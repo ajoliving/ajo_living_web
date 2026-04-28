@@ -122,6 +122,7 @@ type UserPreviewResponse struct {
 	UserID                string `json:"user_id"`
 	PublicID              string `json:"public_id"`
 	DisplayName           string `json:"display_name"`
+	AvatarURL             string `json:"avatar_url"`
 	PublisherIdentityType string `json:"publisher_identity_type"`
 }
 

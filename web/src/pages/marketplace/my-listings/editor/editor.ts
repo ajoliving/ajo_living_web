@@ -721,9 +721,6 @@ export const useMarketplaceListingEditorPage = () => {
         ? await updateSecondhandListing(listingId.value, payload)
         : await createSecondhandListing(payload);
       listingId.value = response.data.data.listing_id;
-      if (!wasEditing) {
-        await router.replace(`/marketplace/my/editor/${listingId.value}`);
-      }
       feedbackStore.pushToast(t(wasEditing ? 'marketplace.editor.updateSaved' : 'marketplace.editor.draftSaved'), 'success');
 
       return listingId.value;
@@ -752,11 +749,19 @@ export const useMarketplaceListingEditorPage = () => {
 
       await publishSecondhandListing(savedListingId);
       feedbackStore.pushToast(t('marketplace.editor.publishSuccess'), 'success');
-      await router.push(`/marketplace/listing/${savedListingId}`);
+      await router.push('/marketplace/my/listings');
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.publishError')), 'error');
     } finally {
       isPublishing.value = false;
+    }
+  };
+
+  // 12.17 儲存並返回我的帖子列表
+  const saveAndBackToList = async (): Promise<void> => {
+    const savedListingId = await saveDraft();
+    if (savedListingId) {
+      await router.push('/marketplace/my/listings');
     }
   };
 
@@ -804,6 +809,7 @@ export const useMarketplaceListingEditorPage = () => {
     readyToSaveDraft,
     removeImageSlot,
     saveDraft,
+    saveAndBackToList,
     selectCoverImage,
     selectedAreaLabel,
     selectedCategoryLabel,

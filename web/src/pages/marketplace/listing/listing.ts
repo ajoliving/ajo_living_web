@@ -62,6 +62,7 @@ export const useMarketplaceListingPage = () => {
     listing.value ? getMarketplaceDistrictLabel(listing.value.district_code, preferenceStore.locale) : '',
   );
   const ownerName = computed(() => listing.value ? resolveListingOwnerName(listing.value) : '');
+  const ownerAvatarUrl = computed(() => listing.value?.owner?.avatar_url ?? '');
   const publishedAt = computed(() =>
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );
@@ -154,6 +155,7 @@ export const useMarketplaceListingPage = () => {
     loadingContact,
     openChat,
     openingChat,
+    ownerAvatarUrl,
     ownerName,
     publishedAt,
     revealContact,

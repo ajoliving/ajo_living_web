@@ -32,6 +32,8 @@
     transition:
       background 0.32s ease,
       color 0.24s ease;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   * {

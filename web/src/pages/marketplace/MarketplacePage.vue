@@ -74,6 +74,14 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
   }
 
   if (path.startsWith('/marketplace/listing')) {
+    const source = String(route.query.from ?? '');
+    if (source === 'discover') {
+      return [...items, { label: t('nav.discover'), to: '/marketplace/discover' }, { label: t('marketplace.detail.title') }];
+    }
+    if (source === 'filter') {
+      return [...items, { label: t('nav.filter'), to: '/marketplace/filter' }, { label: t('marketplace.detail.title') }];
+    }
+
     return [...items, { label: t('marketplace.detail.title') }];
   }
 

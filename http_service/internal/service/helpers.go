@@ -62,5 +62,9 @@ func (s *SecondhandService) mediaURL(asset *model.MediaAsset) string {
 
 // 5. buildMediaURL builds the public media URL from base URL and object key.
 func buildMediaURL(baseURL string, objectKey string) string {
+	if strings.TrimSpace(objectKey) == "" {
+		return ""
+	}
+
 	return strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(objectKey, "/")
 }

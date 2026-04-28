@@ -5,6 +5,7 @@
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
 
 import { useMarketplaceListingPage } from './listing';
 
@@ -22,6 +23,7 @@ const {
   loadingContact,
   openChat,
   openingChat,
+  ownerAvatarUrl,
   ownerName,
   publishedAt,
   revealContact,
@@ -141,8 +143,18 @@ const {
     >
       <section class="detail-panel">
         <p class="detail-panel__label">{{ t('marketplace.detail.seller') }}</p>
-        <h2>{{ ownerName }}</h2>
-        <p>{{ listing.visibility_scope === 'public' ? t('marketplace.detail.publicHint') : t('marketplace.detail.buildingHint') }}</p>
+        <div class="detail-seller-profile">
+          <BaseAvatar
+            :src="ownerAvatarUrl"
+            :name="ownerName"
+            :alt="ownerName"
+            :size="56"
+          />
+          <div>
+            <h2>{{ ownerName }}</h2>
+            <p>{{ listing.visibility_scope === 'public' ? t('marketplace.detail.publicHint') : t('marketplace.detail.buildingHint') }}</p>
+          </div>
+        </div>
         <div class="detail-actions">
           <button
             type="button"
@@ -381,15 +393,22 @@ const {
   padding: 1.25rem;
 }
 
+.detail-seller-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
 .detail-panel h2 {
-  margin: 0.75rem 0 0;
+  margin: 0;
   font-family: var(--font-display);
   font-size: 1.6rem;
   color: #1a1c1b;
 }
 
 .detail-panel p {
-  margin-top: 0.75rem;
+  margin-top: 0.55rem;
   color: #717878;
   line-height: 1.65;
 }

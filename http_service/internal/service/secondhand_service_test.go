@@ -58,6 +58,16 @@ func TestSecondhandResponseIncludesDisplayFields(t *testing.T) {
 	secondhandService := NewSecondhandService(runtime)
 	communityA, _ := mustGetCommunities(t, runtime)
 	owner := mustCreateUser(t, runtime, "+852", "90000021", &communityA.ID)
+	avatarAssetPublicID := mustCreateMediaAsset(t, runtime, owner.ID)
+	var avatarAsset model.MediaAsset
+	if err := runtime.DB.Where("public_id = ?", avatarAssetPublicID).First(&avatarAsset).Error; err != nil {
+		t.Fatalf("load avatar asset: %v", err)
+	}
+	if err := runtime.DB.Model(&model.UserProfile{}).
+		Where("user_id = ?", owner.ID).
+		Update("avatar_asset_id", avatarAsset.ID).Error; err != nil {
+		t.Fatalf("update owner avatar: %v", err)
+	}
 	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
 
 	items, _, err := secondhandService.ListPublicSecondhand(context.Background(), SecondhandListFilters{Page: 1, PageSize: 20})
@@ -73,7 +83,7 @@ func TestSecondhandResponseIncludesDisplayFields(t *testing.T) {
 	if items[0].Community == nil || items[0].Community.PublicID != communityA.PublicID {
 		t.Fatalf("expected community info in list response")
 	}
-	if items[0].Owner == nil || items[0].Owner.PublicID != owner.PublicID || items[0].Owner.DisplayName == "" {
+	if items[0].Owner == nil || items[0].Owner.PublicID != owner.PublicID || items[0].Owner.DisplayName == "" || items[0].Owner.AvatarURL == "" {
 		t.Fatalf("expected owner display info in list response")
 	}
 
@@ -87,7 +97,7 @@ func TestSecondhandResponseIncludesDisplayFields(t *testing.T) {
 	if detail.Community == nil || detail.Community.PublicID != communityA.PublicID {
 		t.Fatalf("expected community info in detail response")
 	}
-	if detail.Owner == nil || detail.Owner.PublicID != owner.PublicID || detail.Owner.DisplayName == "" {
+	if detail.Owner == nil || detail.Owner.PublicID != owner.PublicID || detail.Owner.DisplayName == "" || detail.Owner.AvatarURL == "" {
 		t.Fatalf("expected owner display info in detail response")
 	}
 }
@@ -193,6 +203,10 @@ func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
+	if err := secondhandService.MarkSold(context.Background(), owner.ID, listingID); err != nil {
+		t.Fatalf("mark listing sold before update: %v", err)
+	}
+
 	updated, err := secondhandService.UpdateSecondhandListing(context.Background(), UpsertSecondhandParams{
 		OwnerUserID:           owner.ID,
 		ListingPublicID:       listingID,
@@ -212,6 +226,7 @@ func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 		DeliveryTags:          []string{"self_pickup"},
 		VisibilityScope:       "public",
 		ContactMethod:         "chat",
+		BusinessStatus:        "available",
 		Images: []ListingImageInput{
 			{MediaAssetID: assetID, SortOrder: 1, IsCover: true},
 		},
@@ -224,6 +239,9 @@ func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 	}
 	if updated.Title != "Updated Dining Table" || updated.CategoryCode != "home_furniture" || updated.PriceMode != "negotiable" {
 		t.Fatalf("expected updated fields, got %#v", updated)
+	}
+	if updated.BusinessStatus != "available" {
+		t.Fatalf("expected listing to be available after update, got %s", updated.BusinessStatus)
 	}
 	if len(updated.Images) != 1 || updated.Images[0].MediaAssetID != assetID {
 		t.Fatalf("expected updated image, got %#v", updated.Images)

@@ -1029,6 +1029,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/oss/assets/01KMEDIA001" -Me
         "publication_status": "active",
         "business_status": "available",
         "updated_at": "2026-04-17T05:20:00Z",
+        "owner": {
+          "user_id": "1001",
+          "public_id": "01KUSERSELLER001",
+          "display_name": "Owner Seller",
+          "avatar_url": "http://localhost:9000/local-bucket/ajo_living/avatar.webp",
+          "publisher_identity_type": "owner"
+        },
         "cover_image": {
           "media_asset_id": "01KMEDIA001",
           "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
@@ -1079,6 +1086,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings?page=1&
     "pickup_region_code": "kwun_tong",
     "pickup_location_text": "屋苑樓下自提",
     "delivery_tags": ["self_pickup", "elevator"],
+    "owner": {
+      "user_id": "1001",
+      "public_id": "01KUSERSELLER001",
+      "display_name": "Owner Seller",
+      "avatar_url": "http://localhost:9000/local-bucket/ajo_living/avatar.webp",
+      "publisher_identity_type": "owner"
+    },
     "contact_summary": {
       "show_phone": false,
       "show_whatsapp": true,

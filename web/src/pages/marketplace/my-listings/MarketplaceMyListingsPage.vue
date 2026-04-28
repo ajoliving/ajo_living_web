@@ -133,23 +133,23 @@ const {
           </div>
 
           <div class="my-listing-card__body">
-            <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="my-listing-card__topline">
               <ListingStatusBadge
                 :status="resolveListingStatus(listing)"
                 :visibility="resolveListingVisibility(listing)"
               />
-              <p class="font-display text-[20px] font-semibold text-[#002727]">
+              <p class="my-listing-card__price">
                 {{ formatPrice(resolveListingPrice(listing), preferenceStore.locale) }}
               </p>
             </div>
 
             <div>
-              <div class="mb-2 flex items-start justify-between gap-4">
-                <h2 class="min-w-0 line-clamp-1 font-display text-[24px] font-medium leading-[1.4] text-[#1A1C1B]">
+              <div class="mb-1.5 flex items-start justify-between gap-3">
+                <h2 class="my-listing-card__title">
                   {{ resolveListingTitle(listing) }}
                 </h2>
               </div>
-              <p class="line-clamp-2 text-[16px] leading-[1.6] text-[#414848]">
+              <p class="my-listing-card__summary">
                 {{ resolveListingSummary(listing) }}
               </p>
             </div>
@@ -455,7 +455,7 @@ const {
 
 .my-listing-card {
   display: grid;
-  min-height: 16rem;
+  min-height: 13rem;
   overflow: hidden;
   border: 1px solid #e2e3e1;
   border-radius: 0.75rem;
@@ -469,7 +469,7 @@ const {
 }
 
 .my-listing-card__media {
-  height: 13rem;
+  height: 10.875rem;
   overflow: hidden;
   background: #f4f4f2;
 }
@@ -478,16 +478,57 @@ const {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.65rem;
   overflow: hidden;
-  padding: 1.5rem;
+  padding: 0.875rem 1rem;
+}
+
+.my-listing-card__topline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.my-listing-card__price {
+  flex-shrink: 0;
+  color: #002727;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.my-listing-card__title {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: #1a1c1b;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.28;
+}
+
+.my-listing-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: #414848;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .my-listing-meta-grid {
   display: grid;
-  gap: 1rem;
+  gap: 0.65rem;
   border-top: 1px solid #e2e3e1;
-  padding-top: 1rem;
+  padding-top: 0.65rem;
 }
 
 .my-meta-label {
@@ -500,32 +541,35 @@ const {
 }
 
 .my-meta-value {
-  margin-top: 0.55rem;
+  margin-top: 0.35rem;
   color: #1a1c1b;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .my-listing-actions {
   display: grid;
   align-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   overflow: hidden;
   border-top: 1px solid #e2e3e1;
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 0.75rem 1rem;
 }
 
 .my-action-button {
   display: inline-flex;
-  min-height: 2.35rem;
+  min-height: 1.85rem;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   border: 1px solid #c1c8c7;
   border-radius: 9999px;
-  padding: 0.6rem 1rem;
-  font-size: 0.8125rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.6875rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.1;
@@ -574,13 +618,13 @@ const {
 
 @media (min-width: 1024px) {
   .my-listing-card {
-    height: 16rem;
+    height: 10.875rem;
     min-height: 0;
-    grid-template-columns: 17rem minmax(0, 1fr);
+    grid-template-columns: 13.5rem minmax(0, 1fr);
   }
 
   .my-listing-card--with-actions {
-    grid-template-columns: 17rem minmax(0, 1fr) 13rem;
+    grid-template-columns: 13.5rem minmax(0, 1fr) 13rem;
   }
 
   .my-listing-card__media {
@@ -588,10 +632,9 @@ const {
   }
 
   .my-listing-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     border-top: 0;
     border-left: 1px solid #e2e3e1;
-    justify-content: center;
-    padding: 1.5rem;
   }
 }
 </style>

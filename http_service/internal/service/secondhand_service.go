@@ -273,17 +273,27 @@ func (s *SecondhandService) upsertSecondhand(ctx context.Context, params UpsertS
 			secondhand = *currentSecondhand
 		}
 
+		requestedBusinessStatus := strings.TrimSpace(params.BusinessStatus)
+
 		listing.Title = params.Title
 		listing.Summary = params.Summary
 		listing.Description = params.Description
 		listing.DistrictCode = params.DistrictCode
 		listing.CommunityID = communityID
 		listing.PublisherIdentityType = s.fallbackPublisherIdentity(params.PublisherIdentityType)
-		if !creating && strings.TrimSpace(params.BusinessStatus) != "" {
-			listing.BusinessStatus = strings.TrimSpace(params.BusinessStatus)
+		if !creating && requestedBusinessStatus != "" {
+			listing.BusinessStatus = requestedBusinessStatus
 		}
 		if err := tx.Save(&listing).Error; err != nil {
 			return err
+		}
+		// 12.1 明確保存交易狀態，支援已售出帖子重新改回未售出
+		if !creating && requestedBusinessStatus != "" {
+			if err := tx.Model(&model.Listing{}).
+				Where("id = ?", listing.ID).
+				Update("business_status", requestedBusinessStatus).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update listing business status")
+			}
 		}
 
 		deliveryTags, err := marshalJSON(params.DeliveryTags)

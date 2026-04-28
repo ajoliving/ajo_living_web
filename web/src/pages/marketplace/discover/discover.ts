@@ -48,7 +48,7 @@ const buildListingPreview = (
   price: listing.price_mode === 'free' ? locale === 'zh-HK' ? '免費' : 'Free' : formatPrice(listing.price_hkd ?? 0, locale),
   imageUrl: listing.cover_image?.url ?? '',
   imageAlt: listing.title,
-  to: `/marketplace/listing/${listing.listing_id}`,
+  to: `/marketplace/listing/${listing.listing_id}?from=discover`,
 });
 
 // 2. 管理 Discover 頁展示狀態

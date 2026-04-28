@@ -275,11 +275,11 @@ const viewMode = ref<ResultViewMode>('grid');
         <RouterLink
           v-for="(listing, index) in listings"
           :key="listing.id"
-          :to="`/marketplace/listing/${listing.id}`"
+          :to="{ path: `/marketplace/listing/${listing.id}`, query: { from: 'filter' } }"
           class="marketplace-result-card group"
           :class="viewMode === 'list' ? 'marketplace-result-card--list' : ''"
         >
-          <div class="marketplace-result-card__media relative h-48 overflow-hidden bg-[#F4F4F2]">
+          <div class="marketplace-result-card__media relative overflow-hidden bg-[#F4F4F2]">
             <img
               v-if="listing.imageUrl"
               :src="listing.imageUrl"
@@ -304,21 +304,21 @@ const viewMode = ref<ResultViewMode>('grid');
             </span>
           </div>
 
-          <div class="flex flex-1 flex-col p-6">
-            <div class="mb-2 flex items-start justify-between gap-4">
-              <h2 class="min-w-0 line-clamp-1 font-display text-[24px] font-medium leading-[1.4] text-[#1A1C1B]">
+          <div class="marketplace-result-card__body">
+            <div class="marketplace-result-card__heading">
+              <h2 class="marketplace-result-card__title">
                 {{ listing.title }}
               </h2>
-              <p class="shrink-0 font-display text-[20px] font-semibold text-[#002727]">
+              <p class="marketplace-result-card__price">
                 {{ listing.price }}
               </p>
             </div>
 
-            <p class="mb-4 line-clamp-2 flex-1 text-[16px] leading-[1.6] text-[#414848]">
+            <p class="marketplace-result-card__summary">
               {{ listing.summary }}
             </p>
 
-            <div class="mt-auto flex items-center justify-between border-t border-[#E2E3E1] pt-4">
+            <div class="marketplace-result-card__meta">
               <div class="flex items-center gap-2 text-sm text-[#717878]">
                 <AppIcon
                   name="location"
@@ -558,7 +558,7 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .marketplace-result-card {
   display: flex;
-  height: 25rem;
+  height: 18rem;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #e2e3e1;
@@ -575,7 +575,71 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .marketplace-result-card__media {
+  height: 9.25rem;
   flex-shrink: 0;
+}
+
+.marketplace-result-card__body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.875rem 1rem;
+}
+
+.marketplace-result-card__heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.marketplace-result-card__title {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: #1a1c1b;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.28;
+}
+
+.marketplace-result-card__price {
+  flex-shrink: 0;
+  margin: 0;
+  color: #002727;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.marketplace-result-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0.5rem 0 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #414848;
+  flex: 1;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.marketplace-result-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid #e2e3e1;
+  padding-top: 0.65rem;
+  color: #717878;
 }
 
 .filter-page-button {
@@ -629,16 +693,20 @@ const viewMode = ref<ResultViewMode>('grid');
 
 @media (min-width: 768px) {
   .marketplace-result-card--list {
-    height: 16rem;
+    height: 10.875rem;
     min-height: 0;
     flex-direction: row;
   }
 
   .marketplace-result-card--list .marketplace-result-card__media {
-    width: 18rem;
+    width: 13.5rem;
     height: 100%;
     min-height: 0;
     flex-shrink: 0;
+  }
+
+  .marketplace-result-card--list .marketplace-result-card__summary {
+    -webkit-line-clamp: 1;
   }
 }
 

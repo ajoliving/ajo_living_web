@@ -4,7 +4,7 @@
  * 2. 統一列表、導航與聊天頭像顯示。
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface BaseAvatarProps {
   src: string;
@@ -19,6 +19,8 @@ const props = withDefaults(defineProps<BaseAvatarProps>(), {
   size: 40,
 });
 
+const imageLoadFailed = ref(false);
+
 // 1. 產生頭像回退文字
 const fallbackLabel = computed(() =>
   props.name
@@ -28,6 +30,14 @@ const fallbackLabel = computed(() =>
     .map((item) => item[0]?.toUpperCase() ?? '')
     .join(''),
 );
+
+// 2. 頭像地址變更時重置圖片錯誤狀態
+watch(
+  () => props.src,
+  () => {
+    imageLoadFailed.value = false;
+  },
+);
 </script>
 
 <template>
@@ -36,10 +46,11 @@ const fallbackLabel = computed(() =>
     :style="{ width: `${props.size}px`, height: `${props.size}px` }"
   >
     <img
-      v-if="props.src"
+      v-if="props.src && !imageLoadFailed"
       :src="props.src"
       :alt="props.alt || props.name"
       class="h-full w-full object-cover"
+      @error="imageLoadFailed = true"
     />
     <div
       v-else

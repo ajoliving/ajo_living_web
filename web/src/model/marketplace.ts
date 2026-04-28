@@ -28,6 +28,7 @@ export interface MarketplaceOwnerResponse {
   user_id: string;
   public_id?: string;
   display_name?: string;
+  avatar_url?: string;
   publisher_identity_type?: string;
 }
 

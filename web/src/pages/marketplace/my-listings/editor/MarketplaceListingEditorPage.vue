@@ -32,7 +32,7 @@ const {
   readyToPublish,
   readyToSaveDraft,
   removeImageSlot,
-  saveDraft,
+  saveAndBackToList,
   selectCoverImage,
   submitListing,
   visibilityOptions,
@@ -87,7 +87,7 @@ const {
         :ready-to-publish="readyToPublish"
         :ready-to-save-draft="readyToSaveDraft"
         @publish="submitListing"
-        @save-draft="saveDraft"
+        @save-draft="saveAndBackToList"
       />
     </section>
   </main>

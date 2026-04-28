@@ -38,6 +38,7 @@ type secondhandUserPreviewRow struct {
 	PublicID              string
 	DisplayName           string
 	PublisherIdentityType string
+	AvatarObjectKey       string
 }
 
 // 3. GrantContactAccess validates listing visibility and returns allowed contact payload.
@@ -347,8 +348,9 @@ func (s *SecondhandService) loadUserPreviewMap(ctx context.Context, userIDs []in
 
 	var rows []secondhandUserPreviewRow
 	if err := s.runtime.DB.WithContext(ctx).Table("users").
-		Select("users.id, users.public_id, user_profiles.display_name, user_profiles.publisher_identity_type").
+		Select("users.id, users.public_id, user_profiles.display_name, user_profiles.publisher_identity_type, media_assets.object_key AS avatar_object_key").
 		Joins("LEFT JOIN user_profiles ON user_profiles.user_id = users.id").
+		Joins("LEFT JOIN media_assets ON media_assets.id = user_profiles.avatar_asset_id").
 		Where("users.id IN ?", userIDs).
 		Scan(&rows).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load user previews")
@@ -363,6 +365,7 @@ func (s *SecondhandService) loadUserPreviewMap(ctx context.Context, userIDs []in
 			UserID:                fmt.Sprintf("%d", item.ID),
 			PublicID:              item.PublicID,
 			DisplayName:           displayName,
+			AvatarURL:             buildMediaURL(s.runtime.Config.MediaBaseURL, item.AvatarObjectKey),
 			PublisherIdentityType: item.PublisherIdentityType,
 		}
 	}
