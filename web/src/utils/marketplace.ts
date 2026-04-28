@@ -41,6 +41,10 @@ export const resolveListingStatus = (listing: MarketplaceListingLike) => {
     return 'sold';
   }
 
+  if (listing.publication_status === 'active' && listing.business_status === 'available') {
+    return 'available';
+  }
+
   return listing.publication_status || 'active';
 };
 

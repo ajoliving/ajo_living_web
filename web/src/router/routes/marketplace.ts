@@ -61,7 +61,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
       {
         path: 'my-listings/preview/:listingId',
         redirect: (to) => ({
-          path: `/marketplace/my/preview/${String(to.params.listingId)}`,
+          path: `/marketplace/my/listing/${String(to.params.listingId)}`,
         }),
       },
       {

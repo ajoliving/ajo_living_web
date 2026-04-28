@@ -1,7 +1,7 @@
 /*
  * 我的帖子 - 狀態與資料流程。
  * 1. 讀取我的帖子列表並依狀態分頁。
- * 2. 管理搜尋、概況統計與帖子狀態操作。
+ * 2. 管理搜尋、狀態篩選與帖子狀態操作。
  */
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -96,16 +96,6 @@ export const useMarketplaceMyListingsPage = () => {
     }),
   );
 
-  const overviewCards = computed(() => [
-    { label: t('marketplace.mine.totalListings'), value: items.value.length },
-    { label: t('marketplace.mine.draft'), value: items.value.filter((item) => item.publication_status === 'draft').length },
-    {
-      label: t('common.state.active'),
-      value: items.value.filter((item) => item.publication_status === 'active' && item.business_status !== 'sold').length,
-    },
-    { label: t('common.state.sold'), value: items.value.filter((item) => item.business_status === 'sold').length },
-  ]);
-
   // 1.2 切換帖子狀態分頁
   const setActiveTab = (value: string | number): void => {
     activeTab.value = value as MyListingsTab;
@@ -194,7 +184,6 @@ export const useMarketplaceMyListingsPage = () => {
     openEditor,
     openManagedDetail,
     openPublicDetail,
-    overviewCards,
     preferenceStore,
     resolveListingCategoryLabel,
     resolveListingCommunityName,

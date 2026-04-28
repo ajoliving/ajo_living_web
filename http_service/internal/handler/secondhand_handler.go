@@ -34,10 +34,11 @@ type secondhandRequest struct {
 	ConditionLevel        string                      `json:"condition_level" binding:"required"`
 	DimensionText         string                      `json:"dimension_text"`
 	PickupRegionCode      string                      `json:"pickup_region_code" binding:"required"`
-	PickupLocationText    string                      `json:"pickup_location_text" binding:"required"`
+	PickupLocationText    string                      `json:"pickup_location_text"`
 	DeliveryTags          []string                    `json:"delivery_tags"`
 	VisibilityScope       string                      `json:"visibility_scope" binding:"required"`
 	ContactMethod         string                      `json:"contact_method" binding:"required"`
+	BusinessStatus        string                      `json:"business_status"`
 	Images                []service.ListingImageInput `json:"images"`
 	Contact               secondhandContactRequest    `json:"contact"`
 }
@@ -305,6 +306,7 @@ func (h *SecondhandHandler) bindSecondhandRequest(c *gin.Context, listingPublicI
 		DeliveryTags:          request.DeliveryTags,
 		VisibilityScope:       strings.TrimSpace(request.VisibilityScope),
 		ContactMethod:         strings.TrimSpace(request.ContactMethod),
+		BusinessStatus:        strings.TrimSpace(request.BusinessStatus),
 		Images:                request.Images,
 		Contact: service.ListingContactInput{
 			Phone:           strings.TrimSpace(request.Contact.Phone),

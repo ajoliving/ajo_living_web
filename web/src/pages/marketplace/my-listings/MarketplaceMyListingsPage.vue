@@ -1,6 +1,6 @@
 <!--
  * 我的帖子頁。
- * 1. 顯示真實我的帖子列表、狀態概覽與關鍵操作。
+ * 1. 顯示真實我的帖子列表、搜尋篩選與關鍵操作。
  * 2. 支援草稿發布、過期重發、售出與下架流程。
 -->
 <script setup lang="ts">
@@ -20,7 +20,6 @@ const {
   openEditor,
   openManagedDetail,
   openPublicDetail,
-  overviewCards,
   preferenceStore,
   resolveListingCategoryLabel,
   resolveListingCommunityName,
@@ -42,39 +41,7 @@ const {
 <template>
   <main class="marketplace-my-page">
     <aside class="marketplace-my-sidebar">
-      <div class="border-b border-[#E2E3E1] pb-4">
-        <p class="text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-[#717878]">
-          {{ t('marketplace.mine.overviewTitle') }}
-        </p>
-        <h1 class="mt-3 font-display text-[24px] font-medium leading-[1.4] text-[#1A1C1B]">
-          {{ t('marketplace.mine.title') }}
-        </h1>
-        <p class="mt-2 text-[14px] leading-[1.7] text-[#717878]">
-          {{ t('marketplace.mine.subtitle') }}
-        </p>
-      </div>
-
       <section class="space-y-4">
-        <h2 class="my-section-title">
-          {{ t('marketplace.mine.overviewTitle') }}
-        </h2>
-        <div class="grid grid-cols-2 gap-3">
-          <div
-            v-for="card in overviewCards"
-            :key="card.label"
-            class="my-overview-card"
-          >
-            <p class="my-overview-value">
-              {{ card.value }}
-            </p>
-            <p class="my-overview-label">
-              {{ card.label }}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
         <h2 class="my-section-title">
           {{ t('marketplace.mine.search') }}
         </h2>
@@ -93,7 +60,7 @@ const {
         </label>
       </section>
 
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
+      <section class="space-y-4 border-t border-[#E2E3E1] pt-5">
         <h2 class="my-section-title">
           {{ t('marketplace.mine.statusFilter') }}
         </h2>
@@ -371,31 +338,6 @@ const {
   text-transform: uppercase;
 }
 
-.my-overview-card {
-  min-height: 5.6rem;
-  border: 1px solid #e2e3e1;
-  border-radius: 0.75rem;
-  background: #f9f9f7;
-  padding: 0.9rem;
-  box-shadow: 0 4px 24px rgb(0 0 0 / 0.02);
-}
-
-.my-overview-value {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 2rem;
-  line-height: 1;
-  color: #002727;
-}
-
-.my-overview-label {
-  margin: 0.75rem 0 0;
-  color: #717878;
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.45;
-}
-
 .my-search-field {
   position: relative;
   display: block;
@@ -412,29 +354,34 @@ const {
 }
 
 .my-text-input {
-  height: 2.5rem;
+  height: 3rem;
   width: 100%;
-  border: 0;
-  border-radius: 0.25rem;
-  background: #f4f4f2;
+  border: 1px solid #e2e3e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   color: #1a1c1b;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   line-height: 1.6;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .my-text-input:focus {
-  --tw-ring-color: #002727;
-  --tw-ring-offset-width: 0;
+  border-color: #002727;
+  box-shadow: 0 0 0 3px rgb(0 39 39 / 0.16);
 }
 
 .my-filter-chip {
   border-radius: 9999px;
   border-width: 1px;
-  padding: 0.5rem 1rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 1rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;
   transition:
@@ -444,6 +391,12 @@ const {
 }
 
 .my-filter-chip-active {
+  border-color: #002727;
+  background: rgb(0 39 39 / 0.05);
+  color: #002727;
+}
+
+.my-filter-chip-active:hover {
   border-color: #002727;
   background: rgb(0 39 39 / 0.05);
   color: #002727;
@@ -462,10 +415,11 @@ const {
 .my-loading-card {
   border: 1px solid #e2e3e1;
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: #ffffff;
   padding: 1.5rem;
   color: #717878;
   font-size: 0.875rem;
+  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
 .my-listing-stack {
@@ -475,7 +429,7 @@ const {
 
 .my-create-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: 3.25rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -486,7 +440,7 @@ const {
   padding: 0.65rem 1.1rem;
   color: #ffffff;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.1;
   transition:
@@ -501,12 +455,12 @@ const {
 
 .my-listing-card {
   display: grid;
-  min-height: 13rem;
+  min-height: 16rem;
   overflow: hidden;
   border: 1px solid #e2e3e1;
   border-radius: 0.75rem;
-  background: #f9f9f7;
-  box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
+  background: #ffffff;
+  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
   transition: box-shadow 0.3s ease;
 }
 
@@ -515,7 +469,7 @@ const {
 }
 
 .my-listing-card__media {
-  min-height: 13rem;
+  height: 13rem;
   overflow: hidden;
   background: #f4f4f2;
 }
@@ -525,6 +479,7 @@ const {
   min-width: 0;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
   padding: 1.5rem;
 }
 
@@ -553,24 +508,25 @@ const {
 }
 
 .my-listing-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  align-content: center;
+  gap: 0.5rem;
+  overflow: hidden;
   border-top: 1px solid #e2e3e1;
   padding: 1.25rem 1.5rem 1.5rem;
 }
 
 .my-action-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: 2.35rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   border: 1px solid #c1c8c7;
   border-radius: 9999px;
   padding: 0.6rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.1;
   transition:
@@ -618,15 +574,17 @@ const {
 
 @media (min-width: 1024px) {
   .my-listing-card {
+    height: 16rem;
+    min-height: 0;
     grid-template-columns: 17rem minmax(0, 1fr);
   }
 
   .my-listing-card--with-actions {
-    grid-template-columns: 17rem minmax(0, 1fr) 12rem;
+    grid-template-columns: 17rem minmax(0, 1fr) 13rem;
   }
 
   .my-listing-card__media {
-    height: auto;
+    height: 100%;
   }
 
   .my-listing-actions {

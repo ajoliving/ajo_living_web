@@ -45,6 +45,7 @@ type UpsertSecondhandParams struct {
 	DeliveryTags          []string
 	VisibilityScope       string
 	ContactMethod         string
+	BusinessStatus        string
 	Images                []ListingImageInput
 	Contact               ListingContactInput
 }

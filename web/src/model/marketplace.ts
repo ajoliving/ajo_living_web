@@ -130,6 +130,7 @@ export interface UpsertSecondhandListingPayload {
     sort_order: number;
     is_cover: boolean;
   }>;
+  business_status?: 'available' | 'sold';
   contact: {
     phone: string;
     whatsapp: string;

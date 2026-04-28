@@ -180,7 +180,8 @@ const isNavActive = (item: MyNavItem): boolean =>
   color: #002727;
 }
 
-.marketplace-my-hub__nav-item--active {
+.marketplace-my-hub__nav-item--active,
+.marketplace-my-hub__nav-item--active:hover {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
   color: #ffffff;

@@ -12,12 +12,14 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import type {
   EditorImageSlot,
   EditorOption,
+  ListingEditorBusinessStatus,
   ListingEditorFormState,
   ListingEditorVisibility,
 } from '../editor';
 
 interface EditorFormPanelProps {
   areaOptions: EditorOption[];
+  businessStatusOptions: EditorOption<ListingEditorBusinessStatus>[];
   categoryOptions: EditorOption[];
   conditionOptions: EditorOption[];
   formState: ListingEditorFormState;
@@ -37,7 +39,7 @@ const emit = defineEmits<{
   selectCover: [slotId: string];
 }>();
 
-type SingleSelectKey = 'categoryCode' | 'priceMode' | 'condition' | 'districtCode';
+type SingleSelectKey = 'categoryCode' | 'priceMode' | 'condition' | 'districtCode' | 'businessStatus';
 
 const { t } = useI18n();
 const isDropActive = ref(false);
@@ -121,6 +123,9 @@ const updateSingleSelect = (key: SingleSelectKey, value: string): void => {
       break;
     case 'districtCode':
       props.formState.districtCode = value as ListingEditorFormState['districtCode'];
+      break;
+    case 'businessStatus':
+      props.formState.businessStatus = value as ListingEditorFormState['businessStatus'];
       break;
     default:
       break;
@@ -327,6 +332,39 @@ onBeforeUnmount(() => {
           />
           <span>{{ t('marketplace.editor.donationAvailable') }}</span>
         </label>
+
+        <div class="editor-field">
+          <span>{{ t('marketplace.editor.businessStatus') }}</span>
+          <div class="editor-select">
+            <button
+              type="button"
+              class="editor-select__trigger"
+              :aria-expanded="openSingleSelect === 'businessStatus'"
+              @click="toggleSingleSelect('businessStatus')"
+            >
+              <span>{{ resolveSingleSelectLabel(props.businessStatusOptions, props.formState.businessStatus) }}</span>
+              <AppIcon
+                name="chevron-down"
+                :size="16"
+              />
+            </button>
+            <div
+              v-if="openSingleSelect === 'businessStatus'"
+              class="editor-select__menu"
+            >
+              <button
+                v-for="option in props.businessStatusOptions"
+                :key="option.value"
+                type="button"
+                class="editor-select__option"
+                :class="props.formState.businessStatus === option.value ? 'editor-select__option--active' : ''"
+                @click="updateSingleSelect('businessStatus', option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -490,9 +528,11 @@ onBeforeUnmount(() => {
             ×
           </button>
 
-          <div class="editor-image-actions">
+          <div
+            v-if="slot.url && !slot.isCover"
+            class="editor-image-actions"
+          >
             <button
-              v-if="slot.url && !slot.isCover"
               type="button"
               class="editor-image-action"
               @click="selectCover(slot.id)"
@@ -1002,7 +1042,12 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.editor-upload-slot__media {
+  overflow: hidden;
+}
+
 .editor-upload-slot img {
+  display: block;
   object-fit: cover;
 }
 

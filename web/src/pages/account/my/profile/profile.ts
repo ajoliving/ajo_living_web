@@ -13,6 +13,12 @@ import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
 
+interface ProfileInfoRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
 const avatarObjectPrefix = 'ajo_living/account/';
 const maxAvatarFileSize = 5 * 1024 * 1024;
 const blockedUploadHeaders = new Set(['host', 'content-length']);
@@ -42,6 +48,7 @@ export const useAccountProfilePage = () => {
   const sessionStore = useSessionStore();
   const isSaving = ref(false);
   const isLoading = ref(false);
+  const isEditModalOpen = ref(false);
   const isUploadingAvatar = ref(false);
   const isSigningOut = ref(false);
 
@@ -53,7 +60,10 @@ export const useAccountProfilePage = () => {
     publisher_identity_type: '',
   });
 
-  // 2.1 顯示帳戶電話資料
+  // 2.1 輸出缺省顯示文案
+  const fallbackValue = computed(() => t('marketplace.myProfile.emptyValue'));
+
+  // 2.2 顯示帳戶電話資料
   const phoneDisplay = computed(() => {
     if (sessionStore.me?.phone_country_code === 'email') {
       return t('account.profile.phoneUnavailable');
@@ -62,16 +72,106 @@ export const useAccountProfilePage = () => {
     return formState.phone || t('account.profile.phoneUnavailable');
   });
 
-  // 2.2 同步表單內容
+  // 2.3 顯示主要屋苑資料
+  const communityDisplay = computed(() => {
+    const community = sessionStore.me?.primary_community;
+
+    return (
+      community?.name_zh?.trim() ||
+      community?.name_en?.trim() ||
+      community?.address_text?.trim() ||
+      t('marketplace.myProfile.noCommunity')
+    );
+  });
+
+  // 2.4 顯示帳戶資料行
+  const profileRows = computed<ProfileInfoRow[]>(() => [
+    {
+      key: 'display_name',
+      label: t('account.profile.displayName'),
+      value: sessionStore.me?.display_name?.trim() || sessionStore.currentUser.display_name || fallbackValue.value,
+    },
+    {
+      key: 'email',
+      label: t('account.profile.email'),
+      value: formState.email || t('account.profile.emailUnavailable'),
+    },
+    {
+      key: 'phone',
+      label: t('account.profile.phone'),
+      value: phoneDisplay.value,
+    },
+    {
+      key: 'publisher_identity_type',
+      label: t('account.profile.publisherIdentity'),
+      value: sessionStore.me?.publisher_identity_type?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'district_code',
+      label: t('account.profile.districtCode'),
+      value: sessionStore.me?.district_code?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'primary_community',
+      label: t('common.label.community'),
+      value: communityDisplay.value,
+    },
+  ]);
+
+  // 2.5 顯示身份狀態資料行
+  const accountRows = computed<ProfileInfoRow[]>(() => [
+    {
+      key: 'public_id',
+      label: t('marketplace.myProfile.memberId'),
+      value: sessionStore.me?.public_id?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'member_status',
+      label: t('marketplace.myProfile.memberStatus'),
+      value: sessionStore.me?.member_status?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'member_type',
+      label: t('marketplace.myProfile.memberType'),
+      value: sessionStore.me?.member_type?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'role',
+      label: t('marketplace.myProfile.primaryRole'),
+      value: sessionStore.me?.role?.trim() || fallbackValue.value,
+    },
+    {
+      key: 'profile_completed',
+      label: t('marketplace.myProfile.profileCompleted'),
+      value: sessionStore.me?.profile_completed ? t('marketplace.myProfile.completed') : t('marketplace.myProfile.incomplete'),
+    },
+    {
+      key: 'is_staff',
+      label: t('marketplace.myProfile.staffAccess'),
+      value: sessionStore.me?.is_staff ? t('marketplace.myProfile.enabled') : t('marketplace.myProfile.disabled'),
+    },
+  ]);
+
+  // 2.6 顯示角色與權限
+  const roleChips = computed<string[]>(() =>
+    sessionStore.me?.roles?.length ? sessionStore.me.roles : [t('marketplace.myProfile.noRoles')],
+  );
+  const permissionChips = computed<string[]>(() =>
+    sessionStore.me?.permissions?.length ? sessionStore.me.permissions : [t('marketplace.myProfile.noPermissions')],
+  );
+
+  // 2.7 同步表單內容
   const syncFormState = (): void => {
     formState.display_name = sessionStore.me?.display_name ?? sessionStore.currentUser.display_name;
     formState.email = sessionStore.me?.email ?? '';
-    formState.phone = `${sessionStore.me?.phone_country_code ?? '+852'} ${sessionStore.me?.phone_number ?? ''}`.trim();
+    formState.phone = sessionStore.me?.phone_number
+      ? `${sessionStore.me.phone_country_code || '+852'} ${sessionStore.me.phone_number}`.trim()
+      : '';
     formState.district_code = sessionStore.me?.district_code ?? '';
     formState.publisher_identity_type = sessionStore.me?.publisher_identity_type ?? '';
   };
 
-  // 2.3 讀取會員資料
+  // 2.8 讀取會員資料
   const loadProfile = async (): Promise<void> => {
     if (sessionStore.me) {
       syncFormState();
@@ -91,7 +191,20 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.4 上傳頭像並更新會員資料
+  // 2.9 開啟編輯彈窗
+  const openEditModal = (): void => {
+    syncFormState();
+    isEditModalOpen.value = true;
+  };
+
+  // 2.10 關閉編輯彈窗
+  const closeEditModal = (): void => {
+    if (!isSaving.value && !isUploadingAvatar.value) {
+      isEditModalOpen.value = false;
+    }
+  };
+
+  // 2.11 上傳頭像並更新會員資料
   const handleAvatarFileChange = async (event: Event): Promise<void> => {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -152,7 +265,7 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.5 儲存會員資料
+  // 2.12 儲存會員資料
   const handleSaveProfile = async (): Promise<void> => {
     isSaving.value = true;
 
@@ -165,6 +278,7 @@ export const useAccountProfilePage = () => {
 
       sessionStore.me = data.data;
       syncFormState();
+      isEditModalOpen.value = false;
       feedbackStore.pushToast(t('account.profile.updateSuccess'), 'success');
     } catch (error) {
       console.error(error);
@@ -174,7 +288,7 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.6 執行登出
+  // 2.13 執行登出
   const handleSignOut = async (): Promise<void> => {
     isSigningOut.value = true;
 
@@ -186,21 +300,29 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.7 初始化會員資料
+  // 2.14 初始化會員資料
   onMounted(() => {
     void loadProfile();
   });
 
   return {
+    accountRows,
+    closeEditModal,
+    communityDisplay,
     formState,
     handleAvatarFileChange,
     handleSaveProfile,
     handleSignOut,
+    isEditModalOpen,
     isLoading,
     isSaving,
     isSigningOut,
     isUploadingAvatar,
+    openEditModal,
+    permissionChips,
     phoneDisplay,
+    profileRows,
+    roleChips,
     sessionStore,
     t,
   };

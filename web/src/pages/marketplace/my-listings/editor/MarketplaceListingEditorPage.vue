@@ -10,6 +10,7 @@ import EditorPreviewPanel from './widgets/EditorPreviewPanel.vue';
 
 const {
   areaOptions,
+  businessStatusOptions,
   categoryOptions,
   checklist,
   conditionOptions,
@@ -29,6 +30,7 @@ const {
   previewTitle,
   priceModeOptions,
   readyToPublish,
+  readyToSaveDraft,
   removeImageSlot,
   saveDraft,
   selectCoverImage,
@@ -58,6 +60,7 @@ const {
     <section class="listing-editor-workspace">
       <EditorFormPanel
         :area-options="areaOptions"
+        :business-status-options="businessStatusOptions"
         :category-options="categoryOptions"
         :condition-options="conditionOptions"
         :form-state="formState"
@@ -77,10 +80,12 @@ const {
         :cover-image="coverImage"
         :is-publishing="isPublishing"
         :is-saving="isSaving"
+        :is-editing="isEditing"
         :preview-price="previewPrice"
         :preview-tag-labels="previewTagLabels"
         :preview-title="previewTitle"
         :ready-to-publish="readyToPublish"
+        :ready-to-save-draft="readyToSaveDraft"
         @publish="submitListing"
         @save-draft="saveDraft"
       />

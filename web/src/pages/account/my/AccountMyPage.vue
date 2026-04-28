@@ -23,22 +23,18 @@ import AccountSidebar from './widgets/AccountSidebar.vue';
   display: flex;
   width: 100%;
   max-width: 1280px;
-  height: calc(100vh - var(--app-header-offset, 0rem));
+  min-height: calc(100vh - var(--app-header-offset, 0rem));
   gap: 3rem;
   margin: 0 auto;
   padding: 4rem 2rem;
   color: #1a1c1b;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .account-my-content {
   min-width: 0;
-  height: 100%;
   flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 0.5rem;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 @media (max-width: 767px) {
@@ -52,9 +48,7 @@ import AccountSidebar from './widgets/AccountSidebar.vue';
   }
 
   .account-my-content {
-    height: auto;
     overflow: visible;
-    padding-right: 0;
   }
 }
 </style>

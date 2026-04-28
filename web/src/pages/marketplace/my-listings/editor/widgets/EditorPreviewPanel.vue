@@ -13,12 +13,14 @@ import type { EditorChecklistItem, EditorImageSlot } from '../editor';
 interface EditorPreviewPanelProps {
   checklist: EditorChecklistItem[];
   coverImage?: EditorImageSlot;
+  isEditing: boolean;
   isPublishing: boolean;
   isSaving: boolean;
   previewPrice: string;
   previewTagLabels: string[];
   previewTitle: string;
   readyToPublish: boolean;
+  readyToSaveDraft: boolean;
 }
 
 const props = defineProps<EditorPreviewPanelProps>();
@@ -35,8 +37,13 @@ const saveDraft = (): void => {
   emit('saveDraft');
 };
 
-// 2. 觸發發布
-const publish = (): void => {
+// 2. 觸發主要操作
+const runPrimaryAction = (): void => {
+  if (props.isEditing) {
+    emit('saveDraft');
+    return;
+  }
+
   emit('publish');
 };
 </script>
@@ -101,16 +108,25 @@ const publish = (): void => {
       <button
         type="button"
         class="editor-action editor-action--primary"
-        :disabled="!props.readyToPublish || props.isSaving || props.isPublishing"
-        @click="publish"
+        :disabled="props.isEditing ? !props.readyToSaveDraft || props.isSaving || props.isPublishing : !props.readyToPublish || props.isSaving || props.isPublishing"
+        @click="runPrimaryAction"
       >
         <AppIcon
-          name="send"
+          :name="props.isEditing ? 'check-circle' : 'send'"
           :size="17"
         />
-        <span>{{ props.isPublishing ? t('common.status.loading') : t('common.action.publish') }}</span>
+        <span>
+          {{
+            props.isSaving || props.isPublishing
+              ? t('common.status.loading')
+              : props.isEditing
+                ? t('marketplace.editor.saveChanges')
+                : t('common.action.publish')
+          }}
+        </span>
       </button>
       <button
+        v-if="!props.isEditing"
         type="button"
         class="editor-action editor-action--secondary"
         :disabled="props.isSaving || props.isPublishing"

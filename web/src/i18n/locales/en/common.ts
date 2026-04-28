@@ -53,6 +53,7 @@ export default {
   },
   state: {
     active: 'Active',
+    available: 'Available',
     expired: 'Expired',
     sold: 'Sold',
     draft: 'Draft',

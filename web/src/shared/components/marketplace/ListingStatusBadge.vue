@@ -25,6 +25,10 @@ const chips = computed(() => {
         label: t('common.state.active'),
         className: 'border-success/20 bg-success/10 text-success',
       },
+      available: {
+        label: t('common.state.available'),
+        className: 'border-success/20 bg-success/10 text-success',
+      },
       expired: {
         label: t('common.state.expired'),
         className: 'border-warning/20 bg-warning/10 text-warning',

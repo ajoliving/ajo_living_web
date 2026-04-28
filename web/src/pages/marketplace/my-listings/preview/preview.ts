@@ -1,14 +1,21 @@
 /*
  * 我的帖子預覽頁 - 狀態與資料。
  * 1. 讀取真實帖子詳情。
- * 2. 格式化預覽頁圖片、價格與狀態資料。
+ * 2. 格式化我的帖子詳情頁圖片、價格與狀態資料。
+ * 3. 提供發布者編輯、查看公開頁與狀態操作。
  */
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
-import { fetchSecondhandListingDetail } from '@/httpapis/secondhand-listings';
+import {
+  deactivateSecondhandListing,
+  fetchSecondhandListingDetail,
+  markSecondhandListingSold,
+  publishSecondhandListing,
+  republishSecondhandListing,
+} from '@/httpapis/secondhand-listings';
 import {
   getMarketplaceCategoryLabel,
   getMarketplaceDistrictLabel,
@@ -19,13 +26,17 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate, formatPrice } from '@/utils/format';
 import { resolveListingCoverImage, resolveListingStatus } from '@/utils/marketplace';
 
+type MyListingDetailAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+
 // 1. 管理我的帖子預覽頁資料
 export const useMarketplaceMyListingPreviewPage = () => {
   const route = useRoute();
+  const router = useRouter();
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
   const loading = ref(false);
+  const actionLoading = ref(false);
   const listing = ref<SecondhandListingDetailResponse | null>(null);
   const listingId = computed(() => String(route.params.listingId ?? ''));
   const coverImage = computed(() => listing.value ? resolveListingCoverImage(listing.value) : undefined);
@@ -48,6 +59,16 @@ export const useMarketplaceMyListingPreviewPage = () => {
   const publishedAt = computed(() =>
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );
+  const canPublish = computed(() => listing.value?.publication_status === 'draft');
+  const canRepublish = computed(() => listing.value?.publication_status === 'expired');
+  const canMarkSold = computed(() => {
+    const currentListing = listing.value;
+    return currentListing?.publication_status === 'active' && currentListing.business_status !== 'sold';
+  });
+  const canDeactivate = computed(() => {
+    const currentListing = listing.value;
+    return currentListing?.publication_status === 'active' && currentListing.business_status !== 'sold';
+  });
 
   // 1.1 讀取帖子詳情
   const loadPreview = async (): Promise<void> => {
@@ -72,11 +93,80 @@ export const useMarketplaceMyListingPreviewPage = () => {
     }
   };
 
+  // 1.2 導向帖子編輯頁
+  const openEditor = async (): Promise<void> => {
+    if (!listingId.value) {
+      return;
+    }
+
+    await router.push(`/marketplace/my/editor/${listingId.value}`);
+  };
+
+  // 1.3 導向公開帖子詳情
+  const openPublicDetail = async (): Promise<void> => {
+    if (!listingId.value) {
+      return;
+    }
+
+    await router.push(`/marketplace/listing/${listingId.value}`);
+  };
+
+  // 1.4 執行帖子狀態操作
+  const runAction = async (action: MyListingDetailAction): Promise<void> => {
+    if (!listingId.value || actionLoading.value) {
+      return;
+    }
+
+    if (
+      (action === 'mark-sold' || action === 'deactivate') &&
+      !window.confirm(t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate'))
+    ) {
+      return;
+    }
+
+    actionLoading.value = true;
+
+    try {
+      if (action === 'publish') {
+        await publishSecondhandListing(listingId.value);
+      }
+
+      if (action === 'republish') {
+        await republishSecondhandListing(listingId.value);
+      }
+
+      if (action === 'mark-sold') {
+        await markSecondhandListingSold(listingId.value);
+      }
+
+      if (action === 'deactivate') {
+        await deactivateSecondhandListing(listingId.value);
+      }
+
+      feedbackStore.pushToast(t('marketplace.mine.statusUpdated'), 'success');
+      await loadPreview();
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('marketplace.mine.updateError')
+          : t('marketplace.mine.updateError'),
+        'error',
+      );
+    } finally {
+      actionLoading.value = false;
+    }
+  };
+
   onMounted(() => {
     void loadPreview();
   });
 
   return {
+    actionLoading,
+    canDeactivate,
+    canMarkSold,
+    canPublish,
+    canRepublish,
     categoryLabel,
     coverImage,
     districtLabel,
@@ -84,7 +174,10 @@ export const useMarketplaceMyListingPreviewPage = () => {
     listingId,
     listingPrice,
     loading,
+    openEditor,
+    openPublicDetail,
     publishedAt,
+    runAction,
     statusLabel,
     t,
   };

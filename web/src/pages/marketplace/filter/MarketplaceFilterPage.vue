@@ -375,38 +375,26 @@ const viewMode = ref<ResultViewMode>('grid');
   display: flex;
   width: 100%;
   max-width: 1280px;
-  height: calc(100vh - var(--app-header-offset, 0rem));
+  min-height: calc(100vh - var(--app-header-offset, 0rem));
   gap: 3rem;
   margin: 0 auto;
   padding: 4rem 2rem;
   color: #1a1c1b;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .marketplace-filter-sidebar {
   display: flex;
   width: 16rem;
-  height: 100%;
   flex-shrink: 0;
   flex-direction: column;
   gap: 2rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding-right: 2rem;
-  scrollbar-width: none;
-  scrollbar-gutter: stable;
-}
-
-.marketplace-filter-sidebar::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .marketplace-filter-results {
-  height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 0.5rem;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .view-mode-toggle {
@@ -570,7 +558,7 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .marketplace-result-card {
   display: flex;
-  min-height: 25rem;
+  height: 25rem;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #e2e3e1;
@@ -584,6 +572,10 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .marketplace-result-card:hover {
   box-shadow: 0 8px 32px rgb(0 0 0 / 0.06);
+}
+
+.marketplace-result-card__media {
+  flex-shrink: 0;
 }
 
 .filter-page-button {
@@ -620,15 +612,12 @@ const viewMode = ref<ResultViewMode>('grid');
 
   .marketplace-filter-sidebar {
     width: 100%;
-    height: auto;
     overflow: visible;
     padding-right: 0;
   }
 
   .marketplace-filter-results {
-    height: auto;
     overflow: visible;
-    padding-right: 0;
   }
 }
 
@@ -640,14 +629,15 @@ const viewMode = ref<ResultViewMode>('grid');
 
 @media (min-width: 768px) {
   .marketplace-result-card--list {
-    min-height: 13rem;
+    height: 16rem;
+    min-height: 0;
     flex-direction: row;
   }
 
   .marketplace-result-card--list .marketplace-result-card__media {
     width: 18rem;
-    height: auto;
-    min-height: 13rem;
+    height: 100%;
+    min-height: 0;
     flex-shrink: 0;
   }
 }

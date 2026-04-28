@@ -75,19 +75,11 @@ const accountRoleLabel = computed(() =>
 .account-sidebar {
   display: flex;
   width: 16rem;
-  height: 100%;
   flex-shrink: 0;
   flex-direction: column;
   gap: 2rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding-right: 0.5rem;
-  scrollbar-width: none;
-  scrollbar-gutter: stable;
-}
-
-.account-sidebar::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .account-sidebar-link {
@@ -121,7 +113,6 @@ const accountRoleLabel = computed(() =>
 @media (max-width: 767px) {
   .account-sidebar {
     width: 100%;
-    height: auto;
     overflow: visible;
     padding-right: 0;
   }

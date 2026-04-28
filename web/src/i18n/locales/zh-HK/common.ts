@@ -53,6 +53,7 @@ export default {
   },
   state: {
     active: '上架中',
+    available: '未售出',
     expired: '已過期',
     sold: '已售出',
     draft: '草稿',

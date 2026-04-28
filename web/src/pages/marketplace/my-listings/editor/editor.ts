@@ -42,6 +42,7 @@ import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
 
 export type ListingEditorVisibility = 'public' | 'building_only';
+export type ListingEditorBusinessStatus = 'available' | 'sold';
 
 type EditorStepStatus = 'done' | 'current' | 'idle';
 
@@ -97,6 +98,7 @@ export interface ListingEditorFormState {
   tradeNote: string;
   deliveryTags: string[];
   allowChat: boolean;
+  businessStatus: ListingEditorBusinessStatus;
 }
 
 const listingObjectPrefix = 'ajo_living/listings/';
@@ -124,6 +126,7 @@ const createInitialFormState = (): ListingEditorFormState => ({
   tradeNote: '',
   deliveryTags: [],
   allowChat: true,
+  businessStatus: 'available',
 });
 
 // 2. 建立空圖片槽
@@ -231,6 +234,7 @@ const syncDetailToForm = (
   formState.tradeNote = detail.pickup_location_text;
   formState.deliveryTags = withoutDonationTag(detail.delivery_tags);
   formState.allowChat = detail.contact_summary.show_chat;
+  formState.businessStatus = detail.business_status === 'sold' ? 'sold' : 'available';
 };
 
 // 11. 重置新增帖子表單
@@ -295,6 +299,11 @@ export const useMarketplaceListingEditorPage = () => {
     { label: t('marketplace.editor.buildingOnlyListing'), value: 'building_only' },
   ]);
 
+  const businessStatusOptions = computed<EditorOption<ListingEditorBusinessStatus>[]>(() => [
+    { label: t('marketplace.editor.availableStatus'), value: 'available' },
+    { label: t('marketplace.editor.soldStatus'), value: 'sold' },
+  ]);
+
   const coverImage = computed(() =>
     imageSlots.value.find((slot) => slot.isCover && slot.url) ?? imageSlots.value.find((slot) => slot.url),
   );
@@ -331,10 +340,6 @@ export const useMarketplaceListingEditorPage = () => {
     imageSlots.value.filter((slot) => Boolean(slot.mediaAssetId || slot.file)).length,
   );
 
-  const hasPendingImageFiles = computed(() =>
-    imageSlots.value.some((slot) => Boolean(slot.file && !slot.uploading)),
-  );
-
   const hasValidPrice = computed(() => Number(formState.price) > 0);
 
   const hasValidContact = computed(() =>
@@ -346,26 +351,11 @@ export const useMarketplaceListingEditorPage = () => {
     sessionStore.currentUser.primary_community.public_id.trim().length > 0,
   );
 
-  const hasTradeNote = computed(() => formState.tradeNote.trim().length > 0);
-  const hasDeliveryTags = computed(() => formState.deliveryTags.length > 0);
-  const hasDimensionDetails = computed(() =>
-    [
-      formState.dimensionLength,
-      formState.dimensionWidth,
-      formState.dimensionHeight,
-      formState.dimensionWeight,
-    ].some((value) => value.trim().length > 0),
-  );
-
   const checklist = computed<EditorChecklistItem[]>(() => [
     { label: t('marketplace.editor.titleReady'), complete: formState.title.trim().length > 0 },
     { label: t('marketplace.editor.categoryReady'), complete: Boolean(formState.categoryCode) },
     { label: t('marketplace.editor.priceReady'), complete: hasValidPrice.value },
-    { label: t('marketplace.editor.tradeReady'), complete: hasTradeNote.value },
-    { label: t('marketplace.editor.deliveryReady'), complete: hasDeliveryTags.value },
-    { label: t('marketplace.editor.dimensionReady'), complete: hasDimensionDetails.value },
     { label: t('marketplace.editor.contactReady'), complete: hasValidContact.value && hasValidVisibility.value },
-    { label: t('marketplace.editor.descriptionReady'), complete: formState.description.trim().length >= 12 },
     { label: t('marketplace.editor.imageReady'), complete: selectedImageCount.value > 0 },
   ]);
 
@@ -685,6 +675,7 @@ export const useMarketplaceListingEditorPage = () => {
       delivery_tags: deliveryTags,
       visibility_scope: formState.visibility,
       contact_method: formState.allowChat ? 'chat_or_whatsapp' : 'phone',
+      business_status: formState.businessStatus,
       images: imageSlots.value
         .filter((slot) => Boolean(slot.mediaAssetId))
         .map((slot, index) => ({
@@ -705,7 +696,7 @@ export const useMarketplaceListingEditorPage = () => {
   };
 
   // 12.15 儲存草稿
-  const saveDraft = async (): Promise<string> => {
+  const saveDraft = async (options: { uploadImages?: boolean } = {}): Promise<string> => {
     if (!readyToSaveDraft.value) {
       feedbackStore.pushToast(t('marketplace.editor.saveBlocked'), 'error');
       return '';
@@ -714,15 +705,26 @@ export const useMarketplaceListingEditorPage = () => {
     isSaving.value = true;
 
     try {
+      const wasEditing = isEditing.value;
+
+      if (options.uploadImages ?? wasEditing) {
+        try {
+          await uploadPendingImages();
+        } catch (error) {
+          feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.imageUploadError')), 'error');
+          return '';
+        }
+      }
+
       const payload = buildPayload();
       const response = listingId.value
         ? await updateSecondhandListing(listingId.value, payload)
         : await createSecondhandListing(payload);
       listingId.value = response.data.data.listing_id;
-      if (!hasPendingImageFiles.value) {
+      if (!wasEditing) {
         await router.replace(`/marketplace/my/editor/${listingId.value}`);
       }
-      feedbackStore.pushToast(t('marketplace.editor.draftSaved'), 'success');
+      feedbackStore.pushToast(t(wasEditing ? 'marketplace.editor.updateSaved' : 'marketplace.editor.draftSaved'), 'success');
 
       return listingId.value;
     } catch (error) {
@@ -743,14 +745,7 @@ export const useMarketplaceListingEditorPage = () => {
     isPublishing.value = true;
 
     try {
-      try {
-        await uploadPendingImages();
-      } catch (error) {
-        feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.imageUploadError')), 'error');
-        return;
-      }
-
-      const savedListingId = await saveDraft();
+      const savedListingId = await saveDraft({ uploadImages: true });
       if (!savedListingId) {
         return;
       }
@@ -785,6 +780,7 @@ export const useMarketplaceListingEditorPage = () => {
 
   return {
     areaOptions,
+    businessStatusOptions,
     categoryOptions,
     checklist,
     conditionOptions,
@@ -805,6 +801,7 @@ export const useMarketplaceListingEditorPage = () => {
     previewTitle,
     priceModeOptions,
     readyToPublish,
+    readyToSaveDraft,
     removeImageSlot,
     saveDraft,
     selectCoverImage,

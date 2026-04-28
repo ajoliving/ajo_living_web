@@ -1,7 +1,7 @@
 <!--
- * 我的帖子預覽頁。
- * 1. 建立我的帖子完整檢視、狀態操作與流程記錄布局。
- * 2. 接入真實帖子狀態與預覽資料。
+ * 我的帖子詳情頁。
+ * 1. 建立發布者視角的帖子完整檢視、編輯入口與狀態操作。
+ * 2. 接入真實帖子狀態、圖片、價格與流程資料。
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
@@ -9,6 +9,11 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useMarketplaceMyListingPreviewPage } from './preview';
 
 const {
+  actionLoading,
+  canDeactivate,
+  canMarkSold,
+  canPublish,
+  canRepublish,
   categoryLabel,
   coverImage,
   districtLabel,
@@ -16,7 +21,10 @@ const {
   listingId,
   listingPrice,
   loading,
+  openEditor,
+  openPublicDetail,
   publishedAt,
+  runAction,
   statusLabel,
   t,
 } = useMarketplaceMyListingPreviewPage();
@@ -36,6 +44,9 @@ const {
       class="my-preview-summary"
     >
       <p class="preview-kicker">
+        {{ t('marketplace.mine.detailKicker') }}
+      </p>
+      <p class="preview-reference">
         {{ t('marketplace.detail.referenceId', { id: listingId }) }}
       </p>
       <h1>{{ listing.title }}</h1>
@@ -44,6 +55,46 @@ const {
         <button
           type="button"
           class="preview-action preview-action--primary"
+          :disabled="actionLoading"
+          @click="openEditor"
+        >
+          <AppIcon
+            name="palette"
+            :size="16"
+          />
+          {{ t('marketplace.mine.editDetailAction') }}
+        </button>
+        <button
+          type="button"
+          class="preview-action"
+          :disabled="actionLoading"
+          @click="openPublicDetail"
+        >
+          <AppIcon
+            name="view"
+            :size="16"
+          />
+          {{ t('marketplace.mine.publicDetailAction') }}
+        </button>
+        <button
+          v-if="canPublish"
+          type="button"
+          class="preview-action preview-action--primary"
+          :disabled="actionLoading"
+          @click="runAction('publish')"
+        >
+          <AppIcon
+            name="plus-square"
+            :size="16"
+          />
+          {{ t('marketplace.mine.publishAction') }}
+        </button>
+        <button
+          v-if="canRepublish"
+          type="button"
+          class="preview-action preview-action--primary"
+          :disabled="actionLoading"
+          @click="runAction('republish')"
         >
           <AppIcon
             name="reload"
@@ -52,14 +103,30 @@ const {
           {{ t('marketplace.mine.republishAction') }}
         </button>
         <button
+          v-if="canMarkSold"
           type="button"
           class="preview-action"
+          :disabled="actionLoading"
+          @click="runAction('mark-sold')"
         >
           <AppIcon
             name="check-circle"
             :size="16"
           />
           {{ t('marketplace.mine.markSoldAction') }}
+        </button>
+        <button
+          v-if="canDeactivate"
+          type="button"
+          class="preview-action"
+          :disabled="actionLoading"
+          @click="runAction('deactivate')"
+        >
+          <AppIcon
+            name="close"
+            :size="16"
+          />
+          {{ t('marketplace.mine.deactivateAction') }}
         </button>
       </div>
     </section>
@@ -124,10 +191,9 @@ const {
   display: grid;
   width: 100%;
   max-width: 1280px;
-  min-height: calc(100vh - var(--app-header-offset, 0rem));
   gap: 1.5rem;
   margin: 0 auto;
-  padding: 4rem 2rem;
+  padding: 1rem 2rem 5rem;
   color: #1a1c1b;
 }
 
@@ -137,14 +203,14 @@ const {
 .preview-timeline {
   border: 1px solid #e2e3e1;
   border-radius: 0.75rem;
-  background: #f9f9f7;
-  box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
+  background: #ffffff;
+  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
 .my-preview-summary,
 .preview-detail,
 .preview-timeline {
-  padding: 1.5rem;
+  padding: 2rem;
 }
 
 .preview-kicker {
@@ -157,12 +223,21 @@ const {
   text-transform: uppercase;
 }
 
+.preview-reference {
+  margin: 0.75rem 0 0;
+  color: #717878;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .my-preview-summary h1 {
   margin: 0.9rem 0 0;
+  color: #002727;
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 500;
-  line-height: 1.05;
+  line-height: 1.2;
 }
 
 .my-preview-summary p:not(.preview-kicker) {
@@ -181,21 +256,44 @@ const {
 
 .preview-action {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 3.25rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   border: 1px solid #c1c8c7;
   border-radius: 999px;
-  padding: 0.6rem 1rem;
+  padding: 0.8rem 1.25rem;
   color: #414848;
-  font-weight: 600;
+  font-size: 0.875rem;
+  font-weight: 800;
+  line-height: 1;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.preview-action:hover:not(:disabled) {
+  border-color: #002727;
+  color: #002727;
 }
 
 .preview-action--primary {
   border-color: #002727;
   background: #002727;
   color: #ffffff;
+}
+
+.preview-action--primary:hover:not(:disabled) {
+  border-color: #1a1c1b;
+  background: #1a1c1b;
+  color: #ffffff;
+}
+
+.preview-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .my-preview-layout {
@@ -268,7 +366,13 @@ const {
 
 @media (max-width: 767px) {
   .my-preview-page {
-    padding: 2.5rem 1.25rem;
+    padding: 1rem 1.25rem 4rem;
+  }
+
+  .my-preview-summary,
+  .preview-detail,
+  .preview-timeline {
+    padding: 1.5rem;
   }
 }
 </style>

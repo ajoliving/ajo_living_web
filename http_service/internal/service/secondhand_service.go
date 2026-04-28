@@ -279,6 +279,9 @@ func (s *SecondhandService) upsertSecondhand(ctx context.Context, params UpsertS
 		listing.DistrictCode = params.DistrictCode
 		listing.CommunityID = communityID
 		listing.PublisherIdentityType = s.fallbackPublisherIdentity(params.PublisherIdentityType)
+		if !creating && strings.TrimSpace(params.BusinessStatus) != "" {
+			listing.BusinessStatus = strings.TrimSpace(params.BusinessStatus)
+		}
 		if err := tx.Save(&listing).Error; err != nil {
 			return err
 		}
@@ -342,7 +345,7 @@ func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) 
 		return errcode.New(errcode.CodeValidationError, "missing required listing fields")
 	}
 
-	if strings.TrimSpace(params.PickupRegionCode) == "" || strings.TrimSpace(params.PickupLocationText) == "" || strings.TrimSpace(params.VisibilityScope) == "" || strings.TrimSpace(params.ContactMethod) == "" {
+	if strings.TrimSpace(params.PickupRegionCode) == "" || strings.TrimSpace(params.VisibilityScope) == "" || strings.TrimSpace(params.ContactMethod) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required pickup or contact fields")
 	}
 
@@ -372,6 +375,10 @@ func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) 
 
 	if !isAllowedSecondhandValue(params.ContactMethod, []string{"phone", "whatsapp", "chat", "both", "chat_or_whatsapp"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid contact method")
+	}
+
+	if strings.TrimSpace(params.BusinessStatus) != "" && !isAllowedSecondhandValue(params.BusinessStatus, []string{"available", "sold"}) {
+		return errcode.New(errcode.CodeValidationError, "invalid business status")
 	}
 
 	if !params.Contact.ShowPhone && !params.Contact.ShowWhatsApp && !params.Contact.ShowChat {
