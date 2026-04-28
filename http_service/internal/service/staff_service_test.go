@@ -1,0 +1,93 @@
+/*
+ * Staff service tests.
+ * 1. Bootstrap a staff account through OTP verify.
+ * 2. Promote a member to pro_user and validate staff user listing.
+ */
+package service
+
+import (
+	"context"
+	"testing"
+)
+
+// 1. TestBootstrapStaffAndUpdateUserRole validates staff bootstrap and role updates.
+func TestBootstrapStaffAndUpdateUserRole(t *testing.T) {
+	runtime := newTestRuntime(t)
+	runtime.Config.BootstrapStaffPhones = "+85291238888"
+	authService := NewAuthService(runtime)
+	staffService := NewStaffService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+
+	if _, err := authService.RequestOTP(context.Background(), RequestOTPParams{
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91238888",
+		Scene:            "login",
+	}); err != nil {
+		t.Fatalf("request staff otp: %v", err)
+	}
+
+	result, err := authService.VerifyOTP(context.Background(), VerifyOTPParams{
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91238888",
+		Scene:            "login",
+		Code:             "123456",
+	})
+	if err != nil {
+		t.Fatalf("verify staff otp: %v", err)
+	}
+
+	if !result.User.IsStaff || result.User.Role != RoleStaff {
+		t.Fatalf("expected bootstrap account to become staff, got %+v", result.User)
+	}
+
+	identity, err := authService.AuthenticateToken(context.Background(), result.AccessToken)
+	if err != nil {
+		t.Fatalf("authenticate staff token: %v", err)
+	}
+
+	me, err := staffService.GetStaffMe(context.Background(), identity.UserID)
+	if err != nil {
+		t.Fatalf("get staff me: %v", err)
+	}
+	if !me.IsStaff || me.Role != RoleStaff {
+		t.Fatalf("expected staff me payload, got %+v", me)
+	}
+
+	target := mustCreateUser(t, runtime, "+852", "91239999", &communityA.ID)
+	proUser := MemberTypeProUser
+	notStaff := false
+	updated, err := staffService.UpdateUserRole(context.Background(), identity.UserID, target.PublicID, StaffUserRoleUpdateParams{
+		MemberType: &proUser,
+		IsStaff:    &notStaff,
+	})
+	if err != nil {
+		t.Fatalf("update user role: %v", err)
+	}
+
+	if updated.MemberType != MemberTypeProUser || updated.IsStaff || updated.Role != MemberTypeProUser {
+		t.Fatalf("expected target user to become pro_user, got %+v", updated)
+	}
+
+	items, pagination, err := staffService.ListUsers(context.Background(), StaffUserListFilters{
+		Page:       1,
+		PageSize:   20,
+		MemberType: MemberTypeProUser,
+	})
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+
+	if pagination.Total < 1 {
+		t.Fatalf("expected at least one pro_user in pagination, got %+v", pagination)
+	}
+
+	found := false
+	for _, item := range items {
+		if item.PublicID == target.PublicID && item.Role == MemberTypeProUser {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected promoted user to appear in staff list")
+	}
+}

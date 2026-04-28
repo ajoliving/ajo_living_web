@@ -1,0 +1,45 @@
+# 1. 忽略 Go 编译产生的可执行文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 2. 二进制文件和测试产物
+__debug_bin
+*.test
+*.out
+
+# 3. 真实的配置文件（保护敏感信息）
+config.yaml
+.env
+.env.*
+!.env.example
+!.config.example.yaml
+
+# 4. Go 依赖和缓存
+go.sum
+
+# 5. 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 6. 编辑器目录和文件
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
+*.swo
+
+# 7. 系统文件
+.DS_Store
+
+# 8. 临时文件和日志
+tmp/
+*.log
+logs/
+coverage.out
+
+# 9. vendor 目录（如果使用 vendor 模式）
+vendor/
