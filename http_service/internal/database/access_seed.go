@@ -26,6 +26,9 @@ func SeedAccessControl(ctx context.Context, db *gorm.DB) error {
 		if err != nil {
 			return err
 		}
+		if err := pruneDeprecatedRoles(tx, rolesByCode); err != nil {
+			return err
+		}
 
 		return seedRolePermissions(tx, rolesByCode, permissionsByCode)
 	})
@@ -117,6 +120,24 @@ func seedRolePermissions(tx *gorm.DB, rolesByCode map[string]model.Role, permiss
 			continue
 		}
 
+		permissionIDs := make([]int64, 0, len(permissionCodes))
+		for _, permissionCode := range permissionCodes {
+			permission, exists := permissionsByCode[permissionCode]
+			if !exists {
+				continue
+			}
+			permissionIDs = append(permissionIDs, permission.ID)
+		}
+
+		if len(permissionIDs) > 0 {
+			if err := tx.
+				Where("role_id = ? AND permission_id NOT IN ?", role.ID, permissionIDs).
+				Delete(&model.RolePermission{}).
+				Error; err != nil {
+				return err
+			}
+		}
+
 		for _, permissionCode := range permissionCodes {
 			permission, exists := permissionsByCode[permissionCode]
 			if !exists {
@@ -141,4 +162,34 @@ func seedRolePermissions(tx *gorm.DB, rolesByCode map[string]model.Role, permiss
 	}
 
 	return nil
+}
+
+// 5. pruneDeprecatedRoles removes obsolete system role records and bindings.
+func pruneDeprecatedRoles(tx *gorm.DB, rolesByCode map[string]model.Role) error {
+	activeCodes := make([]string, 0, len(rolesByCode))
+	for code := range rolesByCode {
+		activeCodes = append(activeCodes, code)
+	}
+
+	var deprecatedRoles []model.Role
+	if err := tx.Where("is_system = ? AND code NOT IN ?", true, activeCodes).Find(&deprecatedRoles).Error; err != nil {
+		return err
+	}
+	if len(deprecatedRoles) == 0 {
+		return nil
+	}
+
+	roleIDs := make([]int64, 0, len(deprecatedRoles))
+	for _, role := range deprecatedRoles {
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	if err := tx.Where("role_id IN ?", roleIDs).Delete(&model.UserRoleBinding{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("role_id IN ?", roleIDs).Delete(&model.RolePermission{}).Error; err != nil {
+		return err
+	}
+
+	return tx.Where("id IN ?", roleIDs).Delete(&model.Role{}).Error
 }

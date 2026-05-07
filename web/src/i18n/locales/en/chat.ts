@@ -6,6 +6,8 @@ export default {
   emptyThreadDescription: 'The thread will render message bubbles, listing summary, and read states here.',
   catalogueNote: 'Review conversations, unread counts, and listing context in one place.',
   conversations: 'Conversations',
+  systemNoticeTitle: 'Notifications',
+  systemNoticeSubtitle: 'Official updates and campaign alerts',
   loadingConversations: 'Loading conversations...',
   listingPrice: 'Listing price',
   loadingMessages: 'Loading messages...',

@@ -31,16 +31,22 @@ export interface ChatConversation {
 // 4. 定義聊天頁訊息方向
 export type ChatMessageRole = 'self' | 'peer';
 
-// 5. 定義聊天頁訊息
+// 5. 定義聊天頁會話類型
+export type ChatConversationType = 'direct_listing_chat' | 'system_notice';
+
+// 6. 定義聊天頁訊息
 export interface ChatMessageView {
   id: string;
   chat_id: string;
   sender_role: ChatMessageRole;
   body: string;
+  message_type: string;
+  action_label?: string;
+  action_url?: string;
   sent_at: string;
 }
 
-// 6. 定義聊天列表商品摘要
+// 7. 定義聊天列表商品摘要
 export interface ChatListingView {
   id: string;
   title: string;
@@ -51,7 +57,7 @@ export interface ChatListingView {
   cover_image_url?: string;
 }
 
-// 7. 定義聊天對方摘要
+// 8. 定義聊天對方摘要
 export interface ChatPeerView {
   user_id: string;
   public_id: string;
@@ -60,9 +66,10 @@ export interface ChatPeerView {
   role_in_chat: string;
 }
 
-// 8. 定義聊天會話摘要
+// 9. 定義聊天會話摘要
 export interface ChatConversationView {
   id: string;
+  type: ChatConversationType;
   listing: ChatListingView;
   peer: ChatPeerView;
   unread_count: number;

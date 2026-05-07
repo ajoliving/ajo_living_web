@@ -44,6 +44,8 @@
   --space-stack-md: 1.25rem;
   --space-stack-lg: 2rem;
   --space-card: 1.5rem;
+  --layout-page-max-width: 92rem;
+  --layout-page-padding-inline: 1rem;
 
   /* Font */
   --font-sans: "Avenir Next", "PingFang TC", "Noto Sans TC", sans-serif;

@@ -45,6 +45,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := database.SeedSystemNotificationAccount(context.Background(), db); err != nil {
+		log.Fatal(err)
+	}
+
 	if cfg.SeedCommunities {
 		if err := database.SeedCommunities(context.Background(), db); err != nil {
 			log.Fatal(err)
@@ -72,6 +76,7 @@ func main() {
 	staffService := service.NewStaffService(runtime)
 	uploadService := service.NewUploadService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
+	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
 	chatService := service.NewChatService(runtime, secondhandService)
 	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
@@ -88,6 +93,7 @@ func main() {
 		StaffService:        staffService,
 		UploadService:       uploadService,
 		SecondhandService:   secondhandService,
+		PropertyService:     propertyService,
 		ChatService:         chatService,
 		OrderService:        orderService,
 		NotificationService: notificationService,

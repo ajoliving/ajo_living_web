@@ -45,6 +45,16 @@ func (s *ChatService) loadChatPeerMap(ctx context.Context, userID int64, chatPub
 
 	for _, item := range rows {
 		profile := profileMap[item.UserID]
+		if item.RoleInChat == "system" {
+			result[item.ChatPublicID] = &ChatPeerSummary{
+				UserID:      fmtInt64(item.UserID),
+				PublicID:    safeUserPublicID(profile),
+				DisplayName: model.SystemNotificationDisplayName,
+				RoleInChat:  item.RoleInChat,
+			}
+			continue
+		}
+
 		result[item.ChatPublicID] = &ChatPeerSummary{
 			UserID:      fmtInt64(item.UserID),
 			PublicID:    safeUserPublicID(profile),

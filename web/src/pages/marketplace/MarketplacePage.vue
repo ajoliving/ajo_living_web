@@ -33,6 +33,10 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
     return [...items, { label: t('nav.filter') }];
   }
 
+  if (path.startsWith('/marketplace/settings')) {
+    return [...items, { label: t('nav.settings') }];
+  }
+
   if (
     path.startsWith('/marketplace/my') ||
     path.startsWith('/marketplace/my-listings') ||
@@ -131,11 +135,11 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
 .marketplace-breadcrumb {
   display: flex;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-page-max-width);
   align-items: center;
   gap: 0.5rem;
   margin: 0 auto;
-  padding: 1rem 2rem;
+  padding: 1rem var(--layout-page-padding-inline);
   color: #414848;
   font-size: 0.875rem;
   line-height: 1.5;
@@ -163,7 +167,7 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
 
 @media (max-width: 767px) {
   .marketplace-breadcrumb {
-    padding: 1rem 1.25rem;
+    padding: 1rem var(--layout-page-padding-inline);
   }
 }
 </style>

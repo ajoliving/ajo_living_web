@@ -8,6 +8,8 @@ package service
 import (
 	"context"
 	"testing"
+
+	"ajoliving_web/http_service/internal/model"
 )
 
 // 1. TestBootstrapStaffAndUpdateUserRole validates staff bootstrap and role updates.
@@ -52,6 +54,9 @@ func TestBootstrapStaffAndUpdateUserRole(t *testing.T) {
 	if !me.IsStaff || me.Role != RoleStaff {
 		t.Fatalf("expected staff me payload, got %+v", me)
 	}
+	if len(me.Roles) != 2 || me.Roles[0] != model.RoleCodeSuperAdmin || me.Roles[1] != model.RoleCodeMember {
+		t.Fatalf("expected compact staff role set, got %+v", me.Roles)
+	}
 
 	target := mustCreateUser(t, runtime, "+852", "91239999", &communityA.ID)
 	proUser := MemberTypeProUser
@@ -66,6 +71,9 @@ func TestBootstrapStaffAndUpdateUserRole(t *testing.T) {
 
 	if updated.MemberType != MemberTypeProUser || updated.IsStaff || updated.Role != MemberTypeProUser {
 		t.Fatalf("expected target user to become pro_user, got %+v", updated)
+	}
+	if len(updated.Roles) != 1 || updated.Roles[0] != model.RoleCodeMember {
+		t.Fatalf("expected compact member role set, got %+v", updated.Roles)
 	}
 
 	items, pagination, err := staffService.ListUsers(context.Background(), StaffUserListFilters{

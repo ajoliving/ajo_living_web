@@ -7,8 +7,11 @@ import httpClient from '@/httpapis';
 import type { ApiResponse, PaginatedResult } from '@/model/api';
 import type {
   ContactAccessResult,
+  DiscoverPayloadResponse,
+  DiscoverPlacementPayload,
   ListingListParams,
   MyListingListParams,
+  SettingsListingListParams,
   SecondhandListingDetailResponse,
   SecondhandListingSummaryResponse,
   UpsertSecondhandListingPayload,
@@ -20,45 +23,78 @@ export const fetchSecondhandListings = (params: ListingListParams = {}) =>
     params,
   });
 
-// 2. 取得二手帖子詳情
+// 2. 取得二手發現頁配置
+export const fetchSecondhandDiscover = () =>
+  httpClient.get<ApiResponse<DiscoverPayloadResponse>>('/secondhand/discover');
+
+// 3. 取得二手帖子詳情
 export const fetchSecondhandListingDetail = (listingId: string) =>
   httpClient.get<ApiResponse<SecondhandListingDetailResponse>>(`/listings/${listingId}`);
 
-// 3. 建立二手帖子草稿
+// 4. 建立二手帖子草稿
 export const createSecondhandListing = (payload: UpsertSecondhandListingPayload) =>
   httpClient.post<ApiResponse<SecondhandListingDetailResponse>>('/listings', payload);
 
-// 4. 更新二手帖子
+// 5. 更新二手帖子
 export const updateSecondhandListing = (listingId: string, payload: UpsertSecondhandListingPayload) =>
   httpClient.patch<ApiResponse<SecondhandListingDetailResponse>>(`/listings/${listingId}`, payload);
 
-// 5. 發布二手帖子
+// 6. 發布二手帖子
 export const publishSecondhandListing = (listingId: string) =>
   httpClient.post<ApiResponse<SecondhandListingDetailResponse>>(`/listings/${listingId}/publish`);
 
-// 6. 重新發布二手帖子
+// 7. 重新發布二手帖子
 export const republishSecondhandListing = (listingId: string) =>
   httpClient.post<ApiResponse<SecondhandListingDetailResponse>>(`/listings/${listingId}/republish`);
 
-// 7. 標記帖子售出
+// 8. 標記帖子售出
 export const markSecondhandListingSold = (listingId: string) =>
   httpClient.post<ApiResponse<{ listing_id: string; business_status: string }>>(
     `/listings/${listingId}/mark-sold`,
   );
 
-// 8. 下架帖子
+// 9. 下架帖子
 export const deactivateSecondhandListing = (listingId: string) =>
   httpClient.post<ApiResponse<{ listing_id: string; publication_status: string }>>(
     `/listings/${listingId}/deactivate`,
   );
 
-// 9. 取得我的二手帖子
+// 10. 取得我的二手帖子
 export const fetchMySecondhandListings = (params: MyListingListParams = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<SecondhandListingSummaryResponse>>>(
     '/me/secondhand/listings',
     { params },
   );
 
-// 10. 驗證聯絡方式權限
+// 11. 取得設定頁全部二手帖子
+export const fetchSettingsSecondhandListings = (params: SettingsListingListParams = {}) =>
+  httpClient.get<ApiResponse<PaginatedResult<SecondhandListingSummaryResponse>>>(
+    '/secondhand/settings/listings',
+    { params },
+  );
+
+// 12. 取得設定頁發現廣告位
+export const fetchSettingsDiscoverPlacements = () =>
+  httpClient.get<ApiResponse<DiscoverPayloadResponse>>('/secondhand/settings/discover-placements');
+
+// 13. 儲存設定頁發現廣告位
+export const saveSettingsDiscoverPlacements = (placements: DiscoverPlacementPayload[]) =>
+  httpClient.put<ApiResponse<DiscoverPayloadResponse>>('/secondhand/settings/discover-placements', {
+    placements,
+  });
+
+// 14. 設定頁標記任意帖子售出
+export const markSettingsSecondhandListingSold = (listingId: string) =>
+  httpClient.post<ApiResponse<{ listing_id: string; business_status: string }>>(
+    `/secondhand/settings/listings/${listingId}/mark-sold`,
+  );
+
+// 15. 設定頁下架任意帖子
+export const deactivateSettingsSecondhandListing = (listingId: string) =>
+  httpClient.post<ApiResponse<{ listing_id: string; publication_status: string }>>(
+    `/secondhand/settings/listings/${listingId}/deactivate`,
+  );
+
+// 16. 驗證聯絡方式權限
 export const fetchListingContactAccess = (listingId: string) =>
   httpClient.post<ApiResponse<ContactAccessResult>>(`/listings/${listingId}/contact-access`);

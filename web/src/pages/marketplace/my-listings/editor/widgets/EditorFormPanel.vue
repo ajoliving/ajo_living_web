@@ -7,6 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
+import AppGlassSelect from '@/shared/components/base/AppGlassSelect.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
 import type {
@@ -39,12 +40,9 @@ const emit = defineEmits<{
   selectCover: [slotId: string];
 }>();
 
-type SingleSelectKey = 'categoryCode' | 'priceMode' | 'condition' | 'districtCode' | 'businessStatus';
-
 const { t } = useI18n();
 const isDropActive = ref(false);
 const isDeliveryMenuOpen = ref(false);
-const openSingleSelect = ref<SingleSelectKey | ''>('');
 const deliveryMenuRef = ref<HTMLElement | null>(null);
 const uploadedImageSlots = computed(() =>
   props.imageSlots.filter((slot) => Boolean(slot.url) || slot.uploading),
@@ -66,21 +64,17 @@ const selectedDeliveryTagLabel = computed(() => {
     .join(' / ');
 });
 
-// 1. 讀取單選下拉顯示文字
-const resolveSingleSelectLabel = (options: EditorOption[], value: string): string =>
-  options.find((option) => option.value === value)?.label ?? value;
-
-// 2. 更新封面圖片
+// 1. 更新封面圖片
 const selectCover = (slotId: string): void => {
   emit('selectCover', slotId);
 };
 
-// 3. 轉交批量圖片 input 事件
+// 2. 轉交批量圖片 input 事件
 const handleImagesChange = (event: Event): void => {
   emit('imagesChange', event);
 };
 
-// 4. 處理拖拽圖片檔案
+// 3. 處理拖拽圖片檔案
 const handleImagesDrop = (event: DragEvent): void => {
   isDropActive.value = false;
   const files = Array.from(event.dataTransfer?.files ?? []);
@@ -90,68 +84,34 @@ const handleImagesDrop = (event: DragEvent): void => {
   }
 };
 
-// 5. 更新可見範圍開關
+// 4. 更新可見範圍開關
 const updateBuildingOnly = (event: Event): void => {
   const input = event.target as HTMLInputElement;
   props.formState.visibility = input.checked ? 'building_only' : 'public';
 };
 
-// 6. 切換交收標籤
+// 5. 切換交收標籤
 const toggleDeliveryTag = (value: string): void => {
   props.formState.deliveryTags = props.formState.deliveryTags.includes(value)
     ? props.formState.deliveryTags.filter((item) => item !== value)
     : [...props.formState.deliveryTags, value];
 };
 
-// 7. 切換單選下拉
-const toggleSingleSelect = (key: SingleSelectKey): void => {
-  openSingleSelect.value = openSingleSelect.value === key ? '' : key;
-  isDeliveryMenuOpen.value = false;
-};
-
-// 8. 更新單選下拉值
-const updateSingleSelect = (key: SingleSelectKey, value: string): void => {
-  switch (key) {
-    case 'categoryCode':
-      props.formState.categoryCode = value as ListingEditorFormState['categoryCode'];
-      break;
-    case 'priceMode':
-      props.formState.priceMode = value as ListingEditorFormState['priceMode'];
-      break;
-    case 'condition':
-      props.formState.condition = value as ListingEditorFormState['condition'];
-      break;
-    case 'districtCode':
-      props.formState.districtCode = value as ListingEditorFormState['districtCode'];
-      break;
-    case 'businessStatus':
-      props.formState.businessStatus = value as ListingEditorFormState['businessStatus'];
-      break;
-    default:
-      break;
-  }
-
-  openSingleSelect.value = '';
-};
-
-// 9. 點擊外部時關閉下拉選單
+// 6. 點擊外部時關閉下拉選單
 const closeDeliveryMenuOnOutsideClick = (event: PointerEvent): void => {
   const target = event.target as HTMLElement;
 
   if (!deliveryMenuRef.value?.contains(target)) {
     isDeliveryMenuOpen.value = false;
   }
-  if (!target.closest('.editor-select')) {
-    openSingleSelect.value = '';
-  }
 };
 
-// 10. 掛載全域點擊監聽
+// 7. 掛載全域點擊監聽
 onMounted(() => {
   document.addEventListener('pointerdown', closeDeliveryMenuOnOutsideClick);
 });
 
-// 11. 移除全域點擊監聽
+// 8. 移除全域點擊監聽
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closeDeliveryMenuOnOutsideClick);
 });
@@ -185,68 +145,18 @@ onBeforeUnmount(() => {
 
         <div class="editor-field">
           <span>{{ t('marketplace.editor.categoryField') }}</span>
-          <div class="editor-select">
-            <button
-              type="button"
-              class="editor-select__trigger"
-              :aria-expanded="openSingleSelect === 'categoryCode'"
-              @click="toggleSingleSelect('categoryCode')"
-            >
-              <span>{{ resolveSingleSelectLabel(props.categoryOptions, props.formState.categoryCode) }}</span>
-              <AppIcon
-                name="chevron-down"
-                :size="16"
-              />
-            </button>
-            <div
-              v-if="openSingleSelect === 'categoryCode'"
-              class="editor-select__menu"
-            >
-              <button
-                v-for="option in props.categoryOptions"
-                :key="option.value"
-                type="button"
-                class="editor-select__option"
-                :class="props.formState.categoryCode === option.value ? 'editor-select__option--active' : ''"
-                @click="updateSingleSelect('categoryCode', option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
+          <AppGlassSelect
+            v-model="props.formState.categoryCode"
+            :options="props.categoryOptions"
+          />
         </div>
 
         <div class="editor-field">
           <span>{{ t('marketplace.editor.priceMode') }}</span>
-          <div class="editor-select">
-            <button
-              type="button"
-              class="editor-select__trigger"
-              :aria-expanded="openSingleSelect === 'priceMode'"
-              @click="toggleSingleSelect('priceMode')"
-            >
-              <span>{{ resolveSingleSelectLabel(props.priceModeOptions, props.formState.priceMode) }}</span>
-              <AppIcon
-                name="chevron-down"
-                :size="16"
-              />
-            </button>
-            <div
-              v-if="openSingleSelect === 'priceMode'"
-              class="editor-select__menu"
-            >
-              <button
-                v-for="option in props.priceModeOptions"
-                :key="option.value"
-                type="button"
-                class="editor-select__option"
-                :class="props.formState.priceMode === option.value ? 'editor-select__option--active' : ''"
-                @click="updateSingleSelect('priceMode', option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
+          <AppGlassSelect
+            v-model="props.formState.priceMode"
+            :options="props.priceModeOptions"
+          />
         </div>
 
         <label class="editor-field">
@@ -261,68 +171,18 @@ onBeforeUnmount(() => {
 
         <div class="editor-field">
           <span>{{ t('common.label.condition') }}</span>
-          <div class="editor-select">
-            <button
-              type="button"
-              class="editor-select__trigger"
-              :aria-expanded="openSingleSelect === 'condition'"
-              @click="toggleSingleSelect('condition')"
-            >
-              <span>{{ resolveSingleSelectLabel(props.conditionOptions, props.formState.condition) }}</span>
-              <AppIcon
-                name="chevron-down"
-                :size="16"
-              />
-            </button>
-            <div
-              v-if="openSingleSelect === 'condition'"
-              class="editor-select__menu"
-            >
-              <button
-                v-for="option in props.conditionOptions"
-                :key="option.value"
-                type="button"
-                class="editor-select__option"
-                :class="props.formState.condition === option.value ? 'editor-select__option--active' : ''"
-                @click="updateSingleSelect('condition', option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
+          <AppGlassSelect
+            v-model="props.formState.condition"
+            :options="props.conditionOptions"
+          />
         </div>
 
         <div class="editor-field">
           <span>{{ t('marketplace.filter.area') }}</span>
-          <div class="editor-select">
-            <button
-              type="button"
-              class="editor-select__trigger"
-              :aria-expanded="openSingleSelect === 'districtCode'"
-              @click="toggleSingleSelect('districtCode')"
-            >
-              <span>{{ resolveSingleSelectLabel(props.areaOptions, props.formState.districtCode) }}</span>
-              <AppIcon
-                name="chevron-down"
-                :size="16"
-              />
-            </button>
-            <div
-              v-if="openSingleSelect === 'districtCode'"
-              class="editor-select__menu"
-            >
-              <button
-                v-for="option in props.areaOptions"
-                :key="option.value"
-                type="button"
-                class="editor-select__option"
-                :class="props.formState.districtCode === option.value ? 'editor-select__option--active' : ''"
-                @click="updateSingleSelect('districtCode', option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
+          <AppGlassSelect
+            v-model="props.formState.districtCode"
+            :options="props.areaOptions"
+          />
         </div>
 
         <label class="editor-donation-field">
@@ -335,35 +195,10 @@ onBeforeUnmount(() => {
 
         <div class="editor-field">
           <span>{{ t('marketplace.editor.businessStatus') }}</span>
-          <div class="editor-select">
-            <button
-              type="button"
-              class="editor-select__trigger"
-              :aria-expanded="openSingleSelect === 'businessStatus'"
-              @click="toggleSingleSelect('businessStatus')"
-            >
-              <span>{{ resolveSingleSelectLabel(props.businessStatusOptions, props.formState.businessStatus) }}</span>
-              <AppIcon
-                name="chevron-down"
-                :size="16"
-              />
-            </button>
-            <div
-              v-if="openSingleSelect === 'businessStatus'"
-              class="editor-select__menu"
-            >
-              <button
-                v-for="option in props.businessStatusOptions"
-                :key="option.value"
-                type="button"
-                class="editor-select__option"
-                :class="props.formState.businessStatus === option.value ? 'editor-select__option--active' : ''"
-                @click="updateSingleSelect('businessStatus', option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-          </div>
+          <AppGlassSelect
+            v-model="props.formState.businessStatus"
+            :options="props.businessStatusOptions"
+          />
         </div>
       </div>
     </section>
@@ -841,12 +676,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.editor-select {
-  position: relative;
-  min-width: 0;
-}
-
-.editor-select__trigger,
 .editor-multi-select__trigger {
   display: flex;
   width: 100%;
@@ -868,15 +697,12 @@ onBeforeUnmount(() => {
     box-shadow 0.2s ease;
 }
 
-.editor-select__trigger:hover,
-.editor-select__trigger[aria-expanded='true'],
 .editor-multi-select__trigger:hover,
 .editor-multi-select__trigger[aria-expanded='true'] {
   border-color: rgb(var(--color-primary));
   box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.16);
 }
 
-.editor-field .editor-select__trigger span,
 .editor-field .editor-multi-select__trigger span {
   min-width: 0;
   max-width: 100%;
@@ -891,43 +717,49 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.editor-select__trigger svg,
 .editor-multi-select__trigger svg {
   flex-shrink: 0;
 }
 
-.editor-select__menu,
 .editor-multi-select__menu {
   position: absolute;
-  z-index: 10;
+  z-index: 40;
   top: calc(100% - 1px);
   left: 0;
   right: 0;
   display: grid;
   gap: 0.25rem;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid rgb(var(--color-border) / 0.62);
   border-radius: 0 0 0.625rem 0.625rem;
-  background: #ffffff;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0.08) 46%, transparent 100%),
+    linear-gradient(
+      180deg,
+      rgb(var(--color-dropdown-surface) / 0.52),
+      rgb(var(--color-surface) / 0.28)
+    );
   max-height: 14rem;
   overflow-y: auto;
   padding: 0.5rem;
-  box-shadow: 0 16px 36px rgb(0 0 0 / 0.12);
+  box-shadow:
+    0 20px 48px rgb(15 23 42 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.42),
+    inset 0 -1px 0 rgb(255 255 255 / 0.16);
+  backdrop-filter: blur(34px) saturate(190%);
+  -webkit-backdrop-filter: blur(34px) saturate(190%);
   scrollbar-color: rgb(var(--color-border)) transparent;
   scrollbar-width: thin;
 }
 
-.editor-select__menu::-webkit-scrollbar,
 .editor-multi-select__menu::-webkit-scrollbar {
   width: 0.45rem;
 }
 
-.editor-select__menu::-webkit-scrollbar-thumb,
 .editor-multi-select__menu::-webkit-scrollbar-thumb {
   border-radius: 9999px;
   background: rgb(var(--color-border));
 }
 
-.editor-select__option,
 .editor-multi-select__option {
   display: flex;
   cursor: pointer;
@@ -936,7 +768,7 @@ onBeforeUnmount(() => {
   width: 100%;
   border: 0;
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: transparent;
   padding: 0.65rem 0.7rem;
   color: rgb(var(--color-text));
   font-size: 0.875rem;
@@ -946,14 +778,8 @@ onBeforeUnmount(() => {
   transition: background-color 0.2s ease;
 }
 
-.editor-select__option:hover,
-.editor-select__option--active,
 .editor-multi-select__option:hover {
-  background: rgb(var(--color-surface));
-}
-
-.editor-select__option--active {
-  color: rgb(var(--color-primary));
+  background: rgb(255 255 255 / 0.28);
 }
 
 .editor-multi-select__option input {

@@ -35,14 +35,12 @@ const emit = defineEmits<{
  */
 const modules = computed(() => props.content.modules);
 const carouselRoot = ref<HTMLElement | null>(null);
-const carouselPaused = ref(false);
 
 interface HomeCarouselSlide {
   key: string;
   module: HomeModuleDefinition;
 }
 
-const AUTO_PLAY_SPEED_PX_PER_SECOND = 56;
 const CAROUSEL_GAP = 28;
 const CAROUSEL_MAX_ROTATION = 28;
 const CAROUSEL_MAX_DEPTH = 140;
@@ -159,9 +157,8 @@ const animateCarousel = (timestamp: number) => {
   carouselLastFrame = timestamp;
 
   if (carouselTrack > 0) {
-    const autoSpeed = carouselPaused.value || isCarouselDragging ? 0 : AUTO_PLAY_SPEED_PX_PER_SECOND;
     carouselScrollX = modulo(
-      carouselScrollX + (autoSpeed + carouselVelocityX) * deltaSeconds,
+      carouselScrollX + carouselVelocityX * deltaSeconds,
       carouselTrack,
     );
 
@@ -189,14 +186,6 @@ const stopCarousel = () => {
     window.cancelAnimationFrame(carouselFrameId);
     carouselFrameId = null;
   }
-};
-
-const handleCarouselMouseEnter = () => {
-  carouselPaused.value = true;
-};
-
-const handleCarouselMouseLeave = () => {
-  carouselPaused.value = false;
 };
 
 /*
@@ -550,8 +539,6 @@ onBeforeUnmount(() => {
           ref="carouselRoot"
           class="home-carousel"
           :aria-label="props.content.carouselAriaLabel"
-          @mouseenter="handleCarouselMouseEnter"
-          @mouseleave="handleCarouselMouseLeave"
         >
           <div class="home-carousel__viewport">
             <div class="home-carousel__track">
@@ -849,6 +836,7 @@ html[data-theme='default'] .stage-showcase {
   object-position: center center;
   pointer-events: none;
   -webkit-user-drag: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -907,7 +895,9 @@ html[data-theme='default'] .stage-showcase {
   inset: 0;
   z-index: 3;
   padding: 3vw;
-  pointer-events: none;
+  pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .txt {

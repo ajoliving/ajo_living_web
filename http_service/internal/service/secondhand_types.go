@@ -77,7 +77,44 @@ type MySecondhandFilters struct {
 	Status   string
 }
 
-// 6. ListingImageResponse defines image response payload.
+// 6. SecondhandSettingsListFilters defines operator list filters.
+type SecondhandSettingsListFilters struct {
+	Page         int
+	PageSize     int
+	Keyword      string
+	CategoryCode string
+	Status       string
+}
+
+// 7. DiscoverPlacementInput defines one configurable discover slot.
+type DiscoverPlacementInput struct {
+	Scene        string `json:"scene"`
+	CategoryCode string `json:"category_code"`
+	SlotIndex    int    `json:"slot_index"`
+	ListingID    string `json:"listing_id"`
+}
+
+// 8. DiscoverPlacementResponse defines one discover slot response.
+type DiscoverPlacementResponse struct {
+	Scene        string                    `json:"scene"`
+	CategoryCode string                    `json:"category_code"`
+	SlotIndex    int                       `json:"slot_index"`
+	Listing      *SecondhandListingSummary `json:"listing,omitempty"`
+}
+
+// 9. DiscoverPayload defines the public discover page payload.
+type DiscoverPayload struct {
+	Hero       []DiscoverPlacementResponse            `json:"hero"`
+	Categories map[string][]DiscoverPlacementResponse `json:"categories"`
+}
+
+// 10. DiscoverSettingsPayload defines the settings page slot payload.
+type DiscoverSettingsPayload struct {
+	Hero       []DiscoverPlacementResponse            `json:"hero"`
+	Categories map[string][]DiscoverPlacementResponse `json:"categories"`
+}
+
+// 11. ListingImageResponse defines image response payload.
 type ListingImageResponse struct {
 	MediaAssetID string `json:"media_asset_id"`
 	URL          string `json:"url"`
@@ -85,7 +122,7 @@ type ListingImageResponse struct {
 	IsCover      bool   `json:"is_cover"`
 }
 
-// 7. ListingContactSummary defines contact channel summary.
+// 12. ListingContactSummary defines contact channel summary.
 type ListingContactSummary struct {
 	ShowPhone    bool `json:"show_phone"`
 	ShowWhatsApp bool `json:"show_whatsapp"`
@@ -93,7 +130,7 @@ type ListingContactSummary struct {
 	ShowInquiry  bool `json:"show_inquiry_form"`
 }
 
-// 8. SecondhandListingSummary defines public list payload.
+// 13. SecondhandListingSummary defines public list payload.
 type SecondhandListingSummary struct {
 	ListingID             string                `json:"listing_id"`
 	Title                 string                `json:"title"`
@@ -117,7 +154,7 @@ type SecondhandListingSummary struct {
 	CoverImage            *ListingImageResponse `json:"cover_image,omitempty"`
 }
 
-// 9. UserPreviewResponse defines reusable member display payload.
+// 14. UserPreviewResponse defines reusable member display payload.
 type UserPreviewResponse struct {
 	UserID                string `json:"user_id"`
 	PublicID              string `json:"public_id"`
@@ -126,7 +163,7 @@ type UserPreviewResponse struct {
 	PublisherIdentityType string `json:"publisher_identity_type"`
 }
 
-// 10. SecondhandListingDetail defines detail payload.
+// 15. SecondhandListingDetail defines detail payload.
 type SecondhandListingDetail struct {
 	SecondhandListingSummary
 	Description        string                 `json:"description"`
@@ -138,14 +175,14 @@ type SecondhandListingDetail struct {
 	ContactSummary     ListingContactSummary  `json:"contact_summary"`
 }
 
-// 11. ContactAccessResult defines contact access payload.
+// 16. ContactAccessResult defines contact access payload.
 type ContactAccessResult struct {
 	ListingID       string            `json:"listing_id"`
 	AllowedChannels map[string]bool   `json:"allowed_channels"`
 	ContactPayload  map[string]string `json:"contact_payload,omitempty"`
 }
 
-// 12. toISOTime converts a time pointer to RFC3339 string pointer.
+// 17. toISOTime converts a time pointer to RFC3339 string pointer.
 func toISOTime(value *model.Listing) *string {
 	if value == nil || value.ExpireAt == nil {
 		return nil

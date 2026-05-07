@@ -1,6 +1,6 @@
 <!--
  * 登入頁表單面板。
- * 1. 展示郵箱登入、郵箱註冊與 OTP 登入表單。
+ * 1. 展示郵箱密碼登入、郵箱驗證碼登入、郵箱註冊與手機 OTP 登入表單。
  * 2. 將表單輸入與操作事件回傳給頁面入口。
 -->
 <script setup lang="ts">
@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { LoginAuthMode, LoginAuthModeSwitchIcon, LoginEmailAction } from '../login';
+import type { LoginAuthMode, LoginAuthModeSwitchIcon, LoginEmailAction, LoginEmailMethod } from '../login';
 
 interface LoginFormPanelProps {
   authMode: LoginAuthMode;
@@ -16,6 +16,7 @@ interface LoginFormPanelProps {
   authModeSwitchLabel: string;
   emailAction: LoginEmailAction;
   emailActionSwitchLabel: string;
+  emailLoginMethod: LoginEmailMethod;
   displayName: string;
   email: string;
   password: string;
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   'update:otp': [value: string];
   'update:rememberMe': [value: boolean];
   'request-otp': [];
+  'set-email-login-method': [value: LoginEmailMethod];
   'sign-out': [];
   'submit-login': [];
   'toggle-auth-mode': [];
@@ -81,6 +83,28 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
         @submit.prevent="emit('submit-login')"
       >
         <template v-if="props.authMode === 'email'">
+          <div
+            v-show="props.emailAction === 'login'"
+            class="login-method-tabs grid grid-cols-2 rounded-lg bg-surface-raised p-1"
+          >
+            <button
+              type="button"
+              class="rounded-md px-3 py-2 text-sm font-bold transition"
+              :class="props.emailLoginMethod === 'password' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
+              @click="emit('set-email-login-method', 'password')"
+            >
+              {{ t('auth.passwordLogin') }}
+            </button>
+            <button
+              type="button"
+              class="rounded-md px-3 py-2 text-sm font-bold transition"
+              :class="props.emailLoginMethod === 'code' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
+              @click="emit('set-email-login-method', 'code')"
+            >
+              {{ t('auth.codeLogin') }}
+            </button>
+          </div>
+
           <label
             v-show="props.emailAction === 'register'"
             class="block"
@@ -122,7 +146,10 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
             </div>
           </label>
 
-          <label class="block">
+          <label
+            v-show="props.emailAction === 'register' || props.emailLoginMethod === 'password'"
+            class="block"
+          >
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
               <input
@@ -130,7 +157,7 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.passwordPlaceholder')"
                 type="password"
-                autocomplete="current-password"
+                :autocomplete="props.emailAction === 'register' ? 'new-password' : 'current-password'"
                 @input="emit('update:password', readInputValue($event))"
               >
               <AppIcon
@@ -138,6 +165,32 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
                 :size="20"
                 class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
+            </div>
+          </label>
+
+          <label
+            v-show="props.emailAction === 'login' && props.emailLoginMethod === 'code'"
+            class="block"
+          >
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.emailOtp') }}</span>
+            <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <input
+                :value="props.otp"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.emailOtpPlaceholder')"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                @input="emit('update:otp', readInputValue($event))"
+              >
+              <button
+                type="button"
+                class="rounded-lg border border-border px-4 py-3 text-sm font-bold text-text-muted transition hover:bg-surface-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="props.requestingOtp"
+                @click="emit('request-otp')"
+              >
+                {{ props.otpRequestLabel }}
+              </button>
             </div>
           </label>
 
@@ -151,12 +204,6 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
               >
               <span class="text-sm font-semibold text-text-muted">{{ t('auth.rememberMe') }}</span>
             </label>
-            <button
-              type="button"
-              class="text-sm font-semibold text-primary transition hover:text-text"
-            >
-              {{ t('auth.forgotPassword') }}
-            </button>
           </div>
         </template>
 
@@ -187,6 +234,8 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.otpPlaceholder')"
                 type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
                 @input="emit('update:otp', readInputValue($event))"
               >
               <button

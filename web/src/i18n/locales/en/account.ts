@@ -71,12 +71,17 @@ export default {
   },
   notifications: {
     title: 'Notifications',
-    description: 'Review chat, listing, and transaction updates in one place.',
+    description: 'Review chat and transaction updates in one place.',
+    all: 'All',
     unread: 'Unread',
+    unreadOnly: 'Unread only',
     markAllRead: 'Mark all as read',
+    markAllSuccess: 'All notifications marked as read.',
     loading: 'Loading notifications...',
     emptyTitle: 'No notifications yet',
     emptyDescription: 'New interactions and alerts will appear here.',
+    loadError: 'Failed to load notifications. Please try again later.',
+    updateError: 'Failed to update notification state. Please try again later.',
     markRead: 'Mark read',
   },
   favourites: {

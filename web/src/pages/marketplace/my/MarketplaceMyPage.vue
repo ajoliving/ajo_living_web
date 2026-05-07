@@ -14,7 +14,7 @@ interface MyNavItem {
   key: string;
   label: string;
   to: string;
-  icon: 'browse' | 'plus-square' | 'inbox' | 'check-circle' | 'user' | 'message';
+  icon: 'browse' | 'plus-square' | 'inbox' | 'star' | 'user' | 'message';
   match: string[];
 }
 
@@ -22,6 +22,13 @@ const route = useRoute();
 const { t } = useI18n();
 
 const navItems = computed<MyNavItem[]>(() => [
+  {
+    key: 'chat',
+    label: t('marketplace.myHub.chat'),
+    to: '/marketplace/my/chat',
+    icon: 'message',
+    match: ['/marketplace/my/chat'],
+  },
   {
     key: 'listings',
     label: t('marketplace.myHub.publishedListings'),
@@ -47,7 +54,7 @@ const navItems = computed<MyNavItem[]>(() => [
     key: 'favorites',
     label: t('marketplace.myHub.favorites'),
     to: '/marketplace/my/favorites',
-    icon: 'check-circle',
+    icon: 'star',
     match: ['/marketplace/my/favorites'],
   },
   {
@@ -56,13 +63,6 @@ const navItems = computed<MyNavItem[]>(() => [
     to: '/marketplace/my/profile',
     icon: 'user',
     match: ['/marketplace/my/profile'],
-  },
-  {
-    key: 'chat',
-    label: t('marketplace.myHub.chat'),
-    to: '/marketplace/my/chat',
-    icon: 'message',
-    match: ['/marketplace/my/chat'],
   },
 ]);
 
@@ -111,18 +111,34 @@ const isNavActive = (item: MyNavItem): boolean =>
 .marketplace-my-hub {
   display: grid;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-page-max-width);
   gap: 1.25rem;
   margin: 0 auto;
-  padding: 1rem 2rem 5rem;
+  padding: 1rem var(--layout-page-padding-inline) 5rem;
   color: #1a1c1b;
 }
 
 .marketplace-my-hub__sidebar {
+  --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
+  --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
+  --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
   display: grid;
   align-content: start;
   gap: 1.5rem;
-  padding: 0.25rem 0.75rem 0.25rem 0;
+  border: 1px solid rgb(var(--color-border) / 0.3);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.76),
+      rgb(var(--color-toolbar-surface) / 0.64)
+    );
+  box-shadow:
+    0 16px 40px rgb(15 23 42 / 0.1),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06);
+  padding: 1rem;
+  backdrop-filter: blur(28px) saturate(184%);
+  -webkit-backdrop-filter: blur(28px) saturate(184%);
 }
 
 .marketplace-my-hub__kicker {
@@ -157,34 +173,76 @@ const isNavActive = (item: MyNavItem): boolean =>
 }
 
 .marketplace-my-hub__nav-item {
+  position: relative;
   display: inline-flex;
   min-height: 2.75rem;
   align-items: center;
   gap: 0.65rem;
-  border: 1px solid transparent;
+  border: 1px solid rgb(var(--color-border) / 0.24);
   border-radius: 0.75rem;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.62),
+      rgb(var(--color-toolbar-surface) / 0.48)
+    );
   padding: 0.65rem 0.85rem;
-  color: #414848;
+  color: rgb(var(--color-text) / 0.78);
   font-size: 0.9375rem;
   font-weight: 700;
   line-height: 1;
+  box-shadow:
+    0 12px 28px rgb(15 23 42 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
   transition:
     border-color 0.2s ease,
-    background-color 0.2s ease,
+    background 0.2s ease,
     color 0.2s ease;
 }
 
 .marketplace-my-hub__nav-item:hover {
-  border-color: rgb(var(--color-border));
-  background: rgb(var(--color-surface));
-  color: #002727;
+  border-color: rgb(var(--color-border) / 0.38);
+  color: rgb(var(--color-text));
 }
 
 .marketplace-my-hub__nav-item--active,
 .marketplace-my-hub__nav-item--active:hover {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: #ffffff;
+  border-color: rgb(var(--color-primary) / 0.28);
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.86),
+      rgb(var(--color-primary-soft) / 0.24)
+    );
+  color: var(--subroute-nav-active-color);
+  box-shadow:
+    0 14px 32px rgb(var(--color-primary) / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  text-shadow: var(--subroute-nav-active-shadow);
+}
+
+.marketplace-my-hub__nav-item::after {
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.42rem;
+  height: 1.5px;
+  border-radius: 999px;
+  background: var(--subroute-nav-underline);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease;
+  content: '';
+}
+
+.marketplace-my-hub__nav-item--active::after {
+  transform: scaleX(1);
+  opacity: 1;
 }
 
 .marketplace-my-hub__content {
@@ -205,7 +263,7 @@ const isNavActive = (item: MyNavItem): boolean =>
 
 @media (max-width: 767px) {
   .marketplace-my-hub {
-    padding: 1rem 1.25rem 4rem;
+    padding: 1rem var(--layout-page-padding-inline) 4rem;
   }
 }
 </style>

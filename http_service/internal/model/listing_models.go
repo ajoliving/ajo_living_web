@@ -1,6 +1,6 @@
 /*
  * Listing and media data models.
- * 1. Define shared listing entities and secondhand module extension.
+ * 1. Define shared listing entities, secondhand module extension, and discover placements.
  * 2. Keep sensitive contact and visibility fields isolated for service access.
  */
 package model
@@ -88,7 +88,19 @@ type ContactAccessLog struct {
 	CreatedAt       time.Time      `json:"created_at"`
 }
 
-// 6. SecondhandListing stores secondhand-only listing fields.
+// 6. DiscoverPlacement stores manually curated discover page slots.
+type DiscoverPlacement struct {
+	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Scene        string `gorm:"type:varchar(64);not null;uniqueIndex:uk_discover_placements_position,priority:1;index" json:"scene"`
+	CategoryCode string `gorm:"type:varchar(64);not null;default:'';uniqueIndex:uk_discover_placements_position,priority:2;index" json:"category_code"`
+	SlotIndex    int    `gorm:"not null;uniqueIndex:uk_discover_placements_position,priority:3" json:"slot_index"`
+	ListingID    int64  `gorm:"not null;index" json:"listing_id"`
+	CreatedBy    *int64 `gorm:"index" json:"created_by"`
+	UpdatedBy    *int64 `gorm:"index" json:"updated_by"`
+	TimestampModel
+}
+
+// 7. SecondhandListing stores secondhand-only listing fields.
 type SecondhandListing struct {
 	ListingID          int64          `gorm:"primaryKey" json:"listing_id"`
 	CategoryCode       string         `gorm:"type:varchar(64);not null" json:"category_code"`
@@ -105,18 +117,36 @@ type SecondhandListing struct {
 	IsFreeGiveaway     bool           `gorm:"not null" json:"is_free_giveaway"`
 }
 
-// 7. PropertySaleListing reserves property sale expansion fields.
+// 8. PropertySaleListing stores property sale listing fields.
 type PropertySaleListing struct {
-	ListingID      int64   `gorm:"primaryKey" json:"listing_id"`
-	PropertyType   string  `gorm:"type:varchar(64)" json:"property_type"`
-	EstateName     string  `gorm:"type:varchar(200)" json:"estate_name"`
-	AddressText    string  `gorm:"type:varchar(500)" json:"address_text"`
-	AskingPriceHKD float64 `gorm:"type:numeric(14,2)" json:"asking_price_hkd"`
+	ListingID          int64          `gorm:"primaryKey" json:"listing_id"`
+	PropertyType       string         `gorm:"type:varchar(64);not null" json:"property_type"`
+	EstateName         string         `gorm:"type:varchar(200)" json:"estate_name"`
+	AddressText        string         `gorm:"type:varchar(500);not null" json:"address_text"`
+	AskingPriceHKD     float64        `gorm:"type:numeric(14,2);not null" json:"asking_price_hkd"`
+	UsableAreaSqft     int            `gorm:"not null" json:"usable_area_sqft"`
+	GrossAreaSqft      *int           `json:"gross_area_sqft"`
+	BedroomCount       int            `gorm:"not null;default:0" json:"bedroom_count"`
+	LivingRoomCount    int            `gorm:"not null;default:0" json:"living_room_count"`
+	BathroomCount      int            `gorm:"not null;default:0" json:"bathroom_count"`
+	FloorLevel         string         `gorm:"type:varchar(64)" json:"floor_level"`
+	Direction          string         `gorm:"type:varchar(64)" json:"direction"`
+	BuildingAge        string         `gorm:"type:varchar(64)" json:"building_age"`
+	FeatureTags        datatypes.JSON `gorm:"type:jsonb" json:"feature_tags"`
+	ContactMethod      string         `gorm:"type:varchar(32);not null" json:"contact_method"`
+	PublisherRoleLabel string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
 }
 
-// 8. ServicedApartmentProject reserves serviced apartment expansion fields.
+// 9. ServicedApartmentProject stores serviced apartment project fields.
 type ServicedApartmentProject struct {
-	ListingID            int64  `gorm:"primaryKey" json:"listing_id"`
-	ProjectName          string `gorm:"type:varchar(200)" json:"project_name"`
-	LowestMonthlyRentHKD string `gorm:"type:varchar(32)" json:"lowest_monthly_rent_hkd"`
+	ListingID            int64          `gorm:"primaryKey" json:"listing_id"`
+	ProjectName          string         `gorm:"type:varchar(200);not null" json:"project_name"`
+	AddressText          string         `gorm:"type:varchar(500);not null" json:"address_text"`
+	LowestMonthlyRentHKD float64        `gorm:"type:numeric(12,2);not null" json:"lowest_monthly_rent_hkd"`
+	MinLeaseMonths       int            `gorm:"not null;default:1" json:"min_lease_months"`
+	FacilityTags         datatypes.JSON `gorm:"type:jsonb" json:"facility_tags"`
+	ServiceTags          datatypes.JSON `gorm:"type:jsonb" json:"service_tags"`
+	RoomTypes            datatypes.JSON `gorm:"type:jsonb" json:"room_types"`
+	ContactMethod        string         `gorm:"type:varchar(32);not null" json:"contact_method"`
+	PublisherRoleLabel   string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
 }

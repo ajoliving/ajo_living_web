@@ -25,6 +25,7 @@ type Dependencies struct {
 	StaffService        *service.StaffService
 	UploadService       *service.UploadService
 	SecondhandService   *service.SecondhandService
+	PropertyService     *service.PropertyService
 	ChatService         *service.ChatService
 	OrderService        *service.OrderService
 	NotificationService *service.NotificationService
@@ -48,18 +49,20 @@ func New(deps *Dependencies) *gin.Engine {
 	staffHandler := handler.NewStaffHandler(deps.StaffService)
 	uploadHandler := handler.NewUploadHandler(deps.UploadService)
 	secondhandHandler := handler.NewSecondhandHandler(deps.SecondhandService)
+	propertyHandler := handler.NewPropertyHandler(deps.PropertyService)
 	chatHandler := handler.NewChatHandler(deps.ChatService)
 	orderHandler := handler.NewOrderHandler(deps.OrderService)
 	notificationHandler := handler.NewNotificationHandler(deps.NotificationService)
 
 	api := engine.Group("/api/v1")
-	registerPublicRoutes(api, healthHandler, userHandler, secondhandHandler, optionalAuth)
+	registerPublicRoutes(api, healthHandler, userHandler, secondhandHandler, propertyHandler, optionalAuth)
 	registerAppRoutes(
 		api,
 		authHandler,
 		userHandler,
 		uploadHandler,
 		secondhandHandler,
+		propertyHandler,
 		chatHandler,
 		orderHandler,
 		notificationHandler,
@@ -67,6 +70,7 @@ func New(deps *Dependencies) *gin.Engine {
 		limiter,
 	)
 	registerStaffRoutes(api, staffHandler, requireStaff)
+	registerStaffNoticeRoutes(api, chatHandler, requireStaff)
 
 	return engine
 }
@@ -77,14 +81,20 @@ func registerPublicRoutes(
 	healthHandler *handler.HealthHandler,
 	userHandler *handler.UserHandler,
 	secondhandHandler *handler.SecondhandHandler,
+	propertyHandler *handler.PropertyHandler,
 	optionalAuth gin.HandlerFunc,
 ) {
 	api.GET("/health", healthHandler.Check)
 	api.GET("/channel-home/overview", optionalAuth, userHandler.ChannelHomeOverview)
 	api.GET("/listings", optionalAuth, secondhandHandler.ListPublic)
 	api.GET("/listings/:listingId", optionalAuth, secondhandHandler.GetDetail)
+	api.GET("/secondhand/discover", optionalAuth, secondhandHandler.PublicDiscover)
 	api.GET("/secondhand/listings", optionalAuth, secondhandHandler.ListPublic)
 	api.GET("/secondhand/listings/:listingId", optionalAuth, secondhandHandler.GetDetail)
+	api.GET("/property-sales", optionalAuth, propertyHandler.ListPropertySales)
+	api.GET("/property-sales/:listingId", optionalAuth, propertyHandler.GetPropertySale)
+	api.GET("/serviced-apartments", optionalAuth, propertyHandler.ListServicedApartments)
+	api.GET("/serviced-apartments/:listingId", optionalAuth, propertyHandler.GetServicedApartment)
 }
 
 // 4. registerAppRoutes registers non-public application routes.
@@ -94,6 +104,7 @@ func registerAppRoutes(
 	userHandler *handler.UserHandler,
 	uploadHandler *handler.UploadHandler,
 	secondhandHandler *handler.SecondhandHandler,
+	propertyHandler *handler.PropertyHandler,
 	chatHandler *handler.ChatHandler,
 	orderHandler *handler.OrderHandler,
 	notificationHandler *handler.NotificationHandler,
@@ -123,7 +134,14 @@ func registerAppRoutes(
 	api.GET("/me", requireAuth, userHandler.GetMe)
 	api.PATCH("/me/profile", requireAuth, userHandler.UpdateProfile)
 	api.GET("/me/secondhand/listings", requireAuth, secondhandHandler.MyListings)
+	api.GET("/me/property-sales", requireAuth, propertyHandler.MyPropertySales)
+	api.GET("/me/serviced-apartments", requireAuth, propertyHandler.MyServicedApartments)
 	api.GET("/me/orders", requireAuth, orderHandler.MyOrders)
+	api.GET("/secondhand/settings/listings", requireAuth, secondhandHandler.SettingsListings)
+	api.GET("/secondhand/settings/discover-placements", requireAuth, secondhandHandler.SettingsDiscoverPlacements)
+	api.PUT("/secondhand/settings/discover-placements", requireAuth, secondhandHandler.SaveSettingsDiscoverPlacements)
+	api.POST("/secondhand/settings/listings/:listingId/mark-sold", requireAuth, secondhandHandler.SettingsMarkSold)
+	api.POST("/secondhand/settings/listings/:listingId/deactivate", requireAuth, secondhandHandler.SettingsDeactivate)
 
 	api.POST("/oss/presign", requireAuth, uploadHandler.Presign)
 	api.POST("/oss/complete", requireAuth, uploadHandler.CompleteUpload)
@@ -145,6 +163,17 @@ func registerAppRoutes(
 	api.POST("/secondhand/listings/:listingId/republish", requireAuth, secondhandHandler.Republish)
 	api.POST("/secondhand/listings/:listingId/mark-sold", requireAuth, secondhandHandler.MarkSold)
 	api.POST("/secondhand/listings/:listingId/deactivate", requireAuth, secondhandHandler.Deactivate)
+	api.POST("/property-sales", requireAuth, propertyHandler.CreatePropertySale)
+	api.PATCH("/property-sales/:listingId", requireAuth, propertyHandler.UpdatePropertySale)
+	api.POST("/property-sales/:listingId/publish", requireAuth, propertyHandler.PublishPropertySale)
+	api.POST("/property-sales/:listingId/republish", requireAuth, propertyHandler.RepublishPropertySale)
+	api.POST("/property-sales/:listingId/mark-sold", requireAuth, propertyHandler.MarkPropertySaleSold)
+	api.POST("/property-sales/:listingId/deactivate", requireAuth, propertyHandler.DeactivatePropertySale)
+	api.POST("/serviced-apartments", requireAuth, propertyHandler.CreateServicedApartment)
+	api.PATCH("/serviced-apartments/:listingId", requireAuth, propertyHandler.UpdateServicedApartment)
+	api.POST("/serviced-apartments/:listingId/publish", requireAuth, propertyHandler.PublishServicedApartment)
+	api.POST("/serviced-apartments/:listingId/republish", requireAuth, propertyHandler.RepublishServicedApartment)
+	api.POST("/serviced-apartments/:listingId/deactivate", requireAuth, propertyHandler.DeactivateServicedApartment)
 
 	api.POST("/listings/:listingId/contact-access",
 		requireAuth,
@@ -159,6 +188,20 @@ func registerAppRoutes(
 			return "contact_access:" + c.ClientIP()
 		}),
 		secondhandHandler.ContactAccess,
+	)
+	api.POST("/property-sales/:listingId/contact-access",
+		requireAuth,
+		limiter.Limit(20, time.Minute, func(c *gin.Context) string {
+			return "property_sale_contact_access:" + c.ClientIP()
+		}),
+		propertyHandler.ContactAccessPropertySale,
+	)
+	api.POST("/serviced-apartments/:listingId/contact-access",
+		requireAuth,
+		limiter.Limit(20, time.Minute, func(c *gin.Context) string {
+			return "serviced_apartment_contact_access:" + c.ClientIP()
+		}),
+		propertyHandler.ContactAccessServicedApartment,
 	)
 	api.POST("/listings/:listingId/chats", requireAuth, chatHandler.CreateOrReuse)
 	api.GET("/chats", requireAuth, chatHandler.ListChats)
@@ -180,6 +223,7 @@ func registerAppRoutes(
 	api.POST("/orders/:orderId/complete", requireAuth, orderHandler.Complete)
 
 	api.GET("/notifications", requireAuth, notificationHandler.List)
+	api.GET("/notifications/unread-count", requireAuth, notificationHandler.UnreadCount)
 	api.POST("/notifications/:notificationId/read", requireAuth, notificationHandler.MarkRead)
 	api.POST("/notifications/read-all", requireAuth, notificationHandler.MarkAllRead)
 }
@@ -190,4 +234,9 @@ func registerStaffRoutes(api *gin.RouterGroup, staffHandler *handler.StaffHandle
 	api.GET("/staff/roles", requireStaff, staffHandler.ListRoles)
 	api.GET("/staff/users", requireStaff, staffHandler.ListUsers)
 	api.PATCH("/staff/users/:userId/role", requireStaff, staffHandler.UpdateUserRole)
+}
+
+// 6. registerStaffNoticeRoutes registers staff-only system notice publishing.
+func registerStaffNoticeRoutes(api *gin.RouterGroup, chatHandler *handler.ChatHandler, requireStaff gin.HandlerFunc) {
+	api.POST("/staff/system-notices", requireStaff, chatHandler.PublishSystemNotice)
 }

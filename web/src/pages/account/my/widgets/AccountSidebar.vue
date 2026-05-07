@@ -73,41 +73,105 @@ const accountRoleLabel = computed(() =>
 
 <style scoped>
 .account-sidebar {
+  --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
+  --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
+  --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
   display: flex;
   width: 16rem;
   flex-shrink: 0;
   flex-direction: column;
   gap: 2rem;
-  padding-right: 0.5rem;
+  border: 1px solid rgb(var(--color-border) / 0.3);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.76),
+      rgb(var(--color-toolbar-surface) / 0.64)
+    );
+  box-shadow:
+    0 16px 40px rgb(15 23 42 / 0.1),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06);
+  padding: 1rem;
+  backdrop-filter: blur(28px) saturate(184%);
+  -webkit-backdrop-filter: blur(28px) saturate(184%);
   overflow: visible;
 }
 
 .account-sidebar-link {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid #e2e3e1;
-  padding: 1rem 0;
+  border: 1px solid rgb(var(--color-border) / 0.24);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.62),
+      rgb(var(--color-toolbar-surface) / 0.48)
+    );
+  padding: 0.9rem 0.85rem;
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.6;
+  box-shadow:
+    0 12px 28px rgb(15 23 42 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
   transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
     color 0.2s ease,
     padding-left 0.2s ease;
 }
 
 .account-sidebar-link-active {
-  color: #002727;
-  padding-left: 0.5rem;
+  border-color: rgb(var(--color-primary) / 0.28);
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.86),
+      rgb(var(--color-primary-soft) / 0.24)
+    );
+  color: var(--subroute-nav-active-color);
+  box-shadow:
+    0 14px 32px rgb(var(--color-primary) / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  text-shadow: var(--subroute-nav-active-shadow);
 }
 
 .account-sidebar-link-idle {
-  color: #414848;
+  color: rgb(var(--color-text) / 0.78);
 }
 
 .account-sidebar-link-idle:hover {
-  color: #1a1c1b;
-  padding-left: 0.5rem;
+  border-color: rgb(var(--color-border) / 0.38);
+  color: rgb(var(--color-text));
+  padding-left: 1rem;
+}
+
+.account-sidebar-link::after {
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.58rem;
+  height: 1.5px;
+  border-radius: 999px;
+  background: var(--subroute-nav-underline);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease;
+  content: '';
+}
+
+.account-sidebar-link-active::after {
+  transform: scaleX(1);
+  opacity: 1;
 }
 
 @media (max-width: 767px) {

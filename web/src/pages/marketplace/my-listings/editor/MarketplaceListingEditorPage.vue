@@ -4,6 +4,8 @@
  * 2. 使用左側步驟表單與右側 sticky preview 的發布體驗。
 -->
 <script setup lang="ts">
+import AppUnsavedChangesDialog from '@/shared/components/base/AppUnsavedChangesDialog.vue';
+
 import { useMarketplaceListingEditorPage } from './editor';
 import EditorFormPanel from './widgets/EditorFormPanel.vue';
 import EditorPreviewPanel from './widgets/EditorPreviewPanel.vue';
@@ -16,11 +18,13 @@ const {
   conditionOptions,
   coverImage,
   formState,
+  handleLeavePromptDecision,
   handleDroppedImageFiles,
   handleImageFileChange,
   handleImageFilesChange,
   imageSlots,
   isEditing,
+  isLeavePromptOpen,
   isLoading,
   isPublishing,
   isSaving,
@@ -90,15 +94,28 @@ const {
         @save-draft="saveAndBackToList"
       />
     </section>
+
+    <AppUnsavedChangesDialog
+      :open="isLeavePromptOpen"
+      :title="$t('marketplace.editor.unsavedLeaveTitle')"
+      :description="$t('marketplace.editor.unsavedLeaveDescription')"
+      :save-label="isSaving ? $t('marketplace.editor.savingDraft') : $t('marketplace.editor.unsavedLeaveSave')"
+      :discard-label="$t('marketplace.editor.unsavedLeaveDiscard')"
+      :stay-label="$t('marketplace.editor.unsavedLeaveStay')"
+      :saving="isSaving"
+      @save="handleLeavePromptDecision('save')"
+      @discard="handleLeavePromptDecision('discard')"
+      @stay="handleLeavePromptDecision('stay')"
+    />
   </main>
 </template>
 
 <style scoped>
 .listing-editor-page {
   width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 1rem 2rem 5rem;
+  max-width: none;
+  margin: 0;
+  padding: 0;
   color: #1a1c1b;
 }
 
@@ -146,7 +163,7 @@ const {
 
 @media (max-width: 767px) {
   .listing-editor-page {
-    padding: 2.5rem 1.25rem;
+    padding: 0;
   }
 }
 

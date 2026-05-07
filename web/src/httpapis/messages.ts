@@ -13,6 +13,8 @@ export interface MessageResponse {
   sender_role?: 'self' | 'peer';
   content: string;
   message_type: string;
+  action_label?: string;
+  action_url?: string;
   status: string;
   created_at: string;
 }

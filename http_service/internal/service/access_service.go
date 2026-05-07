@@ -40,13 +40,9 @@ type RoleCatalogItem struct {
 }
 
 var rolePriority = map[string]int{
-	model.RoleCodeSuperAdmin:       10,
-	model.RoleCodeOpsAdmin:         20,
-	model.RoleCodeContentModerator: 30,
-	model.RoleCodeCustomerService:  40,
-	model.RoleCodeMemberPro:        50,
-	model.RoleCodeMemberVerified:   60,
-	model.RoleCodeMemberBasic:      70,
+	model.RoleCodeSuperAdmin: 10,
+	model.RoleCodeStaff:      20,
+	model.RoleCodeMember:     30,
 }
 
 // 4. NewAccessService creates an access service instance.
@@ -159,19 +155,15 @@ func (s *AccessService) mergeImplicitRoleCodes(user *model.User, roleCodes []str
 	}
 
 	result := append([]string{}, explicitRoleCodes...)
-	result = append(result, model.RoleCodeMemberBasic)
-	if user.IsVerifiedPhone {
-		result = append(result, model.RoleCodeMemberVerified)
-	}
-	if normalizeMemberType(user.MemberType) == MemberTypeProUser {
-		result = append(result, model.RoleCodeMemberPro)
-	}
+	result = append(result, model.RoleCodeMember)
 	if user.IsStaff {
-		roleCode := strings.TrimSpace(preferredStaffRole)
-		if roleCode == "" {
-			roleCode = model.RoleCodeOpsAdmin
+		if !containsStaffRole(result) {
+			roleCode := strings.TrimSpace(preferredStaffRole)
+			if roleCode == "" {
+				roleCode = model.RoleCodeStaff
+			}
+			result = append(result, roleCode)
 		}
-		result = append(result, roleCode)
 	}
 
 	return normalizeRoleCodes(result)

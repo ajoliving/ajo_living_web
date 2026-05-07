@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: ajoliving_http_service_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ajoliving}
@@ -17,6 +18,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
 
 volumes:
   ajoliving_http_service_postgres_data:

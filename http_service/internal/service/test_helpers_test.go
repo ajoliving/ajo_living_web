@@ -55,6 +55,10 @@ func newTestRuntime(t *testing.T) *Runtime {
 		t.Fatalf("seed access control: %v", err)
 	}
 
+	if err := database.SeedSystemNotificationAccount(context.Background(), db); err != nil {
+		t.Fatalf("seed system notification account: %v", err)
+	}
+
 	if err := database.SeedCommunities(context.Background(), db); err != nil {
 		t.Fatalf("seed communities: %v", err)
 	}
@@ -149,6 +153,13 @@ func mustCreateMediaAsset(t *testing.T, runtime *Runtime, userID int64) string {
 func mustCreatePublishedListing(t *testing.T, runtime *Runtime, owner model.User, visibilityScope string, communityPublicID string) string {
 	t.Helper()
 
+	return mustCreatePublishedListingWithCategory(t, runtime, owner, "home_appliance", visibilityScope, communityPublicID)
+}
+
+// 6. mustCreatePublishedListingWithCategory creates a published secondhand listing with a category.
+func mustCreatePublishedListingWithCategory(t *testing.T, runtime *Runtime, owner model.User, categoryCode string, visibilityScope string, communityPublicID string) string {
+	t.Helper()
+
 	secondhandService := NewSecondhandService(runtime)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
@@ -160,7 +171,7 @@ func mustCreatePublishedListing(t *testing.T, runtime *Runtime, owner model.User
 		DistrictCode:          "kwun_tong",
 		CommunityID:           communityPublicID,
 		PublisherIdentityType: "owner",
-		CategoryCode:          "home_appliance",
+		CategoryCode:          categoryCode,
 		PriceMode:             "fixed",
 		PriceHKD:              ptrFloat64(1200),
 		ConditionLevel:        "used_good",
@@ -191,7 +202,7 @@ func mustCreatePublishedListing(t *testing.T, runtime *Runtime, owner model.User
 	return published.ListingID
 }
 
-// 6. ptrFloat64 returns a float64 pointer.
+// 7. ptrFloat64 returns a float64 pointer.
 func ptrFloat64(value float64) *float64 {
 	return &value
 }

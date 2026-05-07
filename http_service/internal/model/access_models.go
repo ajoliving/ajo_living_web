@@ -15,20 +15,12 @@ const (
 )
 
 const (
-	// 3. RoleCodeMemberBasic grants baseline member access.
-	RoleCodeMemberBasic = "member_basic"
-	// 4. RoleCodeMemberVerified grants verified-member access.
-	RoleCodeMemberVerified = "member_verified"
-	// 5. RoleCodeMemberPro grants pro member access.
-	RoleCodeMemberPro = "member_pro"
+	// 3. RoleCodeMember grants baseline member access.
+	RoleCodeMember = "member"
 	// 6. RoleCodeSuperAdmin grants full staff access.
 	RoleCodeSuperAdmin = "super_admin"
-	// 7. RoleCodeOpsAdmin grants day-to-day operations access.
-	RoleCodeOpsAdmin = "ops_admin"
-	// 8. RoleCodeContentModerator grants review access.
-	RoleCodeContentModerator = "content_moderator"
-	// 9. RoleCodeCustomerService grants support access.
-	RoleCodeCustomerService = "customer_service"
+	// 7. RoleCodeStaff grants day-to-day staff access.
+	RoleCodeStaff = "staff"
 )
 
 const (
@@ -121,13 +113,9 @@ type SystemPermissionDefinition struct {
 // 30. DefaultRoleDefinitions returns the baseline role catalog.
 func DefaultRoleDefinitions() []SystemRoleDefinition {
 	return []SystemRoleDefinition{
-		{Code: RoleCodeMemberBasic, Scope: RoleScopeMember, Name: "Member Basic", Description: "Baseline member access."},
-		{Code: RoleCodeMemberVerified, Scope: RoleScopeMember, Name: "Member Verified", Description: "Verified member access."},
-		{Code: RoleCodeMemberPro, Scope: RoleScopeMember, Name: "Member Pro", Description: "Upgraded member access."},
+		{Code: RoleCodeMember, Scope: RoleScopeMember, Name: "Member", Description: "Baseline member access."},
 		{Code: RoleCodeSuperAdmin, Scope: RoleScopeStaff, Name: "Super Admin", Description: "Full back-office access."},
-		{Code: RoleCodeOpsAdmin, Scope: RoleScopeStaff, Name: "Operations Admin", Description: "Daily operation access."},
-		{Code: RoleCodeContentModerator, Scope: RoleScopeStaff, Name: "Content Moderator", Description: "Review and moderation access."},
-		{Code: RoleCodeCustomerService, Scope: RoleScopeStaff, Name: "Customer Service", Description: "Support and order follow-up access."},
+		{Code: RoleCodeStaff, Scope: RoleScopeStaff, Name: "Staff", Description: "Day-to-day back-office access."},
 	}
 }
 
@@ -154,25 +142,7 @@ func DefaultPermissionDefinitions() []SystemPermissionDefinition {
 // 32. DefaultRolePermissionMatrix returns the baseline role-permission matrix.
 func DefaultRolePermissionMatrix() map[string][]string {
 	return map[string][]string{
-		RoleCodeMemberBasic: {
-			PermissionCodeAccountProfileRead,
-			PermissionCodeAccountProfileWrite,
-			PermissionCodeListingOwnManage,
-			PermissionCodeChatUse,
-			PermissionCodeOrderCreate,
-			PermissionCodeOrderOwnManage,
-			PermissionCodeNotificationRead,
-		},
-		RoleCodeMemberVerified: {
-			PermissionCodeAccountProfileRead,
-			PermissionCodeAccountProfileWrite,
-			PermissionCodeListingOwnManage,
-			PermissionCodeChatUse,
-			PermissionCodeOrderCreate,
-			PermissionCodeOrderOwnManage,
-			PermissionCodeNotificationRead,
-		},
-		RoleCodeMemberPro: {
+		RoleCodeMember: {
 			PermissionCodeAccountProfileRead,
 			PermissionCodeAccountProfileWrite,
 			PermissionCodeListingOwnManage,
@@ -190,21 +160,13 @@ func DefaultRolePermissionMatrix() map[string][]string {
 			PermissionCodeStaffReviewManage,
 			PermissionCodeStaffSupportManage,
 		},
-		RoleCodeOpsAdmin: {
+		RoleCodeStaff: {
 			PermissionCodeStaffConsoleAccess,
 			PermissionCodeStaffUserRead,
 			PermissionCodeStaffUserManage,
 			PermissionCodeStaffRoleRead,
-		},
-		RoleCodeContentModerator: {
-			PermissionCodeStaffConsoleAccess,
 			PermissionCodeStaffReviewManage,
-			PermissionCodeStaffUserRead,
-		},
-		RoleCodeCustomerService: {
-			PermissionCodeStaffConsoleAccess,
 			PermissionCodeStaffSupportManage,
-			PermissionCodeStaffUserRead,
 		},
 	}
 }

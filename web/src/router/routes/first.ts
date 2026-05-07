@@ -5,14 +5,46 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import FirstPage from '@/pages/first/FirstPage.vue';
+import PropertyDetailPage from '@/pages/property/detail/PropertyDetailPage.vue';
+import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
+import PropertyListPage from '@/pages/property/list/PropertyListPage.vue';
+import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
 
 // 1. 輸出服務住宅路由
 export const firstRoutes: RouteRecordRaw[] = [
   {
     path: '/serviced-residences',
     name: 'ServicedResidences',
-    component: FirstPage,
+    component: PropertyListPage,
+    props: { channel: 'serviced' },
     meta: { titleKey: 'nav.servicedResidences' },
+  },
+  {
+    path: '/serviced-residences/my',
+    name: 'ServicedResidenceMy',
+    component: PropertyMyPage,
+    props: { channel: 'serviced' },
+    meta: { titleKey: 'property.serviced.myTitle', requiresAuth: true },
+  },
+  {
+    path: '/serviced-residences/my/new',
+    name: 'ServicedResidencePublish',
+    component: PropertyEditorPage,
+    props: { channel: 'serviced' },
+    meta: { titleKey: 'property.serviced.publishTitle', requiresAuth: true },
+  },
+  {
+    path: '/serviced-residences/my/editor/:listingId?',
+    name: 'ServicedResidenceEditor',
+    component: PropertyEditorPage,
+    props: { channel: 'serviced' },
+    meta: { titleKey: 'property.serviced.publishTitle', requiresAuth: true },
+  },
+  {
+    path: '/serviced-residences/:listingId',
+    name: 'ServicedResidenceDetail',
+    component: PropertyDetailPage,
+    props: { channel: 'serviced' },
+    meta: { titleKey: 'property.serviced.detailTitle' },
   },
 ];

@@ -18,6 +18,7 @@ import MarketplaceMyListingPreviewPage from '@/pages/marketplace/my-listings/pre
 import MarketplaceChatPage from '@/pages/marketplace/chat/MarketplaceChatPage.vue';
 import MarketplaceListingPage from '@/pages/marketplace/listing/MarketplaceListingPage.vue';
 import MarketplaceSellerPage from '@/pages/marketplace/seller/MarketplaceSellerPage.vue';
+import MarketplaceSettingsPage from '@/pages/marketplace/settings/MarketplaceSettingsPage.vue';
 
 // 1. 輸出二手交易路由
 export const marketplaceRoutes: RouteRecordRaw[] = [
@@ -41,6 +42,12 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
         name: 'MarketplaceFilter',
         component: MarketplaceFilterPage,
         meta: { titleKey: 'nav.filter' },
+      },
+      {
+        path: 'settings',
+        name: 'MarketplaceSettings',
+        component: MarketplaceSettingsPage,
+        meta: { titleKey: 'nav.settings', requiresAuth: true },
       },
       {
         path: 'publish',

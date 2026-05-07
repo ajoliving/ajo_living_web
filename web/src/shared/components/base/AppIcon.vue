@@ -33,6 +33,7 @@ type IconName =
   | 'search'
   | 'send'
   | 'shield'
+  | 'star'
   | 'user'
   | 'view';
 
@@ -82,6 +83,7 @@ const iconMap: Record<IconName, string> = {
   search: 'm21 21-4.35-4.35 M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
   send: 'M22 2 11 13 M22 2l-7 20-4-9-9-4z',
   shield: 'M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6z M9.5 12l1.8 1.8L15 10',
+  star: 'm12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.23 6.44 20.12l1.06-6.2L3 9.53l6.22-.9z',
   user: 'M20 21a8 8 0 1 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   view: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
 };
@@ -92,6 +94,7 @@ const iconPath = computed(() => iconMap[props.name]);
 
 <template>
   <svg
+    class="app-icon"
     :width="props.size"
     :height="props.size"
     viewBox="0 0 24 24"

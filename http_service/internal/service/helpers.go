@@ -55,12 +55,31 @@ func unmarshalStringSlice(value datatypes.JSON) []string {
 	return result
 }
 
-// 4. mediaURL builds the public media URL from config and object key.
+// 4. unmarshalRoomTypeSlice decodes serviced apartment room types.
+func unmarshalRoomTypeSlice(value datatypes.JSON) []ServicedApartmentRoomTypeInput {
+	if len(value) == 0 {
+		return []ServicedApartmentRoomTypeInput{}
+	}
+
+	var result []ServicedApartmentRoomTypeInput
+	if err := json.Unmarshal(value, &result); err != nil {
+		return []ServicedApartmentRoomTypeInput{}
+	}
+
+	return result
+}
+
+// 5. mediaURL builds the public media URL from config and object key.
 func (s *SecondhandService) mediaURL(asset *model.MediaAsset) string {
 	return buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
 }
 
-// 5. buildMediaURL builds the public media URL from base URL and object key.
+// 6. propertyMediaURL builds the public media URL from config and object key.
+func (s *PropertyService) mediaURL(asset *model.MediaAsset) string {
+	return buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
+}
+
+// 7. buildMediaURL builds the public media URL from base URL and object key.
 func buildMediaURL(baseURL string, objectKey string) string {
 	if strings.TrimSpace(objectKey) == "" {
 		return ""

@@ -71,6 +71,7 @@ go run ./http_service/cmd/server
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
 | 12 | /api/v1/secondhand/listings | GET | 查詢二手公開列表 | 無 / 會員 |
+| 43 | /api/v1/secondhand/discover | GET | 查詢二手發現頁廣告位 | 無 / 會員 |
 | 13 | /api/v1/secondhand/listings/{listingId} | GET | 查詢二手帖子詳情 | 無 / 會員 |
 | 14 | /api/v1/secondhand/listings | POST | 建立二手草稿帖子 | 會員 |
 | 15 | /api/v1/secondhand/listings/{listingId} | PATCH | 更新二手帖子內容 | 會員 |
@@ -79,6 +80,11 @@ go run ./http_service/cmd/server
 | 18 | /api/v1/secondhand/listings/{listingId}/mark-sold | POST | 標記帖子為已售 | 會員 |
 | 19 | /api/v1/secondhand/listings/{listingId}/deactivate | POST | 下架二手帖子 | 會員 |
 | 20 | /api/v1/listings/{listingId}/contact-access | POST | 取得可聯絡方式 | 會員 |
+| 44 | /api/v1/secondhand/settings/listings | GET | 設定頁查詢全部二手帖子 | 會員 |
+| 45 | /api/v1/secondhand/settings/discover-placements | GET | 設定頁查詢發現頁廣告位 | 會員 |
+| 46 | /api/v1/secondhand/settings/discover-placements | PUT | 設定頁儲存發現頁廣告位 | 會員 |
+| 47 | /api/v1/secondhand/settings/listings/{listingId}/mark-sold | POST | 設定頁標記任意帖子已售 | 會員 |
+| 48 | /api/v1/secondhand/settings/listings/{listingId}/deactivate | POST | 設定頁下架任意帖子 | 會員 |
 
 ### Chat 模組
 
@@ -106,8 +112,9 @@ go run ./http_service/cmd/server
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
 | 39 | /api/v1/notifications | GET | 查詢我的通知列表 | 會員 |
-| 40 | /api/v1/notifications/{notificationId}/read | POST | 標記單一通知已讀 | 會員 |
-| 41 | /api/v1/notifications/read-all | POST | 標記全部通知已讀 | 會員 |
+| 40 | /api/v1/notifications/unread-count | GET | 查詢未讀通知數 | 會員 |
+| 41 | /api/v1/notifications/{notificationId}/read | POST | 標記單一通知已讀 | 會員 |
+| 42 | /api/v1/notifications/read-all | POST | 標記全部通知已讀 | 會員 |
 
 ### Staff 模組
 
@@ -323,7 +330,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/otp/request" -Method P
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member_basic", "member_verified"],
+      "roles": ["member"],
       "permissions": [
         "account.profile.read",
         "account.profile.write",
@@ -434,7 +441,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/request" -Me
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member_basic", "member_verified"],
+      "roles": ["member"],
       "permissions": [
         "account.profile.read",
         "account.profile.write",
@@ -526,7 +533,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
     "member_type": "user",
     "is_staff": false,
     "role": "user",
-    "roles": ["member_basic", "member_verified"],
+    "roles": ["member"],
     "permissions": [
       "account.profile.read",
       "account.profile.write",
@@ -587,7 +594,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
     "member_type": "user",
     "is_staff": false,
     "role": "user",
-    "roles": ["member_basic", "member_verified"],
+    "roles": ["member"],
     "permissions": [
       "account.profile.read",
       "account.profile.write",
@@ -1065,6 +1072,60 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings?page=1&
 
 ---
 
+### 43. /api/v1/secondhand/discover [GET]
+- **簡介**: 查詢二手發現頁人工配置廣告位。只返回仍然公開、已審核、未售出、未下架的帖子。
+- **請求參數**
+```json
+{}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "hero": [
+      {
+        "scene": "discover_hero",
+        "category_code": "",
+        "slot_index": 1,
+        "listing": {
+          "listing_id": "01KSECONDHAND001",
+          "title": "九成新洗衣機",
+          "category_code": "home_appliance",
+          "publication_status": "active",
+          "business_status": "available"
+        }
+      }
+    ],
+    "categories": {
+      "home_appliance": [
+        {
+          "scene": "discover_category_carousel",
+          "category_code": "home_appliance",
+          "slot_index": 1,
+          "listing": {
+            "listing_id": "01KSECONDHAND001",
+            "title": "九成新洗衣機",
+            "category_code": "home_appliance"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/discover"
+```
+- **Powershell測試**
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/discover" -Method GET
+```
+
+---
+
 ### 13. /api/v1/secondhand/listings/{listingId} [GET]
 - **簡介**: 查詢二手帖子詳情
 - **請求參數**
@@ -1459,6 +1520,210 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECO
 
 ---
 
+### 44. /api/v1/secondhand/settings/listings [GET]
+- **簡介**: 設定頁查詢全部二手帖子，支援關鍵字、分類與狀態篩選。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "keyword": "洗衣機",
+  "category_code": "home_appliance",
+  "status": "active"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "listing_id": "01KSECONDHAND001",
+        "title": "九成新洗衣機",
+        "category_code": "home_appliance",
+        "publication_status": "active",
+        "business_status": "available"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1
+    }
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/settings/listings?page=1&page_size=20&status=active" \
+  -H "Authorization: Bearer $token"
+```
+
+---
+
+### 45. /api/v1/secondhand/settings/discover-placements [GET]
+- **簡介**: 設定頁查詢完整發現頁廣告位矩陣。封面大推固定 4 個位置，每個分類固定 10 個位置。
+- **請求參數**
+```json
+{}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "hero": [
+      {
+        "scene": "discover_hero",
+        "category_code": "",
+        "slot_index": 1,
+        "listing": {
+          "listing_id": "01KSECONDHAND001",
+          "title": "九成新洗衣機"
+        }
+      }
+    ],
+    "categories": {
+      "home_appliance": [
+        {
+          "scene": "discover_category_carousel",
+          "category_code": "home_appliance",
+          "slot_index": 1
+        }
+      ]
+    }
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/settings/discover-placements" \
+  -H "Authorization: Bearer $token"
+```
+
+---
+
+### 46. /api/v1/secondhand/settings/discover-placements [PUT]
+- **簡介**: 設定頁批量儲存發現頁廣告位。`listing_id` 留空會清空指定位置。
+- **請求參數**
+```json
+{
+  "placements": [
+    {
+      "scene": "discover_hero",
+      "category_code": "",
+      "slot_index": 1,
+      "listing_id": "01KSECONDHAND001"
+    },
+    {
+      "scene": "discover_category_carousel",
+      "category_code": "home_appliance",
+      "slot_index": 1,
+      "listing_id": "01KSECONDHAND001"
+    }
+  ]
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "hero": [
+      {
+        "scene": "discover_hero",
+        "category_code": "",
+        "slot_index": 1,
+        "listing": {
+          "listing_id": "01KSECONDHAND001",
+          "title": "九成新洗衣機"
+        }
+      }
+    ],
+    "categories": {
+      "home_appliance": [
+        {
+          "scene": "discover_category_carousel",
+          "category_code": "home_appliance",
+          "slot_index": 1,
+          "listing": {
+            "listing_id": "01KSECONDHAND001",
+            "title": "九成新洗衣機"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X PUT "http://127.0.0.1:8080/api/v1/secondhand/settings/discover-placements" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d '{"placements":[{"scene":"discover_hero","category_code":"","slot_index":1,"listing_id":"01KSECONDHAND001"}]}'
+```
+
+---
+
+### 47. /api/v1/secondhand/settings/listings/{listingId}/mark-sold [POST]
+- **簡介**: 設定頁標記任意二手帖子為已售。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "business_status": "sold"
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/settings/listings/01KSECONDHAND001/mark-sold" \
+  -H "Authorization: Bearer $token"
+```
+
+---
+
+### 48. /api/v1/secondhand/settings/listings/{listingId}/deactivate [POST]
+- **簡介**: 設定頁下架任意二手帖子。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "publication_status": "hidden"
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/settings/listings/01KSECONDHAND001/deactivate" \
+  -H "Authorization: Bearer $token"
+```
+
+---
+
 ### 20. /api/v1/listings/{listingId}/contact-access [POST]
 - **簡介**: 取得可聯絡方式
 - **請求參數**
@@ -1557,9 +1822,19 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/listings/01KSECONDHAND002/c
         "chat_id": "01KCHAT001",
         "listing_id": "01KSECONDHAND002",
         "listing_title": "九成新洗衣機",
+        "chat_type": "direct_listing_chat",
         "last_message_preview": "你好，請問仍可交易嗎？",
         "last_message_at": "2026-04-17T05:30:00Z",
         "unread_count": 1
+      },
+      {
+        "chat_id": "01KCHATNOTICE001",
+        "listing_id": "",
+        "listing_title": "通知",
+        "chat_type": "system_notice",
+        "last_message_preview": "最高100幣，可以當錢花",
+        "last_message_at": "2026-04-17T05:28:00Z",
+        "unread_count": 4
       }
     ],
     "pagination": {
@@ -1602,6 +1877,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats?page=1&page_size=20" 
     "chat_id": "01KCHAT001",
     "listing_id": "01KSECONDHAND002",
     "listing_title": "九成新洗衣機",
+    "chat_type": "direct_listing_chat",
     "created_at": "2026-04-17T05:29:00Z",
     "participants": [
       {
@@ -1655,6 +1931,16 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
         "message_type": "text",
         "status": "sent",
         "created_at": "2026-04-17T05:32:00Z"
+      },
+      {
+        "message_id": "01KNOTICE001",
+        "sender_user_id": "1",
+        "content": "紅包到賬提醒\n拼手氣，瓜分 HK$35999 現金紅包",
+        "message_type": "notice_card",
+        "action_label": "去查看",
+        "action_url": "/marketplace/discover",
+        "status": "sent",
+        "created_at": "2026-04-17T05:28:00Z"
       }
     ],
     "pagination": {
@@ -1781,7 +2067,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     "member_type": "user",
     "is_staff": true,
     "role": "staff",
-    "roles": ["member_basic", "member_verified", "super_admin"],
+    "roles": ["super_admin", "member"],
     "permissions": [
       "account.profile.read",
       "account.profile.write",
@@ -1838,7 +2124,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
   "page_size": 20, // 可選
   "keyword": "9123", // 可選
   "member_type": "pro_user", // 可選，user / pro_user
-  "role_code": "content_moderator", // 可選
+  "role_code": "member", // 可選
   "is_staff": false // 可選
 }
 ```
@@ -1857,7 +2143,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
         "member_type": "pro_user",
         "is_staff": false,
         "role": "pro_user",
-        "roles": ["member_basic", "member_verified", "member_pro"],
+        "roles": ["member"],
         "permissions": [
           "account.profile.read",
           "account.profile.write",
@@ -1886,13 +2172,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
 ```
 - **Curl測試**
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member_pro" \
+curl -X GET "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member" \
   -H "Authorization: Bearer $staff_token"
 ```
 - **Powershell測試**
 ```powershell
 $headers=@{"Authorization"="Bearer $staff_token"}
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member_pro" -Method GET -Headers $headers
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member" -Method GET -Headers $headers
 ```
 
 ---
@@ -1904,7 +2190,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_siz
 {
   "userId": "01KUSERPRO001", // 路徑參數
   "member_type": "pro_user", // 可選，user / pro_user
-  "role_codes": ["member_pro"], // 可選
+  "role_codes": ["member"], // 可選
   "is_staff": false // 可選
 }
 ```
@@ -1919,7 +2205,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_siz
     "member_type": "pro_user",
     "is_staff": false,
     "role": "pro_user",
-    "roles": ["member_basic", "member_verified", "member_pro"],
+    "roles": ["member"],
     "permissions": [
       "account.profile.read",
       "account.profile.write",
@@ -1942,7 +2228,7 @@ curl -X PATCH "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/role" \
   -H "Content-Type: application/json" \
   -d '{
     "member_type": "pro_user",
-    "role_codes": ["member_pro"],
+    "role_codes": ["member"],
     "is_staff": false
   }'
 ```
@@ -1951,7 +2237,7 @@ curl -X PATCH "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/role" \
 $headers=@{"Authorization"="Bearer $staff_token";"Content-Type"="application/json"}
 $body=@{
   member_type="pro_user"
-  role_codes=@("member_pro")
+  role_codes=@("member")
   is_staff=$false
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/role" -Method PATCH -Headers $headers -Body $body
@@ -1985,6 +2271,35 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
           "staff.role.manage",
           "staff.review.manage",
           "staff.support.manage"
+        ]
+      },
+      {
+        "code": "staff",
+        "scope": "staff",
+        "name": "Staff",
+        "description": "Day-to-day back-office access.",
+        "permissions": [
+          "staff.console.access",
+          "staff.user.read",
+          "staff.user.manage",
+          "staff.role.read",
+          "staff.review.manage",
+          "staff.support.manage"
+        ]
+      },
+      {
+        "code": "member",
+        "scope": "member",
+        "name": "Member",
+        "description": "Baseline member access.",
+        "permissions": [
+          "account.profile.read",
+          "account.profile.write",
+          "listing.own.manage",
+          "chat.use",
+          "order.create",
+          "order.own.manage",
+          "notification.read"
         ]
       }
     ]
@@ -2436,7 +2751,36 @@ $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/notifications?page=1&page_size=20&only_unread=false" -Method GET -Headers $headers
 ```
 
-### 40. /api/v1/notifications/{notificationId}/read [POST]
+### 40. /api/v1/notifications/unread-count [GET]
+- **簡介**: 查詢未讀通知數
+- **請求參數**
+```json
+{}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "unread_count": 1
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T06:05:30Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/notifications/unread-count" \
+  -H "Authorization: Bearer $token"
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $token"}
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/notifications/unread-count" -Method GET -Headers $headers
+```
+
+### 41. /api/v1/notifications/{notificationId}/read [POST]
 - **簡介**: 標記單一通知已讀
 - **請求參數**
 ```json
@@ -2468,7 +2812,7 @@ $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/notifications/01KNOTIFY001/read" -Method POST -Headers $headers
 ```
 
-### 41. /api/v1/notifications/read-all [POST]
+### 42. /api/v1/notifications/read-all [POST]
 - **簡介**: 標記全部通知已讀
 - **請求參數**
 ```json

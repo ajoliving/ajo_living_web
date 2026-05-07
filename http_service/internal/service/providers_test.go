@@ -2,6 +2,7 @@
  * Provider adapter tests.
  * 1. Verify OSS provider validation fails fast on missing required config.
  * 2. Verify OSS upload presign returns a signed PUT URL and expected headers.
+ * 3. Verify media object prefixes stay inside approved directories.
  */
 package service
 
@@ -31,6 +32,44 @@ func TestNewStorageProviderRejectsInvalidOSSConfig(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "storage region is required") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// 3. TestNormalizeMediaObjectPrefixAllowsListingDirectories verifies listing scoped uploads.
+func TestNormalizeMediaObjectPrefixAllowsListingDirectories(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "account",
+			input:    "ajo_living/account/",
+			expected: accountMediaObjectPrefix,
+		},
+		{
+			name:     "listing root",
+			input:    "ajo_living/listings/",
+			expected: listingMediaObjectPrefix,
+		},
+		{
+			name:     "listing detail",
+			input:    "ajo_living/listings/01KLISTINGABC/",
+			expected: "ajo_living/listings/01KLISTINGABC/",
+		},
+		{
+			name:     "unsafe listing detail",
+			input:    "ajo_living/listings/../account/",
+			expected: mediaObjectPrefix,
+		},
+	}
+
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			if actual := normalizeMediaObjectPrefix(item.input); actual != item.expected {
+				t.Fatalf("expected %q, got %q", item.expected, actual)
+			}
+		})
 	}
 }
 

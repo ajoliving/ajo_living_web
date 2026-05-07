@@ -49,6 +49,7 @@ func Migrate(db *gorm.DB) error {
 		&model.MediaAsset{},
 		&model.ListingImage{},
 		&model.ContactAccessLog{},
+		&model.DiscoverPlacement{},
 		&model.Order{},
 		&model.OrderLog{},
 		&model.Chat{},
@@ -79,7 +80,7 @@ func SeedCommunities(ctx context.Context, db *gorm.DB) error {
 			CommunityType: "estate",
 			NameZH:        "康怡花園",
 			NameEN:        "Kornhill",
-			DistrictCode:  "hk_east",
+			DistrictCode:  "eastern",
 			AddressText:   "Quarry Bay",
 		},
 		{
@@ -87,7 +88,7 @@ func SeedCommunities(ctx context.Context, db *gorm.DB) error {
 			CommunityType: "building",
 			NameZH:        "太古城金星閣",
 			NameEN:        "Taikoo Shing Venus Mansion",
-			DistrictCode:  "hk_east",
+			DistrictCode:  "eastern",
 			AddressText:   "Taikoo Shing",
 		},
 		{

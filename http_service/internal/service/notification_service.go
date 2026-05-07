@@ -88,7 +88,17 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID int6
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, unreadCount, nil
 }
 
-// 7. MarkRead marks a notification as read for the target user.
+// 7. UnreadCount returns the unread inbox count for the target user.
+func (s *NotificationService) UnreadCount(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	if err := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&count).Error; err != nil {
+		return 0, errcode.New(errcode.CodeInternalError, "failed to count unread notifications")
+	}
+
+	return count, nil
+}
+
+// 8. MarkRead marks a notification as read for the target user.
 func (s *NotificationService) MarkRead(ctx context.Context, userID int64, notificationPublicID string) error {
 	result := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("public_id = ? AND user_id = ?", strings.TrimSpace(notificationPublicID), userID).
@@ -106,7 +116,7 @@ func (s *NotificationService) MarkRead(ctx context.Context, userID int64, notifi
 	return nil
 }
 
-// 8. MarkAllRead marks all unread notifications as read for the target user.
+// 9. MarkAllRead marks all unread notifications as read for the target user.
 func (s *NotificationService) MarkAllRead(ctx context.Context, userID int64) (int64, error) {
 	result := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
@@ -121,7 +131,7 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID int64) (in
 	return result.RowsAffected, nil
 }
 
-// 9. CreateNotification persists one notification inside an existing transaction.
+// 10. CreateNotification persists one notification inside an existing transaction.
 func (s *NotificationService) CreateNotification(ctx context.Context, tx *gorm.DB, params CreateNotificationParams) error {
 	if params.UserID <= 0 {
 		return errcode.New(errcode.CodeValidationError, "notification user is required")
@@ -148,7 +158,7 @@ func (s *NotificationService) CreateNotification(ctx context.Context, tx *gorm.D
 	return nil
 }
 
-// 10. toNotificationItem maps one model notification into the response payload.
+// 11. toNotificationItem maps one model notification into the response payload.
 func toNotificationItem(notification *model.Notification) NotificationItem {
 	result := NotificationItem{
 		NotificationID:  notification.PublicID,

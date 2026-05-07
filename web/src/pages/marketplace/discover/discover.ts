@@ -1,19 +1,19 @@
 /*
  * 二手交易 Discover - 展示資料。
- * 1. 讀取真實公開帖子並建立推薦好物。
+ * 1. 讀取後端人工配置的推薦位。
  * 2. 依統一分類輸出輪播圖與橫向帖子列表。
  */
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { fetchSecondhandListings } from '@/httpapis/secondhand-listings';
+import { fetchSecondhandDiscover } from '@/httpapis/secondhand-listings';
 import {
   getMarketplaceCategoryLabel,
   marketplaceCategories,
   type MarketplaceCategoryCode,
 } from '@/constants/marketplace';
-import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
+import type { DiscoverPayloadResponse, SecondhandListingSummaryResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatPrice } from '@/utils/format';
@@ -58,12 +58,17 @@ export const useMarketplaceDiscoverPage = () => {
   const preferenceStore = usePreferenceStore();
   const activeSlideIndexByCategory = ref<Record<string, number>>({});
   const loading = ref(false);
-  const sourceListings = ref<SecondhandListingSummaryResponse[]>([]);
+  const discoverPayload = ref<DiscoverPayloadResponse>({
+    hero: [],
+    categories: {},
+  });
 
   const categoryRows = computed<DiscoverCategoryRow[]>(() =>
     marketplaceCategories
       .map((category) => {
-        const source = sourceListings.value.filter((listing) => listing.category_code === category.value);
+        const source = (discoverPayload.value.categories[category.value] ?? [])
+          .map((placement) => placement.listing)
+          .filter((listing): listing is SecondhandListingSummaryResponse => Boolean(listing));
         const listings = source.map((listing) => buildListingPreview(listing, preferenceStore.locale));
 
         return {
@@ -79,7 +84,11 @@ export const useMarketplaceDiscoverPage = () => {
   );
 
   const recommendedItems = computed(() =>
-    sourceListings.value.slice(0, 4).map((listing) => buildListingPreview(listing, preferenceStore.locale)),
+    discoverPayload.value.hero
+      .map((placement) => placement.listing)
+      .filter((listing): listing is SecondhandListingSummaryResponse => Boolean(listing))
+      .slice(0, 4)
+      .map((listing) => buildListingPreview(listing, preferenceStore.locale)),
   );
 
   const primaryRecommendation = computed(() => recommendedItems.value[0]);
@@ -89,12 +98,8 @@ export const useMarketplaceDiscoverPage = () => {
     loading.value = true;
 
     try {
-      const { data } = await fetchSecondhandListings({
-        page: 1,
-        page_size: 60,
-        sort_by: 'latest',
-      });
-      sourceListings.value = data.data.items;
+      const { data } = await fetchSecondhandDiscover();
+      discoverPayload.value = data.data;
     } catch (error) {
       feedbackStore.pushToast(
         axios.isAxiosError(error)
@@ -102,7 +107,10 @@ export const useMarketplaceDiscoverPage = () => {
           : t('marketplace.discover.loadError'),
         'error',
       );
-      sourceListings.value = [];
+      discoverPayload.value = {
+        hero: [],
+        categories: {},
+      };
     } finally {
       loading.value = false;
     }

@@ -12,6 +12,7 @@ const {
   authMode,
   emailAction,
   emailActionSwitchLabel,
+  emailLoginMethod,
   emailPlaceholder,
   footerActionLabel,
   footerPrompt,
@@ -28,6 +29,7 @@ const {
   submitLabel,
   authModeSwitchIcon,
   authModeSwitchLabel,
+  setEmailLoginMethod,
   toggleAuthMode,
   toggleEmailAction,
 } = useLoginPage();
@@ -50,6 +52,7 @@ const {
         :auth-mode-switch-label="authModeSwitchLabel"
         :email-action="emailAction"
         :email-action-switch-label="emailActionSwitchLabel"
+        :email-login-method="emailLoginMethod"
         :email-placeholder="emailPlaceholder"
         :footer-action-label="footerActionLabel"
         :footer-prompt="footerPrompt"
@@ -59,6 +62,7 @@ const {
         :submitting="submitting"
         :submit-label="submitLabel"
         @request-otp="handleRequestOtp"
+        @set-email-login-method="setEmailLoginMethod"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"
         @toggle-auth-mode="toggleAuthMode"

@@ -40,6 +40,8 @@ type Message struct {
 	SenderUserID  int64     `gorm:"not null;index" json:"sender_user_id"`
 	MessageType   string    `gorm:"type:varchar(32);not null" json:"message_type"`
 	ContentText   string    `gorm:"type:text;not null" json:"content_text"`
+	ActionLabel   string    `gorm:"type:varchar(80)" json:"action_label"`
+	ActionURL     string    `gorm:"type:varchar(500)" json:"action_url"`
 	MessageStatus string    `gorm:"type:varchar(32);not null" json:"message_status"`
 	CreatedAt     time.Time `gorm:"index:idx_messages_chat_time,priority:2" json:"created_at"`
 }

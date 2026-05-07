@@ -40,13 +40,15 @@ export const useMarketplaceChatPage = () => {
   const activeConversation = computed(() =>
     conversations.value.find((conversation) => conversation.id === selectedChatId.value),
   );
+  const isSystemNoticeConversation = computed(() => activeConversation.value?.type === 'system_notice');
 
   // 1.1 映射會話資料
   const mapConversation = (item: ChatSummaryResponse): ChatConversationView => ({
     id: item.chat_id,
+    type: item.chat_type,
     listing: {
       id: item.listing?.listing_id || item.listing_id,
-      title: item.listing?.title || item.listing_title,
+      title: item.chat_type === 'system_notice' ? t('chat.systemNoticeTitle') : item.listing?.title || item.listing_title,
       summary: item.listing?.summary || '',
       price_hkd: item.listing?.price_hkd ?? 0,
       status: item.listing?.business_status || 'available',
@@ -70,10 +72,15 @@ export const useMarketplaceChatPage = () => {
     id: item.message_id,
     chat_id: selectedChatId.value,
     sender_role:
-      participantPublicIdByUserId.value[item.sender_user_id] === sessionStore.currentUser.public_id
-        ? 'self'
-        : 'peer',
+      item.message_type === 'notice_card'
+        ? 'peer'
+        : participantPublicIdByUserId.value[item.sender_user_id] === sessionStore.currentUser.public_id
+          ? 'self'
+          : 'peer',
     body: item.content,
+    message_type: item.message_type,
+    action_label: item.action_label,
+    action_url: item.action_url,
     sent_at: item.created_at,
   });
 
@@ -86,8 +93,15 @@ export const useMarketplaceChatPage = () => {
       conversations.value = data.data.items.map(mapConversation);
 
       const deepLinkedChatId = String(route.params.conversationId || '').trim();
+      const targetConversationType = String(route.query.target || '').trim();
+      const targetConversation = conversations.value.find(
+        (conversation) => conversation.type === targetConversationType,
+      );
       if (deepLinkedChatId) {
         selectedChatId.value = deepLinkedChatId;
+      } else if (targetConversation) {
+        selectedChatId.value = targetConversation.id;
+        await router.replace(`/marketplace/my/chat/${targetConversation.id}`);
       } else if (!selectedChatId.value && conversations.value[0]) {
         selectedChatId.value = conversations.value[0].id;
       }
@@ -152,7 +166,7 @@ export const useMarketplaceChatPage = () => {
   // 1.6 送出訊息
   const handleSendMessage = async (): Promise<void> => {
     const content = draftMessage.value.trim();
-    if (!content || !selectedChatId.value) {
+    if (!content || !selectedChatId.value || isSystemNoticeConversation.value) {
       return;
     }
 
@@ -230,6 +244,7 @@ export const useMarketplaceChatPage = () => {
     formatPrice,
     handleSelectChat,
     handleSendMessage,
+    isSystemNoticeConversation,
     loadingConversations,
     loadingMessages,
     preferenceStore,

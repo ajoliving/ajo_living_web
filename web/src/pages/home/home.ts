@@ -205,7 +205,7 @@ export const buildHomeLandingContent = (
       title: t('home.landing.modules.property_sale.title'),
       description: t('home.landing.modules.property_sale.description'),
       availabilityLabel: t('home.landing.modules.property_sale.availabilityLabel'),
-      isLive: false,
+      isLive: true,
       noteLabel: t('home.landing.modules.property_sale.noteLabel'),
       statusNote: t('home.landing.modules.property_sale.statusNote'),
       chips: [
@@ -223,6 +223,16 @@ export const buildHomeLandingContent = (
         { label: t('home.landing.modules.property_sale.metrics.audience'), value: t('home.landing.modules.property_sale.metrics.audienceValue') },
         { label: t('home.landing.modules.property_sale.metrics.focus'), value: t('home.landing.modules.property_sale.metrics.focusValue') },
       ],
+      primaryAction: {
+        label: t('home.landing.modules.property_sale.primaryAction'),
+        to: '/properties',
+        variant: 'primary',
+      },
+      secondaryAction: {
+        label: t('home.landing.modules.property_sale.secondaryAction'),
+        to: '/properties/my/new',
+        variant: 'secondary',
+      },
       gridEyebrow: t('home.landing.modules.property_sale.gridEyebrow'),
       gridDescription: t('home.landing.modules.property_sale.gridDescription'),
       gridTiles: [
@@ -249,7 +259,7 @@ export const buildHomeLandingContent = (
       title: t('home.landing.modules.serviced_apartment.title'),
       description: t('home.landing.modules.serviced_apartment.description'),
       availabilityLabel: t('home.landing.modules.serviced_apartment.availabilityLabel'),
-      isLive: false,
+      isLive: true,
       noteLabel: t('home.landing.modules.serviced_apartment.noteLabel'),
       statusNote: t('home.landing.modules.serviced_apartment.statusNote'),
       chips: [
@@ -267,6 +277,16 @@ export const buildHomeLandingContent = (
         { label: t('home.landing.modules.serviced_apartment.metrics.service'), value: t('home.landing.modules.serviced_apartment.metrics.serviceValue') },
         { label: t('home.landing.modules.serviced_apartment.metrics.status'), value: t('home.landing.modules.serviced_apartment.metrics.statusValue') },
       ],
+      primaryAction: {
+        label: t('home.landing.modules.serviced_apartment.primaryAction'),
+        to: '/serviced-residences',
+        variant: 'primary',
+      },
+      secondaryAction: {
+        label: t('home.landing.modules.serviced_apartment.secondaryAction'),
+        to: '/serviced-residences/my/new',
+        variant: 'secondary',
+      },
       gridEyebrow: t('home.landing.modules.serviced_apartment.gridEyebrow'),
       gridDescription: t('home.landing.modules.serviced_apartment.gridDescription'),
       gridTiles: [

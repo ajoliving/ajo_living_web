@@ -7,6 +7,12 @@ package model
 
 import "time"
 
+const (
+	SystemNotificationPhoneCountryCode = "system"
+	SystemNotificationPhoneNumber      = "notification"
+	SystemNotificationDisplayName      = "通知"
+)
+
 // 1. User stores member account records.
 type User struct {
 	ID               int64  `gorm:"primaryKey;autoIncrement" json:"id"`

@@ -5,9 +5,9 @@
  * 3. 集中處理發布前檢查、預覽資料與錯誤提示。
  */
 import axios from 'axios';
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
 import {
   createSecondhandListing,
@@ -45,6 +45,18 @@ export type ListingEditorVisibility = 'public' | 'building_only';
 export type ListingEditorBusinessStatus = 'available' | 'sold';
 
 type EditorStepStatus = 'done' | 'current' | 'idle';
+type EditorLeaveDecision = 'save' | 'discard' | 'stay';
+
+interface EditorSnapshot {
+  formState: ListingEditorFormState;
+  images: Array<{
+    mediaAssetId: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    isCover: boolean;
+  }>;
+}
 
 export interface EditorOption<TValue extends string = string> {
   label: string;
@@ -101,7 +113,7 @@ export interface ListingEditorFormState {
   businessStatus: ListingEditorBusinessStatus;
 }
 
-const listingObjectPrefix = 'ajo_living/listings/';
+const listingObjectPrefix = 'ajo_living/listings';
 const maxListingImageSize = 10 * 1024 * 1024;
 const imageSlotCount = 4;
 const donationDeliveryTag = '可捐贈';
@@ -247,7 +259,49 @@ const resetFormState = (
   imageSlots.value = createEmptyImageSlots();
 };
 
-// 12. 管理發布頁資料與動作
+// 12. 建立表單異動比對快照
+const createEditorSnapshot = (
+  formState: ListingEditorFormState,
+  imageSlots: EditorImageSlot[],
+): string => {
+  const normalizedFormState: ListingEditorFormState = {
+    ...formState,
+    title: formState.title.trim(),
+    summary: formState.summary.trim(),
+    description: formState.description.trim(),
+    dimensionLength: formState.dimensionLength.trim(),
+    dimensionWidth: formState.dimensionWidth.trim(),
+    dimensionHeight: formState.dimensionHeight.trim(),
+    dimensionWeight: formState.dimensionWeight.trim(),
+    phone: formState.phone.trim(),
+    tradeNote: formState.tradeNote.trim(),
+    deliveryTags: formState.deliveryTags.map((tag) => tag.trim()).filter(Boolean).sort(),
+  };
+  const snapshot: EditorSnapshot = {
+    formState: normalizedFormState,
+    images: imageSlots
+      .filter((slot) => Boolean(slot.mediaAssetId || slot.file))
+      .map((slot) => ({
+        mediaAssetId: slot.mediaAssetId ?? '',
+        fileName: slot.fileName ?? slot.file?.name ?? '',
+        fileSize: slot.file?.size ?? 0,
+        fileType: slot.file?.type ?? '',
+        isCover: slot.isCover,
+      })),
+  };
+
+  return JSON.stringify(snapshot);
+};
+
+// 13. 建立帖子圖片 OSS 目錄
+const buildListingObjectPrefix = (targetListingId: string): string => {
+  const normalizedListingId = targetListingId.trim();
+  return normalizedListingId
+    ? `${listingObjectPrefix}/${normalizedListingId}/`
+    : `${listingObjectPrefix}/`;
+};
+
+// 14. 管理發布頁資料與動作
 export const useMarketplaceListingEditorPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -261,6 +315,10 @@ export const useMarketplaceListingEditorPage = () => {
   const isLoading = ref(false);
   const isSaving = ref(false);
   const isPublishing = ref(false);
+  const isLeavePromptOpen = ref(false);
+  const savedSnapshot = ref('');
+  const isProgrammaticNavigation = ref(false);
+  let resolveLeavePrompt: ((decision: EditorLeaveDecision) => void) | null = null;
 
   const isEditing = computed(() => listingId.value.trim().length > 0);
 
@@ -395,7 +453,62 @@ export const useMarketplaceListingEditorPage = () => {
     },
   ]);
 
-  // 12.1 讀取編輯頁詳情
+  const currentSnapshot = computed(() => createEditorSnapshot(formState, imageSlots.value));
+  const hasUnsavedChanges = computed(() =>
+    savedSnapshot.value.length > 0 &&
+    currentSnapshot.value !== savedSnapshot.value,
+  );
+
+  // 14.1 更新離開提示基準
+  const markCurrentStateSaved = (): void => {
+    savedSnapshot.value = currentSnapshot.value;
+  };
+
+  // 14.2 打開離開確認彈窗
+  const requestLeaveDecision = (): Promise<EditorLeaveDecision> => {
+    isLeavePromptOpen.value = true;
+
+    return new Promise((resolve) => {
+      resolveLeavePrompt = resolve;
+    });
+  };
+
+  // 14.3 回應離開確認彈窗
+  const handleLeavePromptDecision = (decision: EditorLeaveDecision): void => {
+    isLeavePromptOpen.value = false;
+    resolveLeavePrompt?.(decision);
+    resolveLeavePrompt = null;
+  };
+
+  // 14.4 確認是否允許離開編輯頁
+  const confirmLeaveEditor = async (): Promise<boolean> => {
+    if (isProgrammaticNavigation.value || !hasUnsavedChanges.value) {
+      return true;
+    }
+
+    const decision = await requestLeaveDecision();
+    if (decision === 'stay') {
+      return false;
+    }
+    if (decision === 'discard') {
+      return true;
+    }
+
+    const savedListingId = await saveDraft({ uploadImages: true });
+    return savedListingId.length > 0;
+  };
+
+  // 14.5 處理瀏覽器關閉或重新整理
+  const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+    if (!hasUnsavedChanges.value) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  };
+
+  // 14.4 讀取編輯頁詳情
   const loadListingDetail = async (): Promise<void> => {
     if (!listingId.value) {
       return;
@@ -422,6 +535,7 @@ export const useMarketplaceListingEditorPage = () => {
         ...slot,
         id: slot.mediaAssetId || `slot-${index + 1}`,
       }));
+      markCurrentStateSaved();
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.loadError')), 'error');
     } finally {
@@ -429,7 +543,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.2 設定封面圖片
+  // 14.5 設定封面圖片
   const selectCoverImage = (slotId: string): void => {
     imageSlots.value = imageSlots.value.map((slot) => ({
       ...slot,
@@ -437,7 +551,7 @@ export const useMarketplaceListingEditorPage = () => {
     }));
   };
 
-  // 12.3 校驗圖片檔案
+  // 14.6 校驗圖片檔案
   const validateImageFile = (file: File): boolean => {
     if (!file.type.startsWith('image/')) {
       feedbackStore.pushToast(t('marketplace.editor.imageFileInvalid'), 'error');
@@ -452,7 +566,7 @@ export const useMarketplaceListingEditorPage = () => {
     return true;
   };
 
-  // 12.4 將圖片暫存在頁面並建立本地預覽
+  // 14.7 將圖片暫存在頁面並建立本地預覽
   const stageImageFile = (file: File, slotId: string): void => {
     if (!validateImageFile(file)) {
       return;
@@ -483,8 +597,8 @@ export const useMarketplaceListingEditorPage = () => {
     );
   };
 
-  // 12.5 上傳單個暫存圖片到 OSS
-  const uploadImageSlot = async (slotId: string): Promise<void> => {
+  // 14.8 上傳單個暫存圖片到 OSS
+  const uploadImageSlot = async (slotId: string, targetListingId: string): Promise<void> => {
     const targetSlot = imageSlots.value.find((slot) => slot.id === slotId);
     if (!targetSlot?.file) {
       return;
@@ -500,7 +614,7 @@ export const useMarketplaceListingEditorPage = () => {
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,
-        object_prefix: listingObjectPrefix,
+        object_prefix: buildListingObjectPrefix(targetListingId),
       });
       const presign = presignResponse.data.data;
       const uploadResponse = await fetch(presign.upload_url, {
@@ -528,7 +642,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.6 將上傳結果回寫圖片槽
+  // 14.9 將上傳結果回寫圖片槽
   const updateImageSlot = (slotId: string, mediaAsset: MediaAssetResponse, fileName: string): void => {
     const hasCover = imageSlots.value.some((slot) => slot.isCover && slot.mediaAssetId);
 
@@ -554,7 +668,7 @@ export const useMarketplaceListingEditorPage = () => {
     });
   };
 
-  // 12.7 處理圖片 input
+  // 14.10 處理圖片 input
   const handleImageFileChange = (event: Event, slotId: string): void => {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -565,7 +679,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.8 批量暫存圖片
+  // 14.11 批量暫存圖片
   const stageImageFiles = (files: File[]): void => {
     for (const file of files) {
       const nextSlot = imageSlots.value.find((slot) => !slot.mediaAssetId && !slot.file && !slot.uploading);
@@ -578,7 +692,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.9 處理多圖 input
+  // 14.12 處理多圖 input
   const handleImageFilesChange = (event: Event): void => {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
@@ -587,20 +701,20 @@ export const useMarketplaceListingEditorPage = () => {
     stageImageFiles(files);
   };
 
-  // 12.10 處理拖拽圖片
+  // 14.13 處理拖拽圖片
   const handleDroppedImageFiles = (files: File[]): void => {
     stageImageFiles(files);
   };
 
-  // 12.11 上傳所有待發布圖片
-  const uploadPendingImages = async (): Promise<void> => {
+  // 14.14 上傳所有待發布圖片
+  const uploadPendingImages = async (targetListingId: string): Promise<void> => {
     const pendingSlots = imageSlots.value.filter((slot) => Boolean(slot.file));
     for (const slot of pendingSlots) {
-      await uploadImageSlot(slot.id);
+      await uploadImageSlot(slot.id, targetListingId);
     }
   };
 
-  // 12.12 移除圖片
+  // 14.15 移除圖片
   const removeImageSlot = (slotId: string): void => {
     const removedSlot = imageSlots.value.find((slot) => slot.id === slotId);
     if (removedSlot) {
@@ -629,7 +743,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.13 移動圖片排序
+  // 14.16 移動圖片排序
   const moveImageSlot = (slotId: string, offset: -1 | 1): void => {
     const currentIndex = imageSlots.value.findIndex((slot) => slot.id === slotId);
     const nextIndex = currentIndex + offset;
@@ -643,7 +757,7 @@ export const useMarketplaceListingEditorPage = () => {
     imageSlots.value = nextSlots;
   };
 
-  // 12.14 建立提交 payload
+  // 14.17 建立提交 payload
   const buildPayload = (): UpsertSecondhandListingPayload => {
     const deliveryTags = [
       ...formState.deliveryTags,
@@ -695,7 +809,7 @@ export const useMarketplaceListingEditorPage = () => {
     };
   };
 
-  // 12.15 儲存草稿
+  // 14.18 儲存草稿
   const saveDraft = async (options: { uploadImages?: boolean } = {}): Promise<string> => {
     if (!readyToSaveDraft.value) {
       feedbackStore.pushToast(t('marketplace.editor.saveBlocked'), 'error');
@@ -706,10 +820,22 @@ export const useMarketplaceListingEditorPage = () => {
 
     try {
       const wasEditing = isEditing.value;
+      const shouldUploadImages = options.uploadImages ?? wasEditing;
 
-      if (options.uploadImages ?? wasEditing) {
+      if (!listingId.value) {
+        const createResponse = await createSecondhandListing(buildPayload());
+        listingId.value = createResponse.data.data.listing_id;
+
+        if (!shouldUploadImages) {
+          markCurrentStateSaved();
+          feedbackStore.pushToast(t('marketplace.editor.draftSaved'), 'success');
+          return listingId.value;
+        }
+      }
+
+      if (shouldUploadImages) {
         try {
-          await uploadPendingImages();
+          await uploadPendingImages(listingId.value);
         } catch (error) {
           feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.imageUploadError')), 'error');
           return '';
@@ -717,10 +843,9 @@ export const useMarketplaceListingEditorPage = () => {
       }
 
       const payload = buildPayload();
-      const response = listingId.value
-        ? await updateSecondhandListing(listingId.value, payload)
-        : await createSecondhandListing(payload);
+      const response = await updateSecondhandListing(listingId.value, payload);
       listingId.value = response.data.data.listing_id;
+      markCurrentStateSaved();
       feedbackStore.pushToast(t(wasEditing ? 'marketplace.editor.updateSaved' : 'marketplace.editor.draftSaved'), 'success');
 
       return listingId.value;
@@ -732,7 +857,7 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.16 儲存並立即發布
+  // 14.19 儲存並立即發布
   const submitListing = async (): Promise<void> => {
     if (!readyToPublish.value) {
       feedbackStore.pushToast(t('marketplace.editor.publishBlocked'), 'error');
@@ -749,6 +874,7 @@ export const useMarketplaceListingEditorPage = () => {
 
       await publishSecondhandListing(savedListingId);
       feedbackStore.pushToast(t('marketplace.editor.publishSuccess'), 'success');
+      isProgrammaticNavigation.value = true;
       await router.push('/marketplace/my/listings');
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.publishError')), 'error');
@@ -757,13 +883,20 @@ export const useMarketplaceListingEditorPage = () => {
     }
   };
 
-  // 12.17 儲存並返回我的帖子列表
+  // 14.20 儲存並返回我的帖子列表
   const saveAndBackToList = async (): Promise<void> => {
-    const savedListingId = await saveDraft();
+    const savedListingId = await saveDraft({ uploadImages: true });
     if (savedListingId) {
+      isProgrammaticNavigation.value = true;
       await router.push('/marketplace/my/listings');
     }
   };
+
+  onBeforeRouteLeave(() => confirmLeaveEditor());
+
+  onMounted(() => {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+  });
 
   watch(
     () => route.params.listingId,
@@ -775,11 +908,13 @@ export const useMarketplaceListingEditorPage = () => {
       }
 
       resetFormState(formState, imageSlots);
+      markCurrentStateSaved();
     },
     { immediate: true },
   );
 
   onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     imageSlots.value.forEach(revokeImageSlotPreview);
   });
 
@@ -791,11 +926,13 @@ export const useMarketplaceListingEditorPage = () => {
     conditionOptions,
     coverImage,
     formState,
+    handleLeavePromptDecision,
     handleDroppedImageFiles,
     handleImageFileChange,
     handleImageFilesChange,
     imageSlots,
     isEditing,
+    isLeavePromptOpen,
     isLoading,
     isPublishing,
     isSaving,

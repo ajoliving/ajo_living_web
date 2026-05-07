@@ -1,7 +1,7 @@
 /*
  * 通知 API。
  * 1. 取得會員通知列表。
- * 2. 提供單筆與全部已讀操作。
+ * 2. 取得未讀數並提供已讀操作。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
@@ -17,12 +17,16 @@ interface FetchNotificationsParams {
 export const fetchNotifications = (params: FetchNotificationsParams = {}) =>
   httpClient.get<ApiResponse<NotificationListPayload>>('/notifications', { params });
 
-// 2. 標記單一通知已讀
+// 2. 取得未讀通知數
+export const fetchNotificationUnreadCount = () =>
+  httpClient.get<ApiResponse<{ unread_count: number }>>('/notifications/unread-count');
+
+// 3. 標記單一通知已讀
 export const markNotificationRead = (notificationId: string) =>
   httpClient.post<ApiResponse<{ notification_id: string; read: boolean }>>(
     `/notifications/${notificationId}/read`,
   );
 
-// 3. 標記全部通知已讀
+// 4. 標記全部通知已讀
 export const markAllNotificationsRead = () =>
   httpClient.post<ApiResponse<{ updated: number }>>('/notifications/read-all');

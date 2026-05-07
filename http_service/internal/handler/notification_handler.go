@@ -46,7 +46,24 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination, "unread_count": unreadCount})
 }
 
-// 4. MarkRead marks one notification as read.
+// 4. UnreadCount returns the current member's unread notification count.
+func (h *NotificationHandler) UnreadCount(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	count, err := h.notificationService.UnreadCount(c.Request.Context(), user.UserID)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, gin.H{"unread_count": count})
+}
+
+// 5. MarkRead marks one notification as read.
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -62,7 +79,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	errcode.Success(c, gin.H{"notification_id": strings.TrimSpace(c.Param("notificationId")), "read": true})
 }
 
-// 5. MarkAllRead marks all unread notifications as read.
+// 6. MarkAllRead marks all unread notifications as read.
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

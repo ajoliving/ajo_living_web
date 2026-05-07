@@ -12,6 +12,7 @@ import commonEn from '@/i18n/locales/en/common';
 import homeEn from '@/i18n/locales/en/home';
 import marketplaceEn from '@/i18n/locales/en/marketplace';
 import navEn from '@/i18n/locales/en/nav';
+import propertyEn from '@/i18n/locales/en/property';
 import accountZhHk from '@/i18n/locales/zh-HK/account';
 import authZhHk from '@/i18n/locales/zh-HK/auth';
 import chatZhHk from '@/i18n/locales/zh-HK/chat';
@@ -19,6 +20,7 @@ import commonZhHk from '@/i18n/locales/zh-HK/common';
 import homeZhHk from '@/i18n/locales/zh-HK/home';
 import marketplaceZhHk from '@/i18n/locales/zh-HK/marketplace';
 import navZhHk from '@/i18n/locales/zh-HK/nav';
+import propertyZhHk from '@/i18n/locales/zh-HK/property';
 
 const messages = {
   'zh-HK': {
@@ -29,6 +31,7 @@ const messages = {
     home: homeZhHk,
     marketplace: marketplaceZhHk,
     nav: navZhHk,
+    property: propertyZhHk,
   },
   en: {
     account: accountEn,
@@ -38,6 +41,7 @@ const messages = {
     home: homeEn,
     marketplace: marketplaceEn,
     nav: navEn,
+    property: propertyEn,
   },
 };
 

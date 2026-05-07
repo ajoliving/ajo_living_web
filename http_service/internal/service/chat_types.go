@@ -10,6 +10,7 @@ type ChatSummary struct {
 	ChatID             string                `json:"chat_id"`
 	ListingID          string                `json:"listing_id"`
 	ListingTitle       string                `json:"listing_title"`
+	ChatType           string                `json:"chat_type"`
 	LastMessagePreview string                `json:"last_message_preview"`
 	LastMessageAt      *string               `json:"last_message_at,omitempty"`
 	UnreadCount        int                   `json:"unread_count"`
@@ -23,6 +24,7 @@ type ChatDetail struct {
 	ChatID       string              `json:"chat_id"`
 	ListingID    string              `json:"listing_id"`
 	ListingTitle string              `json:"listing_title"`
+	ChatType     string              `json:"chat_type"`
 	CreatedAt    string              `json:"created_at"`
 	Peer         *ChatPeerSummary    `json:"peer,omitempty"`
 	Listing      *ChatListingSummary `json:"listing,omitempty"`
@@ -57,12 +59,27 @@ type ChatMember struct {
 	RoleInChat  string `json:"role_in_chat"`
 }
 
-// 6. MessageResponse defines a chat message payload.
+// 6. SystemNoticePublishParams defines a staff broadcast notice input.
+type SystemNoticePublishParams struct {
+	Title       string
+	Body        string
+	ActionLabel string
+	ActionURL   string
+}
+
+// 7. SystemNoticePublishResult defines the broadcast delivery summary.
+type SystemNoticePublishResult struct {
+	DeliveredCount int `json:"delivered_count"`
+}
+
+// 8. MessageResponse defines a chat message payload.
 type MessageResponse struct {
 	MessageID    string `json:"message_id"`
 	SenderUserID string `json:"sender_user_id"`
 	Content      string `json:"content"`
 	MessageType  string `json:"message_type"`
+	ActionLabel  string `json:"action_label,omitempty"`
+	ActionURL    string `json:"action_url,omitempty"`
 	Status       string `json:"status"`
 	CreatedAt    string `json:"created_at"`
 }

@@ -19,6 +19,21 @@ import (
 	"ajoliving_web/http_service/internal/utils"
 )
 
+const (
+	chatTypeDirectListing = "direct_listing_chat"
+	chatTypeSystemNotice  = "system_notice"
+	messageTypeText       = "text"
+	messageTypeNoticeCard = "notice_card"
+	systemNoticeListingID = 0
+)
+
+type defaultNoticeMessage struct {
+	Content     string
+	ActionLabel string
+	ActionURL   string
+	CreatedAt   time.Time
+}
+
 // 1. ChatService handles listing chats and messages.
 type ChatService struct {
 	runtime           *Runtime
@@ -29,6 +44,7 @@ type ChatService struct {
 type chatListRow struct {
 	UnreadCount        int
 	ChatPublicID       string
+	ChatType           string
 	LastMessagePreview string
 	LastMessageAt      *time.Time
 	ListingPublicID    string
@@ -78,7 +94,7 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 		PublicID:  utils.NewPublicID(),
 		BizModule: "secondhand",
 		ListingID: listing.ID,
-		ChatType:  "direct_listing_chat",
+		ChatType:  chatTypeDirectListing,
 		CreatedBy: userID,
 		CreatedAt: s.runtime.Now(),
 		UpdatedAt: s.runtime.Now(),
@@ -103,12 +119,16 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 
 // 5. ListChats returns chats for the current user.
 func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pageSize int) ([]ChatSummary, *model.Pagination, error) {
+	if _, err := s.ensureSystemNoticeChat(ctx, userID); err != nil {
+		return nil, nil, err
+	}
+
 	page, pageSize = normalizePagination(page, pageSize)
 	baseQuery := s.runtime.DB.WithContext(ctx).Table("chat_participants").
-		Select("chat_participants.unread_count, chats.public_id AS chat_public_id, chats.last_message_preview, chats.last_message_at, listings.public_id AS listing_public_id, listings.title, listings.summary, listings.id AS listing_id, listings.business_status, listings.published_at, secondhand_listings.price_mode, secondhand_listings.price_hkd").
+		Select("chat_participants.unread_count, chats.public_id AS chat_public_id, chats.chat_type, chats.last_message_preview, chats.last_message_at, listings.public_id AS listing_public_id, listings.title, listings.summary, listings.id AS listing_id, listings.business_status, listings.published_at, secondhand_listings.price_mode, secondhand_listings.price_hkd").
 		Joins("JOIN chats ON chats.id = chat_participants.chat_id").
-		Joins("JOIN listings ON listings.id = chats.listing_id").
-		Joins("JOIN secondhand_listings ON secondhand_listings.listing_id = listings.id").
+		Joins("LEFT JOIN listings ON listings.id = chats.listing_id").
+		Joins("LEFT JOIN secondhand_listings ON secondhand_listings.listing_id = listings.id").
 		Where("chat_participants.user_id = ?", userID)
 
 	var total int64
@@ -117,7 +137,12 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 	}
 
 	var rows []chatListRow
-	if err := baseQuery.Order("chats.last_message_at desc NULLS LAST, chats.created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Scan(&rows).Error; err != nil {
+	if err := baseQuery.
+		Order("CASE WHEN chats.chat_type = 'system_notice' THEN 0 ELSE 1 END ASC").
+		Order("chats.last_message_at desc NULLS LAST, chats.created_at desc").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Scan(&rows).Error; err != nil {
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load chats")
 	}
 
@@ -139,15 +164,24 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 		}
 
 		var cover *ListingImageResponse
-		if images := imageMap[item.ListingID]; len(images) > 0 {
-			cover = &images[0]
+		if item.ListingID > 0 {
+			if images := imageMap[item.ListingID]; len(images) > 0 {
+				cover = &images[0]
+			}
 		}
 
-		listingSummary := buildChatListingSummary(item, cover)
+		var listingSummary *ChatListingSummary
+		if item.ChatType != chatTypeSystemNotice {
+			listingSummary = buildChatListingSummary(item, cover)
+		}
+		if item.ChatType == chatTypeSystemNotice {
+			item.Title = model.SystemNotificationDisplayName
+		}
 		items = append(items, ChatSummary{
 			ChatID:             item.ChatPublicID,
 			ListingID:          item.ListingPublicID,
 			ListingTitle:       item.Title,
+			ChatType:           item.ChatType,
 			LastMessagePreview: item.LastMessagePreview,
 			LastMessageAt:      lastMessageAt,
 			UnreadCount:        item.UnreadCount,
@@ -175,10 +209,6 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 	if err != nil {
 		return nil, err
 	}
-	images, err := s.secondhandService.loadListingImages(ctx, []int64{listing.ID})
-	if err != nil {
-		return nil, err
-	}
 	peerMap, err := s.loadChatPeerMap(ctx, userID, []string{chat.PublicID})
 	if err != nil {
 		return nil, err
@@ -186,18 +216,25 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 
 	result := &ChatDetail{
 		ChatID:       chat.PublicID,
-		ListingID:    listing.PublicID,
-		ListingTitle: listing.Title,
+		ChatType:     chat.ChatType,
 		CreatedAt:    chat.CreatedAt.UTC().Format(time.RFC3339),
 		Peer:         peerMap[chat.PublicID],
-		Listing: buildChatListingSummary(chatListRow{
+		Participants: make([]ChatMember, 0, len(participants)),
+	}
+	if chat.ChatType != chatTypeSystemNotice {
+		images, imageErr := s.secondhandService.loadListingImages(ctx, []int64{listing.ID})
+		if imageErr != nil {
+			return nil, imageErr
+		}
+		result.ListingID = listing.PublicID
+		result.ListingTitle = listing.Title
+		result.Listing = buildChatListingSummary(chatListRow{
 			ListingPublicID: listing.PublicID,
 			Title:           listing.Title,
 			Summary:         listing.Summary,
 			BusinessStatus:  listing.BusinessStatus,
 			PublishedAt:     listing.PublishedAt,
-		}, firstListingImage(images[listing.ID])),
-		Participants: make([]ChatMember, 0, len(participants)),
+		}, firstListingImage(images[listing.ID]))
 	}
 	for _, participant := range participants {
 		profile := profileMap[participant.UserID]
@@ -239,6 +276,8 @@ func (s *ChatService) ListMessages(ctx context.Context, userID int64, chatPublic
 			SenderUserID: fmtInt64(message.SenderUserID),
 			Content:      message.ContentText,
 			MessageType:  message.MessageType,
+			ActionLabel:  message.ActionLabel,
+			ActionURL:    message.ActionURL,
 			Status:       message.MessageStatus,
 			CreatedAt:    message.CreatedAt.UTC().Format(time.RFC3339),
 		})
@@ -258,6 +297,9 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	if err != nil {
 		return nil, err
 	}
+	if chat.ChatType == chatTypeSystemNotice {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "system notice chat is read-only")
+	}
 	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for messaging")
 	}
@@ -266,7 +308,7 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 		PublicID:      utils.NewPublicID(),
 		ChatID:        chat.ID,
 		SenderUserID:  userID,
-		MessageType:   "text",
+		MessageType:   messageTypeText,
 		ContentText:   content,
 		MessageStatus: "sent",
 		CreatedAt:     s.runtime.Now(),
@@ -290,20 +332,14 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 			return err
 		}
 
-		if err := NewNotificationService(s.runtime).CreateNotification(ctx, tx, CreateNotificationParams{
-			UserID:          listing.OwnerUserID,
-			Category:        "chat_message",
-			Title:           "New chat message",
-			Body:            content,
-			RelatedType:     "chat",
-			RelatedPublicID: chat.PublicID,
-		}); err != nil && listing.OwnerUserID != userID {
+		var recipients []model.ChatParticipant
+		if err := tx.WithContext(ctx).Where("chat_id = ? AND user_id <> ?", chat.ID, userID).Find(&recipients).Error; err != nil {
 			return err
 		}
-
-		if listing.OwnerUserID == userID {
-			if err := NewNotificationService(s.runtime).CreateNotification(ctx, tx, CreateNotificationParams{
-				UserID:          chat.CreatedBy,
+		notificationService := NewNotificationService(s.runtime)
+		for _, recipient := range recipients {
+			if err := notificationService.CreateNotification(ctx, tx, CreateNotificationParams{
+				UserID:          recipient.UserID,
 				Category:        "chat_message",
 				Title:           "New chat message",
 				Body:            content,
@@ -332,7 +368,87 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	}, nil
 }
 
-// 9. MarkRead clears unread count for the current participant.
+// 9. PublishSystemNotice sends one read-only notice card to every active member.
+func (s *ChatService) PublishSystemNotice(ctx context.Context, params SystemNoticePublishParams) (*SystemNoticePublishResult, error) {
+	title := strings.TrimSpace(params.Title)
+	body := strings.TrimSpace(params.Body)
+	actionLabel := strings.TrimSpace(params.ActionLabel)
+	actionURL := strings.TrimSpace(params.ActionURL)
+	if title == "" || body == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "notice title and body are required")
+	}
+	if len([]rune(title)) > 120 || len([]rune(body)) > 1000 || len([]rune(actionLabel)) > 80 || len([]rune(actionURL)) > 500 {
+		return nil, errcode.New(errcode.CodeValidationError, "notice content is too long")
+	}
+	if (actionLabel == "") != (actionURL == "") {
+		return nil, errcode.New(errcode.CodeValidationError, "notice action label and url must be provided together")
+	}
+
+	systemUser, err := s.loadSystemNotificationUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []model.User
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("member_status = ? AND id <> ?", "active", systemUser.ID).
+		Find(&users).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load notice recipients")
+	}
+
+	delivered := 0
+	noticeContent := title + "\n" + body
+	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, user := range users {
+			chat, err := s.ensureSystemNoticeChatWithDB(ctx, tx, user.ID, systemUser)
+			if err != nil {
+				return err
+			}
+			if chat == nil {
+				continue
+			}
+
+			now := s.runtime.Now()
+			message := model.Message{
+				PublicID:      utils.NewPublicID(),
+				ChatID:        chat.ID,
+				SenderUserID:  systemUser.ID,
+				MessageType:   messageTypeNoticeCard,
+				ContentText:   noticeContent,
+				ActionLabel:   actionLabel,
+				ActionURL:     actionURL,
+				MessageStatus: "sent",
+				CreatedAt:     now,
+			}
+			if err := tx.Create(&message).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&model.Chat{}).Where("id = ?", chat.ID).Updates(map[string]any{
+				"last_message_preview": body,
+				"last_message_at":      now,
+				"updated_at":           now,
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&model.ChatParticipant{}).
+				Where("chat_id = ? AND user_id = ?", chat.ID, user.ID).
+				Update("unread_count", gorm.Expr("unread_count + ?", 1)).
+				Error; err != nil {
+				return err
+			}
+
+			delivered++
+		}
+
+		return nil
+	}); err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to publish system notice")
+	}
+
+	return &SystemNoticePublishResult{DeliveredCount: delivered}, nil
+}
+
+// 10. MarkRead clears unread count for the current participant.
 func (s *ChatService) MarkRead(ctx context.Context, userID int64, chatPublicID string) error {
 	chat, _, participant, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
 	if err != nil {
@@ -357,7 +473,7 @@ func (s *ChatService) MarkRead(ctx context.Context, userID int64, chatPublicID s
 	return nil
 }
 
-// 10. loadAuthorizedChat loads a chat and validates membership.
+// 11. loadAuthorizedChat loads a chat and validates membership.
 func (s *ChatService) loadAuthorizedChat(ctx context.Context, userID int64, chatPublicID string) (*model.Chat, *model.Listing, *model.ChatParticipant, error) {
 	var chat model.Chat
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", chatPublicID).First(&chat).Error; err != nil {
@@ -376,9 +492,127 @@ func (s *ChatService) loadAuthorizedChat(ctx context.Context, userID int64, chat
 	}
 
 	var listing model.Listing
-	if err := s.runtime.DB.WithContext(ctx).First(&listing, chat.ListingID).Error; err != nil {
-		return nil, nil, nil, errcode.New(errcode.CodeInternalError, "failed to load chat listing")
+	if chat.ChatType != chatTypeSystemNotice {
+		if err := s.runtime.DB.WithContext(ctx).First(&listing, chat.ListingID).Error; err != nil {
+			return nil, nil, nil, errcode.New(errcode.CodeInternalError, "failed to load chat listing")
+		}
 	}
 
 	return &chat, &listing, &participant, nil
+}
+
+// 12. ensureSystemNoticeChat creates a read-only system notice chat for a user.
+func (s *ChatService) ensureSystemNoticeChat(ctx context.Context, userID int64) (*model.Chat, error) {
+	systemUser, err := s.loadSystemNotificationUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.ensureSystemNoticeChatWithDB(ctx, s.runtime.DB, userID, systemUser)
+}
+
+// 13. ensureSystemNoticeChatWithDB creates a system notice chat with the provided DB handle.
+func (s *ChatService) ensureSystemNoticeChatWithDB(ctx context.Context, db *gorm.DB, userID int64, systemUser *model.User) (*model.Chat, error) {
+	if systemUser.ID == userID {
+		return nil, nil
+	}
+
+	var chat model.Chat
+	err := db.WithContext(ctx).
+		Where("chat_type = ? AND created_by = ?", chatTypeSystemNotice, userID).
+		First(&chat).
+		Error
+	if err == nil {
+		return &chat, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load system notice chat")
+	}
+
+	now := s.runtime.Now()
+	chat = model.Chat{
+		PublicID:           utils.NewPublicID(),
+		BizModule:          "system",
+		ListingID:          systemNoticeListingID,
+		ChatType:           chatTypeSystemNotice,
+		CreatedBy:          userID,
+		LastMessagePreview: "最高100幣，可以當錢花",
+		LastMessageAt:      &now,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+	if err := db.WithContext(ctx).Create(&chat).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create system notice chat")
+	}
+
+	participants := []model.ChatParticipant{
+		{ChatID: chat.ID, UserID: userID, RoleInChat: "recipient", UnreadCount: len(defaultSystemNoticeMessages(now)), JoinedAt: now},
+		{ChatID: chat.ID, UserID: systemUser.ID, RoleInChat: "system", UnreadCount: 0, JoinedAt: now},
+	}
+	if err := db.WithContext(ctx).Create(&participants).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create system notice chat")
+	}
+
+	messages := make([]model.Message, 0, len(defaultSystemNoticeMessages(now)))
+	for _, notice := range defaultSystemNoticeMessages(now) {
+		messages = append(messages, model.Message{
+			PublicID:      utils.NewPublicID(),
+			ChatID:        chat.ID,
+			SenderUserID:  systemUser.ID,
+			MessageType:   messageTypeNoticeCard,
+			ContentText:   notice.Content,
+			ActionLabel:   notice.ActionLabel,
+			ActionURL:     notice.ActionURL,
+			MessageStatus: "sent",
+			CreatedAt:     notice.CreatedAt,
+		})
+	}
+	if err := db.WithContext(ctx).Create(&messages).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create system notice chat")
+	}
+
+	return &chat, nil
+}
+
+// 14. loadSystemNotificationUser returns the built-in notification sender.
+func (s *ChatService) loadSystemNotificationUser(ctx context.Context) (*model.User, error) {
+	var user model.User
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("phone_country_code = ? AND phone_number = ?", model.SystemNotificationPhoneCountryCode, model.SystemNotificationPhoneNumber).
+		First(&user).
+		Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load system notification user")
+	}
+
+	return &user, nil
+}
+
+// 15. defaultSystemNoticeMessages returns initial read-only announcement cards.
+func defaultSystemNoticeMessages(now time.Time) []defaultNoticeMessage {
+	return []defaultNoticeMessage{
+		{
+			Content:     "分百萬紅包，領 IP 周邊\n水豚噜噜、讚萌 Loopy、奶龍等你投餵",
+			ActionLabel: "立即參與",
+			ActionURL:   "/marketplace/discover",
+			CreatedAt:   now.Add(-5 * time.Minute),
+		},
+		{
+			Content:     "紅包到賬提醒\n拼手氣，瓜分 HK$35999 現金紅包",
+			ActionLabel: "去查看",
+			ActionURL:   "/marketplace/discover",
+			CreatedAt:   now.Add(-4 * time.Minute),
+		},
+		{
+			Content:     "恭喜您獲得副業任務獎勵\n恭喜您本月賣出 1 筆副業寶貝，快去領取獎勵吧",
+			ActionLabel: "去領獎",
+			ActionURL:   "/marketplace/my/orders",
+			CreatedAt:   now.Add(-3 * time.Minute),
+		},
+		{
+			Content:     "閒魚幣登入獎勵到賬\n最高 100 幣，可以當錢花",
+			ActionLabel: "去兌換",
+			ActionURL:   "/marketplace/discover",
+			CreatedAt:   now.Add(-2 * time.Minute),
+		},
+	}
 }

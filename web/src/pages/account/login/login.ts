@@ -1,7 +1,7 @@
 /*
  * 登入頁 - 狀態與資料流程。
  * 1. 管理登入表單狀態、模式切換與顯示文字。
- * 2. 處理郵箱登入、郵箱註冊、短訊 OTP 登入與登出。
+ * 2. 處理郵箱密碼登入、郵箱驗證碼登入、郵箱註冊、短訊 OTP 登入與登出。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
 import axios from 'axios';
@@ -9,12 +9,15 @@ import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
+import type { RequestOtpResult } from '@/model/auth';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
 
 export type LoginAuthMode = 'email' | 'otp';
 
 export type LoginEmailAction = 'login' | 'register';
+
+export type LoginEmailMethod = 'password' | 'code';
 
 export type LoginAuthModeSwitchIcon = 'phone' | 'user';
 
@@ -58,9 +61,9 @@ const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
 const createInitialFormState = (): LoginFormState => ({
   email: DEFAULT_LOGIN_EMAIL,
   password: DEFAULT_LOGIN_PASSWORD,
-  displayName: 'Admin',
-  phone: '+852 6123 4567',
-  otp: '246810',
+  displayName: '',
+  phone: '',
+  otp: '',
 });
 
 // 2. 解析手機輸入
@@ -89,19 +92,25 @@ const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
   };
 };
 
-// 3. 組合錯誤訊息
+// 3. 檢查郵箱格式
+const isValidEmailInput = (email: string): boolean => {
+  const value = email.trim();
+  return value.includes('@') && value.includes('.') && value.length <= 255;
+};
+
+// 4. 組合錯誤訊息
 const readErrorMessage = (error: unknown): string =>
   axios.isAxiosError(error)
     ? error.response?.data?.message ?? error.message
     : 'Request failed.';
 
-// 4. 取得隨機登入頁主視覺
+// 5. 取得隨機登入頁主視覺
 const getRandomHeroImage = (): LoginHeroImage => {
   const selectedIndex = Math.floor(Math.random() * LOGIN_HERO_IMAGES.length);
   return LOGIN_HERO_IMAGES[selectedIndex] ?? LOGIN_HERO_IMAGES[0];
 };
 
-// 5. 管理登入頁資料與動作
+// 6. 管理登入頁資料與動作
 export const useLoginPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -111,6 +120,7 @@ export const useLoginPage = () => {
   const formState = reactive(createInitialFormState());
   const authMode = ref<LoginAuthMode>('email');
   const emailAction = ref<LoginEmailAction>('login');
+  const emailLoginMethod = ref<LoginEmailMethod>('password');
   const requestingOtp = ref(false);
   const submitting = ref(false);
   const rememberMe = ref(true);
@@ -158,18 +168,32 @@ export const useLoginPage = () => {
     emailAction.value === 'register' ? t('auth.emailLogin') : t('auth.emailRegister'),
   );
 
-  // 5.1 請求 OTP
+  // 6.1 請求驗證碼
   const handleRequestOtp = async (): Promise<void> => {
-    const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-    if (!phoneCountryCode || !phoneNumber) {
-      feedbackStore.pushToast(t('auth.invalidPhone'), 'error');
-      return;
-    }
-
+    let result: RequestOtpResult;
     requestingOtp.value = true;
 
     try {
-      const result = await sessionStore.sendOtp(phoneCountryCode, phoneNumber);
+      if (authMode.value === 'email') {
+        if (!isValidEmailInput(formState.email)) {
+          feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+          return;
+        }
+
+        result = await sessionStore.sendEmailOtp(
+          formState.email.trim(),
+          emailAction.value === 'register' ? 'register' : 'login',
+        );
+      } else {
+        const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
+        if (!phoneCountryCode || !phoneNumber) {
+          feedbackStore.pushToast(t('auth.invalidPhone'), 'error');
+          return;
+        }
+
+        result = await sessionStore.sendOtp(phoneCountryCode, phoneNumber);
+      }
+
       feedbackStore.pushToast(
         result.mock_code ? t('auth.otpPreview', { code: result.mock_code }) : t('auth.otpSent'),
         'info',
@@ -181,16 +205,31 @@ export const useLoginPage = () => {
     }
   };
 
-  // 5.2 完成登入後跳轉
+  // 6.2 完成登入後跳轉
   const redirectAfterSignIn = async (): Promise<void> => {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/marketplace';
     await router.push(redirect);
   };
 
-  // 5.3 執行郵箱密碼登入或註冊
+  // 6.3 執行郵箱登入或註冊
   const handleEmailSubmit = async (): Promise<void> => {
-    if (!formState.email.trim() || formState.password.trim().length < 8) {
-      feedbackStore.pushToast(t('auth.emailRequiredFields'), 'error');
+    if (!isValidEmailInput(formState.email)) {
+      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+      return;
+    }
+
+    if (emailAction.value === 'register') {
+      if (!formState.displayName.trim() || formState.password.trim().length < 8) {
+        feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
+        return;
+      }
+    } else if (emailLoginMethod.value === 'code') {
+      if (formState.otp.trim().length === 0) {
+        feedbackStore.pushToast(t('auth.emailOtpRequiredFields'), 'error');
+        return;
+      }
+    } else if (formState.password.trim().length === 0) {
+      feedbackStore.pushToast(t('auth.passwordRequired'), 'error');
       return;
     }
 
@@ -204,6 +243,14 @@ export const useLoginPage = () => {
           formState.displayName.trim(),
         );
         feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
+      } else if (emailLoginMethod.value === 'code') {
+        await sessionStore.signInWithEmailOtp(
+          formState.email.trim(),
+          formState.otp.trim(),
+          '',
+          'login',
+        );
+        feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       } else {
         await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
         feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
@@ -217,7 +264,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 5.4 執行 OTP 登入
+  // 6.4 執行 OTP 登入
   const handleOtpSubmit = async (): Promise<void> => {
     const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
     if (!phoneCountryCode || !phoneNumber || formState.otp.trim().length === 0) {
@@ -238,7 +285,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 5.5 按目前模式提交登入表單
+  // 6.5 按目前模式提交登入表單
   const handleSubmit = async (): Promise<void> => {
     if (authMode.value === 'email') {
       await handleEmailSubmit();
@@ -248,21 +295,29 @@ export const useLoginPage = () => {
     await handleOtpSubmit();
   };
 
-  // 5.6 執行登出
+  // 6.6 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 5.7 切換登入模式
+  // 6.7 切換登入模式
   const toggleAuthMode = (): void => {
     authMode.value = authMode.value === 'email' ? 'otp' : 'email';
+    formState.otp = '';
   };
 
-  // 5.8 切換郵箱登入與註冊模式
+  // 6.8 切換郵箱登入與註冊模式
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
     authMode.value = 'email';
+    formState.otp = '';
+  };
+
+  // 6.9 切換郵箱登入方式
+  const setEmailLoginMethod = (method: LoginEmailMethod): void => {
+    emailLoginMethod.value = method;
+    formState.otp = '';
   };
 
   return {
@@ -271,6 +326,7 @@ export const useLoginPage = () => {
     authModeSwitchLabel,
     emailAction,
     emailActionSwitchLabel,
+    emailLoginMethod,
     emailPlaceholder: EMAIL_PLACEHOLDER,
     footerActionLabel,
     footerPrompt,
@@ -283,6 +339,7 @@ export const useLoginPage = () => {
     rememberMe,
     requestingOtp,
     selectedHero,
+    setEmailLoginMethod,
     submitting,
     submitLabel,
     toggleAuthMode,

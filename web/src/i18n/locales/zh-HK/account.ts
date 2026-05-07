@@ -71,12 +71,17 @@ export default {
   },
   notifications: {
     title: '通知中心',
-    description: '集中查看聊天、帖子與交易提醒。',
+    description: '集中查看聊天與交易提醒。',
+    all: '全部',
     unread: '未讀',
+    unreadOnly: '只看未讀',
     markAllRead: '全部標記已讀',
+    markAllSuccess: '通知已全部標記為已讀。',
     loading: '正在載入通知...',
     emptyTitle: '目前沒有通知',
     emptyDescription: '新的互動與提醒會顯示在這裡。',
+    loadError: '通知載入失敗，請稍後再試。',
+    updateError: '通知狀態更新失敗，請稍後再試。',
     markRead: '標記已讀',
   },
   favourites: {

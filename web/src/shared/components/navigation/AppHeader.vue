@@ -332,11 +332,7 @@ watch(
               :key="item.key"
               :to="item.to"
               class="topbar-subnav-link-mobile flex items-center rounded-2xl border px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
-              :class="
-                isSubnavActive(item)
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border/70 bg-surface/70 text-text-muted'
-              "
+              :class="isSubnavActive(item) ? 'topbar-subnav-link-mobile-active' : 'topbar-subnav-link-mobile-idle'"
             >
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -391,7 +387,12 @@ watch(
 
 <style scoped>
 .app-topbar__inner {
+  position: relative;
+  z-index: 3;
+  border-bottom: 1px solid var(--topbar-glass-border);
   transform: none;
+  transition:
+    border-color 0.28s ease;
 }
 
 .topbar-main-nav-shell {
@@ -418,6 +419,16 @@ watch(
 }
 
 .app-topbar {
+  --topbar-glass-border: rgb(var(--color-border) / 0.3);
+  --topbar-glass-background: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.76),
+    rgb(var(--color-toolbar-surface) / 0.64)
+  );
+  --topbar-glass-shadow:
+    0 16px 40px rgb(15 23 42 / 0.1),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06);
+  --topbar-glass-filter: blur(28px) saturate(184%);
   --topbar-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
   --topbar-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
   --topbar-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
@@ -425,11 +436,14 @@ watch(
   --topbar-auth-hover-color: rgb(var(--color-text));
   --topbar-auth-active-color: var(--topbar-nav-active-color);
   --topbar-auth-active-shadow: var(--topbar-nav-active-shadow);
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 40;
+  background: var(--topbar-glass-background);
+  box-shadow: var(--topbar-glass-shadow);
+  backdrop-filter: var(--topbar-glass-filter);
+  -webkit-backdrop-filter: var(--topbar-glass-filter);
   transition:
     background 0.28s ease,
     border-color 0.28s ease,
@@ -437,19 +451,29 @@ watch(
 }
 
 .app-topbar-home {
-  border-bottom-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  --topbar-glass-border: rgb(var(--color-border) / 0.16);
+  --topbar-glass-background: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.5),
+    rgb(var(--color-toolbar-surface) / 0.36)
+  );
+  --topbar-glass-shadow:
+    0 12px 30px rgb(15 23 42 / 0.06),
+    inset 0 -1px 0 rgb(255 255 255 / 0.08);
+  --topbar-glass-filter: blur(22px) saturate(164%);
 }
 
 .app-topbar-solid {
-  border-bottom-color: rgb(var(--color-border) / 0.52);
-  background: rgb(var(--color-topbar-surface));
-  box-shadow: 0 10px 30px rgb(15 23 42 / 0.08);
-  backdrop-filter: blur(16px) saturate(128%);
-  -webkit-backdrop-filter: blur(16px) saturate(128%);
+  --topbar-glass-border: rgb(var(--color-border) / 0.3);
+  --topbar-glass-background: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.76),
+    rgb(var(--color-toolbar-surface) / 0.64)
+  );
+  --topbar-glass-shadow:
+    0 16px 40px rgb(15 23 42 / 0.1),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06);
+  --topbar-glass-filter: blur(28px) saturate(184%);
 }
 
 :global(html[data-theme='default']) .app-topbar {
@@ -560,23 +584,65 @@ watch(
 }
 
 .topbar-subnav-link-mobile {
+  border-color: rgb(var(--color-border) / 0.28);
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.72),
+      rgb(var(--color-toolbar-surface) / 0.56)
+    );
   font-family: var(--font-display);
+  box-shadow:
+    0 12px 28px rgb(15 23 42 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.topbar-subnav-link-mobile-idle {
+  color: rgb(var(--color-text-muted));
+}
+
+.topbar-subnav-link-mobile-active,
+.topbar-subnav-link-mobile-active:hover {
+  border-color: rgb(var(--color-primary) / 0.28);
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-topbar-surface) / 0.86),
+      rgb(var(--color-primary-soft) / 0.24)
+    );
+  color: var(--topbar-nav-active-color);
+  box-shadow:
+    0 14px 32px rgb(var(--color-primary) / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.topbar-subnav-link-mobile-idle:hover {
+  border-color: rgb(var(--color-border) / 0.4);
+  color: rgb(var(--color-text));
 }
 
 .app-subnav {
-  background: rgb(var(--color-topbar-surface));
-  backdrop-filter: blur(16px) saturate(128%);
-  -webkit-backdrop-filter: blur(16px) saturate(128%);
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid var(--topbar-glass-border);
 }
 
 .app-subnav__inner {
   display: flex;
   min-height: 2.65rem;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-page-max-width);
   align-items: center;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding-right: var(--layout-page-padding-inline);
+  padding-left: var(--layout-page-padding-inline);
 }
 
 .app-subnav__inner nav {
@@ -584,17 +650,17 @@ watch(
 }
 
 .app-topbar-home .app-subnav {
-  border-top-color: transparent;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border-top-color: var(--topbar-glass-border);
+  border-bottom-color: var(--topbar-glass-border);
 }
 
 .subnav-link {
   position: relative;
   font-family: var(--font-display);
-  color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text) / 0.98);
   border: 1px solid transparent;
+  background: transparent;
+  text-shadow: none;
 }
 
 .subnav-link::after {
@@ -619,7 +685,7 @@ watch(
 }
 
 .subnav-link-active {
-  color: var(--topbar-nav-active-color);
+  color: var(--topbar-nav-active-color) !important;
   text-shadow: var(--topbar-nav-active-shadow);
 }
 

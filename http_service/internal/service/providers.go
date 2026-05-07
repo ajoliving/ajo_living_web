@@ -59,6 +59,7 @@ type StorageObjectInfo struct {
 
 const mediaObjectPrefix = "ajo_living/"
 const accountMediaObjectPrefix = "ajo_living/account/"
+const listingMediaObjectPrefix = "ajo_living/listings/"
 
 var errStorageObjectNotFound = errors.New("storage object not found")
 
@@ -182,15 +183,66 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 
 // 17. normalizeMediaObjectPrefix keeps upload object keys in approved media directories.
 func normalizeMediaObjectPrefix(prefix string) string {
-	switch strings.Trim(strings.TrimSpace(prefix), "/") {
+	normalizedPrefix := strings.Trim(strings.TrimSpace(prefix), "/")
+	switch normalizedPrefix {
 	case "ajo_living/account", "account":
 		return accountMediaObjectPrefix
+	case "ajo_living/listings", "listings":
+		return listingMediaObjectPrefix
 	default:
+		if listingPrefix, ok := normalizeListingMediaObjectPrefix(normalizedPrefix); ok {
+			return listingPrefix
+		}
 		return mediaObjectPrefix
 	}
 }
 
-// 18. HeadObject returns object metadata from OSS for server-side verification.
+// 18. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.
+func normalizeListingMediaObjectPrefix(prefix string) (string, bool) {
+	cleanedPrefix := strings.TrimPrefix(prefix, "ajo_living/")
+	if !strings.HasPrefix(cleanedPrefix, "listings/") {
+		return "", false
+	}
+
+	segments := strings.Split(strings.Trim(cleanedPrefix, "/"), "/")
+	if len(segments) < 2 {
+		return "", false
+	}
+	for _, segment := range segments {
+		if !isSafeObjectPrefixSegment(segment) {
+			return "", false
+		}
+	}
+
+	return mediaObjectPrefix + strings.Join(segments, "/") + "/", true
+}
+
+// 19. isSafeObjectPrefixSegment validates one object prefix segment.
+func isSafeObjectPrefixSegment(segment string) bool {
+	if segment == "" {
+		return false
+	}
+
+	for _, char := range segment {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+		if char >= 'A' && char <= 'Z' {
+			continue
+		}
+		if char >= '0' && char <= '9' {
+			continue
+		}
+		if char == '-' || char == '_' {
+			continue
+		}
+		return false
+	}
+
+	return true
+}
+
+// 20. HeadObject returns object metadata from OSS for server-side verification.
 func (p *OSSStorageProvider) HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error) {
 	result, err := p.client.HeadObject(ctx, &oss.HeadObjectRequest{
 		Bucket: oss.Ptr(p.config.StorageBucket),
@@ -211,7 +263,7 @@ func (p *OSSStorageProvider) HeadObject(ctx context.Context, objectKey string) (
 	}, nil
 }
 
-// 19. DeleteObject removes the target object from OSS storage.
+// 21. DeleteObject removes the target object from OSS storage.
 func (p *OSSStorageProvider) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := p.client.DeleteObject(ctx, &oss.DeleteObjectRequest{
 		Bucket: oss.Ptr(p.config.StorageBucket),
@@ -224,7 +276,7 @@ func (p *OSSStorageProvider) DeleteObject(ctx context.Context, objectKey string)
 	return nil
 }
 
-// 20. validateOSSConfig enforces the minimum configuration required for OSS uploads.
+// 22. validateOSSConfig enforces the minimum configuration required for OSS uploads.
 func validateOSSConfig(cfg *config.Config) error {
 	switch {
 	case strings.TrimSpace(cfg.StorageBucket) == "":
@@ -244,7 +296,7 @@ func validateOSSConfig(cfg *config.Config) error {
 	}
 }
 
-// 21. newOSSClient builds the Alibaba Cloud OSS SDK client.
+// 23. newOSSClient builds the Alibaba Cloud OSS SDK client.
 func newOSSClient(cfg *config.Config) *oss.Client {
 	ossConfig := oss.LoadDefaultConfig().
 		WithRegion(strings.TrimSpace(cfg.StorageRegion)).
@@ -267,7 +319,7 @@ func newOSSClient(cfg *config.Config) *oss.Client {
 	return oss.NewClient(ossConfig)
 }
 
-// 22. isOSSObjectNotFoundError checks whether OSS returned an object-not-found response.
+// 24. isOSSObjectNotFoundError checks whether OSS returned an object-not-found response.
 func isOSSObjectNotFoundError(err error) bool {
 	var serviceErr *oss.ServiceError
 	if !errors.As(err, &serviceErr) {

@@ -33,6 +33,7 @@ export interface ChatSummaryResponse {
   chat_id: string;
   listing_id: string;
   listing_title: string;
+  chat_type: 'direct_listing_chat' | 'system_notice';
   last_message_preview: string;
   last_message_at?: string | null;
   unread_count: number;
@@ -50,6 +51,7 @@ export interface ChatDetailResponse {
   chat_id: string;
   listing_id: string;
   listing_title: string;
+  chat_type: 'direct_listing_chat' | 'system_notice';
   created_at: string;
   participants: Array<{
     user_id: string;
@@ -64,6 +66,17 @@ export interface ChatDetailResponse {
 interface FetchChatsParams {
   page?: number;
   page_size?: number;
+}
+
+export interface PublishSystemNoticePayload {
+  title: string;
+  body: string;
+  action_label?: string;
+  action_url?: string;
+}
+
+export interface PublishSystemNoticeResponse {
+  delivered_count: number;
 }
 
 // 1. 建立或復用一個帖子聊天
@@ -81,3 +94,7 @@ export const fetchChatDetail = (chatId: string) =>
 // 4. 標記聊天已讀
 export const markChatRead = (chatId: string) =>
   httpClient.post<ApiResponse<{ chat_id: string; read: boolean }>>(`/chats/${chatId}/read`);
+
+// 5. 發布系統通知
+export const publishSystemNotice = (payload: PublishSystemNoticePayload) =>
+  httpClient.post<ApiResponse<PublishSystemNoticeResponse>>('/staff/system-notices', payload);

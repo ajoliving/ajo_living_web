@@ -22,11 +22,11 @@ import AccountSidebar from './widgets/AccountSidebar.vue';
 .account-my-page {
   display: flex;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-page-max-width);
   min-height: calc(100vh - var(--app-header-offset, 0rem));
   gap: 3rem;
   margin: 0 auto;
-  padding: 4rem 2rem;
+  padding: 4rem var(--layout-page-padding-inline);
   color: #1a1c1b;
   overflow: visible;
 }
@@ -44,7 +44,7 @@ import AccountSidebar from './widgets/AccountSidebar.vue';
     flex-direction: column;
     gap: 2rem;
     overflow: visible;
-    padding: 2.5rem 1.25rem;
+    padding: 2.5rem var(--layout-page-padding-inline);
   }
 
   .account-my-content {

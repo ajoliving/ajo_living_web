@@ -172,7 +172,7 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 		roleCodes = dropStaffRoles(roleCodes)
 	}
 	if params.IsStaff != nil && *params.IsStaff && !containsStaffRole(roleCodes) {
-		roleCodes = append(roleCodes, model.RoleCodeOpsAdmin)
+		roleCodes = append(roleCodes, model.RoleCodeStaff)
 	}
 
 	if params.MemberType != nil {
@@ -196,7 +196,7 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 			return errcode.New(errcode.CodeInternalError, "failed to update user role")
 		}
 
-		return accessService.SetUserRoleCodes(ctx, tx, &user, roleCodes, &operatorUserID, model.RoleCodeOpsAdmin)
+		return accessService.SetUserRoleCodes(ctx, tx, &user, roleCodes, &operatorUserID, model.RoleCodeStaff)
 	}); err != nil {
 		return nil, err
 	}

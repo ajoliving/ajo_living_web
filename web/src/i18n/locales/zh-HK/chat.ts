@@ -6,6 +6,8 @@ export default {
   emptyThreadDescription: '這裡會顯示訊息氣泡、商品摘要與已讀狀態。',
   catalogueNote: '查看會話列表、未讀狀態與商品上下文。',
   conversations: '會話',
+  systemNoticeTitle: '通知',
+  systemNoticeSubtitle: '官方公告與活動提醒',
   loadingConversations: '正在載入會話...',
   listingPrice: '帖子價格',
   loadingMessages: '正在載入訊息...',

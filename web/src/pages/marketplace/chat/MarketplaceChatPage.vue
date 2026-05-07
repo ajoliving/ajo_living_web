@@ -21,6 +21,7 @@ const {
   formatPrice,
   handleSelectChat,
   handleSendMessage,
+  isSystemNoticeConversation,
   loadingConversations,
   loadingMessages,
   preferenceStore,
@@ -33,27 +34,8 @@ const {
 </script>
 
 <template>
-  <div class="space-y-10 py-8">
-    <section class="section-shell">
-      <div class="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <div class="panel-surface px-6 py-8 sm:px-8">
-          <p class="text-kicker">
-            {{ t('chat.title') }}
-          </p>
-          <h1 class="display-title mt-4 text-4xl text-text sm:text-5xl">
-            {{ t('chat.subtitle') }}
-          </h1>
-        </div>
-
-        <div class="panel-surface p-6">
-          <p class="text-sm leading-7 text-text-muted">
-            {{ t('chat.catalogueNote') }}
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section-shell">
+  <div class="marketplace-chat-page">
+    <section>
       <div
         v-if="sessionStore.isAuthenticated"
         class="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]"
@@ -99,7 +81,7 @@ const {
                         {{ conversation.peer.display_name }}
                       </p>
                       <p class="truncate text-xs text-text-muted">
-                        {{ conversation.listing.title }}
+                        {{ conversation.type === 'system_notice' ? t('chat.systemNoticeSubtitle') : conversation.listing.title }}
                       </p>
                     </div>
                     <span
@@ -127,10 +109,13 @@ const {
                     {{ activeConversation.peer.display_name }}
                   </p>
                   <p class="mt-1 text-sm text-text-muted">
-                    {{ activeConversation.listing.title }}
+                    {{ isSystemNoticeConversation ? t('chat.systemNoticeSubtitle') : activeConversation.listing.title }}
                   </p>
                 </div>
-                <div class="rounded-2xl bg-surface-raised px-4 py-3 text-right">
+                <div
+                  v-if="!isSystemNoticeConversation"
+                  class="rounded-2xl bg-surface-raised px-4 py-3 text-right"
+                >
                   <p class="text-xs uppercase tracking-[0.16em] text-text-muted">
                     {{ t('chat.listingPrice') }}
                   </p>
@@ -158,7 +143,10 @@ const {
               />
             </div>
 
-            <div class="border-t border-border/80 px-5 py-5 sm:px-6">
+            <div
+              v-if="!isSystemNoticeConversation"
+              class="border-t border-border/80 px-5 py-5 sm:px-6"
+            >
               <div class="flex flex-col gap-3 sm:flex-row">
                 <BaseTextarea
                   :model-value="draftMessage"
@@ -204,3 +192,10 @@ const {
     </section>
   </div>
 </template>
+
+<style scoped>
+.marketplace-chat-page {
+  width: 100%;
+  min-width: 0;
+}
+</style>

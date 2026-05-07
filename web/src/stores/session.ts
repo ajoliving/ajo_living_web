@@ -1,11 +1,19 @@
 /*
  * 會員登入狀態。
  * 1. 保存真實登入 token 與當前會員資料。
- * 2. 提供 OTP 登入、當前會員查詢與登出流程。
+ * 2. 提供手機 OTP、郵箱 OTP、當前會員查詢與登出流程。
  */
 import { defineStore } from 'pinia';
 
-import { loginWithEmail, logout, registerWithEmail, requestOtp, verifyOtp } from '@/httpapis/auth';
+import {
+  loginWithEmail,
+  logout,
+  registerWithEmail,
+  requestEmailOtp,
+  requestOtp,
+  verifyEmailOtp,
+  verifyOtp,
+} from '@/httpapis/auth';
 import { fetchMe } from '@/httpapis/me';
 import type { RequestOtpResult, VerifyOtpResult } from '@/model/auth';
 import type { CurrentMemberProfile, SessionUserView } from '@/model/user';
@@ -132,7 +140,43 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 9. 使用郵箱密碼登入
+    // 9. 請求郵箱驗證碼
+    async sendEmailOtp(email: string, scene = 'login'): Promise<RequestOtpResult> {
+      const { data } = await requestEmailOtp({
+        email,
+        scene,
+      });
+
+      return data.data;
+    },
+
+    // 10. 驗證郵箱驗證碼並登入
+    async signInWithEmailOtp(
+      email: string,
+      code: string,
+      displayName: string,
+      scene = 'login',
+    ): Promise<VerifyOtpResult> {
+      const { data } = await verifyEmailOtp({
+        email,
+        scene,
+        code,
+        display_name: displayName,
+      });
+
+      this.setTokens(data.data.access_token, data.data.refresh_token);
+
+      try {
+        await this.loadCurrentUser();
+      } catch (error) {
+        this.clearSession();
+        throw error;
+      }
+
+      return data.data;
+    },
+
+    // 11. 使用郵箱密碼登入
     async signInWithEmail(email: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithEmail({ email, password });
       this.setTokens(data.data.access_token, data.data.refresh_token);
@@ -147,7 +191,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 10. 註冊郵箱密碼帳戶
+    // 12. 註冊郵箱密碼帳戶
     async registerEmailAccount(email: string, password: string, displayName: string): Promise<VerifyOtpResult> {
       const { data } = await registerWithEmail({
         email,
@@ -166,14 +210,14 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 11. 讀取目前會員資料
+    // 13. 讀取目前會員資料
     async loadCurrentUser() {
       const { data } = await fetchMe();
       this.me = data.data;
       return data.data;
     },
 
-    // 12. 執行登出
+    // 14. 執行登出
     async signOut() {
       try {
         if (this.accessToken) {

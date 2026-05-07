@@ -24,12 +24,20 @@ type messageRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
-// 3. NewChatHandler creates a chat handler instance.
+// 3. systemNoticeRequest defines the staff notice broadcast payload.
+type systemNoticeRequest struct {
+	Title       string `json:"title" binding:"required"`
+	Body        string `json:"body" binding:"required"`
+	ActionLabel string `json:"action_label"`
+	ActionURL   string `json:"action_url"`
+}
+
+// 4. NewChatHandler creates a chat handler instance.
 func NewChatHandler(chatService *service.ChatService) *ChatHandler {
 	return &ChatHandler{chatService: chatService}
 }
 
-// 4. CreateOrReuse creates or reuses a listing chat.
+// 5. CreateOrReuse creates or reuses a listing chat.
 func (h *ChatHandler) CreateOrReuse(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -46,7 +54,7 @@ func (h *ChatHandler) CreateOrReuse(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 5. ListChats returns chats owned by the current member.
+// 6. ListChats returns chats owned by the current member.
 func (h *ChatHandler) ListChats(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -64,7 +72,7 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 6. GetChat returns one chat.
+// 7. GetChat returns one chat.
 func (h *ChatHandler) GetChat(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -81,7 +89,7 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 7. ListMessages returns chat messages.
+// 8. ListMessages returns chat messages.
 func (h *ChatHandler) ListMessages(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -99,7 +107,7 @@ func (h *ChatHandler) ListMessages(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 8. SendMessage sends a new chat message.
+// 9. SendMessage sends a new chat message.
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -122,7 +130,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 9. MarkRead marks a chat as read.
+// 10. MarkRead marks a chat as read.
 func (h *ChatHandler) MarkRead(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -136,4 +144,26 @@ func (h *ChatHandler) MarkRead(c *gin.Context) {
 	}
 
 	errcode.Success(c, gin.H{"chat_id": strings.TrimSpace(c.Param("chatId")), "read": true})
+}
+
+// 11. PublishSystemNotice broadcasts one notice card to all members.
+func (h *ChatHandler) PublishSystemNotice(c *gin.Context) {
+	var request systemNoticeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.chatService.PublishSystemNotice(c.Request.Context(), service.SystemNoticePublishParams{
+		Title:       request.Title,
+		Body:        request.Body,
+		ActionLabel: request.ActionLabel,
+		ActionURL:   request.ActionURL,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
 }

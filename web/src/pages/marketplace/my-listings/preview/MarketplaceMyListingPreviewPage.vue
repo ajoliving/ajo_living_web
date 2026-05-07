@@ -190,10 +190,10 @@ const {
 .my-preview-page {
   display: grid;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--layout-page-max-width);
   gap: 1.5rem;
   margin: 0 auto;
-  padding: 1rem 2rem 5rem;
+  padding: 1rem var(--layout-page-padding-inline) 5rem;
   color: #1a1c1b;
 }
 
@@ -366,7 +366,7 @@ const {
 
 @media (max-width: 767px) {
   .my-preview-page {
-    padding: 1rem 1.25rem 4rem;
+    padding: 1rem var(--layout-page-padding-inline) 4rem;
   }
 
   .my-preview-summary,
