@@ -17,6 +17,7 @@ func TestPropertySalePublishListAndContactAccess(t *testing.T) {
 	communityA, _ := mustGetCommunities(t, runtime)
 	owner := mustCreateUser(t, runtime, "+852", "91000001", &communityA.ID)
 	viewer := mustCreateUser(t, runtime, "+852", "91000002", &communityA.ID)
+	mustGrantPoints(t, runtime, owner.ID, 2000)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
 	created, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
@@ -93,6 +94,7 @@ func TestServicedApartmentPublishAndList(t *testing.T) {
 	propertyService := NewPropertyService(runtime)
 	communityA, _ := mustGetCommunities(t, runtime)
 	owner := mustCreateUser(t, runtime, "+852", "91000011", &communityA.ID)
+	mustGrantPoints(t, runtime, owner.ID, 1600)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
 	created, err := propertyService.CreateServicedApartment(context.Background(), UpsertServicedApartmentParams{

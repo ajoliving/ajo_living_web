@@ -1,6 +1,6 @@
 <!--
  * 登入頁表單面板。
- * 1. 展示郵箱密碼登入、郵箱驗證碼登入、郵箱註冊與手機 OTP 登入表單。
+ * 1. 展示郵箱密碼登入、手機密碼登入、郵箱驗證碼登入與住戶註冊表單。
  * 2. 將表單輸入與操作事件回傳給頁面入口。
 -->
 <script setup lang="ts">
@@ -8,12 +8,10 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { LoginAuthMode, LoginAuthModeSwitchIcon, LoginEmailAction, LoginEmailMethod } from '../login';
+import type { LoginAuthMode, LoginEmailAction, LoginEmailMethod } from '../login';
 
 interface LoginFormPanelProps {
   authMode: LoginAuthMode;
-  authModeSwitchIcon: LoginAuthModeSwitchIcon;
-  authModeSwitchLabel: string;
   emailAction: LoginEmailAction;
   emailActionSwitchLabel: string;
   emailLoginMethod: LoginEmailMethod;
@@ -26,7 +24,6 @@ interface LoginFormPanelProps {
   requestingOtp: boolean;
   submitting: boolean;
   emailPlaceholder: string;
-  footerActionLabel: string;
   footerPrompt: string;
   isAuthenticated: boolean;
   otpRequestLabel: string;
@@ -43,10 +40,10 @@ const emit = defineEmits<{
   'update:otp': [value: string];
   'update:rememberMe': [value: boolean];
   'request-otp': [];
+  'set-auth-mode': [value: LoginAuthMode];
   'set-email-login-method': [value: LoginEmailMethod];
   'sign-out': [];
   'submit-login': [];
-  'toggle-auth-mode': [];
   'toggle-email-action': [];
 }>();
 
@@ -57,6 +54,17 @@ const readInputValue = (event: Event): string => (event.target as HTMLInputEleme
 
 // 2. 讀取勾選輸入值
 const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputElement).checked;
+
+// 3. 選擇郵箱登入方式
+const selectEmailLoginMethod = (method: LoginEmailMethod): void => {
+  emit('set-auth-mode', 'email');
+  emit('set-email-login-method', method);
+};
+
+// 4. 選擇手機密碼登入
+const selectPhonePasswordLogin = (): void => {
+  emit('set-auth-mode', 'phone');
+};
 </script>
 
 <template>
@@ -71,10 +79,10 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
     <div class="login-form-main mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col justify-center">
       <div class="login-form-heading text-center lg:text-left">
         <h2 class="font-display text-3xl leading-tight text-text">
-          {{ t('auth.residentLogin') }}
+          {{ props.emailAction === 'register' ? t('auth.residentRegister') : t('auth.residentLogin') }}
         </h2>
         <p class="mt-3 text-base leading-7 text-text-muted">
-          {{ t('auth.note') }}
+          {{ props.emailAction === 'register' ? t('auth.registerNote') : t('auth.note') }}
         </p>
       </div>
 
@@ -82,33 +90,38 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
         class="login-form-fields"
         @submit.prevent="emit('submit-login')"
       >
-        <template v-if="props.authMode === 'email'">
-          <div
-            v-show="props.emailAction === 'login'"
-            class="login-method-tabs grid grid-cols-2 rounded-lg bg-surface-raised p-1"
+        <div
+          v-show="props.emailAction === 'login'"
+          class="login-method-tabs grid grid-cols-3 rounded-lg bg-surface-raised p-1"
+        >
+          <button
+            type="button"
+            class="rounded-md px-2 py-2 text-xs font-bold transition sm:text-sm"
+            :class="props.authMode === 'email' && props.emailLoginMethod === 'password' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
+            @click="selectEmailLoginMethod('password')"
           >
-            <button
-              type="button"
-              class="rounded-md px-3 py-2 text-sm font-bold transition"
-              :class="props.emailLoginMethod === 'password' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
-              @click="emit('set-email-login-method', 'password')"
-            >
-              {{ t('auth.passwordLogin') }}
-            </button>
-            <button
-              type="button"
-              class="rounded-md px-3 py-2 text-sm font-bold transition"
-              :class="props.emailLoginMethod === 'code' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
-              @click="emit('set-email-login-method', 'code')"
-            >
-              {{ t('auth.codeLogin') }}
-            </button>
-          </div>
+            {{ t('auth.emailPasswordLogin') }}
+          </button>
+          <button
+            type="button"
+            class="rounded-md px-2 py-2 text-xs font-bold transition sm:text-sm"
+            :class="props.authMode === 'phone' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
+            @click="selectPhonePasswordLogin"
+          >
+            {{ t('auth.phonePasswordLogin') }}
+          </button>
+          <button
+            type="button"
+            class="rounded-md px-2 py-2 text-xs font-bold transition sm:text-sm"
+            :class="props.authMode === 'email' && props.emailLoginMethod === 'code' ? 'bg-surface text-text shadow-sm' : 'text-text-muted hover:text-text'"
+            @click="selectEmailLoginMethod('code')"
+          >
+            {{ t('auth.emailCodeLogin') }}
+          </button>
+        </div>
 
-          <label
-            v-show="props.emailAction === 'register'"
-            class="block"
-          >
+        <template v-if="props.emailAction === 'register'">
+          <label class="block">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.displayName') }}</span>
             <div class="group relative">
               <input
@@ -134,8 +147,8 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
                 :value="props.email"
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="props.emailPlaceholder"
-                type="email"
                 autocomplete="email"
+                type="email"
                 @input="emit('update:email', readInputValue($event))"
               >
               <AppIcon
@@ -146,68 +159,6 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
             </div>
           </label>
 
-          <label
-            v-show="props.emailAction === 'register' || props.emailLoginMethod === 'password'"
-            class="block"
-          >
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
-            <div class="group relative">
-              <input
-                :value="props.password"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.passwordPlaceholder')"
-                type="password"
-                :autocomplete="props.emailAction === 'register' ? 'new-password' : 'current-password'"
-                @input="emit('update:password', readInputValue($event))"
-              >
-              <AppIcon
-                name="lock"
-                :size="20"
-                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
-              />
-            </div>
-          </label>
-
-          <label
-            v-show="props.emailAction === 'login' && props.emailLoginMethod === 'code'"
-            class="block"
-          >
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.emailOtp') }}</span>
-            <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <input
-                :value="props.otp"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.emailOtpPlaceholder')"
-                type="text"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                @input="emit('update:otp', readInputValue($event))"
-              >
-              <button
-                type="button"
-                class="rounded-lg border border-border px-4 py-3 text-sm font-bold text-text-muted transition hover:bg-surface-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="props.requestingOtp"
-                @click="emit('request-otp')"
-              >
-                {{ props.otpRequestLabel }}
-              </button>
-            </div>
-          </label>
-
-          <div class="flex items-center justify-between gap-4">
-            <label class="flex cursor-pointer items-center gap-2">
-              <input
-                :checked="props.rememberMe"
-                class="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-                type="checkbox"
-                @change="emit('update:rememberMe', readCheckboxValue($event))"
-              >
-              <span class="text-sm font-semibold text-text-muted">{{ t('auth.rememberMe') }}</span>
-            </label>
-          </div>
-        </template>
-
-        <template v-else>
           <label class="block">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.phone') }}</span>
             <div class="group relative">
@@ -215,7 +166,8 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
                 :value="props.phone"
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.phonePlaceholder')"
-                type="text"
+                autocomplete="tel"
+                type="tel"
                 @input="emit('update:phone', readInputValue($event))"
               >
               <AppIcon
@@ -227,15 +179,120 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.otp') }}</span>
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.password"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.passwordPlaceholder')"
+                autocomplete="new-password"
+                type="password"
+                @input="emit('update:password', readInputValue($event))"
+              >
+              <AppIcon
+                name="lock"
+                :size="20"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+        </template>
+
+        <template v-else-if="props.authMode === 'phone'">
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.phone') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.phone"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.phonePlaceholder')"
+                autocomplete="tel"
+                type="tel"
+                @input="emit('update:phone', readInputValue($event))"
+              >
+              <AppIcon
+                name="phone"
+                :size="20"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.password"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.passwordPlaceholder')"
+                autocomplete="current-password"
+                type="password"
+                @input="emit('update:password', readInputValue($event))"
+              >
+              <AppIcon
+                name="lock"
+                :size="20"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+        </template>
+
+        <template v-else>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.email') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.email"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="props.emailPlaceholder"
+                autocomplete="email"
+                type="email"
+                @input="emit('update:email', readInputValue($event))"
+              >
+              <AppIcon
+                name="user"
+                :size="20"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+
+          <label
+            v-show="props.emailLoginMethod === 'password'"
+            class="block"
+          >
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.password"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.passwordPlaceholder')"
+                autocomplete="current-password"
+                type="password"
+                @input="emit('update:password', readInputValue($event))"
+              >
+              <AppIcon
+                name="lock"
+                :size="20"
+                class="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+
+          <label
+            v-show="props.emailLoginMethod === 'code'"
+            class="block"
+          >
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.emailOtp') }}</span>
             <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
                 :value="props.otp"
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.otpPlaceholder')"
-                type="text"
-                inputmode="numeric"
+                :placeholder="t('auth.emailOtpPlaceholder')"
                 autocomplete="one-time-code"
+                inputmode="numeric"
+                type="text"
                 @input="emit('update:otp', readInputValue($event))"
               >
               <button
@@ -250,50 +307,29 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
           </label>
         </template>
 
+        <div
+          v-show="props.emailAction === 'login'"
+          class="flex items-center justify-between gap-4"
+        >
+          <label class="flex cursor-pointer items-center gap-2">
+            <input
+              :checked="props.rememberMe"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+              type="checkbox"
+              @change="emit('update:rememberMe', readCheckboxValue($event))"
+            >
+            <span class="text-sm font-semibold text-text-muted">{{ t('auth.rememberMe') }}</span>
+          </label>
+        </div>
+
         <button
-          class="login-submit-button w-full rounded-lg bg-primary text-sm font-bold uppercase tracking-[0.24em] text-white shadow-[0_10px_30px_rgba(0,0,0,0.04)] transition hover:bg-text active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+          class="login-submit-button w-full rounded-lg bg-primary text-sm font-bold uppercase tracking-[0.24em] text-primary-contrast shadow-[0_10px_30px_rgba(0,0,0,0.04)] transition hover:bg-text active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           type="submit"
           :disabled="props.submitting"
         >
           {{ props.submitLabel }}
         </button>
       </form>
-
-      <div class="login-divider relative">
-        <div class="absolute inset-0 flex items-center">
-          <div class="w-full border-t border-border" />
-        </div>
-        <div class="relative flex justify-center text-xs font-semibold uppercase tracking-[0.22em]">
-          <span class="bg-surface px-4 text-text-muted">{{ t('auth.continueWith') }}</span>
-        </div>
-      </div>
-
-      <div class="login-switch-grid grid grid-cols-2">
-        <button
-          type="button"
-          class="flex items-center justify-center gap-2 rounded-lg border border-border py-3 text-sm font-bold text-text transition hover:bg-surface-raised"
-          @click="emit('toggle-auth-mode')"
-        >
-          <AppIcon
-            :name="props.authModeSwitchIcon"
-            :size="18"
-            class="text-text-muted"
-          />
-          <span>{{ props.authModeSwitchLabel }}</span>
-        </button>
-        <button
-          type="button"
-          class="flex items-center justify-center gap-2 rounded-lg border border-border py-3 text-sm font-bold text-text transition hover:bg-surface-raised"
-          @click="emit('toggle-email-action')"
-        >
-          <AppIcon
-            name="shield"
-            :size="18"
-            class="text-text-muted"
-          />
-          <span>{{ props.emailActionSwitchLabel }}</span>
-        </button>
-      </div>
     </div>
 
     <div class="login-form-footer border-t border-border/70 text-center text-sm leading-6 text-text-muted">
@@ -303,7 +339,7 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
         class="ml-1 font-bold text-primary transition hover:underline"
         @click="emit('toggle-email-action')"
       >
-        {{ props.footerActionLabel }}
+        {{ props.emailActionSwitchLabel }}
       </button>
       <button
         v-if="props.isAuthenticated"
@@ -356,19 +392,6 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
 .login-submit-button {
   min-height: clamp(2.85rem, 6svh, 3.5rem);
   padding-block: 0.65rem;
-}
-
-.login-divider {
-  margin-block: clamp(1rem, 2.6svh, 2rem);
-}
-
-.login-switch-grid {
-  gap: clamp(0.75rem, 1.6vw, 1rem);
-}
-
-.login-switch-grid button {
-  min-height: clamp(2.65rem, 5.2svh, 3rem);
-  padding-block: 0.55rem;
 }
 
 .login-form-footer {

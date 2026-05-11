@@ -34,6 +34,7 @@ const emit = defineEmits<{
         role="dialog"
         aria-modal="true"
         :aria-label="props.title"
+        @click.self="emit('stay')"
       >
         <div class="unsaved-dialog__panel">
           <div class="unsaved-dialog__header">
@@ -82,7 +83,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(15 23 42 / 0.16);
+  background: rgb(15 23 42 / 0.22);
   padding: 1rem;
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
@@ -93,11 +94,11 @@ const emit = defineEmits<{
   border: 1px solid rgb(var(--color-border) / 0.62);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0.08) 46%, transparent 100%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.18) 46%, transparent 100%),
     linear-gradient(
       180deg,
-      rgb(var(--color-dropdown-surface) / 0.52),
-      rgb(var(--color-surface) / 0.28)
+      rgb(var(--color-dropdown-surface) / 0.78),
+      rgb(var(--color-surface) / 0.58)
     );
   padding: 1.25rem;
   box-shadow:
@@ -172,11 +173,11 @@ const emit = defineEmits<{
 }
 
 .unsaved-dialog__button--secondary {
-  background: transparent;
+  background: rgb(255 255 255 / 0.34);
 }
 
 .unsaved-dialog__button--primary {
-  background: rgb(var(--color-primary-soft) / 0.42);
+  background: rgb(var(--color-primary-soft) / 0.68);
   color: rgb(var(--color-primary));
 }
 
@@ -185,11 +186,11 @@ const emit = defineEmits<{
 }
 
 .unsaved-dialog__button--secondary:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.48);
 }
 
 .unsaved-dialog__button--primary:hover:not(:disabled) {
-  background: rgb(var(--color-primary-soft) / 0.52);
+  background: rgb(var(--color-primary-soft) / 0.78);
 }
 
 .unsaved-dialog__button:disabled {

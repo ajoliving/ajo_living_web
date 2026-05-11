@@ -11,6 +11,8 @@ export default {
   loadingConversations: 'Loading conversations...',
   listingPrice: 'Listing price',
   loadingMessages: 'Loading messages...',
+  emojiToggle: 'Emoji',
+  emojiPanelLabel: 'Choose an emoji',
   sending: 'Sending...',
   memberRequiredTitle: 'Member session required',
   memberRequiredDescription: 'Sign in first, then the chat module can load your real conversations.',

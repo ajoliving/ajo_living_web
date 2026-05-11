@@ -7,7 +7,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
@@ -70,12 +73,17 @@ func (s *PropertyService) CreatePropertySale(ctx context.Context, params UpsertP
 
 // 5. UpdatePropertySale updates an owned property sale listing.
 func (s *PropertyService) UpdatePropertySale(ctx context.Context, params UpsertPropertySaleParams) (*PropertyListingDetail, error) {
-	listingID, err := s.upsertPropertySale(ctx, params, false)
+	listingID, charge, err := s.updatePropertySaleWithCharge(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetPropertyDetail(ctx, PropertyChannelSale, listingID, &params.OwnerUserID)
+	result, err := s.GetPropertyDetail(ctx, PropertyChannelSale, listingID, &params.OwnerUserID)
+	if err != nil {
+		return nil, err
+	}
+	attachPropertyCharge(result, charge)
+	return result, nil
 }
 
 // 6. CreateServicedApartment creates a serviced apartment draft.
@@ -90,67 +98,27 @@ func (s *PropertyService) CreateServicedApartment(ctx context.Context, params Up
 
 // 7. UpdateServicedApartment updates an owned serviced apartment listing.
 func (s *PropertyService) UpdateServicedApartment(ctx context.Context, params UpsertServicedApartmentParams) (*PropertyListingDetail, error) {
-	listingID, err := s.upsertServicedApartment(ctx, params, false)
+	listingID, charge, err := s.updateServicedApartmentWithCharge(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetPropertyDetail(ctx, PropertyChannelServiced, listingID, &params.OwnerUserID)
+	result, err := s.GetPropertyDetail(ctx, PropertyChannelServiced, listingID, &params.OwnerUserID)
+	if err != nil {
+		return nil, err
+	}
+	attachPropertyCharge(result, charge)
+	return result, nil
 }
 
 // 8. PublishProperty publishes a draft property listing.
 func (s *PropertyService) PublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
-	listing, _, err := s.loadOwnedPropertyListing(ctx, channel, ownerUserID, listingPublicID)
-	if err != nil {
-		return nil, err
-	}
-	if listing.PublicationStatus != "draft" {
-		return nil, errcode.New(errcode.CodeValidationError, "only draft listings can be published")
-	}
-	if err := s.validatePropertyReady(ctx, listing.ID); err != nil {
-		return nil, err
-	}
-
-	now := s.runtime.Now()
-	expireAt := now.Add(propertyChannelTTL(channel))
-	if err := s.runtime.DB.WithContext(ctx).Model(&model.Listing{}).
-		Where("id = ?", listing.ID).
-		Updates(map[string]any{
-			"publication_status": "active",
-			"published_at":       now,
-			"sort_refreshed_at":  now,
-			"expire_at":          expireAt,
-		}).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to publish listing")
-	}
-
-	return s.GetPropertyDetail(ctx, channel, listing.PublicID, &ownerUserID)
+	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionPublish)
 }
 
 // 9. RepublishProperty republishes an expired property listing.
 func (s *PropertyService) RepublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
-	listing, _, err := s.loadOwnedPropertyListing(ctx, channel, ownerUserID, listingPublicID)
-	if err != nil {
-		return nil, err
-	}
-	if listing.PublicationStatus != "expired" {
-		return nil, errcode.New(errcode.CodeValidationError, "only expired listings can be republished")
-	}
-
-	now := s.runtime.Now()
-	expireAt := now.Add(propertyChannelTTL(channel))
-	if err := s.runtime.DB.WithContext(ctx).Model(&model.Listing{}).
-		Where("id = ?", listing.ID).
-		Updates(map[string]any{
-			"publication_status": "active",
-			"sort_refreshed_at":  now,
-			"expire_at":          expireAt,
-			"business_status":    "available",
-		}).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to republish listing")
-	}
-
-	return s.GetPropertyDetail(ctx, channel, listing.PublicID, &ownerUserID)
+	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionRepublish)
 }
 
 // 10. MarkPropertySold marks a sale listing as sold.
@@ -290,7 +258,92 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 	}, nil
 }
 
-// 15. GrantPropertyContactAccess returns allowed contact payload for logged-in users.
+// 15. publishPropertyWithCharge publishes or republishes and charges points.
+func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string, action string) (*PropertyListingDetail, error) {
+	var returnPublicID string
+	var charge *PointsChargeResponse
+	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, _, err := s.loadOwnedPropertyListingWithTx(ctx, tx, channel, ownerUserID, listingPublicID)
+		if err != nil {
+			return err
+		}
+		if action == WalletActionPublish && listing.PublicationStatus != "draft" {
+			return errcode.New(errcode.CodeValidationError, "only draft listings can be published")
+		}
+		if action == WalletActionRepublish && listing.PublicationStatus != "expired" {
+			return errcode.New(errcode.CodeValidationError, "only expired listings can be republished")
+		}
+		if err := s.validatePropertyReadyWithTx(ctx, tx, listing.ID); err != nil {
+			return err
+		}
+		chargeResult, err := s.chargePropertyAction(ctx, tx, channel, listing, action)
+		if err != nil {
+			return err
+		}
+		charge = chargeResult
+
+		now := s.runtime.Now()
+		expireAt := now.Add(propertyChannelTTL(channel))
+		updates := map[string]any{
+			"publication_status": "active",
+			"sort_refreshed_at":  now,
+			"expire_at":          expireAt,
+		}
+		if action == WalletActionPublish {
+			updates["published_at"] = now
+		}
+		if action == WalletActionRepublish {
+			updates["business_status"] = "available"
+		}
+		if err := tx.Model(&model.Listing{}).Where("id = ?", listing.ID).Updates(updates).Error; err != nil {
+			if action == WalletActionPublish {
+				return errcode.New(errcode.CodeInternalError, "failed to publish listing")
+			}
+			return errcode.New(errcode.CodeInternalError, "failed to republish listing")
+		}
+		returnPublicID = listing.PublicID
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.GetPropertyDetail(ctx, channel, returnPublicID, &ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	attachPropertyCharge(result, charge)
+	return result, nil
+}
+
+// 16. chargePropertyAction charges the configured property channel action cost.
+func (s *PropertyService) chargePropertyAction(ctx context.Context, tx *gorm.DB, channel PropertyChannel, listing *model.Listing, action string) (*PointsChargeResponse, error) {
+	if s.runtime.WalletService == nil {
+		return nil, errcode.New(errcode.CodeInternalError, "wallet service is not configured")
+	}
+	module := string(channel)
+	return s.runtime.WalletService.SpendPointsWithTx(ctx, tx, WalletSpendParams{
+		UserID:         listing.OwnerUserID,
+		Amount:         ListingActionCost(module, action),
+		BizModule:      module,
+		ActionType:     action,
+		ListingID:      &listing.ID,
+		IdempotencyKey: fmt.Sprintf("listing:%s:%s:%d", listing.PublicID, action, s.runtime.Now().UnixNano()),
+		Note:           module + " listing " + action,
+	})
+}
+
+// 17. attachPropertyCharge attaches wallet charge metadata to a property detail.
+func attachPropertyCharge(detail *PropertyListingDetail, charge *PointsChargeResponse) {
+	if detail == nil || charge == nil {
+		return
+	}
+	detail.PointsCharged = charge.PointsCharged
+	detail.PointsBalanceAfter = &charge.PointsBalanceAfter
+	detail.PointsTransactionID = charge.PointsTransactionID
+}
+
+// 18. GrantPropertyContactAccess returns allowed contact payload for logged-in users.
 func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channel PropertyChannel, userID int64, listingPublicID string, requestIP string, userAgent string) (*ContactAccessResult, error) {
 	listing, contact, err := s.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
 	if err != nil {

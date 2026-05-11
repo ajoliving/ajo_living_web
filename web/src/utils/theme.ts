@@ -22,6 +22,7 @@ interface ThemeColorTokens {
   fieldSurface: string;
   dropdownSurface: string;
   primary: string;
+  primaryContrast: string;
   primarySoft: string;
   text: string;
   textMuted: string;
@@ -44,7 +45,7 @@ interface ThemeFontTokens {
 }
 
 interface ThemePreset {
-  label: string;
+  labelKey: string;
   color: ThemeColorTokens;
   shadow: ThemeShadowTokens;
   font: ThemeFontTokens;
@@ -57,6 +58,7 @@ interface ThemePaletteSeed {
   surfaceMuted: string;
   surfaceRaised: string;
   primary: string;
+  primaryContrast: string;
   primarySoft: string;
   text: string;
   textMuted: string;
@@ -157,7 +159,7 @@ const buildDerivedColorTokens = (seed: ThemePaletteSeed, mode: ThemeToneMode = '
 // 2. 定義三套主題配置
 export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
   default: {
-    label: 'Default',
+    labelKey: 'common.theme.default',
     color: buildDerivedColorTokens({
       canvas: '255 255 255',
       pageTint: '248 248 245',
@@ -165,6 +167,7 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       surfaceMuted: '250 250 248',
       surfaceRaised: '255 255 252',
       primary: '168 129 82',
+      primaryContrast: '22 22 24',
       primarySoft: '241 234 224',
       text: '34 34 38',
       textMuted: '96 96 104',
@@ -185,7 +188,7 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
     },
   },
   'copper-sun': {
-    label: 'Copper',
+    labelKey: 'common.theme.copperSun',
     color: buildDerivedColorTokens({
       canvas: '255 246 236',
       pageTint: '244 223 190',
@@ -193,6 +196,7 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       surfaceMuted: '249 236 217',
       surfaceRaised: '255 244 229',
       primary: '217 119 7',
+      primaryContrast: '28 18 8',
       primarySoft: '252 226 188',
       text: '86 45 12',
       textMuted: '143 95 57',
@@ -213,7 +217,7 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
     },
   },
   'dark-neutral': {
-    label: 'Dark',
+    labelKey: 'common.theme.darkNeutral',
     color: buildDerivedColorTokens({
       canvas: '0 0 0',
       pageTint: '18 18 18',
@@ -221,6 +225,7 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       surfaceMuted: '18 18 18',
       surfaceRaised: '28 28 28',
       primary: '214 172 103',
+      primaryContrast: '10 10 10',
       primarySoft: '78 63 35',
       text: '242 245 248',
       textMuted: '154 154 154',
@@ -253,6 +258,7 @@ const buildThemeCssVariables = (preset: ThemePreset): Record<string, string> => 
   '--color-field-surface': preset.color.fieldSurface,
   '--color-dropdown-surface': preset.color.dropdownSurface,
   '--color-primary': preset.color.primary,
+  '--color-primary-contrast': preset.color.primaryContrast,
   '--color-primary-soft': preset.color.primarySoft,
   '--color-text': preset.color.text,
   '--color-text-muted': preset.color.textMuted,
@@ -294,7 +300,7 @@ const buildThemeCssVariables = (preset: ThemePreset): Record<string, string> => 
 export const THEME_OPTIONS = (
   Object.entries(THEME_PRESETS) as [AppThemeName, ThemePreset][]
 ).map(([value, preset]) => ({
-  label: preset.label,
+  labelKey: preset.labelKey,
   value,
 }));
 

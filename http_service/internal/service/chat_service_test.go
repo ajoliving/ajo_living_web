@@ -2,6 +2,7 @@
  * Chat service tests.
  * 1. Create chats, send messages, and validate unread counts.
  * 2. Marking a chat as read should clear unread state.
+ * 3. Validate seeded admin accounts can exchange listing-scoped messages.
  */
 package service
 
@@ -9,6 +10,7 @@ import (
 	"context"
 	"testing"
 
+	"ajoliving_web/http_service/internal/database"
 	"ajoliving_web/http_service/internal/model"
 )
 
@@ -243,7 +245,93 @@ func TestSystemNoticeChatIsCreatedAndReadOnly(t *testing.T) {
 	}
 }
 
-// 3. findChatSummaryByID returns a chat summary by public ID.
+// 3. TestDefaultAdminAccountsCanExchangeListingMessages validates admin-to-admin chat flow.
+func TestDefaultAdminAccountsCanExchangeListingMessages(t *testing.T) {
+	runtime := newTestRuntime(t)
+	if err := database.SeedDefaultAdminAccount(context.Background(), runtime.DB); err != nil {
+		t.Fatalf("seed default admin accounts: %v", err)
+	}
+
+	secondhandService := NewSecondhandService(runtime)
+	chatService := NewChatService(runtime, secondhandService)
+	communityA, _ := mustGetCommunities(t, runtime)
+	adminCom := mustLoadSeedAdminUser(t, runtime, "admin@admin.com")
+	adminCn := mustLoadSeedAdminUser(t, runtime, "admin@admin.cn")
+	if adminCom.ID == adminCn.ID || adminCom.PublicID == adminCn.PublicID {
+		t.Fatalf("expected distinct seeded admin users, got %+v and %+v", adminCom, adminCn)
+	}
+
+	listingID := mustCreatePublishedListing(t, runtime, adminCom, "public", communityA.PublicID)
+	chatCreate, err := chatService.CreateOrReuseChat(context.Background(), adminCn.ID, viewerProfileCommunityID(&adminCn, runtime), listingID)
+	if err != nil {
+		t.Fatalf("create admin chat: %v", err)
+	}
+	chatID, _ := chatCreate["chat_id"].(string)
+	if chatID == "" {
+		t.Fatalf("expected admin chat id")
+	}
+
+	firstMessage, err := chatService.SendMessage(context.Background(), adminCn.ID, chatID, "你好，這件商品還在嗎？")
+	if err != nil {
+		t.Fatalf("send admin cn message: %v", err)
+	}
+	if firstMessage.SenderUserID != fmtInt64(adminCn.ID) {
+		t.Fatalf("expected first sender admin cn, got %+v", firstMessage)
+	}
+
+	ownerChats, _, err := chatService.ListChats(context.Background(), adminCom.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("list admin com chats: %v", err)
+	}
+	ownerChat := findChatSummaryByID(ownerChats, chatID)
+	if ownerChat == nil || ownerChat.UnreadCount != 1 || ownerChat.Peer == nil || ownerChat.Peer.PublicID != adminCn.PublicID {
+		t.Fatalf("expected admin com to see unread chat from admin cn, got %+v", ownerChat)
+	}
+
+	reply, err := chatService.SendMessage(context.Background(), adminCom.ID, chatID, "還在，可以安排交收。")
+	if err != nil {
+		t.Fatalf("send admin com reply: %v", err)
+	}
+	if reply.SenderUserID != fmtInt64(adminCom.ID) {
+		t.Fatalf("expected reply sender admin com, got %+v", reply)
+	}
+
+	messagesForCn, _, err := chatService.ListMessages(context.Background(), adminCn.ID, chatID, 1, 20)
+	if err != nil {
+		t.Fatalf("list admin cn messages: %v", err)
+	}
+	if len(messagesForCn) != 2 || messagesForCn[0].SenderUserID != fmtInt64(adminCn.ID) || messagesForCn[1].SenderUserID != fmtInt64(adminCom.ID) {
+		t.Fatalf("expected two admin messages in order, got %+v", messagesForCn)
+	}
+
+	buyerChats, _, err := chatService.ListChats(context.Background(), adminCn.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("list admin cn chats: %v", err)
+	}
+	buyerChat := findChatSummaryByID(buyerChats, chatID)
+	if buyerChat == nil || buyerChat.UnreadCount != 1 || buyerChat.Peer == nil || buyerChat.Peer.PublicID != adminCom.PublicID {
+		t.Fatalf("expected admin cn to see unread reply from admin com, got %+v", buyerChat)
+	}
+}
+
+// 4. mustLoadSeedAdminUser returns a seeded admin user by email.
+func mustLoadSeedAdminUser(t *testing.T, runtime *Runtime, email string) model.User {
+	t.Helper()
+
+	var credential model.UserCredential
+	if err := runtime.DB.Where("email = ?", email).First(&credential).Error; err != nil {
+		t.Fatalf("load admin credential %s: %v", email, err)
+	}
+
+	var user model.User
+	if err := runtime.DB.First(&user, credential.UserID).Error; err != nil {
+		t.Fatalf("load admin user %s: %v", email, err)
+	}
+
+	return user
+}
+
+// 5. findChatSummaryByID returns a chat summary by public ID.
 func findChatSummaryByID(items []ChatSummary, chatID string) *ChatSummary {
 	for i := range items {
 		if items[i].ChatID == chatID {

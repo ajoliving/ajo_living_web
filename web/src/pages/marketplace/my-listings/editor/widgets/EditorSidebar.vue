@@ -39,7 +39,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 
 <template>
   <aside class="editor-sidebar">
-    <div class="border-b border-[#E2E3E1] pb-4">
+    <div class="border-b border-border pb-4">
       <p class="editor-kicker">
         {{ t('marketplace.editor.workflow') }}
       </p>
@@ -76,7 +76,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
       </div>
     </section>
 
-    <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
+    <section class="space-y-4 border-t border-border pt-6">
       <h2 class="editor-section-title">
         {{ t('marketplace.editor.visibilityTitle') }}
       </h2>
@@ -94,7 +94,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
       </div>
     </section>
 
-    <section class="grid grid-cols-2 gap-3 border-t border-[#E2E3E1] pt-6">
+    <section class="grid grid-cols-2 gap-3 border-t border-border pt-6">
       <div
         v-for="metric in props.metrics"
         :key="metric.label"
@@ -128,7 +128,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 
 .editor-kicker,
 .editor-section-title {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -138,7 +138,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 
 .editor-sidebar h1 {
   margin: 0.75rem 0 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 500;
@@ -147,7 +147,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 
 .editor-sidebar__description {
   margin: 0.5rem 0 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   line-height: 1.7;
 }
@@ -161,9 +161,9 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.75rem;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   padding: 0.9rem;
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.02);
 }
@@ -175,19 +175,19 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #f4f4f2;
-  color: #717878;
+  background: rgb(var(--color-surface-muted));
+  color: rgb(var(--color-text-muted));
 }
 
 .editor-step--done .editor-step__icon,
 .editor-step--current .editor-step__icon {
   background: rgb(0 39 39 / 0.07);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .editor-step strong {
   display: block;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.3;
@@ -196,7 +196,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 .editor-step small {
   display: block;
   margin-top: 0.35rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   line-height: 1.45;
 }
@@ -216,33 +216,33 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 }
 
 .editor-chip-active {
-  border-color: #002727;
+  border-color: rgb(var(--color-primary));
   background: rgb(0 39 39 / 0.05);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .editor-chip-idle {
-  border-color: #c1c8c7;
-  color: #414848;
+  border-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
 }
 
 .editor-chip-idle:hover {
-  border-color: #717878;
-  color: #1a1c1b;
+  border-color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text));
 }
 
 .editor-metric {
   min-height: 5.6rem;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   padding: 0.9rem;
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.02);
 }
 
 .editor-metric p {
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 2rem;
   line-height: 1;
@@ -251,7 +251,7 @@ const updateVisibility = (value: ListingEditorVisibility): void => {
 .editor-metric span {
   display: block;
   margin-top: 0.75rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.45;

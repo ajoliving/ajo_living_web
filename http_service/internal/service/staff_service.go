@@ -46,6 +46,7 @@ type StaffUserListFilters struct {
 	Page       int
 	PageSize   int
 	Keyword    string
+	Status     string
 	MemberType string
 	RoleCode   string
 	IsStaff    *bool
@@ -98,6 +99,10 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 			return nil, nil, errcode.New(errcode.CodeValidationError, "member_type is invalid")
 		}
 		query = query.Where("member_type = ?", normalizeMemberType(memberType))
+	}
+
+	if status := strings.TrimSpace(filters.Status); status != "" {
+		query = query.Where("member_status = ?", status)
 	}
 
 	if roleCode := strings.TrimSpace(filters.RoleCode); roleCode != "" {

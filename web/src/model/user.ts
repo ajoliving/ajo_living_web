@@ -45,9 +45,29 @@ export interface CurrentMemberProfile {
   district_code: string;
   primary_community?: CurrentMemberCommunity;
   profile_completed: boolean;
+  ajo_balance?: number;
 }
 
-// 5. 定義前端導覽用會員資料
+// 5. 定義 Staff 會員列表資料
+export interface StaffUserSummary {
+  public_id: string;
+  phone_country_code: string;
+  phone_number: string;
+  member_status: string;
+  member_type: string;
+  is_staff: boolean;
+  role: string;
+  roles: string[];
+  permissions: string[];
+  display_name: string;
+  publisher_identity_type: string;
+  district_code: string;
+  primary_community?: CurrentMemberCommunity;
+  created_at: string;
+  updated_at: string;
+}
+
+// 6. 定義前端導覽用會員資料
 export interface SessionUserView {
   public_id: string;
   display_name: string;
@@ -62,4 +82,5 @@ export interface SessionUserView {
   permissions: string[];
   member_type: string;
   is_staff: boolean;
+  ajo_balance: number;
 }

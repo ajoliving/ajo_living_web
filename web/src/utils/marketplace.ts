@@ -27,11 +27,31 @@ export const humanizeCodeLabel = (value: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-// 3. 取得帖子主鍵
+// 3. 取得交收標籤翻譯 key
+export const getDeliveryTagTranslationKey = (value: string): string => {
+  const keyMap: Record<string, string> = {
+    self_pickup: 'marketplace.editor.deliveryTagSelfPickup',
+    door_delivery: 'marketplace.editor.deliveryTagDoorDelivery',
+    free_post: 'marketplace.editor.deliveryTagFreePost',
+    paid_post: 'marketplace.editor.deliveryTagPaidPost',
+    face_check: 'marketplace.editor.deliveryTagFaceCheck',
+    donation_available: 'marketplace.editor.donationAvailable',
+    '自取': 'marketplace.editor.deliveryTagSelfPickup',
+    '送貨上門': 'marketplace.editor.deliveryTagDoorDelivery',
+    '免費郵寄': 'marketplace.editor.deliveryTagFreePost',
+    '付費郵寄': 'marketplace.editor.deliveryTagPaidPost',
+    '面對面驗貨': 'marketplace.editor.deliveryTagFaceCheck',
+    '可捐贈': 'marketplace.editor.donationAvailable',
+  };
+
+  return keyMap[value] ?? '';
+};
+
+// 4. 取得帖子主鍵
 export const resolveListingId = (listing: MarketplaceListingLike) =>
   isApiListing(listing) ? listing.listing_id : String(listing.id);
 
-// 4. 取得帖子主狀態
+// 5. 取得帖子主狀態
 export const resolveListingStatus = (listing: MarketplaceListingLike) => {
   if (!isApiListing(listing)) {
     return listing.status;

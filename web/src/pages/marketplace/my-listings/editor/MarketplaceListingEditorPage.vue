@@ -14,6 +14,7 @@ const {
   areaOptions,
   businessStatusOptions,
   categoryOptions,
+  chargeHint,
   checklist,
   conditionOptions,
   coverImage,
@@ -81,6 +82,7 @@ const {
 
       <EditorPreviewPanel
         :checklist="checklist"
+        :charge-hint="chargeHint"
         :cover-image="coverImage"
         :is-publishing="isPublishing"
         :is-saving="isSaving"
@@ -116,7 +118,7 @@ const {
   max-width: none;
   margin: 0;
   padding: 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .listing-editor-heading {
@@ -125,7 +127,7 @@ const {
 
 .listing-editor-kicker {
   margin: 0 0 0.7rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -135,7 +137,7 @@ const {
 
 .listing-editor-heading h1 {
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 500;
@@ -144,11 +146,11 @@ const {
 
 .listing-editor-loading {
   margin-top: 1.5rem;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   padding: 1rem 1.25rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
 }
 

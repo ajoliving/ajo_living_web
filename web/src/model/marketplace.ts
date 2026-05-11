@@ -73,6 +73,9 @@ export interface SecondhandListingDetailResponse extends SecondhandListingSummar
   delivery_tags: string[];
   images: ListingImageResponse[];
   contact_summary: ListingContactSummary;
+  points_charged?: number;
+  points_balance_after?: number | null;
+  points_transaction_id?: string;
 }
 
 // 7. 定義聯絡方式授權結果

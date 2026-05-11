@@ -4,13 +4,17 @@
  * 2. 先保留靜態骨架，後續再接入賣家公開資料。
 -->
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { usePreferenceStore } from '@/stores/preferences';
+import { formatPrice } from '@/utils/format';
 
 const route = useRoute();
 const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 
 // 1. 取得目前賣家識別碼
 const sellerId = String(route.params.sellerId ?? '');
@@ -21,6 +25,7 @@ const sampleItems = [
   '/home-stage/carousel/rant.png',
   '/home-stage/secondhand.webp',
 ];
+const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 </script>
 
 <template>
@@ -79,7 +84,7 @@ const sampleItems = [
           <div class="seller-card__body">
             <h3>{{ t('marketplace.detail.sampleMiniTitle') }}</h3>
             <p>{{ t('marketplace.detail.sampleSummary') }}</p>
-            <strong>HK$ 680</strong>
+            <strong>{{ samplePrice }}</strong>
           </div>
         </article>
       </div>
@@ -96,14 +101,14 @@ const sampleItems = [
   gap: 2rem;
   margin: 0 auto;
   padding: 4rem var(--layout-page-padding-inline);
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .seller-profile,
 .seller-results {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
 }
 
@@ -118,15 +123,15 @@ const sampleItems = [
   height: 4.5rem;
   place-items: center;
   border-radius: 999px;
-  background: #002727;
-  color: #ffffff;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
   font-family: var(--font-display);
   font-size: 1.5rem;
 }
 
 .seller-kicker {
   margin: 1.5rem 0 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -145,7 +150,7 @@ const sampleItems = [
 
 .seller-profile p:not(.seller-kicker) {
   margin-top: 1rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   line-height: 1.75;
 }
 
@@ -157,7 +162,7 @@ const sampleItems = [
 }
 
 .seller-stats div {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
   padding: 1rem;
 }
@@ -166,11 +171,11 @@ const sampleItems = [
   display: block;
   font-family: var(--font-display);
   font-size: 2rem;
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .seller-stats span {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.8rem;
 }
 
@@ -182,7 +187,7 @@ const sampleItems = [
   display: grid;
   gap: 1rem;
   align-items: center;
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
   padding-bottom: 1.5rem;
 }
 
@@ -193,9 +198,9 @@ const sampleItems = [
   justify-content: center;
   gap: 0.5rem;
   border-radius: 999px;
-  background: #002727;
+  background: rgb(var(--color-primary));
   padding: 0.6rem 1rem;
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
   font-size: 0.875rem;
   font-weight: 600;
 }
@@ -208,16 +213,16 @@ const sampleItems = [
 
 .seller-card {
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
 }
 
 .seller-card__media {
   height: 12rem;
   overflow: hidden;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .seller-card__media img {
@@ -239,19 +244,19 @@ const sampleItems = [
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.35rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .seller-card__body p {
   margin-top: 0.5rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   line-height: 1.65;
 }
 
 .seller-card__body strong {
   display: block;
   margin-top: 1rem;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.5rem;
 }

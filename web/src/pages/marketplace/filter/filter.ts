@@ -58,9 +58,10 @@ const readQueryString = (value: unknown): string =>
 const buildListingCard = (
   listing: SecondhandListingSummaryResponse,
   locale: AppLocale,
+  translate: (key: string) => string,
 ): FilterListingCard => {
   const price = listing.price_mode === 'free'
-    ? locale === 'zh-HK' ? '免費' : 'Free'
+    ? translate('common.price.free')
     : formatPrice(listing.price_hkd ?? 0, locale);
 
   return {
@@ -123,7 +124,7 @@ export const useMarketplaceFilterPage = () => {
 
   const listings = computed(() =>
     sourceListings.value
-      .map((listing) => buildListingCard(listing, preferenceStore.locale))
+      .map((listing) => buildListingCard(listing, preferenceStore.locale, t))
       .filter((listing) => !withPhotos.value || Boolean(listing.imageUrl)),
   );
 

@@ -46,13 +46,13 @@ const viewMode = ref<ResultViewMode>('grid');
 <template>
   <main class="marketplace-filter-page">
     <aside class="marketplace-filter-sidebar">
-      <div class="flex items-center justify-between border-b border-[#E2E3E1] pb-4">
-        <h1 class="font-display text-[24px] font-medium leading-[1.4] text-[#1A1C1B]">
+      <div class="flex items-center justify-between border-b border-border pb-4">
+        <h1 class="font-display text-[24px] font-medium leading-[1.4] text-text">
           {{ t('marketplace.filter.title') }}
         </h1>
         <button
           type="button"
-          class="text-[14px] font-medium tracking-[0.02em] text-[#002727] transition-colors hover:text-[#426464]"
+          class="text-[14px] font-medium tracking-[0.02em] text-primary transition-colors hover:text-primary/80"
           @click="clearFilters"
         >
           {{ t('marketplace.filter.clearAll') }}
@@ -97,14 +97,14 @@ const viewMode = ref<ResultViewMode>('grid');
                 :checked="selectedCategoryKeys.includes(category.key)"
                 @change="toggleCategory(category.key)"
               />
-              <span class="transition-colors group-hover:text-[#1A1C1B]">{{ category.label }}</span>
+              <span class="transition-colors group-hover:text-text">{{ category.label }}</span>
             </span>
-            <span class="text-sm text-[#717878]">{{ category.count }}</span>
+            <span class="text-sm text-text-muted">{{ category.count }}</span>
           </label>
         </div>
       </section>
 
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
+      <section class="space-y-4 border-t border-border pt-6">
         <h2 class="filter-section-title">
           {{ t('marketplace.filter.priceRange') }}
         </h2>
@@ -119,7 +119,7 @@ const viewMode = ref<ResultViewMode>('grid');
               @change="syncFiltersToQuery()"
             />
           </label>
-          <span class="text-[#C1C8C7]">-</span>
+          <span class="text-border">-</span>
           <label class="filter-price-field">
             <span>$</span>
             <input
@@ -133,7 +133,7 @@ const viewMode = ref<ResultViewMode>('grid');
         </div>
       </section>
 
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
+      <section class="space-y-4 border-t border-border pt-6">
         <h2 class="filter-section-title">
           {{ t('marketplace.filter.condition') }}
         </h2>
@@ -151,7 +151,7 @@ const viewMode = ref<ResultViewMode>('grid');
         </div>
       </section>
 
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-6">
+      <section class="space-y-4 border-t border-border pt-6">
         <h2 class="filter-section-title">
           {{ t('marketplace.filter.area') }}
         </h2>
@@ -182,8 +182,8 @@ const viewMode = ref<ResultViewMode>('grid');
         </label>
       </section>
 
-      <section class="border-t border-[#E2E3E1] pt-6">
-        <label class="flex cursor-pointer items-center justify-between gap-4 text-[16px] leading-[1.6] text-[#414848] transition-colors hover:text-[#1A1C1B]">
+      <section class="border-t border-border pt-6">
+        <label class="flex cursor-pointer items-center justify-between gap-4 text-[16px] leading-[1.6] text-text-muted transition-colors hover:text-text">
           <span>{{ t('marketplace.filter.onlyPhotos') }}</span>
           <span class="relative inline-block h-6 w-10">
             <input
@@ -191,7 +191,7 @@ const viewMode = ref<ResultViewMode>('grid');
               type="checkbox"
               class="peer sr-only"
             />
-            <span class="block h-6 w-10 rounded-full bg-[#E2E3E1] transition-colors peer-checked:bg-[#002727]" />
+            <span class="block h-6 w-10 rounded-full bg-border transition-colors peer-checked:bg-primary" />
             <span class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
           </span>
         </label>
@@ -200,7 +200,7 @@ const viewMode = ref<ResultViewMode>('grid');
 
     <section class="marketplace-filter-results min-w-0 flex-1">
       <div class="mb-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <p class="min-w-0 text-[18px] leading-[1.6] text-[#414848]">
+        <p class="min-w-0 text-[18px] leading-[1.6] text-text-muted">
           {{ t('marketplace.filter.resultsFound', { count: totalResults }) }}
         </p>
         <div class="sort-control flex min-w-0 flex-wrap items-center gap-3 md:justify-end">
@@ -236,11 +236,11 @@ const viewMode = ref<ResultViewMode>('grid');
               />
             </button>
           </div>
-          <label class="shrink-0 text-[16px] leading-[1.6] text-[#717878]">{{ t('marketplace.filter.sortBy') }}</label>
+          <label class="shrink-0 text-[16px] leading-[1.6] text-text-muted">{{ t('marketplace.filter.sortBy') }}</label>
           <label class="relative w-[9.75rem] max-w-full">
             <select
               v-model="sortBy"
-              class="w-full cursor-pointer appearance-none truncate border-none bg-transparent pr-5 text-[14px] font-medium leading-none tracking-[0.02em] text-[#1A1C1B] outline-none focus:ring-0"
+              class="w-full cursor-pointer appearance-none truncate border-none bg-transparent pr-5 text-[14px] font-medium leading-none tracking-[0.02em] text-text outline-none focus:ring-0"
               @change="syncFiltersToQuery(page)"
             >
               <option
@@ -253,7 +253,7 @@ const viewMode = ref<ResultViewMode>('grid');
             </select>
             <AppIcon
               name="chevron-down"
-              class="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-[#717878]"
+              class="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-text-muted"
               :size="16"
             />
           </label>
@@ -262,7 +262,7 @@ const viewMode = ref<ResultViewMode>('grid');
 
       <div
         v-if="loading"
-        class="my-6 rounded-xl border border-[#E2E3E1] bg-[#F9F9F7] p-6 text-[#717878]"
+        class="my-6 rounded-xl border border-border bg-surface-raised p-6 text-text-muted"
       >
         {{ t('common.status.loading') }}
       </div>
@@ -279,7 +279,7 @@ const viewMode = ref<ResultViewMode>('grid');
           class="marketplace-result-card group"
           :class="viewMode === 'list' ? 'marketplace-result-card--list' : ''"
         >
-          <div class="marketplace-result-card__media relative overflow-hidden bg-[#F4F4F2]">
+          <div class="marketplace-result-card__media relative overflow-hidden bg-surface-muted">
             <img
               v-if="listing.imageUrl"
               :src="listing.imageUrl"
@@ -288,17 +288,17 @@ const viewMode = ref<ResultViewMode>('grid');
             />
             <div
               v-else
-              class="flex h-full w-full items-center justify-center bg-[#E2E3E1]"
+              class="flex h-full w-full items-center justify-center bg-border"
             >
               <AppIcon
                 name="picture"
-                class="text-[#717878]"
+                class="text-text-muted"
                 :size="48"
               />
             </div>
             <span
               v-if="index === 0 || selectedConditions.includes('brand_new')"
-              class="absolute right-3 top-3 rounded bg-white/90 px-2 py-1 text-xs font-semibold text-[#002727] backdrop-blur-sm"
+              class="absolute right-3 top-3 rounded bg-white/90 px-2 py-1 text-xs font-semibold text-primary backdrop-blur-sm"
             >
               {{ t('marketplace.filter.newBadge') }}
             </span>
@@ -319,14 +319,14 @@ const viewMode = ref<ResultViewMode>('grid');
             </p>
 
             <div class="marketplace-result-card__meta">
-              <div class="flex items-center gap-2 text-sm text-[#717878]">
+              <div class="flex items-center gap-2 text-sm text-text-muted">
                 <AppIcon
                   name="location"
                   :size="16"
                 />
                 <span>{{ listing.districtLabel }}</span>
               </div>
-              <span class="text-xs text-[#717878]">{{ index < 2 ? `${index + 2}h ago` : `${index - 1}d ago` }}</span>
+              <span class="text-xs text-text-muted">{{ index < 2 ? `${index + 2}h ago` : `${index - 1}d ago` }}</span>
             </div>
           </div>
         </RouterLink>
@@ -335,7 +335,7 @@ const viewMode = ref<ResultViewMode>('grid');
       <div class="mt-16 flex items-center justify-center gap-2">
         <button
           type="button"
-          class="filter-page-button text-[#717878] opacity-50"
+          class="filter-page-button text-text-muted opacity-50"
           :aria-label="t('marketplace.filter.previousPage')"
           :disabled="page <= 1"
           @click="setPage(page - 1)"
@@ -347,15 +347,15 @@ const viewMode = ref<ResultViewMode>('grid');
         </button>
         <button
           type="button"
-          class="h-10 w-10 rounded-full bg-[#002727] text-[14px] font-medium leading-none tracking-[0.02em] text-white"
+          class="h-10 w-10 rounded-full bg-primary text-[14px] font-medium leading-none tracking-[0.02em] text-primary-contrast"
         >
           {{ page }}
         </button>
-        <span class="px-2 text-[#717878]">/</span>
-        <span class="px-2 text-[#717878]">{{ totalPages }}</span>
+        <span class="px-2 text-text-muted">/</span>
+        <span class="px-2 text-text-muted">{{ totalPages }}</span>
         <button
           type="button"
-          class="filter-page-button text-[#717878]"
+          class="filter-page-button text-text-muted"
           :aria-label="t('marketplace.filter.nextPage')"
           :disabled="page >= totalPages"
           @click="setPage(page + 1)"
@@ -379,7 +379,7 @@ const viewMode = ref<ResultViewMode>('grid');
   gap: 3rem;
   margin: 0 auto;
   padding: 4rem var(--layout-page-padding-inline);
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   overflow: visible;
 }
 
@@ -400,9 +400,9 @@ const viewMode = ref<ResultViewMode>('grid');
 .view-mode-toggle {
   display: inline-flex;
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
 }
 
 .view-mode-button {
@@ -422,16 +422,16 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .view-mode-button-active {
-  background: #002727;
-  color: #ffffff;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .view-mode-button-idle {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
 }
 
 .view-mode-button-idle:hover {
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .marketplace-results-grid {
@@ -441,7 +441,7 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .filter-section-title {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -455,7 +455,7 @@ const viewMode = ref<ResultViewMode>('grid');
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 1rem;
   line-height: 1.6;
 }
@@ -464,13 +464,13 @@ const viewMode = ref<ResultViewMode>('grid');
   height: 1rem;
   width: 1rem;
   border-radius: 0.25rem;
-  border-color: #c1c8c7;
-  background-color: #f9f9f7;
-  color: #002727;
+  border-color: rgb(var(--color-border));
+  background-color: rgb(var(--color-surface-raised));
+  color: rgb(var(--color-primary));
 }
 
 .filter-checkbox:focus {
-  --tw-ring-color: #002727;
+  --tw-ring-color: rgb(var(--color-primary));
   --tw-ring-offset-width: 0;
 }
 
@@ -487,13 +487,13 @@ const viewMode = ref<ResultViewMode>('grid');
   top: 50%;
   z-index: 1;
   transform: translateY(-50%);
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   pointer-events: none;
 }
 
 .filter-price-field > span {
   left: 0.75rem;
-  color: #c1c8c7;
+  color: rgb(var(--color-border));
 }
 
 .filter-select-field .left-icon {
@@ -509,16 +509,16 @@ const viewMode = ref<ResultViewMode>('grid');
   width: 100%;
   border: 0;
   border-radius: 0.25rem;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 1rem;
   line-height: 1.6;
 }
 
 .filter-text-input:focus {
-  --tw-ring-color: #002727;
+  --tw-ring-color: rgb(var(--color-primary));
   --tw-ring-offset-width: 0;
 }
 
@@ -537,19 +537,19 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .filter-chip-active {
-  border-color: #002727;
+  border-color: rgb(var(--color-primary));
   background: rgb(0 39 39 / 0.05);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .filter-chip-idle {
-  border-color: #c1c8c7;
-  color: #414848;
+  border-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
 }
 
 .filter-chip-idle:hover {
-  border-color: #717878;
-  color: #1a1c1b;
+  border-color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text));
 }
 
 .marketplace-results-grid--list {
@@ -561,9 +561,9 @@ const viewMode = ref<ResultViewMode>('grid');
   height: 18rem;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   color: inherit;
   text-decoration: none;
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
@@ -603,7 +603,7 @@ const viewMode = ref<ResultViewMode>('grid');
   margin: 0;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 500;
@@ -613,7 +613,7 @@ const viewMode = ref<ResultViewMode>('grid');
 .marketplace-result-card__price {
   flex-shrink: 0;
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 700;
@@ -626,7 +626,7 @@ const viewMode = ref<ResultViewMode>('grid');
   margin: 0.5rem 0 0;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   flex: 1;
   font-size: 0.875rem;
   line-height: 1.45;
@@ -637,9 +637,9 @@ const viewMode = ref<ResultViewMode>('grid');
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border-top: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
   padding-top: 0.65rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
 }
 
 .filter-page-button {
@@ -648,7 +648,7 @@ const viewMode = ref<ResultViewMode>('grid');
   width: 2.5rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -660,8 +660,8 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .filter-page-button:hover:not(:disabled) {
-  border-color: #002727;
-  color: #002727;
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
 }
 
 @media (max-width: 767px) {

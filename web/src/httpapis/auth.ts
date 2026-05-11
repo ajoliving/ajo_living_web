@@ -1,11 +1,11 @@
 /*
  * 認證 API。
- * 1. 串接手機 OTP、郵箱 OTP、郵箱密碼與登出接口。
+ * 1. 串接手機 OTP、郵箱 OTP、郵箱密碼、手機密碼與登出接口。
  * 2. 與後端真實認證流程保持一致。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
-import type { EmailOtpPayload, EmailPasswordPayload, RequestOtpResult, VerifyOtpResult } from '@/model/auth';
+import type { EmailOtpPayload, EmailPasswordPayload, PhonePasswordPayload, RequestOtpResult, VerifyOtpResult } from '@/model/auth';
 
 interface RequestOtpPayload {
   phone_country_code: string;
@@ -44,6 +44,10 @@ export const registerWithEmail = (payload: EmailPasswordPayload) =>
 export const loginWithEmail = (payload: EmailPasswordPayload) =>
   httpClient.post<ApiResponse<VerifyOtpResult>>('/auth/email/login', payload);
 
-// 7. 登出目前會員
+// 7. 使用手機密碼登入
+export const loginWithPhone = (payload: PhonePasswordPayload) =>
+  httpClient.post<ApiResponse<VerifyOtpResult>>('/auth/phone/login', payload);
+
+// 8. 登出目前會員
 export const logout = () =>
   httpClient.post<ApiResponse<{ logged_out: boolean }>>('/auth/logout');

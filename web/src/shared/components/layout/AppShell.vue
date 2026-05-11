@@ -76,7 +76,7 @@ const mainClasses = computed(() => ({
           </p>
           <p>{{ t('common.brand.tagline') }}</p>
         </div>
-        <p>&copy; 2026 AJO Living</p>
+        <p>{{ t('common.footer.copyright') }}</p>
       </div>
     </footer>
   </div>

@@ -12,6 +12,7 @@ import type { EditorChecklistItem, EditorImageSlot } from '../editor';
 
 interface EditorPreviewPanelProps {
   checklist: EditorChecklistItem[];
+  chargeHint: string;
   coverImage?: EditorImageSlot;
   isEditing: boolean;
   isPublishing: boolean;
@@ -105,6 +106,9 @@ const runPrimaryAction = (): void => {
     </section>
 
     <div class="editor-actions">
+      <p class="editor-charge-hint">
+        {{ props.chargeHint }}
+      </p>
       <button
         type="button"
         class="editor-action editor-action--primary"
@@ -150,7 +154,7 @@ const runPrimaryAction = (): void => {
 
 .editor-preview-kicker {
   margin: 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -161,9 +165,9 @@ const runPrimaryAction = (): void => {
 .editor-preview-card,
 .editor-checklist {
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
@@ -171,7 +175,7 @@ const runPrimaryAction = (): void => {
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .editor-preview-card__media img {
@@ -184,7 +188,7 @@ const runPrimaryAction = (): void => {
   display: grid;
   height: 100%;
   place-items: center;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
 }
 
 .editor-preview-card__body {
@@ -198,7 +202,7 @@ const runPrimaryAction = (): void => {
   margin: 0;
   min-width: 0;
   overflow: hidden;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 500;
@@ -209,7 +213,7 @@ const runPrimaryAction = (): void => {
 
 .editor-preview-card__body strong {
   display: block;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-size: 1.2rem;
   font-weight: 800;
   line-height: 1.2;
@@ -218,7 +222,7 @@ const runPrimaryAction = (): void => {
 .editor-preview-meta-line {
   min-width: 0;
   overflow: hidden;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1.3;
@@ -240,13 +244,13 @@ const runPrimaryAction = (): void => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 600;
 }
 
 .editor-checklist__item--complete {
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .editor-actions {
@@ -255,13 +259,21 @@ const runPrimaryAction = (): void => {
   margin-top: 0.5rem;
 }
 
+.editor-charge-hint {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .editor-action {
   display: inline-flex;
   min-height: 3.25rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 1px solid #002727;
+  border: 1px solid rgb(var(--color-primary));
   border-radius: 9999px;
   padding: 0.8rem 1.25rem;
   font-size: 0.875rem;
@@ -276,22 +288,22 @@ const runPrimaryAction = (): void => {
 }
 
 .editor-action--primary {
-  background: #002727;
-  color: #ffffff;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .editor-action--primary:hover:not(:disabled) {
-  border-color: #1a1c1b;
-  background: #1a1c1b;
+  border-color: rgb(var(--color-text));
+  background: rgb(var(--color-text));
 }
 
 .editor-action--secondary {
   background: transparent;
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .editor-action--secondary:hover:not(:disabled) {
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .editor-action:disabled {

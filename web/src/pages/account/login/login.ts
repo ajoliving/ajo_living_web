@@ -1,25 +1,25 @@
 /*
  * 登入頁 - 狀態與資料流程。
  * 1. 管理登入表單狀態、模式切換與顯示文字。
- * 2. 處理郵箱密碼登入、郵箱驗證碼登入、郵箱註冊、短訊 OTP 登入與登出。
+ * 2. 處理郵箱密碼登入、手機密碼登入、郵箱驗證碼登入、住戶註冊與登出。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
 import axios from 'axios';
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
+import { fetchLoginHero } from '@/httpapis/home-content';
 import type { RequestOtpResult } from '@/model/auth';
+import type { LoginHeroImageSetting } from '@/model/home-content';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
 
-export type LoginAuthMode = 'email' | 'otp';
+export type LoginAuthMode = 'email' | 'phone';
 
 export type LoginEmailAction = 'login' | 'register';
 
 export type LoginEmailMethod = 'password' | 'code';
-
-export type LoginAuthModeSwitchIcon = 'phone' | 'user';
 
 export interface LoginFormState {
   email: string;
@@ -40,9 +40,8 @@ interface ParsedPhoneInput {
   phoneNumber: string;
 }
 
-const DEFAULT_LOGIN_EMAIL = 'admin@admin.com';
-const DEFAULT_LOGIN_PASSWORD = 'admin123';
-const EMAIL_PLACEHOLDER = DEFAULT_LOGIN_EMAIL;
+const LOGIN_HERO_MAX_IMAGES = 3;
+const EMAIL_PLACEHOLDER = 'name@example.com';
 
 const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
   {
@@ -59,8 +58,8 @@ const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
 
 // 1. 建立登入表單初始狀態
 const createInitialFormState = (): LoginFormState => ({
-  email: DEFAULT_LOGIN_EMAIL,
-  password: DEFAULT_LOGIN_PASSWORD,
+  email: '',
+  password: '',
   displayName: '',
   phone: '',
   otp: '',
@@ -68,13 +67,13 @@ const createInitialFormState = (): LoginFormState => ({
 
 // 2. 解析手機輸入
 const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
-  const compactValue = rawValue.replace(/-/g, ' ').trim();
+  const compactValue = rawValue.replace(/[()-]/g, ' ').trim();
   const parts = compactValue.split(/\s+/).filter(Boolean);
 
   if (parts.length >= 2) {
     return {
       phoneCountryCode: parts[0].startsWith('+') ? parts[0] : `+${parts[0]}`,
-      phoneNumber: parts.slice(1).join(''),
+      phoneNumber: parts.slice(1).join('').replace(/\D/g, ''),
     };
   }
 
@@ -110,7 +109,20 @@ const getRandomHeroImage = (): LoginHeroImage => {
   return LOGIN_HERO_IMAGES[selectedIndex] ?? LOGIN_HERO_IMAGES[0];
 };
 
-// 6. 管理登入頁資料與動作
+// 6. 將後台登入背景圖轉為頁面主視覺列表
+const buildConfiguredHeroImages = (items: LoginHeroImageSetting[]): LoginHeroImage[] =>
+  items
+    .slice()
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .filter((item) => item.url.trim().length > 0)
+    .slice(0, LOGIN_HERO_MAX_IMAGES)
+    .map((item) => ({
+      src: item.url,
+      author: item.author || 'AJO Living',
+      location: item.location || 'Hong Kong',
+    }));
+
+// 7. 管理登入頁資料與動作
 export const useLoginPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -137,23 +149,13 @@ export const useLoginPage = () => {
   });
 
   const submitLabel = computed(() => {
-    if (authMode.value === 'email') {
-      return emailSubmitLabel.value;
-    }
-
-    return submitting.value ? t('auth.loading') : t('auth.submit');
+    return authMode.value === 'email' || emailAction.value === 'register'
+      ? emailSubmitLabel.value
+      : submitting.value ? t('auth.loading') : t('auth.submit');
   });
 
   const otpRequestLabel = computed(() =>
     requestingOtp.value ? t('auth.sending') : t('auth.requestOtp'),
-  );
-
-  const authModeSwitchIcon = computed<LoginAuthModeSwitchIcon>(() =>
-    authMode.value === 'email' ? 'phone' : 'user',
-  );
-
-  const authModeSwitchLabel = computed(() =>
-    authMode.value === 'email' ? t('auth.otpMode') : t('auth.emailMode'),
   );
 
   const emailActionSwitchLabel = computed(() =>
@@ -164,35 +166,35 @@ export const useLoginPage = () => {
     emailAction.value === 'register' ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount'),
   );
 
-  const footerActionLabel = computed(() =>
-    emailAction.value === 'register' ? t('auth.emailLogin') : t('auth.emailRegister'),
-  );
+  // 7.1 載入後台登入背景圖
+  const loadConfiguredHero = async (): Promise<void> => {
+    try {
+      const { data } = await fetchLoginHero();
+      const configuredHeroes = buildConfiguredHeroImages(data.data.items);
+      if (configuredHeroes.length > 0) {
+        const selectedIndex = Math.floor(Math.random() * configuredHeroes.length);
+        selectedHero.value = configuredHeroes[selectedIndex] ?? configuredHeroes[0];
+      }
+    } catch {
+      selectedHero.value = selectedHero.value || getRandomHeroImage();
+    }
+  };
 
-  // 6.1 請求驗證碼
+  // 7.2 請求驗證碼
   const handleRequestOtp = async (): Promise<void> => {
     let result: RequestOtpResult;
     requestingOtp.value = true;
 
     try {
-      if (authMode.value === 'email') {
-        if (!isValidEmailInput(formState.email)) {
-          feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-          return;
-        }
-
-        result = await sessionStore.sendEmailOtp(
-          formState.email.trim(),
-          emailAction.value === 'register' ? 'register' : 'login',
-        );
-      } else {
-        const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-        if (!phoneCountryCode || !phoneNumber) {
-          feedbackStore.pushToast(t('auth.invalidPhone'), 'error');
-          return;
-        }
-
-        result = await sessionStore.sendOtp(phoneCountryCode, phoneNumber);
+      if (!isValidEmailInput(formState.email)) {
+        feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+        return;
       }
+
+      result = await sessionStore.sendEmailOtp(
+        formState.email.trim(),
+        emailAction.value === 'register' ? 'register' : 'login',
+      );
 
       feedbackStore.pushToast(
         result.mock_code ? t('auth.otpPreview', { code: result.mock_code }) : t('auth.otpSent'),
@@ -205,13 +207,13 @@ export const useLoginPage = () => {
     }
   };
 
-  // 6.2 完成登入後跳轉
+  // 7.3 完成登入後跳轉
   const redirectAfterSignIn = async (): Promise<void> => {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/marketplace';
     await router.push(redirect);
   };
 
-  // 6.3 執行郵箱登入或註冊
+  // 7.4 執行郵箱登入或註冊
   const handleEmailSubmit = async (): Promise<void> => {
     if (!isValidEmailInput(formState.email)) {
       feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
@@ -219,7 +221,8 @@ export const useLoginPage = () => {
     }
 
     if (emailAction.value === 'register') {
-      if (!formState.displayName.trim() || formState.password.trim().length < 8) {
+      const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
+      if (!formState.displayName.trim() || !phoneCountryCode || !phoneNumber || formState.password.trim().length < 8) {
         feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
         return;
       }
@@ -237,10 +240,13 @@ export const useLoginPage = () => {
 
     try {
       if (emailAction.value === 'register') {
+        const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
         await sessionStore.registerEmailAccount(
           formState.email.trim(),
           formState.password,
           formState.displayName.trim(),
+          phoneCountryCode,
+          phoneNumber,
         );
         feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
       } else if (emailLoginMethod.value === 'code') {
@@ -264,18 +270,18 @@ export const useLoginPage = () => {
     }
   };
 
-  // 6.4 執行 OTP 登入
-  const handleOtpSubmit = async (): Promise<void> => {
+  // 7.5 執行手機密碼登入
+  const handlePhoneSubmit = async (): Promise<void> => {
     const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-    if (!phoneCountryCode || !phoneNumber || formState.otp.trim().length === 0) {
-      feedbackStore.pushToast(t('auth.requiredFields'), 'error');
+    if (!phoneCountryCode || !phoneNumber || formState.password.trim().length === 0) {
+      feedbackStore.pushToast(t('auth.phonePasswordRequired'), 'error');
       return;
     }
 
     submitting.value = true;
 
     try {
-      await sessionStore.signInWithOtp(phoneCountryCode, phoneNumber, formState.otp.trim());
+      await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
@@ -285,50 +291,54 @@ export const useLoginPage = () => {
     }
   };
 
-  // 6.5 按目前模式提交登入表單
+  // 7.6 按目前模式提交登入表單
   const handleSubmit = async (): Promise<void> => {
-    if (authMode.value === 'email') {
+    if (authMode.value === 'email' || emailAction.value === 'register') {
       await handleEmailSubmit();
       return;
     }
 
-    await handleOtpSubmit();
+    await handlePhoneSubmit();
   };
 
-  // 6.6 執行登出
+  // 7.7 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 6.7 切換登入模式
-  const toggleAuthMode = (): void => {
-    authMode.value = authMode.value === 'email' ? 'otp' : 'email';
+  // 7.8 設定登入模式
+  const setAuthMode = (mode: LoginAuthMode): void => {
+    authMode.value = mode;
+    emailAction.value = 'login';
     formState.otp = '';
   };
 
-  // 6.8 切換郵箱登入與註冊模式
+  // 7.9 切換郵箱登入與註冊模式
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
     authMode.value = 'email';
     formState.otp = '';
   };
 
-  // 6.9 切換郵箱登入方式
+  // 7.10 切換郵箱登入方式
   const setEmailLoginMethod = (method: LoginEmailMethod): void => {
+    authMode.value = 'email';
+    emailAction.value = 'login';
     emailLoginMethod.value = method;
     formState.otp = '';
   };
 
+  onMounted(() => {
+    void loadConfiguredHero();
+  });
+
   return {
     authMode,
-    authModeSwitchIcon,
-    authModeSwitchLabel,
     emailAction,
     emailActionSwitchLabel,
     emailLoginMethod,
     emailPlaceholder: EMAIL_PLACEHOLDER,
-    footerActionLabel,
     footerPrompt,
     formState,
     handleRequestOtp,
@@ -339,10 +349,10 @@ export const useLoginPage = () => {
     rememberMe,
     requestingOtp,
     selectedHero,
+    setAuthMode,
     setEmailLoginMethod,
     submitting,
     submitLabel,
-    toggleAuthMode,
     toggleEmailAction,
   };
 };

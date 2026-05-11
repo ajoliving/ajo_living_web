@@ -41,11 +41,12 @@ interface DiscoverCategoryRow {
 const buildListingPreview = (
   listing: SecondhandListingSummaryResponse,
   locale: string,
+  translate: (key: string) => string,
 ): DiscoverListingPreview => ({
   key: listing.listing_id,
   title: listing.title,
   summary: listing.summary,
-  price: listing.price_mode === 'free' ? locale === 'zh-HK' ? '免費' : 'Free' : formatPrice(listing.price_hkd ?? 0, locale),
+  price: listing.price_mode === 'free' ? translate('common.price.free') : formatPrice(listing.price_hkd ?? 0, locale),
   imageUrl: listing.cover_image?.url ?? '',
   imageAlt: listing.title,
   to: `/marketplace/listing/${listing.listing_id}?from=discover`,
@@ -69,7 +70,7 @@ export const useMarketplaceDiscoverPage = () => {
         const source = (discoverPayload.value.categories[category.value] ?? [])
           .map((placement) => placement.listing)
           .filter((listing): listing is SecondhandListingSummaryResponse => Boolean(listing));
-        const listings = source.map((listing) => buildListingPreview(listing, preferenceStore.locale));
+        const listings = source.map((listing) => buildListingPreview(listing, preferenceStore.locale, t));
 
         return {
           key: category.value,
@@ -88,7 +89,7 @@ export const useMarketplaceDiscoverPage = () => {
       .map((placement) => placement.listing)
       .filter((listing): listing is SecondhandListingSummaryResponse => Boolean(listing))
       .slice(0, 4)
-      .map((listing) => buildListingPreview(listing, preferenceStore.locale)),
+      .map((listing) => buildListingPreview(listing, preferenceStore.locale, t)),
   );
 
   const primaryRecommendation = computed(() => recommendedItems.value[0]);

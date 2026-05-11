@@ -59,12 +59,21 @@ type EmailOTPParams struct {
 
 // 6. EmailPasswordParams defines email password auth input.
 type EmailPasswordParams struct {
-	Email       string
-	Password    string
-	DisplayName string
+	Email            string
+	Password         string
+	DisplayName      string
+	PhoneCountryCode string
+	PhoneNumber      string
 }
 
-// 7. VerifyOTPResult defines the OTP verify result.
+// 7. PhonePasswordParams defines phone password auth input.
+type PhonePasswordParams struct {
+	PhoneCountryCode string
+	PhoneNumber      string
+	Password         string
+}
+
+// 8. VerifyOTPResult defines the OTP verify result.
 type VerifyOTPResult struct {
 	AccessToken  string           `json:"access_token"`
 	RefreshToken string           `json:"refresh_token"`
@@ -72,7 +81,7 @@ type VerifyOTPResult struct {
 	User         AuthUserResponse `json:"user"`
 }
 
-// 8. AuthUserResponse defines the auth response user payload.
+// 9. AuthUserResponse defines the auth response user payload.
 type AuthUserResponse struct {
 	PublicID         string   `json:"public_id"`
 	MemberStatus     string   `json:"member_status"`
@@ -84,7 +93,7 @@ type AuthUserResponse struct {
 	ProfileCompleted bool     `json:"profile_completed"`
 }
 
-// 9. AuthIdentity defines the middleware-facing auth identity.
+// 10. AuthIdentity defines the middleware-facing auth identity.
 type AuthIdentity struct {
 	UserID             int64
 	PublicID           string
@@ -97,7 +106,7 @@ type AuthIdentity struct {
 	PrimaryCommunityID *int64
 }
 
-// 10. accessTokenClaims stores custom JWT claims.
+// 11. accessTokenClaims stores custom JWT claims.
 type accessTokenClaims struct {
 	UserID     int64  `json:"user_id"`
 	MemberType string `json:"member_type"`
@@ -106,12 +115,12 @@ type accessTokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-// 11. NewAuthService creates an auth service instance.
+// 12. NewAuthService creates an auth service instance.
 func NewAuthService(runtime *Runtime) *AuthService {
 	return &AuthService{runtime: runtime}
 }
 
-// 12. RequestOTP stores a mock OTP code and delegates delivery.
+// 13. RequestOTP stores a mock OTP code and delegates delivery.
 func (s *AuthService) RequestOTP(ctx context.Context, params RequestOTPParams) (*RequestOTPResult, error) {
 	if strings.TrimSpace(params.PhoneCountryCode) == "" || strings.TrimSpace(params.PhoneNumber) == "" {
 		return nil, errcode.New(errcode.CodeValidationError, "phone number is required")
@@ -149,7 +158,7 @@ func (s *AuthService) RequestOTP(ctx context.Context, params RequestOTPParams) (
 	return result, nil
 }
 
-// 13. VerifyOTP validates the OTP code and issues access tokens.
+// 14. VerifyOTP validates the OTP code and issues access tokens.
 func (s *AuthService) VerifyOTP(ctx context.Context, params VerifyOTPParams) (*VerifyOTPResult, error) {
 	key := otpKey(params.PhoneCountryCode, params.PhoneNumber, params.Scene)
 	record, ok := s.runtime.OTPStore.Get(key)
@@ -170,7 +179,7 @@ func (s *AuthService) VerifyOTP(ctx context.Context, params VerifyOTPParams) (*V
 	return result, nil
 }
 
-// 14. RequestEmailOTP stores a code and sends it to the target email.
+// 15. RequestEmailOTP stores a code and sends it to the target email.
 func (s *AuthService) RequestEmailOTP(ctx context.Context, params EmailOTPParams) (*RequestOTPResult, error) {
 	email := normalizeEmail(params.Email)
 	if !isValidEmail(email) {
@@ -202,7 +211,7 @@ func (s *AuthService) RequestEmailOTP(ctx context.Context, params EmailOTPParams
 	return result, nil
 }
 
-// 15. VerifyEmailOTP validates an email code and signs the member in.
+// 16. VerifyEmailOTP validates an email code and signs the member in.
 func (s *AuthService) VerifyEmailOTP(ctx context.Context, params EmailOTPParams) (*VerifyOTPResult, error) {
 	email := normalizeEmail(params.Email)
 	if !isValidEmail(email) {
@@ -228,12 +237,14 @@ func (s *AuthService) VerifyEmailOTP(ctx context.Context, params EmailOTPParams)
 	return result, nil
 }
 
-// 16. RegisterWithEmail creates an email password account and issues tokens.
+// 17. RegisterWithEmail creates an email and phone password account.
 func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswordParams) (*VerifyOTPResult, error) {
 	email := normalizeEmail(params.Email)
 	password := strings.TrimSpace(params.Password)
-	if !isValidEmail(email) || len(password) < 8 {
-		return nil, errcode.New(errcode.CodeValidationError, "valid email and password are required")
+	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
+	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
+	if !isValidEmail(email) || !isValidPhone(phoneCountryCode, phoneNumber) || len(password) < 8 {
+		return nil, errcode.New(errcode.CodeValidationError, "valid email, phone number, and password are required")
 	}
 
 	passwordHash, err := utils.HashPassword(password)
@@ -252,11 +263,17 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 		if count > 0 {
 			return errcode.New(errcode.CodeValidationError, "email is already registered")
 		}
+		if err := tx.Model(&model.User{}).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errcode.New(errcode.CodeValidationError, "phone number is already registered")
+		}
 
 		user = model.User{
 			PublicID:         utils.NewPublicID(),
-			PhoneCountryCode: "email",
-			PhoneNumber:      utils.NewPublicID(),
+			PhoneCountryCode: phoneCountryCode,
+			PhoneNumber:      phoneNumber,
 			MemberStatus:     "active",
 			MemberType:       MemberTypeUser,
 			IsStaff:          false,
@@ -300,7 +317,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 17. LoginWithEmail validates an email password account and issues tokens.
+// 18. LoginWithEmail validates an email password account and issues tokens.
 func (s *AuthService) LoginWithEmail(ctx context.Context, params EmailPasswordParams) (*VerifyOTPResult, error) {
 	email := normalizeEmail(params.Email)
 	password := strings.TrimSpace(params.Password)
@@ -339,12 +356,54 @@ func (s *AuthService) LoginWithEmail(ctx context.Context, params EmailPasswordPa
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 18. Logout returns a stable success path without token invalidation storage.
+// 19. LoginWithPhone validates a phone password account and issues tokens.
+func (s *AuthService) LoginWithPhone(ctx context.Context, params PhonePasswordParams) (*VerifyOTPResult, error) {
+	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
+	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
+	password := strings.TrimSpace(params.Password)
+	if !isValidPhone(phoneCountryCode, phoneNumber) || password == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "valid phone number and password are required")
+	}
+
+	var user model.User
+	if err := s.runtime.DB.WithContext(ctx).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeValidationError, "phone or password is incorrect")
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load phone account")
+	}
+
+	var credential model.UserCredential
+	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", user.ID).First(&credential).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeValidationError, "phone or password is incorrect")
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load phone account")
+	}
+	if !utils.VerifyPassword(password, credential.PasswordHash) {
+		return nil, errcode.New(errcode.CodeValidationError, "phone or password is incorrect")
+	}
+
+	var profile model.UserProfile
+	profileErr := s.runtime.DB.WithContext(ctx).Where("user_id = ?", user.ID).First(&profile).Error
+	if errors.Is(profileErr, gorm.ErrRecordNotFound) {
+		profile = model.UserProfile{UserID: user.ID, DisplayName: phoneCountryCode + phoneNumber}
+		if err := s.runtime.DB.WithContext(ctx).Create(&profile).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to create phone profile")
+		}
+	} else if profileErr != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load phone profile")
+	}
+
+	return s.issueAuthResult(ctx, &user, &profile)
+}
+
+// 20. Logout returns a stable success path without token invalidation storage.
 func (s *AuthService) Logout(context.Context, int64) error {
 	return nil
 }
 
-// 19. AuthenticateToken parses and validates a bearer token.
+// 21. AuthenticateToken parses and validates a bearer token.
 func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string) (*AuthIdentity, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &accessTokenClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(s.runtime.Config.JWTSecret), nil
@@ -390,7 +449,7 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 	}, nil
 }
 
-// 20. upsertUserByPhone creates or updates a user during OTP verify.
+// 22. upsertUserByPhone creates or updates a user during OTP verify.
 func (s *AuthService) upsertUserByPhone(ctx context.Context, countryCode string, phoneNumber string) (*VerifyOTPResult, error) {
 	var user model.User
 	var profile model.UserProfile
@@ -464,7 +523,7 @@ func (s *AuthService) upsertUserByPhone(ctx context.Context, countryCode string,
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 21. upsertUserByEmail creates or updates a user during email OTP verify.
+// 23. upsertUserByEmail creates or updates a user during email OTP verify.
 func (s *AuthService) upsertUserByEmail(ctx context.Context, email string, displayName string) (*VerifyOTPResult, error) {
 	var user model.User
 	var profile model.UserProfile
@@ -533,7 +592,7 @@ func (s *AuthService) upsertUserByEmail(ctx context.Context, email string, displ
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 22. issueAuthResult resolves access and returns a token payload.
+// 24. issueAuthResult resolves access and returns a token payload.
 func (s *AuthService) issueAuthResult(ctx context.Context, user *model.User, profile *model.UserProfile) (*VerifyOTPResult, error) {
 	access, err := NewAccessService(s.runtime).ResolveUserAccess(ctx, user)
 	if err != nil {
@@ -562,7 +621,7 @@ func (s *AuthService) issueAuthResult(ctx context.Context, user *model.User, pro
 	}, nil
 }
 
-// 23. issueTokens creates access and refresh JWT tokens.
+// 25. issueTokens creates access and refresh JWT tokens.
 func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool) (string, string, error) {
 	accessToken, err := s.signToken(userID, memberType, isStaff, accessTokenTTL)
 	if err != nil {
@@ -577,7 +636,7 @@ func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool)
 	return accessToken, refreshToken, nil
 }
 
-// 24. signToken signs a JWT token with the configured secret.
+// 26. signToken signs a JWT token with the configured secret.
 func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, ttl time.Duration) (string, error) {
 	now := s.runtime.Now()
 	claims := &accessTokenClaims{
@@ -596,7 +655,7 @@ func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, t
 	return token.SignedString([]byte(s.runtime.Config.JWTSecret))
 }
 
-// 25. isBootstrapStaffPhone checks whether the verified phone should become staff.
+// 27. isBootstrapStaffPhone checks whether the verified phone should become staff.
 func (s *AuthService) isBootstrapStaffPhone(countryCode string, phoneNumber string) bool {
 	target := strings.TrimSpace(countryCode) + strings.TrimSpace(phoneNumber)
 	if target == "" {
@@ -612,17 +671,49 @@ func (s *AuthService) isBootstrapStaffPhone(countryCode string, phoneNumber stri
 	return false
 }
 
-// 26. normalizeEmail prepares email lookup input.
+// 28. normalizeEmail prepares email lookup input.
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// 27. isValidEmail checks the minimum email shape needed for auth flows.
+// 29. isValidEmail checks the minimum email shape needed for auth flows.
 func isValidEmail(email string) bool {
 	return strings.Contains(email, "@") && strings.Contains(email, ".") && len(email) <= 255
 }
 
-// 28. normalizeAuthScene returns a stable verification scene.
+// 30. normalizePhoneCountryCode prepares a phone country code for lookup.
+func normalizePhoneCountryCode(countryCode string) string {
+	value := strings.TrimSpace(countryCode)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "+") {
+		return value
+	}
+	return "+" + value
+}
+
+// 31. normalizePhoneNumber prepares a phone number for lookup.
+func normalizePhoneNumber(phoneNumber string) string {
+	value := strings.TrimSpace(phoneNumber)
+	value = strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(value)
+	return value
+}
+
+// 32. isValidPhone checks the minimum phone shape needed for password auth.
+func isValidPhone(countryCode string, phoneNumber string) bool {
+	if !strings.HasPrefix(countryCode, "+") || len(countryCode) > 8 || len(phoneNumber) < 4 || len(phoneNumber) > 32 {
+		return false
+	}
+	for _, item := range strings.TrimPrefix(countryCode, "+") + phoneNumber {
+		if item < '0' || item > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// 33. normalizeAuthScene returns a stable verification scene.
 func normalizeAuthScene(scene string) string {
 	value := strings.TrimSpace(scene)
 	if value == "" {
@@ -632,7 +723,7 @@ func normalizeAuthScene(scene string) string {
 	return value
 }
 
-// 29. buildEmailOTPContent returns the email verification message.
+// 34. buildEmailOTPContent returns the email verification message.
 func buildEmailOTPContent(code string, scene string) (string, string) {
 	subject := "AJO Living email verification code"
 	body := fmt.Sprintf("Your AJO Living verification code is %s. It expires in 5 minutes.", code)
@@ -643,12 +734,12 @@ func buildEmailOTPContent(code string, scene string) (string, string) {
 	return subject, body
 }
 
-// 30. otpKey builds the in-memory OTP lookup key.
+// 35. otpKey builds the in-memory OTP lookup key.
 func otpKey(countryCode string, phoneNumber string, scene string) string {
 	return strings.TrimSpace(countryCode) + ":" + strings.TrimSpace(phoneNumber) + ":" + normalizeAuthScene(scene)
 }
 
-// 31. emailOTPKey builds the in-memory email OTP lookup key.
+// 36. emailOTPKey builds the in-memory email OTP lookup key.
 func emailOTPKey(email string, scene string) string {
 	return "email:" + normalizeEmail(email) + ":" + normalizeAuthScene(scene)
 }

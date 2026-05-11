@@ -11,6 +11,8 @@ export default {
   loadingConversations: '正在載入會話...',
   listingPrice: '帖子價格',
   loadingMessages: '正在載入訊息...',
+  emojiToggle: '表情',
+  emojiPanelLabel: '選擇表情',
   sending: '發送中...',
   memberRequiredTitle: '需要登入會員',
   memberRequiredDescription: '請先登入，聊天模組才會載入你的真實會話。',

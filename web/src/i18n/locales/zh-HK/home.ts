@@ -27,6 +27,7 @@ export default {
   },
   loadError: '首頁資料載入失敗，請稍後再試。',
   carouselAriaLabel: '自動輪播圖集',
+  carouselImageAlt: '首頁輪播圖片 {index}',
   landing: {
     secondaryCta: '篩選帖子',
     heroHighlights: {

@@ -47,6 +47,9 @@ type Config struct {
 	StoragePresignExpires  time.Duration
 	MediaBaseURL           string
 	SeedCommunities        bool
+	SeedHomeContent        bool
+	WebPublicDir           string
+	SystemUserID           int64
 	EnableExpireTicker     bool
 	ExpireTickerInterval   time.Duration
 }
@@ -84,6 +87,9 @@ func Load() *Config {
 		StorageDisableSSL:      getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
 		StoragePresignExpires:  getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
 		SeedCommunities:        getBoolEnv("SEED_COMMUNITIES", true),
+		SeedHomeContent:        getBoolEnv("SEED_HOME_CONTENT", true),
+		WebPublicDir:           getEnv("WEB_PUBLIC_DIR", "../web/public"),
+		SystemUserID:           getInt64Env("SYSTEM_USER_ID", 1),
 		EnableExpireTicker:     getBoolEnv("ENABLE_EXPIRE_TICKER", true),
 		ExpireTickerInterval:   getDurationEnv("EXPIRE_TICKER_INTERVAL", time.Hour),
 	}
@@ -129,7 +135,22 @@ func getIntEnv(key string, fallback int) int {
 	return value
 }
 
-// 6. getBoolEnv parses bool env value or fallback.
+// 6. getInt64Env parses integer env value or fallback.
+func getInt64Env(key string, fallback int64) int64 {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fallback
+	}
+
+	return value
+}
+
+// 7. getBoolEnv parses bool env value or fallback.
 func getBoolEnv(key string, fallback bool) bool {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -144,7 +165,7 @@ func getBoolEnv(key string, fallback bool) bool {
 	return value
 }
 
-// 7. getBoolEnvWithLegacy parses new or legacy bool env value.
+// 8. getBoolEnvWithLegacy parses new or legacy bool env value.
 func getBoolEnvWithLegacy(key string, legacyKey string, fallback bool) bool {
 	if os.Getenv(key) != "" {
 		return getBoolEnv(key, fallback)
@@ -153,7 +174,7 @@ func getBoolEnvWithLegacy(key string, legacyKey string, fallback bool) bool {
 	return getBoolEnv(legacyKey, fallback)
 }
 
-// 8. getDurationEnv parses duration env value or fallback.
+// 9. getDurationEnv parses duration env value or fallback.
 func getDurationEnv(key string, fallback time.Duration) time.Duration {
 	raw := os.Getenv(key)
 	if raw == "" {
@@ -168,7 +189,7 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 	return value
 }
 
-// 9. getDurationEnvWithLegacy parses new or legacy duration env value.
+// 10. getDurationEnvWithLegacy parses new or legacy duration env value.
 func getDurationEnvWithLegacy(key string, legacyKey string, fallback time.Duration) time.Duration {
 	if os.Getenv(key) != "" {
 		return getDurationEnv(key, fallback)
@@ -177,12 +198,12 @@ func getDurationEnvWithLegacy(key string, legacyKey string, fallback time.Durati
 	return getDurationEnv(legacyKey, fallback)
 }
 
-// 10. SMTPAddress builds the outbound SMTP server address.
+// 11. SMTPAddress builds the outbound SMTP server address.
 func (c *Config) SMTPAddress() string {
 	return fmt.Sprintf("%s:%d", c.SMTPHost, c.SMTPPort)
 }
 
-// 11. defaultMediaBaseURL builds the default public media base URL.
+// 12. defaultMediaBaseURL builds the default public media base URL.
 func defaultMediaBaseURL(cfg *Config) string {
 	if strings.EqualFold(strings.TrimSpace(cfg.StorageProvider), "oss") {
 		return defaultOSSMediaBaseURL(cfg)
@@ -191,7 +212,7 @@ func defaultMediaBaseURL(cfg *Config) string {
 	return strings.TrimRight(cfg.StorageEndpoint, "/") + "/" + strings.TrimLeft(cfg.StorageBucket, "/")
 }
 
-// 12. defaultOSSMediaBaseURL derives the public base URL for OSS-backed media.
+// 13. defaultOSSMediaBaseURL derives the public base URL for OSS-backed media.
 func defaultOSSMediaBaseURL(cfg *Config) string {
 	bucket := strings.TrimSpace(cfg.StorageBucket)
 	if bucket == "" {
@@ -218,7 +239,7 @@ func defaultOSSMediaBaseURL(cfg *Config) string {
 	return fmt.Sprintf("%s://%s.%s", scheme, bucket, endpoint)
 }
 
-// 13. trimEndpointScheme removes scheme and surrounding slashes from endpoint values.
+// 14. trimEndpointScheme removes scheme and surrounding slashes from endpoint values.
 func trimEndpointScheme(endpoint string) string {
 	value := strings.TrimSpace(endpoint)
 	value = strings.TrimPrefix(value, "https://")

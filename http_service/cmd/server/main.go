@@ -72,15 +72,27 @@ func main() {
 	}
 
 	authService := service.NewAuthService(runtime)
+	walletService := service.NewWalletService(runtime)
+	runtime.WalletService = walletService
 	userService := service.NewUserService(runtime)
 	staffService := service.NewStaffService(runtime)
 	uploadService := service.NewUploadService(runtime)
+	homeContentService := service.NewHomeContentService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
 	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
 	chatService := service.NewChatService(runtime, secondhandService)
 	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
 	lifecycleService := service.NewLifecycleService(runtime)
+
+	if cfg.SeedHomeContent {
+		if err := homeContentService.SeedDefaultHomeContent(context.Background(), service.HomeContentSeedOptions{
+			WebPublicDir:   cfg.WebPublicDir,
+			OperatorUserID: cfg.SystemUserID,
+		}); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	if cfg.EnableExpireTicker {
 		go startExpireTicker(lifecycleService, cfg.ExpireTickerInterval)
@@ -92,6 +104,8 @@ func main() {
 		UserService:         userService,
 		StaffService:        staffService,
 		UploadService:       uploadService,
+		HomeContentService:  homeContentService,
+		WalletService:       walletService,
 		SecondhandService:   secondhandService,
 		PropertyService:     propertyService,
 		ChatService:         chatService,

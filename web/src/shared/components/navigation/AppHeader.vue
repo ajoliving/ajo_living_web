@@ -99,36 +99,53 @@ const mobileDrawerOpen = computed({
 // 2. 判斷目前頁面是否有子路由導航
 const hasSubNavigation = computed(() => subnavItems.value.length > 0);
 
-// 3. 切換主題
+// 3. 依目前主路由輸出 mobile 子導航標題
+const mobileSubnavLabel = computed(() => {
+  if (route.path.startsWith('/account')) {
+    return t('nav.account');
+  }
+
+  if (route.path.startsWith('/properties')) {
+    return t('nav.properties');
+  }
+
+  if (route.path.startsWith('/serviced-residences')) {
+    return t('nav.servicedResidences');
+  }
+
+  return t('nav.marketplaceSubroutes');
+});
+
+// 4. 切換主題
 const handleThemeChange = (value: string | number) => {
   preferenceStore.setTheme(value as AppThemeName);
 };
 
-// 4. 切換語系
+// 5. 切換語系
 const handleLocaleChange = (value: string | number) => {
   preferenceStore.setLocale(value as AppLocale);
 };
 
-// 5. 導向登入頁
+// 6. 導向登入頁
 const handleNavigateLogin = async () => {
   mobileDrawerOpen.value = false;
   await router.push('/login');
 };
 
-// 6. 導向會員中心
+// 7. 導向會員中心
 const handleNavigateAccount = async () => {
   mobileDrawerOpen.value = false;
   await router.push('/account/profile');
 };
 
-// 7. 執行登出
+// 8. 執行登出
 const handleSignOut = async () => {
   mobileDrawerOpen.value = false;
   await sessionStore.signOut();
   await router.push('/login');
 };
 
-// 8. 路由切換時自動收起 mobile 抽屜
+// 9. 路由切換時自動收起 mobile 抽屜
 watch(
   () => route.fullPath,
   () => {
@@ -151,9 +168,9 @@ watch(
           <img
             class="brand-logo"
             :src="brandLogoSrc"
-            alt="AJO Living"
+            :alt="t('common.brand.name')"
           />
-          <span class="brand-wordmark">AJOLIVING</span>
+          <span class="brand-wordmark">{{ t('common.brand.name') }}</span>
         </RouterLink>
       </div>
 
@@ -272,7 +289,7 @@ watch(
             <img
               class="brand-logo brand-logo--mobile"
               :src="brandLogoSrc"
-              alt="AJO Living"
+              :alt="t('common.brand.name')"
             />
             <BaseButton
               variant="ghost"
@@ -325,7 +342,7 @@ watch(
             class="space-y-2 border-t border-border/70 pt-4"
           >
             <p class="px-1 text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
-              {{ t('nav.marketplaceSubroutes') }}
+              {{ mobileSubnavLabel }}
             </p>
             <RouterLink
               v-for="item in subnavItems"

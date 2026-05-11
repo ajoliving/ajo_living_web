@@ -30,7 +30,7 @@ const accountRoleLabel = computed(() =>
 
 <template>
   <aside class="account-sidebar">
-    <div class="border-b border-[#E2E3E1] pb-5">
+    <div class="border-b border-border pb-5">
       <div class="flex items-center gap-4">
         <BaseAvatar
           :src="sessionStore.currentUser.avatar_url"
@@ -38,20 +38,20 @@ const accountRoleLabel = computed(() =>
           :size="56"
         />
         <div class="min-w-0">
-          <p class="truncate font-display text-[24px] font-medium leading-[1.4] text-[#1A1C1B]">
+          <p class="truncate font-display text-[24px] font-medium leading-[1.4] text-text">
             {{ sessionStore.currentUser.display_name }}
           </p>
-          <p class="truncate text-[14px] leading-[1.6] text-[#717878]">
+          <p class="truncate text-[14px] leading-[1.6] text-text-muted">
             {{ sessionStore.currentUser.primary_community.name }}
           </p>
         </div>
       </div>
 
-      <div class="mt-5 border-l-2 border-[#002727] bg-[#F4F4F2] px-4 py-3">
-        <p class="text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-[#717878]">
+      <div class="mt-5 border-l-2 border-primary bg-surface-muted px-4 py-3">
+        <p class="text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-text-muted">
           {{ t('account.overview.memberLabel') }}
         </p>
-        <p class="mt-2 text-[15px] font-semibold leading-[1.5] text-[#1A1C1B]">
+        <p class="mt-2 text-[15px] font-semibold leading-[1.5] text-text">
           {{ accountRoleLabel }}
         </p>
       </div>

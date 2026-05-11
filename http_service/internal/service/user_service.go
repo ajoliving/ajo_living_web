@@ -39,6 +39,7 @@ type MeResponse struct {
 	DistrictCode      string             `json:"district_code"`
 	PrimaryCommunity  *CommunityResponse `json:"primary_community,omitempty"`
 	ProfileCompleted  bool               `json:"profile_completed"`
+	AJOBalance        int64              `json:"ajo_balance"`
 }
 
 // 3. CommunityResponse defines a lightweight community payload.
@@ -109,6 +110,13 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 
 	if profile.PrimaryCommunity != nil {
 		response.PrimaryCommunity = toCommunityResponse(profile.PrimaryCommunity)
+	}
+	if s.runtime.WalletService != nil {
+		overview, err := s.runtime.WalletService.GetWalletOverview(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		response.AJOBalance = overview.Account.Balance
 	}
 
 	return response, nil

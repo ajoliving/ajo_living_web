@@ -86,7 +86,81 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 	return returnPublicID, nil
 }
 
-// 2. upsertServicedApartment creates or updates a serviced apartment aggregate.
+// 2. updatePropertySaleWithCharge updates a sale listing and charges edit points.
+func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, params UpsertPropertySaleParams) (string, *PointsChargeResponse, error) {
+	if err := s.validateSaleParams(params); err != nil {
+		return "", nil, err
+	}
+
+	communityID, err := s.resolveCommunityID(ctx, params.CommunityID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var returnPublicID string
+	var charge *PointsChargeResponse
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, err := s.preparePropertyRoot(ctx, tx, PropertyChannelSale, false, propertyRootInput{
+			OwnerUserID:           params.OwnerUserID,
+			ListingPublicID:       params.ListingPublicID,
+			Title:                 params.Title,
+			Summary:               params.Summary,
+			Description:           params.Description,
+			DistrictCode:          params.DistrictCode,
+			CommunityID:           communityID,
+			PublisherIdentityType: params.PublisherIdentityType,
+			BusinessStatus:        params.BusinessStatus,
+		})
+		if err != nil {
+			return err
+		}
+		returnPublicID = listing.PublicID
+
+		if shouldChargeListingEdit(listing) {
+			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, WalletActionEdit)
+			if err != nil {
+				return err
+			}
+			charge = chargeResult
+		}
+
+		featureTags, err := marshalJSON(params.FeatureTags)
+		if err != nil {
+			return err
+		}
+
+		sale := model.PropertySaleListing{
+			ListingID:          listing.ID,
+			PropertyType:       strings.TrimSpace(params.PropertyType),
+			EstateName:         strings.TrimSpace(params.EstateName),
+			AddressText:        strings.TrimSpace(params.AddressText),
+			AskingPriceHKD:     params.AskingPriceHKD,
+			UsableAreaSqft:     params.UsableAreaSqft,
+			GrossAreaSqft:      params.GrossAreaSqft,
+			BedroomCount:       params.BedroomCount,
+			LivingRoomCount:    params.LivingRoomCount,
+			BathroomCount:      params.BathroomCount,
+			FloorLevel:         strings.TrimSpace(params.FloorLevel),
+			Direction:          strings.TrimSpace(params.Direction),
+			BuildingAge:        strings.TrimSpace(params.BuildingAge),
+			FeatureTags:        featureTags,
+			ContactMethod:      strings.TrimSpace(params.ContactMethod),
+			PublisherRoleLabel: publisherRoleLabel(params.PublisherIdentityType),
+		}
+		if err := tx.Save(&sale).Error; err != nil {
+			return err
+		}
+
+		return s.savePropertyContactAndImages(ctx, tx, listing.ID, params.OwnerUserID, params.Contact, params.ContactMethod, params.Images)
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	return returnPublicID, charge, nil
+}
+
+// 3. upsertServicedApartment creates or updates a serviced apartment aggregate.
 func (s *PropertyService) upsertServicedApartment(ctx context.Context, params UpsertServicedApartmentParams, creating bool) (string, error) {
 	if err := s.validateServicedParams(params); err != nil {
 		return "", err
@@ -153,7 +227,83 @@ func (s *PropertyService) upsertServicedApartment(ctx context.Context, params Up
 	return returnPublicID, nil
 }
 
-// 3. propertyRootInput defines shared root listing input.
+// 4. updateServicedApartmentWithCharge updates a serviced apartment and charges edit points.
+func (s *PropertyService) updateServicedApartmentWithCharge(ctx context.Context, params UpsertServicedApartmentParams) (string, *PointsChargeResponse, error) {
+	if err := s.validateServicedParams(params); err != nil {
+		return "", nil, err
+	}
+
+	communityID, err := s.resolveCommunityID(ctx, params.CommunityID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var returnPublicID string
+	var charge *PointsChargeResponse
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, err := s.preparePropertyRoot(ctx, tx, PropertyChannelServiced, false, propertyRootInput{
+			OwnerUserID:           params.OwnerUserID,
+			ListingPublicID:       params.ListingPublicID,
+			Title:                 params.Title,
+			Summary:               params.Summary,
+			Description:           params.Description,
+			DistrictCode:          params.DistrictCode,
+			CommunityID:           communityID,
+			PublisherIdentityType: params.PublisherIdentityType,
+			BusinessStatus:        params.BusinessStatus,
+		})
+		if err != nil {
+			return err
+		}
+		returnPublicID = listing.PublicID
+
+		if shouldChargeListingEdit(listing) {
+			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelServiced, listing, WalletActionEdit)
+			if err != nil {
+				return err
+			}
+			charge = chargeResult
+		}
+
+		facilityTags, err := marshalJSON(params.FacilityTags)
+		if err != nil {
+			return err
+		}
+		serviceTags, err := marshalJSON(params.ServiceTags)
+		if err != nil {
+			return err
+		}
+		roomTypes, err := marshalJSON(params.RoomTypes)
+		if err != nil {
+			return err
+		}
+
+		serviced := model.ServicedApartmentProject{
+			ListingID:            listing.ID,
+			ProjectName:          strings.TrimSpace(params.ProjectName),
+			AddressText:          strings.TrimSpace(params.AddressText),
+			LowestMonthlyRentHKD: params.LowestMonthlyRentHKD,
+			MinLeaseMonths:       params.MinLeaseMonths,
+			FacilityTags:         facilityTags,
+			ServiceTags:          serviceTags,
+			RoomTypes:            roomTypes,
+			ContactMethod:        strings.TrimSpace(params.ContactMethod),
+			PublisherRoleLabel:   publisherRoleLabel(params.PublisherIdentityType),
+		}
+		if err := tx.Save(&serviced).Error; err != nil {
+			return err
+		}
+
+		return s.savePropertyContactAndImages(ctx, tx, listing.ID, params.OwnerUserID, params.Contact, params.ContactMethod, params.Images)
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	return returnPublicID, charge, nil
+}
+
+// 5. propertyRootInput defines shared root listing input.
 type propertyRootInput struct {
 	OwnerUserID           int64
 	ListingPublicID       string
@@ -166,7 +316,7 @@ type propertyRootInput struct {
 	BusinessStatus        string
 }
 
-// 4. preparePropertyRoot creates or updates the common listing root.
+// 6. preparePropertyRoot creates or updates the common listing root.
 func (s *PropertyService) preparePropertyRoot(ctx context.Context, tx *gorm.DB, channel PropertyChannel, creating bool, input propertyRootInput) (*model.Listing, error) {
 	var listing model.Listing
 	if creating {
@@ -204,7 +354,7 @@ func (s *PropertyService) preparePropertyRoot(ctx context.Context, tx *gorm.DB, 
 	return &listing, nil
 }
 
-// 5. savePropertyContactAndImages saves encrypted contacts and listing images.
+// 7. savePropertyContactAndImages saves encrypted contacts and listing images.
 func (s *PropertyService) savePropertyContactAndImages(ctx context.Context, tx *gorm.DB, listingID int64, ownerUserID int64, contactInput PropertyContactInput, contactMethod string, imageInputs []ListingImageInput) error {
 	contact, err := s.buildPropertyContact(listingID, contactInput, contactMethod)
 	if err != nil {
@@ -229,7 +379,7 @@ func (s *PropertyService) savePropertyContactAndImages(ctx context.Context, tx *
 	return nil
 }
 
-// 6. preserveExistingPropertyContact keeps encrypted contact values when edit payload omits them.
+// 8. preserveExistingPropertyContact keeps encrypted contact values when edit payload omits them.
 func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, tx *gorm.DB, listingID int64, contact *model.ListingContact) {
 	var existing model.ListingContact
 	if err := tx.WithContext(ctx).Where("listing_id = ?", listingID).First(&existing).Error; err != nil {
@@ -249,7 +399,7 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 	}
 }
 
-// 7. validateSaleParams validates sale listing payloads.
+// 9. validateSaleParams validates sale listing payloads.
 func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) error {
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required property fields")
@@ -273,7 +423,7 @@ func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) er
 	return nil
 }
 
-// 8. validateServicedParams validates serviced apartment payloads.
+// 10. validateServicedParams validates serviced apartment payloads.
 func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentParams) error {
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.ProjectName) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required serviced apartment fields")
@@ -297,7 +447,7 @@ func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentP
 	return nil
 }
 
-// 9. basePropertyListQuery builds the channel-specific select query.
+// 11. basePropertyListQuery builds the channel-specific select query.
 func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel PropertyChannel) *gorm.DB {
 	query := s.runtime.DB.WithContext(ctx).Table("listings")
 	if channel == PropertyChannelSale {
@@ -700,8 +850,13 @@ func (s *PropertyService) loadCommunityMap(ctx context.Context, communityIDs []i
 
 // 23. validatePropertyReady ensures listing can be published.
 func (s *PropertyService) validatePropertyReady(ctx context.Context, listingID int64) error {
+	return s.validatePropertyReadyWithTx(ctx, s.runtime.DB, listingID)
+}
+
+// 24. validatePropertyReadyWithTx ensures listing can be published inside a transaction.
+func (s *PropertyService) validatePropertyReadyWithTx(ctx context.Context, tx *gorm.DB, listingID int64) error {
 	var imageCount int64
-	if err := s.runtime.DB.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing images")
 	}
 	if imageCount == 0 {
@@ -709,7 +864,7 @@ func (s *PropertyService) validatePropertyReady(ctx context.Context, listingID i
 	}
 
 	var contact model.ListingContact
-	if err := s.runtime.DB.WithContext(ctx).Where("listing_id = ?", listingID).First(&contact).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("listing_id = ?", listingID).First(&contact).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing contacts")
 	}
 	if !contact.ShowPhone && !contact.ShowWhatsApp && !contact.ShowChat {
@@ -719,7 +874,7 @@ func (s *PropertyService) validatePropertyReady(ctx context.Context, listingID i
 	return nil
 }
 
-// 24. decodeStringSliceBytes decodes JSON bytes into string slice.
+// 25. decodeStringSliceBytes decodes JSON bytes into string slice.
 func decodeStringSliceBytes(value []byte) []string {
 	if len(value) == 0 {
 		return []string{}
@@ -733,7 +888,7 @@ func decodeStringSliceBytes(value []byte) []string {
 	return result
 }
 
-// 25. decodeRoomTypeBytes decodes JSON bytes into room type slice.
+// 26. decodeRoomTypeBytes decodes JSON bytes into room type slice.
 func decodeRoomTypeBytes(value []byte) []ServicedApartmentRoomTypeInput {
 	if len(value) == 0 {
 		return []ServicedApartmentRoomTypeInput{}
@@ -747,7 +902,7 @@ func decodeRoomTypeBytes(value []byte) []ServicedApartmentRoomTypeInput {
 	return result
 }
 
-// 26. formatOptionalTime formats a time pointer as RFC3339.
+// 27. formatOptionalTime formats a time pointer as RFC3339.
 func formatOptionalTime(value *time.Time) *string {
 	if value == nil {
 		return nil
@@ -757,7 +912,7 @@ func formatOptionalTime(value *time.Time) *string {
 	return &formatted
 }
 
-// 27. propertyChannelTTL returns listing validity duration.
+// 28. propertyChannelTTL returns listing validity duration.
 func propertyChannelTTL(channel PropertyChannel) time.Duration {
 	if channel == PropertyChannelServiced {
 		return servicedApartmentTTL
@@ -766,7 +921,7 @@ func propertyChannelTTL(channel PropertyChannel) time.Duration {
 	return propertySaleTTL
 }
 
-// 28. propertyPriceColumn returns sortable price column.
+// 29. propertyPriceColumn returns sortable price column.
 func propertyPriceColumn(channel PropertyChannel) string {
 	if channel == PropertyChannelServiced {
 		return "serviced_apartment_projects.lowest_monthly_rent_hkd"
@@ -775,7 +930,7 @@ func propertyPriceColumn(channel PropertyChannel) string {
 	return "property_sale_listings.asking_price_hkd"
 }
 
-// 29. fallbackPropertyPublisherIdentity returns a stable identity.
+// 30. fallbackPropertyPublisherIdentity returns a stable identity.
 func fallbackPropertyPublisherIdentity(identity string) string {
 	if strings.TrimSpace(identity) == "" {
 		return "owner"
@@ -784,7 +939,7 @@ func fallbackPropertyPublisherIdentity(identity string) string {
 	return strings.TrimSpace(identity)
 }
 
-// 30. publisherRoleLabel returns display label for owner type.
+// 31. publisherRoleLabel returns display label for owner type.
 func publisherRoleLabel(identity string) string {
 	switch strings.TrimSpace(identity) {
 	case "agent", "professional_seller":
@@ -794,7 +949,7 @@ func publisherRoleLabel(identity string) string {
 	}
 }
 
-// 31. isAllowedPropertyValue validates enum-like input.
+// 32. isAllowedPropertyValue validates enum-like input.
 func isAllowedPropertyValue(value string, allowedValues []string) bool {
 	normalizedValue := strings.TrimSpace(value)
 	for _, allowedValue := range allowedValues {
@@ -806,12 +961,12 @@ func isAllowedPropertyValue(value string, allowedValues []string) bool {
 	return false
 }
 
-// 32. isAllowedPropertyDistrict validates district input with existing marketplace set.
+// 33. isAllowedPropertyDistrict validates district input with existing marketplace set.
 func isAllowedPropertyDistrict(value string) bool {
 	return isAllowedSecondhandDistrict(value)
 }
 
-// 33. buildPropertyWhatsAppURL creates a prefilled WhatsApp deep link.
+// 34. buildPropertyWhatsAppURL creates a prefilled WhatsApp deep link.
 func buildPropertyWhatsAppURL(phone string, title string, listingPublicID string, baseURL string, channel PropertyChannel) string {
 	digits := strings.NewReplacer("+", "", " ", "", "-", "", "(", "", ")", "").Replace(phone)
 	pathPrefix := "/properties/"

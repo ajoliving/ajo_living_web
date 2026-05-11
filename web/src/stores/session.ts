@@ -1,12 +1,13 @@
 /*
  * 會員登入狀態。
  * 1. 保存真實登入 token 與當前會員資料。
- * 2. 提供手機 OTP、郵箱 OTP、當前會員查詢與登出流程。
+ * 2. 提供手機 OTP、郵箱 OTP、郵箱密碼、手機密碼、當前會員查詢與登出流程。
  */
 import { defineStore } from 'pinia';
 
 import {
   loginWithEmail,
+  loginWithPhone,
   logout,
   registerWithEmail,
   requestEmailOtp,
@@ -14,20 +15,15 @@ import {
   verifyEmailOtp,
   verifyOtp,
 } from '@/httpapis/auth';
+import {
+  clearStoredTokens,
+  readStoredAccessToken,
+  readStoredRefreshToken,
+  writeStoredTokens,
+} from '@/httpapis/auth-session';
 import { fetchMe } from '@/httpapis/me';
 import type { RequestOtpResult, VerifyOtpResult } from '@/model/auth';
 import type { CurrentMemberProfile, SessionUserView } from '@/model/user';
-
-const ACCESS_TOKEN_STORAGE_KEY = 'ajoliving.access-token';
-const REFRESH_TOKEN_STORAGE_KEY = 'ajoliving.refresh-token';
-
-const getStoredValue = (key: string) => {
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  return window.localStorage.getItem(key) ?? '';
-};
 
 const buildSessionUser = (member: CurrentMemberProfile | null): SessionUserView => ({
   public_id: member?.public_id ?? '',
@@ -47,14 +43,15 @@ const buildSessionUser = (member: CurrentMemberProfile | null): SessionUserView 
   permissions: member?.permissions ?? [],
   member_type: member?.member_type ?? '',
   is_staff: member?.is_staff ?? false,
+  ajo_balance: member?.ajo_balance ?? 0,
 });
 
 // 1. 建立會員登入狀態 Store
 export const useSessionStore = defineStore('session', {
   state: () => ({
     me: null as CurrentMemberProfile | null,
-    accessToken: getStoredValue(ACCESS_TOKEN_STORAGE_KEY),
-    refreshToken: getStoredValue(REFRESH_TOKEN_STORAGE_KEY),
+    accessToken: readStoredAccessToken(),
+    refreshToken: readStoredRefreshToken(),
     isHydrating: false,
     isLoaded: false,
   }),
@@ -69,11 +66,7 @@ export const useSessionStore = defineStore('session', {
     setTokens(accessToken: string, refreshToken: string) {
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
-        window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-      }
+      writeStoredTokens(accessToken, refreshToken);
     },
 
     // 5. 清除登入狀態
@@ -81,11 +74,7 @@ export const useSessionStore = defineStore('session', {
       this.me = null;
       this.accessToken = '';
       this.refreshToken = '';
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-        window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-      }
+      clearStoredTokens();
     },
 
     // 6. 啟動時還原登入狀態
@@ -191,12 +180,12 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 12. 註冊郵箱密碼帳戶
-    async registerEmailAccount(email: string, password: string, displayName: string): Promise<VerifyOtpResult> {
-      const { data } = await registerWithEmail({
-        email,
+    // 12. 使用手機密碼登入
+    async signInWithPhone(phoneCountryCode: string, phoneNumber: string, password: string): Promise<VerifyOtpResult> {
+      const { data } = await loginWithPhone({
+        phone_country_code: phoneCountryCode,
+        phone_number: phoneNumber,
         password,
-        display_name: displayName,
       });
       this.setTokens(data.data.access_token, data.data.refresh_token);
 
@@ -210,14 +199,41 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 13. 讀取目前會員資料
+    // 13. 註冊郵箱與手機密碼帳戶
+    async registerEmailAccount(
+      email: string,
+      password: string,
+      displayName: string,
+      phoneCountryCode: string,
+      phoneNumber: string,
+    ): Promise<VerifyOtpResult> {
+      const { data } = await registerWithEmail({
+        email,
+        password,
+        display_name: displayName,
+        phone_country_code: phoneCountryCode,
+        phone_number: phoneNumber,
+      });
+      this.setTokens(data.data.access_token, data.data.refresh_token);
+
+      try {
+        await this.loadCurrentUser();
+      } catch (error) {
+        this.clearSession();
+        throw error;
+      }
+
+      return data.data;
+    },
+
+    // 14. 讀取目前會員資料
     async loadCurrentUser() {
       const { data } = await fetchMe();
       this.me = data.data;
       return data.data;
     },
 
-    // 14. 執行登出
+    // 15. 執行登出
     async signOut() {
       try {
         if (this.accessToken) {

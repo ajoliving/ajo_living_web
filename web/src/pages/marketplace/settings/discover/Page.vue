@@ -1,7 +1,7 @@
 <!--
- * 二手交易設定頁。
- * 1. 使用左側設定導航切換發布通知與發現設定。
- * 2. 管理全部帖子狀態、發現頁大推與分類輪播廣告位。
+ * 二手交易發現設定頁。
+ * 1. 管理全部帖子狀態。
+ * 2. 管理發現頁大推與分類輪播廣告位。
 -->
 <script setup lang="ts">
 import AppGlassSelect from '@/shared/components/base/AppGlassSelect.vue';
@@ -9,10 +9,9 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import AppUnsavedChangesDialog from '@/shared/components/base/AppUnsavedChangesDialog.vue';
 import ListingStatusBadge from '@/shared/components/marketplace/ListingStatusBadge.vue';
 
-import { useMarketplaceSettingsPage } from './settings';
+import { useMarketplaceSettingsPage } from './discover';
 
 const {
-  activeSection,
   assignSelectedToSlot,
   categoryCode,
   categoryOptions,
@@ -30,14 +29,8 @@ const {
   loadListings,
   markSold,
   marketplaceCategories,
-  noticeActionLabel,
-  noticeActionURL,
-  noticeBody,
-  noticeTitle,
   placementsLoading,
   preferenceStore,
-  publishNotice,
-  publishingNotice,
   resolveListingCategoryLabel,
   resolveListingCommunityName,
   resolveListingCoverImage,
@@ -51,8 +44,6 @@ const {
   selectListing,
   selectedCategoryForSlots,
   selectedListingId,
-  setActiveSection,
-  settingsNavItems,
   status,
   statusOptions,
   t,
@@ -61,108 +52,34 @@ const {
 </script>
 
 <template>
-  <main class="settings-page">
-    <aside class="settings-sidebar">
+  <section class="settings-page">
+    <header class="settings-local-header">
       <div>
-        <h1>{{ t('marketplace.settings.title') }}</h1>
+        <p class="settings-kicker">
+          {{ t('marketplace.settings.discoverSection') }}
+        </p>
+        <h1>{{ t('marketplace.settings.discoverPlacements') }}</h1>
         <p class="settings-description">
-          {{ t('marketplace.settings.description') }}
+          {{ t('marketplace.settings.discoverDescription') }}
         </p>
       </div>
 
-      <nav class="settings-side-nav">
-        <button
-          v-for="item in settingsNavItems"
-          :key="item.key"
-          type="button"
-          class="settings-side-nav-item"
-          :class="activeSection === item.key ? 'settings-side-nav-item-active' : ''"
-          @click="setActiveSection(item.key)"
-        >
-          <AppIcon
-            :name="item.icon"
-            :size="17"
-          />
-          <span>{{ item.label }}</span>
-        </button>
-      </nav>
-    </aside>
+      <button
+        type="button"
+        class="settings-primary-button"
+        :disabled="savingPlacements"
+        @click="savePlacements"
+      >
+        <AppIcon
+          name="check-circle"
+          :size="17"
+        />
+        <span>{{ savingPlacements ? t('marketplace.settings.saving') : t('marketplace.settings.savePlacements') }}</span>
+      </button>
+    </header>
 
     <section class="settings-content">
-      <section
-        v-if="activeSection === 'notice'"
-        class="settings-panel"
-      >
-        <div class="settings-panel-header">
-          <div>
-            <h2>{{ t('marketplace.settings.noticePublisherTitle') }}</h2>
-            <p>{{ t('marketplace.settings.noticePublisherDescription') }}</p>
-          </div>
-        </div>
-
-        <div class="settings-notice-form">
-          <label class="settings-field">
-            <span>{{ t('marketplace.settings.noticeTitleField') }}</span>
-            <input
-              v-model="noticeTitle"
-              type="text"
-              maxlength="120"
-              :placeholder="t('marketplace.settings.noticeTitlePlaceholder')"
-            />
-          </label>
-
-          <label class="settings-field">
-            <span>{{ t('marketplace.settings.noticeBodyField') }}</span>
-            <textarea
-              v-model="noticeBody"
-              maxlength="1000"
-              rows="5"
-              :placeholder="t('marketplace.settings.noticeBodyPlaceholder')"
-            />
-          </label>
-
-          <div class="settings-notice-actions">
-            <label class="settings-field">
-              <span>{{ t('marketplace.settings.noticeActionLabelField') }}</span>
-              <input
-                v-model="noticeActionLabel"
-                type="text"
-                maxlength="80"
-                :placeholder="t('marketplace.settings.noticeActionLabelPlaceholder')"
-              />
-            </label>
-            <label class="settings-field">
-              <span>{{ t('marketplace.settings.noticeActionURLField') }}</span>
-              <input
-                v-model="noticeActionURL"
-                type="text"
-                maxlength="500"
-                :placeholder="t('marketplace.settings.noticeActionURLPlaceholder')"
-              />
-            </label>
-          </div>
-
-          <div class="settings-notice-footer">
-            <button
-              type="button"
-              class="settings-primary-button"
-              :disabled="publishingNotice"
-              @click="publishNotice"
-            >
-              <AppIcon
-                name="send"
-                :size="16"
-              />
-              <span>{{ publishingNotice ? t('marketplace.settings.noticePublishing') : t('marketplace.settings.noticePublishAction') }}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section
-        v-else
-        class="settings-discover"
-      >
+      <section class="settings-discover">
         <div class="settings-section-header">
           <div>
             <p class="settings-kicker">
@@ -170,18 +87,6 @@ const {
             </p>
             <h2>{{ t('marketplace.settings.discoverPlacements') }}</h2>
           </div>
-          <button
-            type="button"
-            class="settings-primary-button"
-            :disabled="savingPlacements"
-            @click="savePlacements"
-          >
-            <AppIcon
-              name="check-circle"
-              :size="17"
-            />
-            <span>{{ savingPlacements ? t('marketplace.settings.saving') : t('marketplace.settings.savePlacements') }}</span>
-          </button>
         </div>
 
         <div class="settings-grid">
@@ -457,7 +362,7 @@ const {
       @discard="handleLeavePromptDecision('discard')"
       @stay="handleLeavePromptDecision('stay')"
     />
-  </main>
+  </section>
 </template>
 
 <style scoped>
@@ -467,36 +372,23 @@ const {
   max-width: var(--layout-page-max-width);
   gap: 1.25rem;
   margin: 0 auto;
-  padding: 1rem var(--layout-page-padding-inline) 5rem;
-  color: #1a1c1b;
+  padding: 0;
+  color: rgb(var(--color-text));
 }
 
-.settings-sidebar {
+.settings-local-header {
   --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
   --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
   --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
-  display: grid;
-  align-content: start;
-  gap: 1.5rem;
-  border: 1px solid rgb(var(--color-border) / 0.3);
-  border-radius: 0.75rem;
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.76),
-      rgb(var(--color-toolbar-surface) / 0.64)
-    );
-  box-shadow:
-    0 16px 40px rgb(15 23 42 / 0.1),
-    inset 0 -1px 0 rgb(255 255 255 / 0.06);
-  padding: 1rem;
-  backdrop-filter: blur(28px) saturate(184%);
-  -webkit-backdrop-filter: blur(28px) saturate(184%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .settings-kicker {
   margin: 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -504,9 +396,9 @@ const {
   text-transform: uppercase;
 }
 
-.settings-sidebar h1 {
+.settings-local-header h1 {
   margin: 0.75rem 0 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 500;
@@ -515,13 +407,14 @@ const {
 
 .settings-description {
   margin: 0.65rem 0 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   line-height: 1.7;
 }
 
 .settings-side-nav {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -529,7 +422,6 @@ const {
   position: relative;
   display: inline-flex;
   min-height: 2.75rem;
-  width: 100%;
   align-items: center;
   gap: 0.65rem;
   border: 1px solid rgb(var(--color-border) / 0.24);
@@ -614,7 +506,7 @@ const {
 
 .settings-section-header h2 {
   margin-top: 0.35rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: clamp(1.5rem, 2vw, 2.25rem);
   font-weight: 650;
@@ -629,9 +521,9 @@ const {
 }
 
 .settings-panel {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #fbfbf8;
+  background: rgb(var(--color-surface-raised));
 }
 
 .settings-listings-panel {
@@ -648,20 +540,20 @@ const {
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .settings-panel-header h2,
 .settings-slot-section-header h3 {
   font-size: 1rem;
   font-weight: 700;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .settings-panel-header p {
   margin-top: 0.2rem;
   font-size: 0.82rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
 }
 
 .settings-notice-form,
@@ -672,7 +564,7 @@ const {
 }
 
 .settings-filters {
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .settings-notice-actions,
@@ -693,7 +585,7 @@ const {
 }
 
 .settings-field span {
-  color: #545a58;
+  color: rgb(var(--color-text-muted));
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -702,10 +594,10 @@ const {
 .settings-field textarea,
 .settings-search {
   width: 100%;
-  border: 1px solid #d2d5d1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #fff;
-  color: #1a1c1b;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
   font-size: 0.92rem;
   outline: 0;
 }
@@ -726,7 +618,7 @@ const {
   gap: 0.55rem;
   min-height: 2.75rem;
   padding: 0 0.75rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
 }
 
 .settings-search input {
@@ -742,10 +634,10 @@ const {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid #1a1c1b;
+  border: 1px solid rgb(var(--color-text));
   border-radius: 8px;
-  color: #1a1c1b;
-  background: #fff;
+  color: rgb(var(--color-text));
+  background: rgb(var(--color-surface));
   font-size: 0.9rem;
   font-weight: 700;
   transition:
@@ -757,8 +649,8 @@ const {
 .settings-primary-button {
   min-height: 2.75rem;
   padding: 0 1rem;
-  background: #1a1c1b;
-  color: #fff;
+  background: rgb(var(--color-text));
+  color: rgb(var(--color-surface));
 }
 
 .settings-secondary-button {
@@ -786,13 +678,13 @@ const {
 .settings-secondary-button:hover,
 .settings-icon-button:hover,
 .settings-mini-button:not(:disabled):hover {
-  background: #1a1c1b;
-  color: #fff;
+  background: rgb(var(--color-text));
+  color: rgb(var(--color-surface));
 }
 
 .settings-empty {
   padding: 1rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.9rem;
 }
 
@@ -808,9 +700,9 @@ const {
   display: grid;
   grid-template-columns: 5.5rem minmax(0, 1fr);
   gap: 0.85rem;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 0.75rem;
   cursor: pointer;
   transition:
@@ -819,7 +711,7 @@ const {
 }
 
 .settings-listing-card-active {
-  border-color: #1a1c1b;
+  border-color: rgb(var(--color-text));
   box-shadow: 0 12px 34px rgb(26 28 27 / 0.1);
 }
 
@@ -827,8 +719,8 @@ const {
 .settings-slot-media {
   overflow: hidden;
   border-radius: 8px;
-  background: #e2e3e1;
-  color: #717878;
+  background: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
 }
 
 .settings-listing-media {
@@ -848,7 +740,7 @@ const {
 .settings-listing-price {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .settings-listing-title,
@@ -858,7 +750,7 @@ const {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   font-weight: 700;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   line-height: 1.35;
 }
 
@@ -869,7 +761,7 @@ const {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   margin-top: 0.25rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.82rem;
   line-height: 1.55;
 }
@@ -879,7 +771,7 @@ const {
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-top: 0.65rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.76rem;
 }
 
@@ -902,9 +794,9 @@ const {
 }
 
 .settings-slot-section {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .settings-category-select {
@@ -926,7 +818,7 @@ const {
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr);
   gap: 0.85rem;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   padding: 0.75rem;
 }
@@ -943,21 +835,9 @@ const {
 
 .settings-slot-label {
   margin-top: 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.76rem;
   font-weight: 700;
-}
-
-@media (min-width: 1024px) {
-  .settings-page {
-    grid-template-columns: 15.75rem minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .settings-sidebar {
-    position: sticky;
-    top: calc(var(--app-header-offset, 0rem) + 2rem);
-  }
 }
 
 @media (max-width: 1100px) {
@@ -977,10 +857,11 @@ const {
 
 @media (max-width: 767px) {
   .settings-page {
-    padding: 1rem var(--layout-page-padding-inline) 4rem;
+    padding: 0;
   }
 
   .settings-section-header,
+  .settings-local-header,
   .settings-panel-header,
   .settings-slot-section-header {
     align-items: stretch;

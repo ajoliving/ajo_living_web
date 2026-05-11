@@ -166,13 +166,16 @@ type UserPreviewResponse struct {
 // 15. SecondhandListingDetail defines detail payload.
 type SecondhandListingDetail struct {
 	SecondhandListingSummary
-	Description        string                 `json:"description"`
-	DimensionText      string                 `json:"dimension_text"`
-	PickupRegionCode   string                 `json:"pickup_region_code"`
-	PickupLocationText string                 `json:"pickup_location_text"`
-	DeliveryTags       []string               `json:"delivery_tags"`
-	Images             []ListingImageResponse `json:"images"`
-	ContactSummary     ListingContactSummary  `json:"contact_summary"`
+	Description         string                 `json:"description"`
+	DimensionText       string                 `json:"dimension_text"`
+	PickupRegionCode    string                 `json:"pickup_region_code"`
+	PickupLocationText  string                 `json:"pickup_location_text"`
+	DeliveryTags        []string               `json:"delivery_tags"`
+	Images              []ListingImageResponse `json:"images"`
+	ContactSummary      ListingContactSummary  `json:"contact_summary"`
+	PointsCharged       int64                  `json:"points_charged,omitempty"`
+	PointsBalanceAfter  *int64                 `json:"points_balance_after,omitempty"`
+	PointsTransactionID string                 `json:"points_transaction_id,omitempty"`
 }
 
 // 16. ContactAccessResult defines contact access payload.

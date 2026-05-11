@@ -7,6 +7,8 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
+import { useSessionStore } from '@/stores/session';
+
 interface HeaderSubnavItem {
   key: string;
   label: string;
@@ -19,14 +21,13 @@ interface HeaderSubnavItem {
 export const useHeaderSubnav = () => {
   const route = useRoute();
   const { t } = useI18n();
+  const sessionStore = useSessionStore();
 
   const subnavItems = computed<HeaderSubnavItem[]>(() => {
     if (route.path.startsWith('/marketplace')) {
       return [
         { key: 'marketplace-discover', label: t('nav.discover'), to: '/marketplace/discover', match: ['/marketplace/discover'] },
         { key: 'marketplace-filter', label: t('nav.filter'), to: '/marketplace/filter', match: ['/marketplace/filter'] },
-        { key: 'marketplace-my', label: t('nav.my'), to: '/marketplace/my', match: ['/marketplace/my', '/marketplace/my-listings', '/marketplace/publish', '/marketplace/chat'] },
-        { key: 'marketplace-settings', label: t('nav.settings'), to: '/marketplace/settings', match: ['/marketplace/settings'] },
       ];
     }
 
@@ -47,9 +48,32 @@ export const useHeaderSubnav = () => {
     }
 
     if (route.path.startsWith('/account')) {
-      return [
+      const accountItems: HeaderSubnavItem[] = [
         { key: 'account-profile', label: t('nav.accountProfile'), to: '/account/profile', match: ['/account/profile'] },
+        {
+          key: 'account-marketplace-my',
+          label: t('nav.marketplaceMy'),
+          to: '/account/marketplace/my',
+          match: ['/account/marketplace/my'],
+        },
       ];
+
+      if (sessionStore.currentUser.is_staff) {
+        accountItems.push({
+          key: 'account-marketplace-settings',
+          label: t('nav.marketplaceSettings'),
+          to: '/account/marketplace/settings',
+          match: ['/account/marketplace/settings'],
+        });
+        accountItems.push({
+          key: 'account-marketplace-management',
+          label: t('nav.marketplaceManagement'),
+          to: '/account/marketplace/management',
+          match: ['/account/marketplace/management'],
+        });
+      }
+
+      return accountItems;
     }
 
     return [];

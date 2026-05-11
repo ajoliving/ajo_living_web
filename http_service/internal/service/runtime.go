@@ -24,6 +24,7 @@ type Runtime struct {
 	MailSender      MailSender
 	StorageProvider StorageProvider
 	OTPStore        *OTPStore
+	WalletService   *WalletService
 	Now             func() time.Time
 }
 

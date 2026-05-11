@@ -1,54 +1,38 @@
 <!--
- * 會員中心布局頁。
- * 1. 提供會員中心側欄與內容區雙欄布局。
- * 2. 承載會員中心各子頁的 RouterView。
+ * 會員中心外框頁。
+ * 1. 承載會員中心頂部子導航下的各子頁。
+ * 2. 保持帳戶模組全寬內容容器。
 -->
 <script setup lang="ts">
 import { RouterView } from 'vue-router';
-
-import AccountSidebar from './widgets/AccountSidebar.vue';
 </script>
 
 <template>
   <main class="account-my-page">
-    <AccountSidebar />
-    <section class="account-my-content">
-      <RouterView />
-    </section>
+    <RouterView v-slot="{ Component }">
+      <Transition
+        name="subroute-slide"
+        mode="out-in"
+      >
+        <component
+          :is="Component"
+          class="subroute-transition-shell"
+        />
+      </Transition>
+    </RouterView>
   </main>
 </template>
 
 <style scoped>
 .account-my-page {
-  display: flex;
   width: 100%;
-  max-width: var(--layout-page-max-width);
   min-height: calc(100vh - var(--app-header-offset, 0rem));
-  gap: 3rem;
-  margin: 0 auto;
-  padding: 4rem var(--layout-page-padding-inline);
-  color: #1a1c1b;
-  overflow: visible;
-}
-
-.account-my-content {
-  min-width: 0;
-  flex: 1;
-  overflow: visible;
+  color: rgb(var(--color-text));
 }
 
 @media (max-width: 767px) {
   .account-my-page {
-    height: auto;
     min-height: calc(100vh - var(--app-header-offset, 0rem));
-    flex-direction: column;
-    gap: 2rem;
-    overflow: visible;
-    padding: 2.5rem var(--layout-page-padding-inline);
-  }
-
-  .account-my-content {
-    overflow: visible;
   }
 }
 </style>

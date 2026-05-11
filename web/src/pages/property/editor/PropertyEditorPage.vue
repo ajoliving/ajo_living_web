@@ -46,6 +46,7 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
+import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
 
 const props = defineProps<{
   channel: PropertyChannel;
@@ -179,6 +180,14 @@ const canSave = computed(() =>
 );
 const previewPrice = computed(() =>
   formatPrice(isSale.value ? form.askingPriceHKD : form.lowestMonthlyRentHKD, preferenceStore.locale),
+);
+const chargeCost = computed(() =>
+  resolveWalletChargeCost(isSale.value ? 'property_sale' : 'serviced_apartment'),
+);
+const formatPoints = (value: number): string =>
+  formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+const chargeHint = computed(() =>
+  `${t('property.editor.chargeHint')} ${formatPoints(chargeCost.value)} · ${t('property.editor.walletBalance')} ${formatPoints(sessionStore.me?.ajo_balance ?? 0)}`,
 );
 
 // 1. 讀取錯誤訊息
@@ -513,6 +522,7 @@ const saveDraft = async (): Promise<string> => {
     } else {
       await updateServicedApartment(listingId.value, buildServicedPayload());
     }
+    await sessionStore.loadCurrentUser();
 
     feedbackStore.pushToast(t('property.editor.saveSuccess'), 'success');
     return listingId.value;
@@ -543,6 +553,7 @@ const saveAndPublish = async (): Promise<void> => {
     } else {
       await publishServicedApartment(savedListingId);
     }
+    await sessionStore.loadCurrentUser();
 
     feedbackStore.pushToast(t('property.editor.publishSuccess'), 'success');
     await router.push(myPath.value);
@@ -930,6 +941,9 @@ onBeforeUnmount(() => {
           <h2>{{ form.title || pageTitle }}</h2>
           <p>{{ form.summary }}</p>
           <strong>{{ previewPrice }}</strong>
+          <p class="property-editor-charge">
+            {{ chargeHint }}
+          </p>
           <button
             type="button"
             class="property-editor-action property-editor-action--secondary"
@@ -1020,6 +1034,13 @@ onBeforeUnmount(() => {
   margin: 1rem 0;
   font-family: var(--font-display);
   font-size: 1.8rem;
+}
+
+.property-editor-charge {
+  margin: 0 0 1rem;
+  color: rgb(var(--color-text));
+  font-size: 0.85rem;
+  font-weight: 900;
 }
 
 .property-editor-grid {
@@ -1138,7 +1159,7 @@ onBeforeUnmount(() => {
 .property-editor-action--primary {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: #fff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .property-editor-action--secondary {

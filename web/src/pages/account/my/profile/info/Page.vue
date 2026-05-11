@@ -10,7 +10,7 @@ import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
 import BaseButton from '@/shared/components/base/BaseButton.vue';
 import BaseInput from '@/shared/components/base/BaseInput.vue';
 
-import { useAccountProfilePage } from './profile';
+import { useAccountProfilePage } from '../profile';
 
 const {
   accountRows,
@@ -268,7 +268,7 @@ const {
   display: grid;
   min-height: 100%;
   gap: 1.25rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .account-profile-header {
@@ -276,7 +276,7 @@ const {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
   padding-bottom: 1rem;
 }
 
@@ -294,7 +294,7 @@ const {
 
 .account-profile-header__text p {
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 500;
@@ -305,7 +305,7 @@ const {
 .account-profile-header__text span {
   display: block;
   margin-top: 0.2rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.45;
@@ -319,19 +319,19 @@ const {
 }
 
 .account-profile-loading {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0.9rem 1rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 700;
 }
 
 .account-profile-panel {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
@@ -339,20 +339,20 @@ const {
   display: inline-flex;
   min-height: 2rem;
   align-items: center;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
   padding: 0.45rem 0.8rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
 }
 
 .account-profile-status--ready {
-  border-color: #002727;
-  background: #002727;
-  color: #ffffff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .account-profile-grid {
@@ -366,13 +366,13 @@ const {
 }
 
 .account-profile-section + .account-profile-section {
-  border-left: 1px solid #e2e3e1;
+  border-left: 1px solid rgb(var(--color-border));
 }
 
 .account-profile-section h2,
 .account-profile-permissions h2 {
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-size: 0.8125rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -390,12 +390,12 @@ const {
   grid-template-columns: minmax(7.5rem, 0.42fr) minmax(0, 1fr);
   gap: 0.9rem;
   align-items: start;
-  border-top: 1px solid #edf0ed;
+  border-top: 1px solid rgb(var(--color-border) / 0.72);
   padding: 0.72rem 0;
 }
 
 .account-profile-row dt {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -406,7 +406,7 @@ const {
 .account-profile-row dd {
   min-width: 0;
   margin: 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.45;
@@ -416,7 +416,7 @@ const {
 .account-profile-permissions {
   display: grid;
   gap: 0.9rem;
-  border-top: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
   padding: 1.25rem;
 }
 
@@ -434,7 +434,7 @@ const {
   justify-content: center;
   border-radius: 9999px;
   background: rgb(0 39 39 / 0.07);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .account-profile-chip-group {
@@ -447,20 +447,20 @@ const {
   display: inline-flex;
   min-height: 2rem;
   align-items: center;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0.45rem 0.8rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
 }
 
 .account-profile-chip--role {
-  border-color: #002727;
-  background: #002727;
-  color: #ffffff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .account-profile-modal {
@@ -475,9 +475,9 @@ const {
 
 .account-profile-dialog {
   width: min(100%, 36rem);
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 24px 70px rgb(0 0 0 / 0.2);
 }
 
@@ -486,13 +486,13 @@ const {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
   padding: 1.25rem;
 }
 
 .account-profile-kicker {
   margin: 0 0 0.45rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -502,7 +502,7 @@ const {
 
 .account-profile-dialog__header h2 {
   margin: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 500;
@@ -515,18 +515,18 @@ const {
   width: 2.25rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #ffffff;
-  color: #002727;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-primary));
   transition:
     border-color 0.2s ease,
     background-color 0.2s ease;
 }
 
 .account-profile-dialog__close:hover {
-  border-color: #002727;
-  background: #f4f4f2;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-surface-muted));
 }
 
 .account-avatar-editor {
@@ -534,7 +534,7 @@ const {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  border-bottom: 1px solid #e2e3e1;
+  border-bottom: 1px solid rgb(var(--color-border));
   padding: 1.25rem;
 }
 
@@ -545,7 +545,7 @@ const {
 .account-avatar-editor__copy span,
 .account-profile-field span,
 .account-profile-dialog__readonly span {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -555,7 +555,7 @@ const {
 
 .account-avatar-editor__copy p {
   margin: 0.45rem 0 0;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.8125rem;
   line-height: 1.55;
 }
@@ -567,11 +567,11 @@ const {
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  border: 1px solid #002727;
+  border: 1px solid rgb(var(--color-primary));
   border-radius: 9999px;
-  background: #002727;
+  background: rgb(var(--color-primary));
   padding: 0.625rem 1rem;
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
   font-size: 0.8125rem;
   font-weight: 800;
   line-height: 1;
@@ -581,7 +581,7 @@ const {
 }
 
 .account-avatar-upload-button:hover {
-  background: #1a1c1b;
+  background: rgb(var(--color-text));
   transform: translateY(-1px);
 }
 
@@ -610,8 +610,8 @@ const {
 .account-profile-dialog__readonly {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  border-top: 1px solid #e2e3e1;
-  border-bottom: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .account-profile-dialog__readonly div {
@@ -622,12 +622,12 @@ const {
 }
 
 .account-profile-dialog__readonly div + div {
-  border-left: 1px solid #e2e3e1;
+  border-left: 1px solid rgb(var(--color-border));
 }
 
 .account-profile-dialog__readonly strong {
   min-width: 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.45;
@@ -665,7 +665,7 @@ const {
   .account-profile-section + .account-profile-section,
   .account-profile-dialog__readonly div + div {
     border-left: 0;
-    border-top: 1px solid #e2e3e1;
+    border-top: 1px solid rgb(var(--color-border));
   }
 
   .account-profile-status {

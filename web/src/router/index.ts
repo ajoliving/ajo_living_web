@@ -32,7 +32,7 @@ const router = createRouter({
 });
 
 // 2. 集中處理需登入頁面的導航守衛
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const sessionStore = useSessionStore(pinia);
 
   if (to.meta.requiresAuth && !sessionStore.isAuthenticated) {
@@ -40,6 +40,24 @@ router.beforeEach((to) => {
       path: '/login',
       query: { redirect: to.fullPath },
     };
+  }
+
+  if (to.meta.requiresAuth && sessionStore.isAuthenticated && !sessionStore.me) {
+    try {
+      await sessionStore.loadCurrentUser();
+    } catch {
+      sessionStore.clearSession();
+      return {
+        path: '/login',
+        query: { redirect: to.fullPath },
+      };
+    }
+  }
+
+  if (to.meta.requiresStaff) {
+    if (!sessionStore.currentUser.is_staff) {
+      return { path: '/account/profile' };
+    }
   }
 
   return true;

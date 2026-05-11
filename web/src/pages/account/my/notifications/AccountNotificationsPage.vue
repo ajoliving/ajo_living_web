@@ -14,7 +14,7 @@ const { t } = useI18n();
 // 1. 導向系統通知會話
 onMounted(() => {
   void router.replace({
-    path: '/marketplace/my/chat',
+    path: '/account/marketplace/my/chat',
     query: { target: 'system_notice' },
   });
 });

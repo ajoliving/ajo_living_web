@@ -94,6 +94,9 @@ export interface PropertyListingDetailResponse extends PropertyListingSummaryRes
   description: string;
   images: ListingImageResponse[];
   contact_summary: ListingContactSummary;
+  points_charged?: number;
+  points_balance_after?: number | null;
+  points_transaction_id?: string;
 }
 
 // 8. 定義共用聯絡輸入

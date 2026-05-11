@@ -18,6 +18,7 @@ import (
 
 const (
 	defaultAdminEmail       = "admin@admin.com"
+	defaultAdminSecondEmail = "admin@admin.cn"
 	defaultAdminPassword    = "admin123"
 	defaultAdminDisplayName = "Admin"
 )
@@ -25,21 +26,23 @@ const (
 // 1. SeedDefaultAdminAccount upserts the default local admin account.
 func SeedDefaultAdminAccount(ctx context.Context, db *gorm.DB) error {
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		user, err := upsertDefaultAdminUser(tx)
-		if err != nil {
-			return err
-		}
+		for _, email := range []string{defaultAdminEmail, defaultAdminSecondEmail} {
+			user, err := upsertDefaultAdminUser(tx, email)
+			if err != nil {
+				return err
+			}
 
-		if err := upsertDefaultAdminCredential(tx, user.ID); err != nil {
-			return err
-		}
+			if err := upsertDefaultAdminCredential(tx, user.ID, email); err != nil {
+				return err
+			}
 
-		if err := upsertDefaultAdminProfile(tx, user.ID); err != nil {
-			return err
-		}
+			if err := upsertDefaultAdminProfile(tx, user.ID); err != nil {
+				return err
+			}
 
-		if err := upsertDefaultAdminRole(tx, user.ID); err != nil {
-			return err
+			if err := upsertDefaultAdminRole(tx, user.ID); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -47,9 +50,9 @@ func SeedDefaultAdminAccount(ctx context.Context, db *gorm.DB) error {
 }
 
 // 2. upsertDefaultAdminUser creates or promotes the default admin user.
-func upsertDefaultAdminUser(tx *gorm.DB) (*model.User, error) {
+func upsertDefaultAdminUser(tx *gorm.DB, email string) (*model.User, error) {
 	var credential model.UserCredential
-	if err := tx.Where("email = ?", defaultAdminEmail).Limit(1).Find(&credential).Error; err != nil {
+	if err := tx.Where("email = ?", email).Limit(1).Find(&credential).Error; err != nil {
 		return nil, err
 	}
 
@@ -91,21 +94,21 @@ func upsertDefaultAdminUser(tx *gorm.DB) (*model.User, error) {
 }
 
 // 3. upsertDefaultAdminCredential creates or resets the default admin credential.
-func upsertDefaultAdminCredential(tx *gorm.DB, userID int64) error {
+func upsertDefaultAdminCredential(tx *gorm.DB, userID int64, email string) error {
 	passwordHash, err := utils.HashPassword(defaultAdminPassword)
 	if err != nil {
 		return fmt.Errorf("hash default admin password: %w", err)
 	}
 
 	var credential model.UserCredential
-	if err := tx.Where("email = ?", defaultAdminEmail).Limit(1).Find(&credential).Error; err != nil {
+	if err := tx.Where("email = ?", email).Limit(1).Find(&credential).Error; err != nil {
 		return err
 	}
 
 	if credential.UserID == 0 {
 		return tx.Create(&model.UserCredential{
 			UserID:       userID,
-			Email:        defaultAdminEmail,
+			Email:        email,
 			PasswordHash: passwordHash,
 			IsVerified:   true,
 		}).Error

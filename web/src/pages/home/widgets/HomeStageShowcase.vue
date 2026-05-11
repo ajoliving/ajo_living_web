@@ -5,7 +5,7 @@
  * 3. 移除首頁主標上方的額外標籤與 01 02 03 導覽列。
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -39,6 +39,8 @@ const carouselRoot = ref<HTMLElement | null>(null);
 interface HomeCarouselSlide {
   key: string;
   module: HomeModuleDefinition;
+  imageUrl: string;
+  imageAlt: string;
 }
 
 const CAROUSEL_GAP = 28;
@@ -68,12 +70,35 @@ const modulo = (value: number, base: number) => ((value % base) + base) % base;
 // 2.1 建立重複輪播資料，避免只有三張卡片時軌道過短
 const carouselSlides = computed<HomeCarouselSlide[]>(() =>
   Array.from({ length: 4 }, (_, repeatIndex) =>
-    modules.value.map((module, moduleIndex) => ({
-      key: `${module.code}-${repeatIndex}-${moduleIndex}`,
-      module,
+    carouselBaseSlides.value.map((slide, slideIndex) => ({
+      ...slide,
+      key: `${slide.key}-${repeatIndex}-${slideIndex}`,
     })),
   ).flat(),
 );
+
+// 2.2 建立首頁輪播基礎資料
+const carouselBaseSlides = computed<HomeCarouselSlide[]>(() => {
+  if (props.content.carouselImages.length > 0) {
+    return props.content.carouselImages.map((image, index) => {
+      const module = modules.value[index % Math.max(modules.value.length, 1)] ?? modules.value[0];
+
+      return {
+        key: image.id,
+        module,
+        imageUrl: image.url,
+        imageAlt: image.alt,
+      };
+    });
+  }
+
+  return modules.value.map((module) => ({
+    key: module.code,
+    module,
+    imageUrl: module.carouselImagePath,
+    imageAlt: module.displayTitle,
+  }));
+});
 
 const bindCarouselCards = async () => {
   await nextTick();
@@ -500,6 +525,15 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize);
 });
 
+watch(
+  () => carouselSlides.value.map((slide) => slide.key).join('|'),
+  async () => {
+    await bindCarouselCards();
+    measureCarousel();
+    updateCarouselTransforms();
+  },
+);
+
 onBeforeUnmount(() => {
   stopCarousel();
   carouselRoot.value?.removeEventListener('wheel', handleCarouselWheel);
@@ -548,8 +582,8 @@ onBeforeUnmount(() => {
                 class="home-carousel__slide"
               >
                 <img
-                  :src="slide.module.carouselImagePath"
-                  :alt="slide.module.displayTitle"
+                  :src="slide.imageUrl"
+                  :alt="slide.imageAlt"
                   class="home-carousel__image"
                 >
               </article>

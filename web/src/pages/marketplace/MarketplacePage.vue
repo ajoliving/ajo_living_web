@@ -33,7 +33,7 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
     return [...items, { label: t('nav.filter') }];
   }
 
-  if (path.startsWith('/marketplace/settings')) {
+  if (path.startsWith('/marketplace/settings') || path.startsWith('/account/marketplace/settings')) {
     return [...items, { label: t('nav.settings') }];
   }
 
@@ -41,10 +41,11 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
     path.startsWith('/marketplace/my') ||
     path.startsWith('/marketplace/my-listings') ||
     path.startsWith('/marketplace/publish') ||
-    path.startsWith('/marketplace/chat')
+    path.startsWith('/marketplace/chat') ||
+    path.startsWith('/account/marketplace/my')
   ) {
-    const myItems = [...items, { label: t('nav.my'), to: '/marketplace/my' }];
-    const myListingItems = [...myItems, { label: t('nav.myListings'), to: '/marketplace/my/listings' }];
+    const myItems = [...items, { label: t('nav.my'), to: '/account/marketplace/my' }];
+    const myListingItems = [...myItems, { label: t('nav.myListings'), to: '/account/marketplace/my/listings' }];
 
     if (path.includes('/new') || path.startsWith('/marketplace/publish')) {
       return [...myItems, { label: t('marketplace.editor.createTitle') }];
@@ -140,29 +141,29 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
   gap: 0.5rem;
   margin: 0 auto;
   padding: 1rem var(--layout-page-padding-inline);
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .marketplace-breadcrumb__link {
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-weight: 500;
   transition: color 0.2s ease;
 }
 
 .marketplace-breadcrumb__link:hover {
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .marketplace-breadcrumb__current {
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-weight: 700;
 }
 
 .marketplace-breadcrumb__separator {
   transform: rotate(-90deg);
-  color: #c1c8c7;
+  color: rgb(var(--color-border));
 }
 
 @media (max-width: 767px) {

@@ -48,19 +48,27 @@ const uploadedImageSlots = computed(() =>
   props.imageSlots.filter((slot) => Boolean(slot.url) || slot.uploading),
 );
 const deliveryTagOptions = computed(() => [
-  { value: '自取', label: t('marketplace.editor.deliveryTagSelfPickup') },
-  { value: '送貨上門', label: t('marketplace.editor.deliveryTagDoorDelivery') },
-  { value: '免費郵寄', label: t('marketplace.editor.deliveryTagFreePost') },
-  { value: '付費郵寄', label: t('marketplace.editor.deliveryTagPaidPost') },
-  { value: '面對面驗貨', label: t('marketplace.editor.deliveryTagFaceCheck') },
+  { value: 'self_pickup', label: t('marketplace.editor.deliveryTagSelfPickup') },
+  { value: 'door_delivery', label: t('marketplace.editor.deliveryTagDoorDelivery') },
+  { value: 'free_post', label: t('marketplace.editor.deliveryTagFreePost') },
+  { value: 'paid_post', label: t('marketplace.editor.deliveryTagPaidPost') },
+  { value: 'face_check', label: t('marketplace.editor.deliveryTagFaceCheck') },
 ]);
+const legacyDeliveryTagMap: Record<string, string> = {
+  '自取': 'self_pickup',
+  '送貨上門': 'door_delivery',
+  '免費郵寄': 'free_post',
+  '付費郵寄': 'paid_post',
+  '面對面驗貨': 'face_check',
+};
+const normalizeDeliveryTagValue = (value: string): string => legacyDeliveryTagMap[value] ?? value;
 const selectedDeliveryTagLabel = computed(() => {
   if (props.formState.deliveryTags.length === 0) {
     return t('marketplace.editor.deliveryTagsPlaceholder');
   }
 
   return props.formState.deliveryTags
-    .map((value) => deliveryTagOptions.value.find((option) => option.value === value)?.label ?? value)
+    .map((value) => deliveryTagOptions.value.find((option) => option.value === normalizeDeliveryTagValue(value))?.label ?? value)
     .join(' / ');
 });
 
@@ -92,8 +100,9 @@ const updateBuildingOnly = (event: Event): void => {
 
 // 5. 切換交收標籤
 const toggleDeliveryTag = (value: string): void => {
-  props.formState.deliveryTags = props.formState.deliveryTags.includes(value)
-    ? props.formState.deliveryTags.filter((item) => item !== value)
+  const selectedValues = props.formState.deliveryTags.map(normalizeDeliveryTagValue);
+  props.formState.deliveryTags = selectedValues.includes(value)
+    ? props.formState.deliveryTags.filter((item) => normalizeDeliveryTagValue(item) !== value)
     : [...props.formState.deliveryTags, value];
 };
 
@@ -471,7 +480,7 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
-                  :checked="props.formState.deliveryTags.includes(option.value)"
+                  :checked="props.formState.deliveryTags.map(normalizeDeliveryTagValue).includes(option.value)"
                   @change="toggleDeliveryTag(option.value)"
                 />
                 <span>{{ option.label }}</span>
@@ -508,9 +517,9 @@ onBeforeUnmount(() => {
 }
 
 .editor-section {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 2rem;
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
@@ -530,8 +539,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: #002727;
-  color: #ffffff;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
   font-size: 0.875rem;
   font-weight: 800;
   line-height: 1;
@@ -539,7 +548,7 @@ onBeforeUnmount(() => {
 
 .editor-kicker,
 .editor-field span {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -549,7 +558,7 @@ onBeforeUnmount(() => {
 
 .editor-section-heading h2 {
   margin: 0.35rem 0 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 500;
@@ -579,7 +588,7 @@ onBeforeUnmount(() => {
   align-items: center;
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0.35rem 0.6rem;
   color: rgb(var(--color-primary));
   font-size: 0.75rem;
@@ -597,7 +606,7 @@ onBeforeUnmount(() => {
   align-self: end;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0.75rem 1rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
@@ -628,7 +637,7 @@ onBeforeUnmount(() => {
   width: 100%;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
   line-height: 1.6;
@@ -659,7 +668,7 @@ onBeforeUnmount(() => {
 .editor-field input:disabled,
 .editor-field select:disabled,
 .editor-field textarea:disabled {
-  background: color-mix(in srgb, #ffffff 82%, rgb(var(--color-page-tint)) 18%);
+  background: color-mix(in srgb, rgb(var(--color-surface)) 82%, rgb(var(--color-page-tint)) 18%);
   color: rgb(var(--color-text-muted));
   cursor: not-allowed;
 }
@@ -687,7 +696,7 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0 1rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
@@ -807,7 +816,7 @@ onBeforeUnmount(() => {
   gap: 0.65rem;
   border: 2px dashed rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 3rem 2rem;
   text-align: center;
   transition:
@@ -819,7 +828,7 @@ onBeforeUnmount(() => {
 .editor-dropzone:hover,
 .editor-dropzone--active {
   border-color: rgb(var(--color-primary));
-  background: #ffffff;
+  background: rgb(var(--color-surface));
 }
 
 .editor-dropzone__icon {
@@ -855,7 +864,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
 }
 
 .editor-upload-slot--cover {
@@ -881,7 +890,7 @@ onBeforeUnmount(() => {
   display: grid;
   height: 100%;
   place-items: center;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   color: rgb(var(--color-text-muted));
   font-size: 0.8125rem;
   font-weight: 700;
@@ -894,7 +903,7 @@ onBeforeUnmount(() => {
   border-radius: 9999px;
   background: rgb(var(--color-primary));
   padding: 0.45rem 0.75rem;
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
@@ -912,7 +921,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   background: rgb(255 255 255 / 0.92);
-  color: #ba1a1a;
+  color: rgb(var(--color-danger));
   cursor: pointer;
   font-size: 1.125rem;
   font-weight: 800;
@@ -925,8 +934,8 @@ onBeforeUnmount(() => {
 }
 
 .editor-image-remove-button:hover {
-  border-color: #ba1a1a;
-  background: #ffffff;
+  border-color: rgb(var(--color-danger));
+  background: rgb(var(--color-surface));
   transform: translateY(-1px);
 }
 
@@ -946,7 +955,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   padding: 0.4rem 0.7rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 700;
@@ -965,18 +974,18 @@ onBeforeUnmount(() => {
 .editor-image-action--primary {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .editor-image-action--primary:hover {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary) / 0.9);
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .editor-image-action--danger:hover {
-  border-color: #ba1a1a;
-  color: #ba1a1a;
+  border-color: rgb(var(--color-danger));
+  color: rgb(var(--color-danger));
 }
 
 .editor-visibility-card {
@@ -986,7 +995,7 @@ onBeforeUnmount(() => {
   gap: 1rem;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 1rem;
 }
 
@@ -1016,7 +1025,7 @@ onBeforeUnmount(() => {
 .editor-visibility-option {
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0.55rem 0.95rem;
   color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
@@ -1027,7 +1036,7 @@ onBeforeUnmount(() => {
 .editor-visibility-option--active {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .editor-toggle {
@@ -1054,7 +1063,7 @@ onBeforeUnmount(() => {
   height: 1.125rem;
   width: 1.125rem;
   border-radius: 9999px;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.16);
   transition: transform 0.2s ease;
 }
@@ -1076,7 +1085,7 @@ onBeforeUnmount(() => {
   gap: 1rem;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0 1rem;
   color: rgb(var(--color-text-muted));
   font-size: 0.875rem;

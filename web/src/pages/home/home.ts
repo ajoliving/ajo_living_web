@@ -3,6 +3,7 @@
  * 1. 根據語系輸出首頁主標與模組入口文案。
  * 2. 保持首頁內容簡潔，避免展示開發說明與原型話術。
  */
+import type { HomeCarouselImage, HomeModuleCard } from '@/model/home-content';
 
 // 1. 定義首頁模組代碼
 export type HomeModuleCode = 'secondhand' | 'property_sale' | 'serviced_apartment';
@@ -72,7 +73,14 @@ export interface HomeModuleDefinition {
   gridTiles: HomeGridTile[];
 }
 
-// 11. 定義首頁整體文案
+// 11. 定義首頁輪播顯示圖
+export interface HomeCarouselDisplayImage {
+  id: string;
+  url: string;
+  alt: string;
+}
+
+// 12. 定義首頁整體文案
 export interface HomeLandingContent {
   eyebrow: string;
   title: string;
@@ -82,6 +90,7 @@ export interface HomeLandingContent {
   secondaryCta: string;
   heroHighlights: string[];
   heroMetrics: HomeModuleMetric[];
+  carouselImages: HomeCarouselDisplayImage[];
   modules: HomeModuleDefinition[];
 }
 
@@ -120,6 +129,8 @@ export const buildHomeLandingContent = (
   t: HomeTranslate,
   featuredCount: number,
   channelCount: number,
+  carouselImages: HomeCarouselImage[] = [],
+  moduleCards: HomeModuleCard[] = [],
 ): HomeLandingContent => ({
   eyebrow: t('home.eyebrow'),
   title: t('home.title'),
@@ -137,7 +148,8 @@ export const buildHomeLandingContent = (
     { value: formatMetricCount(channelCount), label: t('home.landing.heroMetrics.sections') },
     { value: formatMetricCount(featuredCount), label: t('home.landing.heroMetrics.featured') },
   ],
-  modules: [
+  carouselImages: buildCarouselDisplayImages(t, carouselImages),
+  modules: applyHomeModuleCards([
     {
       code: 'secondhand',
       index: '01',
@@ -300,5 +312,44 @@ export const buildHomeLandingContent = (
         buildGridTile(t, 'serviced_apartment', 'tone', 'square', 'contrast'),
       ],
     },
-  ],
+  ], moduleCards),
 });
+
+// 2. buildCarouselDisplayImages 建立首頁輪播圖片清單
+const buildCarouselDisplayImages = (
+  t: HomeTranslate,
+  carouselImages: HomeCarouselImage[],
+): HomeCarouselDisplayImage[] =>
+  carouselImages
+    .slice()
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .map((image, index) => ({
+      id: image.media_asset_id,
+      url: image.url,
+      alt: t('home.carouselImageAlt', { index: index + 1 }),
+    }));
+
+// 3. applyHomeModuleCards 套用首頁後台三大圖設定
+const applyHomeModuleCards = (
+  modules: HomeModuleDefinition[],
+  moduleCards: HomeModuleCard[],
+): HomeModuleDefinition[] => {
+  const cardMap = new Map(moduleCards.map((card) => [card.module_code, card]));
+
+  return modules.map((module) => {
+    const card = cardMap.get(module.code);
+    if (!card) {
+      return module;
+    }
+
+    return {
+      ...module,
+      stageImagePath: card.url || module.stageImagePath,
+      carouselImagePath: card.url || module.carouselImagePath,
+      displayTitle: card.title || module.displayTitle,
+      title: card.title || module.title,
+      description: card.body || module.description,
+      statusNote: card.subtitle || module.statusNote,
+    };
+  });
+};

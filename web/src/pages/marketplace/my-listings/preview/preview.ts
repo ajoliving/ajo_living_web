@@ -99,7 +99,7 @@ export const useMarketplaceMyListingPreviewPage = () => {
       return;
     }
 
-    await router.push(`/marketplace/my/editor/${listingId.value}`);
+    await router.push(`/account/marketplace/my/editor/${listingId.value}`);
   };
 
   // 1.3 導向公開帖子詳情

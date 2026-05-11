@@ -27,6 +27,7 @@ export default {
   },
   loadError: 'Failed to load home data. Please try again later.',
   carouselAriaLabel: 'Auto rotating gallery',
+  carouselImageAlt: 'Homepage carousel image {index}',
   landing: {
     secondaryCta: 'Filter listings',
     heroHighlights: {

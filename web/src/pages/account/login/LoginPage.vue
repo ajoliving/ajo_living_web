@@ -14,7 +14,6 @@ const {
   emailActionSwitchLabel,
   emailLoginMethod,
   emailPlaceholder,
-  footerActionLabel,
   footerPrompt,
   formState,
   handleRequestOtp,
@@ -27,10 +26,8 @@ const {
   selectedHero,
   submitting,
   submitLabel,
-  authModeSwitchIcon,
-  authModeSwitchLabel,
+  setAuthMode,
   setEmailLoginMethod,
-  toggleAuthMode,
   toggleEmailAction,
 } = useLoginPage();
 </script>
@@ -48,13 +45,10 @@ const {
         v-model:phone="formState.phone"
         v-model:remember-me="rememberMe"
         :auth-mode="authMode"
-        :auth-mode-switch-icon="authModeSwitchIcon"
-        :auth-mode-switch-label="authModeSwitchLabel"
         :email-action="emailAction"
         :email-action-switch-label="emailActionSwitchLabel"
         :email-login-method="emailLoginMethod"
         :email-placeholder="emailPlaceholder"
-        :footer-action-label="footerActionLabel"
         :footer-prompt="footerPrompt"
         :is-authenticated="isAuthenticated"
         :otp-request-label="otpRequestLabel"
@@ -62,10 +56,10 @@ const {
         :submitting="submitting"
         :submit-label="submitLabel"
         @request-otp="handleRequestOtp"
+        @set-auth-mode="setAuthMode"
         @set-email-login-method="setEmailLoginMethod"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"
-        @toggle-auth-mode="toggleAuthMode"
         @toggle-email-action="toggleEmailAction"
       />
     </section>

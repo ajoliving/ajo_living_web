@@ -79,9 +79,11 @@ func TestEmailPasswordRegisterAndLogin(t *testing.T) {
 	authService := NewAuthService(runtime)
 
 	registered, err := authService.RegisterWithEmail(context.Background(), EmailPasswordParams{
-		Email:       "member@example.com",
-		Password:    "safe-password-123",
-		DisplayName: "Email Member",
+		Email:            "member@example.com",
+		Password:         "safe-password-123",
+		DisplayName:      "Email Member",
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91234567",
 	})
 	if err != nil {
 		t.Fatalf("register email: %v", err)
@@ -101,11 +103,31 @@ func TestEmailPasswordRegisterAndLogin(t *testing.T) {
 		t.Fatalf("expected user login result, got %+v", loggedIn)
 	}
 
+	phoneLoggedIn, err := authService.LoginWithPhone(context.Background(), PhonePasswordParams{
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91234567",
+		Password:         "safe-password-123",
+	})
+	if err != nil {
+		t.Fatalf("login phone: %v", err)
+	}
+	if phoneLoggedIn.AccessToken == "" || phoneLoggedIn.User.MemberType != MemberTypeUser {
+		t.Fatalf("expected phone login result, got %+v", phoneLoggedIn)
+	}
+
 	if _, err := authService.LoginWithEmail(context.Background(), EmailPasswordParams{
 		Email:    "member@example.com",
 		Password: "wrong-password",
 	}); err == nil {
 		t.Fatalf("expected wrong password to fail")
+	}
+
+	if _, err := authService.LoginWithPhone(context.Background(), PhonePasswordParams{
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91234567",
+		Password:         "wrong-password",
+	}); err == nil {
+		t.Fatalf("expected wrong phone password to fail")
 	}
 }
 

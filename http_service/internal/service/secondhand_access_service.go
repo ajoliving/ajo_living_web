@@ -505,8 +505,13 @@ func (s *SecondhandService) resolveListingImages(ctx context.Context, tx *gorm.D
 
 // 17. validateListingReady ensures draft listing has publishable content.
 func (s *SecondhandService) validateListingReady(ctx context.Context, ownerUserID int64, listingID int64) error {
+	return s.validateListingReadyWithTx(ctx, s.runtime.DB, ownerUserID, listingID)
+}
+
+// 18. validateListingReadyWithTx ensures listing has publishable content inside a transaction.
+func (s *SecondhandService) validateListingReadyWithTx(ctx context.Context, tx *gorm.DB, ownerUserID int64, listingID int64) error {
 	var imageCount int64
-	if err := s.runtime.DB.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing images")
 	}
 	if imageCount == 0 {
@@ -514,7 +519,7 @@ func (s *SecondhandService) validateListingReady(ctx context.Context, ownerUserI
 	}
 
 	var contact model.ListingContact
-	if err := s.runtime.DB.WithContext(ctx).Where("listing_id = ?", listingID).First(&contact).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("listing_id = ?", listingID).First(&contact).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing contacts")
 	}
 	if !contact.ShowPhone && !contact.ShowWhatsApp && !contact.ShowChat {
@@ -524,7 +529,7 @@ func (s *SecondhandService) validateListingReady(ctx context.Context, ownerUserI
 	return nil
 }
 
-// 18. canViewListing checks secondhand visibility rules for the current viewer.
+// 19. canViewListing checks secondhand visibility rules for the current viewer.
 func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *model.SecondhandListing, viewerCommunityID *int64) bool {
 	if secondhand.VisibilityScope == "public" {
 		return true
@@ -532,7 +537,7 @@ func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *m
 	return viewerCommunityID != nil && secondhand.VisibleCommunityID != nil && *viewerCommunityID == *secondhand.VisibleCommunityID
 }
 
-// 19. findCommunityByID loads a community by numeric ID.
+// 20. findCommunityByID loads a community by numeric ID.
 func (s *SecondhandService) findCommunityByID(ctx context.Context, communityID *int64) (*model.Community, error) {
 	if communityID == nil {
 		return nil, nil

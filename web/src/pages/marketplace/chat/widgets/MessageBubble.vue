@@ -33,8 +33,8 @@ const formattedTime = computed(() =>
 
 <template>
   <div
-    class="flex"
-    :class="isNoticeCard ? 'justify-center' : isSelf ? 'justify-end' : 'justify-start'"
+    class="message-bubble-row"
+    :class="isNoticeCard ? 'message-bubble-row--notice' : isSelf ? 'message-bubble-row--self' : 'message-bubble-row--peer'"
   >
     <div
       v-if="isNoticeCard"
@@ -63,27 +63,83 @@ const formattedTime = computed(() =>
 
     <div
       v-else
-      class="max-w-[80%] rounded-panel px-4 py-3 shadow-soft"
-      :class="
-        isSelf
-          ? 'bg-primary text-white'
-          : 'border border-border/80 bg-surface-raised text-text'
-      "
+      class="message-bubble"
+      :class="isSelf ? 'message-bubble--self' : 'message-bubble--peer'"
     >
-      <p class="text-sm leading-6">
-        {{ props.message.body }}
-      </p>
       <p
-        class="mt-2 text-right text-[11px]"
-        :class="isSelf ? 'text-white/70' : 'text-text-muted'"
+        class="message-bubble__time"
+        :class="isSelf ? 'message-bubble__time--self' : 'message-bubble__time--peer'"
       >
         {{ formattedTime }}
+      </p>
+      <p class="message-bubble__body">
+        {{ props.message.body }}
       </p>
     </div>
   </div>
 </template>
 
 <style scoped>
+.message-bubble-row {
+  display: flex;
+  width: 100%;
+}
+
+.message-bubble-row--notice {
+  justify-content: center;
+}
+
+.message-bubble-row--self {
+  justify-content: flex-end;
+}
+
+.message-bubble-row--peer {
+  justify-content: flex-start;
+}
+
+.message-bubble {
+  width: fit-content;
+  max-width: min(76%, 34rem);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.08);
+  padding: 0.72rem 0.9rem 0.82rem;
+}
+
+.message-bubble--self {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.message-bubble--peer {
+  border: 1px solid rgb(var(--color-border) / 0.78);
+  background: rgb(var(--color-surface-raised));
+  color: rgb(var(--color-text));
+}
+
+.message-bubble__time {
+  margin: 0 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.message-bubble__time--self {
+  color: rgb(var(--color-primary-contrast) / 0.72);
+}
+
+.message-bubble__time--peer {
+  color: rgb(var(--color-text-muted));
+}
+
+.message-bubble__body {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
 .notice-card {
   width: min(100%, 24rem);
   border: 1px solid rgb(var(--color-border) / 0.72);
@@ -122,5 +178,11 @@ const formattedTime = computed(() =>
   color: rgb(var(--color-text-muted));
   font-size: 0.74rem;
   text-align: right;
+}
+
+@media (max-width: 640px) {
+  .message-bubble {
+    max-width: 88%;
+  }
 }
 </style>

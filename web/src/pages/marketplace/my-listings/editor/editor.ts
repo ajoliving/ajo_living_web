@@ -40,6 +40,7 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
+import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
 
 export type ListingEditorVisibility = 'public' | 'building_only';
 export type ListingEditorBusinessStatus = 'available' | 'sold';
@@ -116,7 +117,8 @@ export interface ListingEditorFormState {
 const listingObjectPrefix = 'ajo_living/listings';
 const maxListingImageSize = 10 * 1024 * 1024;
 const imageSlotCount = 4;
-const donationDeliveryTag = '可捐贈';
+const donationDeliveryTag = 'donation_available';
+const legacyDonationDeliveryTag = '可捐贈';
 
 // 1. 建立表單初始狀態
 const createInitialFormState = (): ListingEditorFormState => ({
@@ -207,16 +209,26 @@ const buildHongKongPhone = (phone: string): string => {
 
 // 8. 過濾可捐贈標籤
 const withoutDonationTag = (tags: string[]): string[] =>
-  tags.filter((tag) => tag.trim() !== donationDeliveryTag);
+  tags.filter((tag) => {
+    const normalizedTag = tag.trim();
+    return normalizedTag !== donationDeliveryTag && normalizedTag !== legacyDonationDeliveryTag;
+  });
 
 // 9. 轉換交收標籤顯示文字
 const resolveDeliveryTagLabel = (tag: string, translate: (key: string) => string): string => {
   const labelMap: Record<string, string> = {
-    自取: translate('marketplace.editor.deliveryTagSelfPickup'),
-    送貨上門: translate('marketplace.editor.deliveryTagDoorDelivery'),
-    免費郵寄: translate('marketplace.editor.deliveryTagFreePost'),
-    付費郵寄: translate('marketplace.editor.deliveryTagPaidPost'),
-    面對面驗貨: translate('marketplace.editor.deliveryTagFaceCheck'),
+    self_pickup: translate('marketplace.editor.deliveryTagSelfPickup'),
+    door_delivery: translate('marketplace.editor.deliveryTagDoorDelivery'),
+    free_post: translate('marketplace.editor.deliveryTagFreePost'),
+    paid_post: translate('marketplace.editor.deliveryTagPaidPost'),
+    face_check: translate('marketplace.editor.deliveryTagFaceCheck'),
+    donation_available: translate('marketplace.editor.donationAvailable'),
+    '自取': translate('marketplace.editor.deliveryTagSelfPickup'),
+    '送貨上門': translate('marketplace.editor.deliveryTagDoorDelivery'),
+    '免費郵寄': translate('marketplace.editor.deliveryTagFreePost'),
+    '付費郵寄': translate('marketplace.editor.deliveryTagPaidPost'),
+    '面對面驗貨': translate('marketplace.editor.deliveryTagFaceCheck'),
+    '可捐贈': translate('marketplace.editor.donationAvailable'),
   };
 
   return labelMap[tag] ?? tag;
@@ -235,7 +247,11 @@ const syncDetailToForm = (
   formState.categoryCode = detail.category_code as MarketplaceCategoryCode;
   formState.priceMode = detail.price_mode === 'free' ? 'fixed' : detail.price_mode as MarketplacePriceMode;
   formState.price = detail.price_hkd ?? 0;
-  formState.isDonation = detail.delivery_tags.includes(donationDeliveryTag) || detail.price_mode === 'free';
+  formState.isDonation = (
+    detail.delivery_tags.includes(donationDeliveryTag) ||
+    detail.delivery_tags.includes(legacyDonationDeliveryTag) ||
+    detail.price_mode === 'free'
+  );
   formState.condition = detail.condition_level as MarketplaceConditionCode;
   formState.districtCode = detail.district_code as MarketplaceDistrictCode;
   formState.visibility = detail.visibility_scope;
@@ -423,6 +439,13 @@ export const useMarketplaceListingEditorPage = () => {
   );
 
   const readyToPublish = computed(() => checklist.value.every((item) => item.complete));
+  const chargeCost = computed(() => resolveWalletChargeCost('secondhand'));
+  const walletBalance = computed(() => sessionStore.me?.ajo_balance ?? 0);
+  const formatPoints = (value: number): string =>
+    formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+  const chargeHint = computed(() =>
+    `${t(isEditing.value ? 'marketplace.editor.editChargeHint' : 'marketplace.editor.publishChargeHint')} ${formatPoints(chargeCost.value)} · ${t('marketplace.editor.walletBalance')} ${formatPoints(walletBalance.value)}`,
+  );
 
   const workflowSteps = computed<EditorWorkflowStep[]>(() => [
     {
@@ -845,6 +868,9 @@ export const useMarketplaceListingEditorPage = () => {
       const payload = buildPayload();
       const response = await updateSecondhandListing(listingId.value, payload);
       listingId.value = response.data.data.listing_id;
+      if (typeof response.data.data.points_balance_after === 'number') {
+        await sessionStore.loadCurrentUser();
+      }
       markCurrentStateSaved();
       feedbackStore.pushToast(t(wasEditing ? 'marketplace.editor.updateSaved' : 'marketplace.editor.draftSaved'), 'success');
 
@@ -873,9 +899,10 @@ export const useMarketplaceListingEditorPage = () => {
       }
 
       await publishSecondhandListing(savedListingId);
+      await sessionStore.loadCurrentUser();
       feedbackStore.pushToast(t('marketplace.editor.publishSuccess'), 'success');
       isProgrammaticNavigation.value = true;
-      await router.push('/marketplace/my/listings');
+      await router.push('/account/marketplace/my/listings');
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error, t('marketplace.editor.publishError')), 'error');
     } finally {
@@ -888,7 +915,7 @@ export const useMarketplaceListingEditorPage = () => {
     const savedListingId = await saveDraft({ uploadImages: true });
     if (savedListingId) {
       isProgrammaticNavigation.value = true;
-      await router.push('/marketplace/my/listings');
+      await router.push('/account/marketplace/my/listings');
     }
   };
 
@@ -923,6 +950,7 @@ export const useMarketplaceListingEditorPage = () => {
     businessStatusOptions,
     categoryOptions,
     checklist,
+    chargeHint,
     conditionOptions,
     coverImage,
     formState,

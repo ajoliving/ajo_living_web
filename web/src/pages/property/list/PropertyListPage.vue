@@ -72,6 +72,7 @@ const priceLabel = computed(() =>
 const areaLabel = computed(() =>
   props.channel === 'sale' ? t('property.sale.areaLabel') : t('property.serviced.areaLabel'),
 );
+const formatAreaSqft = (value: number): string => t('common.unit.sqft', { value });
 
 // 1. 讀取列表資料
 const loadListings = async (): Promise<void> => {
@@ -269,7 +270,7 @@ onMounted(() => {
             </div>
             <div>
               <dt>{{ areaLabel }}</dt>
-              <dd>{{ resolvePropertyArea(listing) }} sqft</dd>
+              <dd>{{ formatAreaSqft(resolvePropertyArea(listing)) }}</dd>
             </div>
             <div>
               <dt>{{ t('property.sale.estateLabel') }}</dt>
@@ -353,7 +354,7 @@ onMounted(() => {
 .property-button--primary {
   border: 1px solid rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: #fff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .property-button--secondary {

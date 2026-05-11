@@ -35,17 +35,21 @@ const (
 	CodeRateLimited = "RATE_LIMITED"
 	// 10. CodeIdempotencyConflict is reserved for idempotent write conflicts.
 	CodeIdempotencyConflict = "IDEMPOTENCY_CONFLICT"
-	// 11. CodeInternalError is returned for unexpected server failures.
+	// 11. CodePointsInsufficient is returned when a wallet balance cannot cover an action.
+	CodePointsInsufficient = "POINTS_INSUFFICIENT"
+	// 12. CodeWalletActionUnavailable is returned when a wallet task cannot be claimed.
+	CodeWalletActionUnavailable = "WALLET_ACTION_UNAVAILABLE"
+	// 13. CodeInternalError is returned for unexpected server failures.
 	CodeInternalError = "INTERNAL_ERROR"
 )
 
-// 12. FieldError defines field level validation detail.
+// 14. FieldError defines field level validation detail.
 type FieldError struct {
 	Field  string `json:"field"`
 	Reason string `json:"reason"`
 }
 
-// 13. AppError is the project-wide business error type.
+// 15. AppError is the project-wide business error type.
 type AppError struct {
 	Code    string       `json:"code"`
 	Message string       `json:"message"`
@@ -53,7 +57,7 @@ type AppError struct {
 	Cause   error        `json:"-"`
 }
 
-// 14. Error implements the error interface.
+// 16. Error implements the error interface.
 func (e *AppError) Error() string {
 	if e == nil {
 		return ""
@@ -62,7 +66,7 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-// 15. Unwrap returns the underlying error.
+// 17. Unwrap returns the underlying error.
 func (e *AppError) Unwrap() error {
 	if e == nil {
 		return nil
@@ -71,7 +75,7 @@ func (e *AppError) Unwrap() error {
 	return e.Cause
 }
 
-// 16. New creates an AppError without field details.
+// 18. New creates an AppError without field details.
 func New(code string, message string) *AppError {
 	return &AppError{
 		Code:    code,
@@ -79,7 +83,7 @@ func New(code string, message string) *AppError {
 	}
 }
 
-// 17. NewWithFields creates an AppError with validation details.
+// 19. NewWithFields creates an AppError with validation details.
 func NewWithFields(code string, message string, fields []FieldError) *AppError {
 	return &AppError{
 		Code:    code,
@@ -88,7 +92,7 @@ func NewWithFields(code string, message string, fields []FieldError) *AppError {
 	}
 }
 
-// 18. Success writes the shared success response.
+// 20. Success writes the shared success response.
 func Success(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":       CodeOK,
@@ -99,7 +103,7 @@ func Success(c *gin.Context, data any) {
 	})
 }
 
-// 19. WriteError writes the shared failure response.
+// 21. WriteError writes the shared failure response.
 func WriteError(c *gin.Context, err error) {
 	var appErr *AppError
 	if !errors.As(err, &appErr) {
@@ -115,7 +119,7 @@ func WriteError(c *gin.Context, err error) {
 	})
 }
 
-// 20. RequestID extracts request id from gin context.
+// 22. RequestID extracts request id from gin context.
 func RequestID(c *gin.Context) string {
 	value, exists := c.Get("request_id")
 	if !exists {
@@ -126,7 +130,7 @@ func RequestID(c *gin.Context) string {
 	return requestID
 }
 
-// 21. httpStatus maps business codes to HTTP status.
+// 23. httpStatus maps business codes to HTTP status.
 func httpStatus(code string) int {
 	switch code {
 	case CodeAuthRequired:
@@ -137,7 +141,7 @@ func httpStatus(code string) int {
 		return http.StatusBadRequest
 	case CodeNotFound:
 		return http.StatusNotFound
-	case CodeExpired, CodeHidden, CodeIdempotencyConflict:
+	case CodeExpired, CodeHidden, CodeIdempotencyConflict, CodePointsInsufficient, CodeWalletActionUnavailable:
 		return http.StatusConflict
 	case CodeRateLimited:
 		return http.StatusTooManyRequests

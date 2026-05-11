@@ -23,6 +23,7 @@ import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
+  getDeliveryTagTranslationKey,
   resolveListingImages,
   resolveListingOwnerName,
 } from '@/utils/marketplace';
@@ -67,6 +68,10 @@ export const useMarketplaceListingPage = () => {
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );
   const contactPayload = computed(() => contactAccess.value?.contact_payload ?? {});
+  const formatDeliveryTag = (tag: string): string => {
+    const translationKey = getDeliveryTagTranslationKey(tag);
+    return translationKey ? t(translationKey) : tag;
+  };
 
   // 1.1 讀取帖子詳情
   const loadListing = async (): Promise<void> => {
@@ -124,7 +129,7 @@ export const useMarketplaceListingPage = () => {
 
     try {
       const { data } = await createOrReuseChat(listing.value.listing_id);
-      await router.push(`/marketplace/my/chat/${data.data.chat_id}`);
+      await router.push(`/account/marketplace/my/chat/${data.data.chat_id}`);
     } catch (error) {
       feedbackStore.pushToast(
         axios.isAxiosError(error)
@@ -148,6 +153,7 @@ export const useMarketplaceListingPage = () => {
     coverImage,
     districtLabel,
     galleryImages,
+    formatDeliveryTag,
     listing,
     listingId,
     listingPrice,

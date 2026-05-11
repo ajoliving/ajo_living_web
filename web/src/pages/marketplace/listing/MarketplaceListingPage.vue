@@ -15,6 +15,7 @@ const {
   contactPayload,
   coverImage,
   districtLabel,
+  formatDeliveryTag,
   galleryImages,
   listing,
   listingId,
@@ -53,7 +54,7 @@ const {
           >
           <div
             v-else
-            class="flex h-full items-center justify-center text-[#717878]"
+            class="flex h-full items-center justify-center text-text-muted"
           >
             <AppIcon
               name="picture"
@@ -129,7 +130,7 @@ const {
               v-for="tag in listing.delivery_tags"
               :key="tag"
             >
-              {{ tag }}
+              {{ formatDeliveryTag(tag) }}
             </span>
             <span>{{ listing.visibility_scope === 'public' ? t('marketplace.detail.publicListing') : t('common.state.buildingOnly') }}</span>
           </div>
@@ -235,7 +236,7 @@ const {
   gap: 2rem;
   margin: 0 auto;
   padding: 4rem var(--layout-page-padding-inline);
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .detail-main {
@@ -247,9 +248,9 @@ const {
 .detail-content,
 .detail-panel,
 .detail-safety {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #f9f9f7;
+  background: rgb(var(--color-surface-raised));
   box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
 }
 
@@ -259,7 +260,7 @@ const {
 
 .detail-gallery__hero {
   aspect-ratio: 4 / 3;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .detail-gallery__hero img,
@@ -280,9 +281,9 @@ const {
 .detail-gallery__thumb {
   aspect-ratio: 1;
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .detail-content {
@@ -291,7 +292,7 @@ const {
 
 .detail-kicker,
 .detail-panel__label {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -315,7 +316,7 @@ const {
 
 .detail-heading p {
   margin-top: 0.75rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 1rem;
   line-height: 1.7;
 }
@@ -325,18 +326,18 @@ const {
   font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 3.25rem);
   font-weight: 600;
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .detail-section {
   margin-top: 1.5rem;
-  border-top: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
   padding-top: 1.5rem;
 }
 
 .detail-section h2 {
   margin: 0 0 1rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -345,7 +346,7 @@ const {
 }
 
 .detail-section p {
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   line-height: 1.8;
 }
 
@@ -355,7 +356,7 @@ const {
 }
 
 .detail-spec-grid dt {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -363,7 +364,7 @@ const {
 
 .detail-spec-grid dd {
   margin: 0.5rem 0 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-weight: 600;
 }
 
@@ -374,10 +375,10 @@ const {
 }
 
 .detail-tags span {
-  border: 1px solid #c1c8c7;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 999px;
   padding: 0.5rem 0.9rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 600;
 }
@@ -404,12 +405,12 @@ const {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.6rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .detail-panel p {
   margin-top: 0.55rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   line-height: 1.65;
 }
 
@@ -425,17 +426,17 @@ const {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 1px solid #c1c8c7;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 999px;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 600;
 }
 
 .detail-action--primary {
-  border-color: #002727;
-  background: #002727;
-  color: #ffffff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .detail-mini-list {
@@ -461,20 +462,20 @@ const {
 }
 
 .detail-mini-card h3 {
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.95rem;
 }
 
 .detail-mini-card p {
   margin-top: 0.4rem;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-weight: 700;
 }
 
 .detail-safety {
   display: grid;
   gap: 0.75rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   line-height: 1.65;
   grid-template-columns: auto 1fr;
 }

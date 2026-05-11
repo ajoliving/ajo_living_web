@@ -143,7 +143,7 @@ const {
         >
         <div
           v-else
-          class="flex h-full min-h-[22rem] items-center justify-center text-[#717878]"
+          class="flex h-full min-h-[22rem] items-center justify-center text-text-muted"
         >
           <AppIcon
             name="picture"
@@ -194,16 +194,16 @@ const {
   gap: 1.5rem;
   margin: 0 auto;
   padding: 1rem var(--layout-page-padding-inline) 5rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .my-preview-summary,
 .preview-media,
 .preview-detail,
 .preview-timeline {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
@@ -215,7 +215,7 @@ const {
 
 .preview-kicker {
   margin: 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -225,7 +225,7 @@ const {
 
 .preview-reference {
   margin: 0.75rem 0 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.5;
@@ -233,7 +233,7 @@ const {
 
 .my-preview-summary h1 {
   margin: 0.9rem 0 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 500;
@@ -243,7 +243,7 @@ const {
 .my-preview-summary p:not(.preview-kicker) {
   margin-top: 1rem;
   max-width: 44rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   line-height: 1.75;
 }
 
@@ -260,10 +260,10 @@ const {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 1px solid #c1c8c7;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 999px;
   padding: 0.8rem 1.25rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 800;
   line-height: 1;
@@ -275,20 +275,20 @@ const {
 }
 
 .preview-action:hover:not(:disabled) {
-  border-color: #002727;
-  color: #002727;
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
 }
 
 .preview-action--primary {
-  border-color: #002727;
-  background: #002727;
-  color: #ffffff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .preview-action--primary:hover:not(:disabled) {
-  border-color: #1a1c1b;
-  background: #1a1c1b;
-  color: #ffffff;
+  border-color: rgb(var(--color-text));
+  background: rgb(var(--color-text));
+  color: rgb(var(--color-surface));
 }
 
 .preview-action:disabled {
@@ -316,7 +316,7 @@ const {
   font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 600;
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .preview-specs {
@@ -326,7 +326,7 @@ const {
 }
 
 .preview-specs dt {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -335,7 +335,7 @@ const {
 
 .preview-specs dd {
   margin: 0.45rem 0 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-weight: 600;
 }
 
@@ -344,7 +344,7 @@ const {
   gap: 1rem;
   margin: 1rem 0 0;
   padding-left: 1.25rem;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   line-height: 1.65;
 }
 

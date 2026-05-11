@@ -1,7 +1,7 @@
 /*
  * 認證資料型別。
  * 1. 對齊手機與郵箱 OTP 申請、驗證回應。
- * 2. 保留郵箱密碼流程型別供既有接口使用。
+ * 2. 保留郵箱密碼、手機密碼流程型別供既有接口使用。
  */
 
 // 1. OTP 申請結果
@@ -30,4 +30,13 @@ export interface EmailPasswordPayload {
   email: string;
   password: string;
   display_name?: string;
+  phone_country_code?: string;
+  phone_number?: string;
+}
+
+// 5. 手機密碼認證請求
+export interface PhonePasswordPayload {
+  phone_country_code: string;
+  phone_number: string;
+  password: string;
 }

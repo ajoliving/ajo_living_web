@@ -1,6 +1,7 @@
 export default {
   brand: {
     name: 'AJO Living',
+    pointsName: 'AJO Point',
     tagline: 'Hong Kong community marketplace and living platform',
   },
   action: {
@@ -29,6 +30,14 @@ export default {
     mobilePreview: 'Mobile preview',
     desktopPreview: 'Desktop preview',
   },
+  price: {
+    free: 'Free',
+  },
+  unit: {
+    sqft: '{value} sqft',
+    leaseMonth: '{value} month | {value} months',
+    roomSpec: '{area} sqft · {months} month | {area} sqft · {months} months',
+  },
   locale: {
     zhHkShort: '繁中',
     enShort: 'EN',
@@ -50,6 +59,7 @@ export default {
   },
   footer: {
     statement: 'Hong Kong community marketplace and living platform',
+    copyright: '© 2026 AJO Living',
   },
   state: {
     active: 'Active',

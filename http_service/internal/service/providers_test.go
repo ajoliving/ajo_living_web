@@ -58,6 +58,26 @@ func TestNormalizeMediaObjectPrefixAllowsListingDirectories(t *testing.T) {
 			expected: "ajo_living/listings/01KLISTINGABC/",
 		},
 		{
+			name:     "home eng carousel",
+			input:    "ajo_living/eng/home-carousel/",
+			expected: homeEngMediaObjectPrefix,
+		},
+		{
+			name:     "login bag",
+			input:    "ajo_living/login_bag/",
+			expected: loginBagMediaObjectPrefix,
+		},
+		{
+			name:     "advertisement images",
+			input:    "advertisements/images",
+			expected: advertisementImageObjectPrefix,
+		},
+		{
+			name:     "advertisement video",
+			input:    "ajo_living/advertisements/video/",
+			expected: advertisementVideoObjectPrefix,
+		},
+		{
 			name:     "unsafe listing detail",
 			input:    "ajo_living/listings/../account/",
 			expected: mediaObjectPrefix,

@@ -18,6 +18,7 @@ import {
 import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
   resolveListingCategoryLabel,
@@ -30,6 +31,7 @@ import {
   resolveListingTitle,
   resolveListingVisibility,
 } from '@/utils/marketplace';
+import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
 
 type MyListingsTab = 'all' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
 type MyListingsAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
@@ -40,10 +42,13 @@ export const useMarketplaceMyListingsPage = () => {
   const router = useRouter();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
+  const sessionStore = useSessionStore();
   const loading = ref(false);
   const searchQuery = ref('');
   const activeTab = ref<MyListingsTab>('all');
   const items = ref<SecondhandListingSummaryResponse[]>([]);
+  const formatPoints = (value: number): string =>
+    formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 
   const tabOptions = computed(() => [
     { label: t('marketplace.mine.totalListings'), value: 'all' },
@@ -109,6 +114,10 @@ export const useMarketplaceMyListingsPage = () => {
 
   // 1.4 執行帖子狀態操作
   const runAction = async (action: MyListingsAction, listingId: string): Promise<void> => {
+    if ((action === 'publish' || action === 'republish') &&
+      !window.confirm(`${t(action === 'publish' ? 'marketplace.mine.confirmPublishCharge' : 'marketplace.mine.confirmRepublishCharge')} ${formatPoints(resolveWalletChargeCost('secondhand'))}`)) {
+      return;
+    }
     if (
       (action === 'mark-sold' || action === 'deactivate') &&
       !window.confirm(t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate'))
@@ -134,6 +143,9 @@ export const useMarketplaceMyListingsPage = () => {
       }
 
       feedbackStore.pushToast(t('marketplace.mine.statusUpdated'), 'success');
+      if (action === 'publish' || action === 'republish') {
+        await sessionStore.loadCurrentUser();
+      }
       await loadMyListings();
     } catch (error) {
       feedbackStore.pushToast(
@@ -147,17 +159,17 @@ export const useMarketplaceMyListingsPage = () => {
 
   // 1.5 導向新增帖子頁
   const openCreate = async (): Promise<void> => {
-    await router.push('/marketplace/my/new');
+    await router.push('/account/marketplace/my/new');
   };
 
   // 1.6 導向帖子編輯頁
   const openEditor = async (listingId: string): Promise<void> => {
-    await router.push(`/marketplace/my/editor/${listingId}`);
+    await router.push(`/account/marketplace/my/editor/${listingId}`);
   };
 
   // 1.7 導向我的帖子管理詳情頁
   const openManagedDetail = async (listingId: string): Promise<void> => {
-    await router.push(`/marketplace/my/listing/${listingId}`);
+    await router.push(`/account/marketplace/my/listing/${listingId}`);
   };
 
   // 1.8 導向公開詳情頁
@@ -196,6 +208,8 @@ export const useMarketplaceMyListingsPage = () => {
     resolveListingVisibility,
     runAction,
     searchQuery,
+    formatAjoPoints: formatPoints,
+    secondhandChargeCost: resolveWalletChargeCost('secondhand'),
     setActiveTab,
     t,
     tabOptions,

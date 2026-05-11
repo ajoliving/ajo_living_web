@@ -15,7 +15,6 @@ import {
   markSettingsSecondhandListingSold,
   saveSettingsDiscoverPlacements,
 } from '@/httpapis/secondhand-listings';
-import { publishSystemNotice } from '@/httpapis/chats';
 import {
   getMarketplaceCategoryLabel,
   marketplaceCategories,
@@ -28,7 +27,6 @@ import type {
 } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
-import { useSessionStore } from '@/stores/session';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
   resolveListingCategoryLabel,
@@ -43,7 +41,6 @@ import {
 
 type SettingsStatusFilter = '' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
 type SettingsPlacementScene = 'discover_hero' | 'discover_category_carousel';
-type SettingsSection = 'notice' | 'discover';
 type SettingsLeaveDecision = 'save' | 'discard' | 'stay';
 
 interface SlotView {
@@ -80,26 +77,17 @@ export const useMarketplaceSettingsPage = () => {
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
-  const sessionStore = useSessionStore();
   const listingsLoading = ref(false);
   const placementsLoading = ref(false);
   const savingPlacements = ref(false);
-  const publishingNotice = ref(false);
   const keyword = ref('');
   const categoryCode = ref<MarketplaceCategoryCode | ''>('');
   const status = ref<SettingsStatusFilter>('');
-  const noticeTitle = ref('');
-  const noticeBody = ref('');
-  const noticeActionLabel = ref('');
-  const noticeActionURL = ref('');
-  const activeSection = ref<SettingsSection>('discover');
   const savedPlacementSnapshot = ref('');
-  const savedNoticeSnapshot = ref('');
   const isLeavePromptOpen = ref(false);
   const listings = ref<SecondhandListingSummaryResponse[]>([]);
   const selectedListingId = ref('');
   const selectedCategoryForSlots = ref<MarketplaceCategoryCode>('home_furniture');
-  const pendingSection = ref<SettingsSection | ''>('');
   let resolveLeavePrompt: ((decision: SettingsLeaveDecision) => void) | null = null;
 
   const heroSlots = ref<SlotView[]>(
@@ -136,51 +124,6 @@ export const useMarketplaceSettingsPage = () => {
   );
 
   const visibleCategorySlots = computed(() => categorySlots[selectedCategoryForSlots.value]);
-  const canPublishNotice = computed(() => sessionStore.currentUser.is_staff);
-  const settingsNavItems = computed(() => {
-    const items = [{ key: 'discover' as const, label: t('marketplace.settings.discoverSection'), icon: 'palette' as const }];
-
-    return canPublishNotice.value
-      ? [{ key: 'notice' as const, label: t('marketplace.settings.noticeSection'), icon: 'send' as const }, ...items]
-      : items;
-  });
-
-  // 3.1 切換設定區塊
-  const setActiveSection = async (section: SettingsSection): Promise<void> => {
-    if (section === activeSection.value) {
-      return;
-    }
-
-    if (!hasUnsavedSettingsChanges.value) {
-      activeSection.value = section;
-      return;
-    }
-
-    pendingSection.value = section;
-    const decision = await requestLeaveDecision();
-    if (decision === 'stay') {
-      pendingSection.value = '';
-      return;
-    }
-    if (decision === 'discard') {
-      pendingSection.value = '';
-      refreshNoticeSnapshot();
-      refreshPlacementSnapshot();
-      activeSection.value = section;
-      return;
-    }
-    if (isPlacementsDirty.value) {
-      const saved = await savePlacements();
-      if (!saved) {
-        pendingSection.value = '';
-        return;
-      }
-    }
-
-    pendingSection.value = '';
-    refreshNoticeSnapshot();
-    activeSection.value = section;
-  };
 
   // 3.2 建立發現廣告位 payload
   const buildPlacementPayload = (): DiscoverPlacementPayload[] =>
@@ -210,34 +153,11 @@ export const useMarketplaceSettingsPage = () => {
     savedPlacementSnapshot.value = serializePlacementPayload(buildPlacementPayload());
   };
 
-  // 3.5 序列化通知發布表單
-  const serializeNoticePayload = (): string =>
-    JSON.stringify({
-      title: noticeTitle.value.trim(),
-      body: noticeBody.value.trim(),
-      actionLabel: noticeActionLabel.value.trim(),
-      actionURL: noticeActionURL.value.trim(),
-    });
-
-  // 3.6 更新通知表單快照
-  const refreshNoticeSnapshot = (): void => {
-    savedNoticeSnapshot.value = serializeNoticePayload();
-  };
-
   const isPlacementsDirty = computed(
     () =>
       savedPlacementSnapshot.value.trim().length > 0 &&
       serializePlacementPayload(buildPlacementPayload()) !== savedPlacementSnapshot.value,
   );
-
-  const isNoticeDirty = computed(
-    () =>
-      canPublishNotice.value &&
-      savedNoticeSnapshot.value.length > 0 &&
-      serializeNoticePayload() !== savedNoticeSnapshot.value,
-  );
-
-  const hasUnsavedSettingsChanges = computed(() => isPlacementsDirty.value || isNoticeDirty.value);
 
   // 3.7 打開離開確認彈窗
   const requestLeaveDecision = (): Promise<SettingsLeaveDecision> => {
@@ -391,53 +311,12 @@ export const useMarketplaceSettingsPage = () => {
     }
   };
 
-  // 3.17 發布系統通知
-  const publishNotice = async (): Promise<void> => {
-    const title = noticeTitle.value.trim();
-    const body = noticeBody.value.trim();
-    const actionLabel = noticeActionLabel.value.trim();
-    const actionURL = noticeActionURL.value.trim();
-    if (!title || !body) {
-      feedbackStore.pushToast(t('marketplace.settings.noticeRequired'), 'error');
-      return;
-    }
-    if ((actionLabel && !actionURL) || (!actionLabel && actionURL)) {
-      feedbackStore.pushToast(t('marketplace.settings.noticeActionPairRequired'), 'error');
-      return;
-    }
-
-    publishingNotice.value = true;
-
-    try {
-      const { data } = await publishSystemNotice({
-        title,
-        body,
-        action_label: actionLabel || undefined,
-        action_url: actionURL || undefined,
-      });
-      noticeTitle.value = '';
-      noticeBody.value = '';
-      noticeActionLabel.value = '';
-      noticeActionURL.value = '';
-      refreshNoticeSnapshot();
-      feedbackStore.pushToast(
-        t('marketplace.settings.noticePublishSuccess', { count: data.data.delivered_count }),
-        'success',
-      );
-    } catch (error) {
-      feedbackStore.pushToast(resolveErrorMessage(error, t('marketplace.settings.noticePublishError')), 'error');
-    } finally {
-      publishingNotice.value = false;
-    }
-  };
-
   onMounted(() => {
-    refreshNoticeSnapshot();
     void Promise.all([loadListings(), loadPlacements()]);
   });
 
   onBeforeRouteLeave(async () => {
-    if (!hasUnsavedSettingsChanges.value) {
+    if (!isPlacementsDirty.value) {
       return true;
     }
 
@@ -449,17 +328,11 @@ export const useMarketplaceSettingsPage = () => {
       return true;
     }
 
-    if (!isPlacementsDirty.value) {
-      return true;
-    }
-
     return savePlacements();
   });
 
   return {
-    activeSection,
     assignSelectedToSlot,
-    canPublishNotice,
     categoryCode,
     categoryOptions,
     categorySlots,
@@ -470,10 +343,8 @@ export const useMarketplaceSettingsPage = () => {
     getMarketplaceCategoryLabel,
     heroSlots,
     handleLeavePromptDecision,
-    hasUnsavedSettingsChanges,
     isLeavePromptOpen,
     isPlacementsDirty,
-    isNoticeDirty,
     keyword,
     listings,
     listingsLoading,
@@ -482,12 +353,6 @@ export const useMarketplaceSettingsPage = () => {
     marketplaceCategories,
     placementsLoading,
     preferenceStore,
-    noticeActionLabel,
-    noticeActionURL,
-    noticeBody,
-    noticeTitle,
-    publishNotice,
-    publishingNotice,
     resolveListingCategoryLabel,
     resolveListingCommunityName,
     resolveListingCoverImage,
@@ -502,8 +367,6 @@ export const useMarketplaceSettingsPage = () => {
     selectedCategoryForSlots,
     selectedListingId,
     selectedListing,
-    setActiveSection,
-    settingsNavItems,
     status,
     statusOptions,
     t,

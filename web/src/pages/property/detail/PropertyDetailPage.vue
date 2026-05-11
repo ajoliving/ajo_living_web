@@ -70,6 +70,8 @@ const priceLabel = computed(() =>
 const areaLabel = computed(() =>
   props.channel === 'sale' ? t('property.sale.areaLabel') : t('property.serviced.areaLabel'),
 );
+const formatAreaSqft = (value: number): string => t('common.unit.sqft', { value });
+const formatRoomSpec = (area: number, months: number): string => t('common.unit.roomSpec', { area, months });
 const contactPayload = computed(() => contactAccess.value?.contact_payload ?? {});
 const ownerName = computed(() =>
   listing.value?.owner?.display_name ||
@@ -199,7 +201,7 @@ onMounted(() => {
               </div>
               <div>
                 <dt>{{ areaLabel }}</dt>
-                <dd>{{ resolvePropertyArea(listing) }} sqft</dd>
+                <dd>{{ formatAreaSqft(resolvePropertyArea(listing)) }}</dd>
               </div>
               <div>
                 <dt>{{ t('property.detail.address') }}</dt>
@@ -290,7 +292,7 @@ onMounted(() => {
             >
               <h3>{{ room.name }}</h3>
               <p>{{ formatPrice(room.monthly_rent_hkd, preferenceStore.locale) }}</p>
-              <span>{{ room.usable_area_sqft }} sqft · {{ room.min_lease_months }} month</span>
+              <span>{{ formatRoomSpec(room.usable_area_sqft, room.min_lease_months) }}</span>
             </article>
           </div>
         </section>
@@ -477,7 +479,7 @@ onMounted(() => {
   border: 1px solid rgb(var(--color-primary));
   border-radius: 0.5rem;
   background: rgb(var(--color-primary));
-  color: #fff;
+  color: rgb(var(--color-primary-contrast));
   font-weight: 900;
 }
 

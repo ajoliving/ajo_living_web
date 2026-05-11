@@ -176,6 +176,7 @@ func TestRepublishExpiredListing(t *testing.T) {
 	communityA, _ := mustGetCommunities(t, runtime)
 	owner := mustCreateUser(t, runtime, "+852", "90000032", &communityA.ID)
 	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+	mustGrantPoints(t, runtime, owner.ID, 100)
 
 	listing, _, _, err := secondhandService.loadListingByPublicID(context.Background(), listingID)
 	if err != nil {
@@ -201,6 +202,7 @@ func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 	communityA, _ := mustGetCommunities(t, runtime)
 	owner := mustCreateUser(t, runtime, "+852", "90000033", &communityA.ID)
 	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+	mustGrantPoints(t, runtime, owner.ID, 100)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
 	if err := secondhandService.MarkSold(context.Background(), owner.ID, listingID); err != nil {

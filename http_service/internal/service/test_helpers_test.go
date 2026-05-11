@@ -68,7 +68,7 @@ func newTestRuntime(t *testing.T) *Runtime {
 		t.Fatalf("create storage provider: %v", err)
 	}
 
-	return &Runtime{
+	runtime := &Runtime{
 		Config:          cfg,
 		DB:              db,
 		Logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -78,6 +78,8 @@ func newTestRuntime(t *testing.T) *Runtime {
 		OTPStore:        NewOTPStore(),
 		Now:             func() time.Time { return fixedNow },
 	}
+	runtime.WalletService = NewWalletService(runtime)
+	return runtime
 }
 
 // 2. mustGetCommunities returns at least two seeded communities.
@@ -161,6 +163,7 @@ func mustCreatePublishedListingWithCategory(t *testing.T, runtime *Runtime, owne
 	t.Helper()
 
 	secondhandService := NewSecondhandService(runtime)
+	mustGrantPoints(t, runtime, owner.ID, 1000)
 	assetID := mustCreateMediaAsset(t, runtime, owner.ID)
 
 	created, err := secondhandService.CreateSecondhandListing(context.Background(), UpsertSecondhandParams{
@@ -205,4 +208,16 @@ func mustCreatePublishedListingWithCategory(t *testing.T, runtime *Runtime, owne
 // 7. ptrFloat64 returns a float64 pointer.
 func ptrFloat64(value float64) *float64 {
 	return &value
+}
+
+// 8. mustGrantPoints credits a test wallet account.
+func mustGrantPoints(t *testing.T, runtime *Runtime, userID int64, amount int64) {
+	t.Helper()
+
+	if runtime.WalletService == nil {
+		runtime.WalletService = NewWalletService(runtime)
+	}
+	if _, err := runtime.WalletService.GrantOperatorPoints(context.Background(), 0, userID, amount, "test grant"); err != nil {
+		t.Fatalf("grant test points: %v", err)
+	}
 }

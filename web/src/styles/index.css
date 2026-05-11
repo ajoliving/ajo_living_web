@@ -118,7 +118,7 @@
   }
 
   .app-button-primary {
-    @apply border-primary bg-primary text-white hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-soft;
+    @apply border-primary bg-primary text-primary-contrast hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-soft;
   }
 
   .app-button-secondary {
@@ -218,6 +218,39 @@
 
   .status-pill {
     @apply inline-flex items-center rounded-pill border px-3 py-1 text-xs font-semibold;
+  }
+
+  .subroute-transition-shell {
+    min-width: 0;
+  }
+
+  .subroute-slide-enter-active,
+  .subroute-slide-leave-active {
+    transition:
+      opacity 0.22s ease,
+      transform 0.22s ease;
+  }
+
+  .subroute-slide-enter-from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  .subroute-slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .subroute-slide-enter-active,
+    .subroute-slide-leave-active {
+      transition: opacity 0.12s ease;
+    }
+
+    .subroute-slide-enter-from,
+    .subroute-slide-leave-to {
+      transform: none;
+    }
   }
 }
 

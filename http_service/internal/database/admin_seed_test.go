@@ -33,29 +33,31 @@ func TestSeedDefaultAdminAccountCreatesLoginCredential(t *testing.T) {
 		t.Fatalf("seed default admin: %v", err)
 	}
 
-	var credential model.UserCredential
-	if err := db.Where("email = ?", defaultAdminEmail).First(&credential).Error; err != nil {
-		t.Fatalf("load default admin credential: %v", err)
-	}
-	if !utils.VerifyPassword(defaultAdminPassword, credential.PasswordHash) {
-		t.Fatalf("expected default admin password to verify")
-	}
+	for _, email := range []string{defaultAdminEmail, defaultAdminSecondEmail} {
+		var credential model.UserCredential
+		if err := db.Where("email = ?", email).First(&credential).Error; err != nil {
+			t.Fatalf("load default admin credential %s: %v", email, err)
+		}
+		if !utils.VerifyPassword(defaultAdminPassword, credential.PasswordHash) {
+			t.Fatalf("expected default admin password to verify for %s", email)
+		}
 
-	var user model.User
-	if err := db.First(&user, credential.UserID).Error; err != nil {
-		t.Fatalf("load default admin user: %v", err)
-	}
-	if !user.IsStaff || user.MemberStatus != "active" {
-		t.Fatalf("expected active staff user, got %+v", user)
-	}
+		var user model.User
+		if err := db.First(&user, credential.UserID).Error; err != nil {
+			t.Fatalf("load default admin user %s: %v", email, err)
+		}
+		if !user.IsStaff || user.MemberStatus != "active" {
+			t.Fatalf("expected active staff user for %s, got %+v", email, user)
+		}
 
-	var binding model.UserRoleBinding
-	err = db.
-		Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
-		Where("user_role_bindings.user_id = ? AND roles.code = ?", user.ID, model.RoleCodeSuperAdmin).
-		First(&binding).
-		Error
-	if err != nil {
-		t.Fatalf("load default admin role binding: %v", err)
+		var binding model.UserRoleBinding
+		err = db.
+			Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
+			Where("user_role_bindings.user_id = ? AND roles.code = ?", user.ID, model.RoleCodeSuperAdmin).
+			First(&binding).
+			Error
+		if err != nil {
+			t.Fatalf("load default admin role binding %s: %v", email, err)
+		}
 	}
 }

@@ -19,6 +19,43 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 
+export interface ChatEmojiOption {
+  key: string;
+  value: string;
+}
+
+const chatEmojiCodePoints = [
+  0x1f600,
+  0x1f604,
+  0x1f60a,
+  0x1f602,
+  0x1f60d,
+  0x1f914,
+  0x1f44d,
+  0x1f44b,
+  0x1f64f,
+  0x1f44c,
+  0x1f389,
+  0x1f525,
+  0x1f4a1,
+  0x1f4b0,
+  0x1f4e6,
+  0x1f69a,
+  0x1f4cd,
+  0x1f4de,
+  0x1f4f7,
+  0x1f44a,
+  0x1f622,
+  0x1f621,
+  0x2764,
+  0x2705,
+];
+
+const chatEmojiOptions: ChatEmojiOption[] = chatEmojiCodePoints.map((codePoint) => ({
+  key: String(codePoint),
+  value: String.fromCodePoint(codePoint),
+}));
+
 // 1. 管理聊天頁資料與動作
 export const useMarketplaceChatPage = () => {
   const route = useRoute();
@@ -35,6 +72,7 @@ export const useMarketplaceChatPage = () => {
   const activeMessages = ref<ChatMessageView[]>([]);
   const participantPublicIdByUserId = ref<Record<string, string>>({});
   const draftMessage = ref('');
+  const emojiPickerOpen = ref(false);
   const messageContainerRef = ref<HTMLDivElement | null>(null);
 
   const activeConversation = computed(() =>
@@ -101,7 +139,7 @@ export const useMarketplaceChatPage = () => {
         selectedChatId.value = deepLinkedChatId;
       } else if (targetConversation) {
         selectedChatId.value = targetConversation.id;
-        await router.replace(`/marketplace/my/chat/${targetConversation.id}`);
+        await router.replace(`/account/marketplace/my/chat/${targetConversation.id}`);
       } else if (!selectedChatId.value && conversations.value[0]) {
         selectedChatId.value = conversations.value[0].id;
       }
@@ -160,7 +198,7 @@ export const useMarketplaceChatPage = () => {
   // 1.5 切換會話
   const handleSelectChat = async (chatId: string): Promise<void> => {
     selectedChatId.value = chatId;
-    await router.replace(`/marketplace/my/chat/${chatId}`);
+    await router.replace(`/account/marketplace/my/chat/${chatId}`);
   };
 
   // 1.6 送出訊息
@@ -170,6 +208,7 @@ export const useMarketplaceChatPage = () => {
       return;
     }
 
+    emojiPickerOpen.value = false;
     sendingMessage.value = true;
 
     try {
@@ -198,14 +237,35 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
-  // 1.7 綁定訊息滾動容器
+  // 1.7 使用 Enter 送出訊息，Shift + Enter 保留換行
+  const handleSendByEnter = (event: KeyboardEvent): void => {
+    if (event.shiftKey || event.isComposing || sendingMessage.value) {
+      return;
+    }
+
+    event.preventDefault();
+    void handleSendMessage();
+  };
+
+  // 1.8 綁定訊息滾動容器
   const setMessageContainerRef = (element: Element | ComponentPublicInstance | null): void => {
     messageContainerRef.value = element instanceof HTMLDivElement ? element : null;
+  };
+
+  // 1.9 切換表情面板
+  const toggleEmojiPicker = (): void => {
+    emojiPickerOpen.value = !emojiPickerOpen.value;
+  };
+
+  // 1.10 插入表情到輸入內容
+  const insertEmoji = (emoji: string): void => {
+    draftMessage.value = `${draftMessage.value}${emoji}`;
   };
 
   watch(
     () => selectedChatId.value,
     () => {
+      emojiPickerOpen.value = false;
       void loadActiveChat();
     },
   );
@@ -239,11 +299,15 @@ export const useMarketplaceChatPage = () => {
   return {
     activeConversation,
     activeMessages,
+    chatEmojiOptions,
     conversations,
     draftMessage,
+    emojiPickerOpen,
     formatPrice,
     handleSelectChat,
+    handleSendByEnter,
     handleSendMessage,
+    insertEmoji,
     isSystemNoticeConversation,
     loadingConversations,
     loadingMessages,
@@ -253,5 +317,6 @@ export const useMarketplaceChatPage = () => {
     sendingMessage,
     sessionStore,
     t,
+    toggleEmojiPicker,
   };
 };

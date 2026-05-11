@@ -25,44 +25,44 @@ const navItems = computed<MyNavItem[]>(() => [
   {
     key: 'chat',
     label: t('marketplace.myHub.chat'),
-    to: '/marketplace/my/chat',
+    to: '/account/marketplace/my/chat',
     icon: 'message',
-    match: ['/marketplace/my/chat'],
+    match: ['/account/marketplace/my/chat'],
   },
   {
     key: 'listings',
     label: t('marketplace.myHub.publishedListings'),
-    to: '/marketplace/my/listings',
+    to: '/account/marketplace/my/listings',
     icon: 'browse',
-    match: ['/marketplace/my/listings', '/marketplace/my/editor', '/marketplace/my/listing', '/marketplace/my/preview'],
+    match: ['/account/marketplace/my/listings', '/account/marketplace/my/editor', '/account/marketplace/my/listing', '/account/marketplace/my/preview'],
   },
   {
     key: 'new',
     label: t('marketplace.myHub.newListing'),
-    to: '/marketplace/my/new',
+    to: '/account/marketplace/my/new',
     icon: 'plus-square',
-    match: ['/marketplace/my/new'],
+    match: ['/account/marketplace/my/new'],
   },
   {
     key: 'orders',
     label: t('marketplace.myHub.orders'),
-    to: '/marketplace/my/orders',
+    to: '/account/marketplace/my/orders',
     icon: 'inbox',
-    match: ['/marketplace/my/orders'],
+    match: ['/account/marketplace/my/orders'],
   },
   {
     key: 'favorites',
     label: t('marketplace.myHub.favorites'),
-    to: '/marketplace/my/favorites',
+    to: '/account/marketplace/my/favorites',
     icon: 'star',
-    match: ['/marketplace/my/favorites'],
+    match: ['/account/marketplace/my/favorites'],
   },
   {
     key: 'profile',
     label: t('marketplace.myHub.profile'),
-    to: '/marketplace/my/profile',
+    to: '/account/marketplace/my/profile',
     icon: 'user',
-    match: ['/marketplace/my/profile'],
+    match: ['/account/marketplace/my/profile'],
   },
 ]);
 
@@ -102,7 +102,17 @@ const isNavActive = (item: MyNavItem): boolean =>
     </aside>
 
     <section class="marketplace-my-hub__content">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <Transition
+          name="subroute-slide"
+          mode="out-in"
+        >
+          <component
+            :is="Component"
+            class="subroute-transition-shell"
+          />
+        </Transition>
+      </RouterView>
     </section>
   </main>
 </template>
@@ -115,7 +125,7 @@ const isNavActive = (item: MyNavItem): boolean =>
   gap: 1.25rem;
   margin: 0 auto;
   padding: 1rem var(--layout-page-padding-inline) 5rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
 }
 
 .marketplace-my-hub__sidebar {
@@ -126,7 +136,7 @@ const isNavActive = (item: MyNavItem): boolean =>
   align-content: start;
   gap: 1.5rem;
   border: 1px solid rgb(var(--color-border) / 0.3);
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background:
     linear-gradient(
       180deg,
@@ -143,7 +153,7 @@ const isNavActive = (item: MyNavItem): boolean =>
 
 .marketplace-my-hub__kicker {
   margin: 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -153,7 +163,7 @@ const isNavActive = (item: MyNavItem): boolean =>
 
 .marketplace-my-hub__sidebar h1 {
   margin: 0.75rem 0 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 500;
@@ -162,7 +172,7 @@ const isNavActive = (item: MyNavItem): boolean =>
 
 .marketplace-my-hub__description {
   margin: 0.65rem 0 0;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   line-height: 1.7;
 }
@@ -176,10 +186,11 @@ const isNavActive = (item: MyNavItem): boolean =>
   position: relative;
   display: inline-flex;
   min-height: 2.75rem;
+  width: 100%;
   align-items: center;
   gap: 0.65rem;
   border: 1px solid rgb(var(--color-border) / 0.24);
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background:
     linear-gradient(
       180deg,

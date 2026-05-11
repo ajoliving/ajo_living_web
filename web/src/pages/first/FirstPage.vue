@@ -24,7 +24,7 @@ const { t } = useI18n();
       </p>
       <RouterLink
         to="/marketplace"
-        class="mt-8 inline-flex rounded-pill bg-primary px-5 py-3 text-sm font-semibold text-white shadow-soft transition hover:-translate-y-0.5"
+        class="mt-8 inline-flex rounded-pill bg-primary px-5 py-3 text-sm font-semibold text-primary-contrast shadow-soft transition hover:-translate-y-0.5"
       >
         {{ t('nav.goMarketplace') }}
       </RouterLink>

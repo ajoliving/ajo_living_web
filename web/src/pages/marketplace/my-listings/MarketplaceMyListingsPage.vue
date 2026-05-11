@@ -15,6 +15,7 @@ const {
   filteredItems,
   formatDate,
   formatPrice,
+  formatAjoPoints,
   loading,
   openCreate,
   openEditor,
@@ -32,6 +33,7 @@ const {
   resolveListingVisibility,
   runAction,
   searchQuery,
+  secondhandChargeCost,
   setActiveTab,
   t,
   tabOptions,
@@ -60,7 +62,7 @@ const {
         </label>
       </section>
 
-      <section class="space-y-4 border-t border-[#E2E3E1] pt-5">
+      <section class="space-y-4 border-t border-border pt-5">
         <h2 class="my-section-title">
           {{ t('marketplace.mine.statusFilter') }}
         </h2>
@@ -81,7 +83,7 @@ const {
 
     <section class="marketplace-my-results min-w-0 flex-1">
       <div class="mb-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <p class="min-w-0 text-[18px] leading-[1.6] text-[#414848]">
+        <p class="min-w-0 text-[18px] leading-[1.6] text-text-muted">
           {{ t('marketplace.filter.resultsFound', { count: filteredItems.length }) }}
         </p>
         <button
@@ -122,7 +124,7 @@ const {
             />
             <div
               v-else
-              class="flex h-full w-full flex-col items-center justify-center gap-3 bg-[#E2E3E1] text-sm text-[#717878]"
+              class="flex h-full w-full flex-col items-center justify-center gap-3 bg-border text-sm text-text-muted"
             >
               <AppIcon
                 name="picture"
@@ -226,7 +228,7 @@ const {
                 :size="16"
               />
               <span>
-                {{ t('marketplace.mine.publishAction') }}
+                {{ t('marketplace.mine.publishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
               </span>
             </button>
 
@@ -241,7 +243,7 @@ const {
                 :size="16"
               />
               <span>
-                {{ t('marketplace.mine.republishAction') }}
+                {{ t('marketplace.mine.republishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
               </span>
             </button>
 
@@ -306,7 +308,7 @@ const {
   gap: 1.5rem;
   margin: 0;
   padding: 0;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   overflow: visible;
 }
 
@@ -330,7 +332,7 @@ const {
 }
 
 .my-section-title {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -349,19 +351,19 @@ const {
   left: 0.625rem;
   z-index: 1;
   transform: translateY(-50%);
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   pointer-events: none;
 }
 
 .my-text-input {
   height: 3rem;
   width: 100%;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.9375rem;
   line-height: 1.6;
   outline: none;
@@ -371,7 +373,7 @@ const {
 }
 
 .my-text-input:focus {
-  border-color: #002727;
+  border-color: rgb(var(--color-primary));
   box-shadow: 0 0 0 3px rgb(0 39 39 / 0.16);
 }
 
@@ -391,33 +393,33 @@ const {
 }
 
 .my-filter-chip-active {
-  border-color: #002727;
+  border-color: rgb(var(--color-primary));
   background: rgb(0 39 39 / 0.05);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .my-filter-chip-active:hover {
-  border-color: #002727;
+  border-color: rgb(var(--color-primary));
   background: rgb(0 39 39 / 0.05);
-  color: #002727;
+  color: rgb(var(--color-primary));
 }
 
 .my-filter-chip-idle {
-  border-color: #c1c8c7;
-  color: #414848;
+  border-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-muted));
 }
 
 .my-filter-chip-idle:hover {
-  border-color: #717878;
-  color: #1a1c1b;
+  border-color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text));
 }
 
 .my-loading-card {
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 1.5rem;
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
@@ -434,11 +436,11 @@ const {
   justify-content: center;
   gap: 0.5rem;
   justify-self: start;
-  border: 1px solid #002727;
+  border: 1px solid rgb(var(--color-primary));
   border-radius: 9999px;
-  background: #002727;
+  background: rgb(var(--color-primary));
   padding: 0.65rem 1.1rem;
-  color: #ffffff;
+  color: rgb(var(--color-primary-contrast));
   font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -449,17 +451,17 @@ const {
 }
 
 .my-create-button:hover {
-  border-color: #1a1c1b;
-  background: #1a1c1b;
+  border-color: rgb(var(--color-text));
+  background: rgb(var(--color-text));
 }
 
 .my-listing-card {
   display: grid;
   min-height: 13rem;
   overflow: hidden;
-  border: 1px solid #e2e3e1;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
   transition: box-shadow 0.3s ease;
 }
@@ -471,7 +473,7 @@ const {
 .my-listing-card__media {
   height: 10.875rem;
   overflow: hidden;
-  background: #f4f4f2;
+  background: rgb(var(--color-surface-muted));
 }
 
 .my-listing-card__body {
@@ -493,7 +495,7 @@ const {
 
 .my-listing-card__price {
   flex-shrink: 0;
-  color: #002727;
+  color: rgb(var(--color-primary));
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 700;
@@ -506,7 +508,7 @@ const {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 500;
@@ -519,7 +521,7 @@ const {
   margin: 0;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   line-height: 1.45;
 }
@@ -527,12 +529,12 @@ const {
 .my-listing-meta-grid {
   display: grid;
   gap: 0.65rem;
-  border-top: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
   padding-top: 0.65rem;
 }
 
 .my-meta-label {
-  color: #717878;
+  color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -542,7 +544,7 @@ const {
 
 .my-meta-value {
   margin-top: 0.35rem;
-  color: #1a1c1b;
+  color: rgb(var(--color-text));
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.25;
@@ -556,7 +558,7 @@ const {
   align-content: center;
   gap: 0.35rem;
   overflow: hidden;
-  border-top: 1px solid #e2e3e1;
+  border-top: 1px solid rgb(var(--color-border));
   padding: 0.75rem 1rem;
 }
 
@@ -566,7 +568,7 @@ const {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  border: 1px solid #c1c8c7;
+  border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   padding: 0.35rem 0.5rem;
   font-size: 0.6875rem;
@@ -580,24 +582,24 @@ const {
 }
 
 .my-action-button-primary {
-  border-color: #002727;
-  background: #002727;
-  color: #ffffff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .my-action-button-primary:hover {
-  background: #1a1c1b;
-  border-color: #1a1c1b;
+  background: rgb(var(--color-text));
+  border-color: rgb(var(--color-text));
 }
 
 .my-action-button-secondary {
   background: transparent;
-  color: #414848;
+  color: rgb(var(--color-text-muted));
 }
 
 .my-action-button-secondary:hover {
-  border-color: #002727;
-  color: #002727;
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
 }
 
 @media (max-width: 767px) {
@@ -634,7 +636,7 @@ const {
   .my-listing-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     border-top: 0;
-    border-left: 1px solid #e2e3e1;
+    border-left: 1px solid rgb(var(--color-border));
   }
 }
 </style>

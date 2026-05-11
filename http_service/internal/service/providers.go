@@ -7,6 +7,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ type OTPProvider interface {
 // 2. StorageProvider creates upload targets for media assets.
 type StorageProvider interface {
 	PresignUpload(ctx context.Context, input PresignUploadInput) (*PresignUploadResult, error)
+	PutObject(ctx context.Context, input PutObjectInput) (*StorageObjectInfo, error)
 	HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error)
 	DeleteObject(ctx context.Context, objectKey string) error
 }
@@ -49,7 +51,14 @@ type PresignUploadResult struct {
 	Headers   map[string]string `json:"headers"`
 }
 
-// 5. StorageObjectInfo defines the storage object metadata payload.
+// 5. PutObjectInput defines a direct server-side object upload.
+type PutObjectInput struct {
+	ObjectKey string
+	MimeType  string
+	Body      []byte
+}
+
+// 6. StorageObjectInfo defines the storage object metadata payload.
 type StorageObjectInfo struct {
 	ObjectKey     string
 	ContentType   string
@@ -60,6 +69,10 @@ type StorageObjectInfo struct {
 const mediaObjectPrefix = "ajo_living/"
 const accountMediaObjectPrefix = "ajo_living/account/"
 const listingMediaObjectPrefix = "ajo_living/listings/"
+const homeEngMediaObjectPrefix = "ajo_living/eng/home-carousel/"
+const loginBagMediaObjectPrefix = "ajo_living/login_bag/"
+const advertisementImageObjectPrefix = "ajo_living/advertisements/images/"
+const advertisementVideoObjectPrefix = "ajo_living/advertisements/video/"
 
 var errStorageObjectNotFound = errors.New("storage object not found")
 
@@ -119,7 +132,20 @@ func (p *MockStorageProvider) PresignUpload(_ context.Context, input PresignUplo
 	}, nil
 }
 
-// 13. HeadObject returns mock metadata for the target object key.
+// 13. PutObject accepts a mock server-side object upload.
+func (p *MockStorageProvider) PutObject(_ context.Context, input PutObjectInput) (*StorageObjectInfo, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" {
+		return nil, errStorageObjectNotFound
+	}
+
+	return &StorageObjectInfo{
+		ObjectKey:     input.ObjectKey,
+		ContentType:   input.MimeType,
+		ContentLength: int64(len(input.Body)),
+	}, nil
+}
+
+// 14. HeadObject returns mock metadata for the target object key.
 func (p *MockStorageProvider) HeadObject(_ context.Context, objectKey string) (*StorageObjectInfo, error) {
 	if strings.TrimSpace(objectKey) == "" {
 		return nil, errStorageObjectNotFound
@@ -130,7 +156,7 @@ func (p *MockStorageProvider) HeadObject(_ context.Context, objectKey string) (*
 	}, nil
 }
 
-// 14. DeleteObject accepts mock object deletion without external side effects.
+// 15. DeleteObject accepts mock object deletion without external side effects.
 func (p *MockStorageProvider) DeleteObject(_ context.Context, objectKey string) error {
 	if strings.TrimSpace(objectKey) == "" {
 		return errStorageObjectNotFound
@@ -139,7 +165,7 @@ func (p *MockStorageProvider) DeleteObject(_ context.Context, objectKey string) 
 	return nil
 }
 
-// 15. newOSSStorageProvider validates config and creates the OSS-backed provider.
+// 16. newOSSStorageProvider validates config and creates the OSS-backed provider.
 func newOSSStorageProvider(cfg *config.Config) (*OSSStorageProvider, error) {
 	if err := validateOSSConfig(cfg); err != nil {
 		return nil, err
@@ -152,7 +178,7 @@ func newOSSStorageProvider(cfg *config.Config) (*OSSStorageProvider, error) {
 	}, nil
 }
 
-// 16. PresignUpload returns a PUT presign URL for direct browser upload to OSS.
+// 17. PresignUpload returns a PUT presign URL for direct browser upload to OSS.
 func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUploadInput) (*PresignUploadResult, error) {
 	extension := path.Ext(input.FileName)
 	objectKey := fmt.Sprintf("%s%s%s", normalizeMediaObjectPrefix(input.ObjectPrefix), strings.ToLower(utils.NewPublicID()), extension)
@@ -181,7 +207,30 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 	}, nil
 }
 
-// 17. normalizeMediaObjectPrefix keeps upload object keys in approved media directories.
+// 18. PutObject uploads bytes directly to OSS from the server.
+func (p *OSSStorageProvider) PutObject(ctx context.Context, input PutObjectInput) (*StorageObjectInfo, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.MimeType) == "" || len(input.Body) == 0 {
+		return nil, fmt.Errorf("invalid object upload payload")
+	}
+
+	_, err := p.client.PutObject(ctx, &oss.PutObjectRequest{
+		Bucket:      oss.Ptr(p.config.StorageBucket),
+		Key:         oss.Ptr(input.ObjectKey),
+		Body:        bytes.NewReader(input.Body),
+		ContentType: oss.Ptr(input.MimeType),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("put oss object: %w", err)
+	}
+
+	return &StorageObjectInfo{
+		ObjectKey:     input.ObjectKey,
+		ContentType:   input.MimeType,
+		ContentLength: int64(len(input.Body)),
+	}, nil
+}
+
+// 19. normalizeMediaObjectPrefix keeps upload object keys in approved media directories.
 func normalizeMediaObjectPrefix(prefix string) string {
 	normalizedPrefix := strings.Trim(strings.TrimSpace(prefix), "/")
 	switch normalizedPrefix {
@@ -189,6 +238,14 @@ func normalizeMediaObjectPrefix(prefix string) string {
 		return accountMediaObjectPrefix
 	case "ajo_living/listings", "listings":
 		return listingMediaObjectPrefix
+	case "ajo_living/eng/home-carousel", "eng/home-carousel":
+		return homeEngMediaObjectPrefix
+	case "ajo_living/login_bag", "login_bag":
+		return loginBagMediaObjectPrefix
+	case "ajo_living/advertisements/images", "advertisements/images":
+		return advertisementImageObjectPrefix
+	case "ajo_living/advertisements/video", "advertisements/video":
+		return advertisementVideoObjectPrefix
 	default:
 		if listingPrefix, ok := normalizeListingMediaObjectPrefix(normalizedPrefix); ok {
 			return listingPrefix
@@ -197,7 +254,7 @@ func normalizeMediaObjectPrefix(prefix string) string {
 	}
 }
 
-// 18. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.
+// 20. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.
 func normalizeListingMediaObjectPrefix(prefix string) (string, bool) {
 	cleanedPrefix := strings.TrimPrefix(prefix, "ajo_living/")
 	if !strings.HasPrefix(cleanedPrefix, "listings/") {
@@ -217,7 +274,7 @@ func normalizeListingMediaObjectPrefix(prefix string) (string, bool) {
 	return mediaObjectPrefix + strings.Join(segments, "/") + "/", true
 }
 
-// 19. isSafeObjectPrefixSegment validates one object prefix segment.
+// 21. isSafeObjectPrefixSegment validates one object prefix segment.
 func isSafeObjectPrefixSegment(segment string) bool {
 	if segment == "" {
 		return false
@@ -242,7 +299,7 @@ func isSafeObjectPrefixSegment(segment string) bool {
 	return true
 }
 
-// 20. HeadObject returns object metadata from OSS for server-side verification.
+// 22. HeadObject returns object metadata from OSS for server-side verification.
 func (p *OSSStorageProvider) HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error) {
 	result, err := p.client.HeadObject(ctx, &oss.HeadObjectRequest{
 		Bucket: oss.Ptr(p.config.StorageBucket),
@@ -263,7 +320,7 @@ func (p *OSSStorageProvider) HeadObject(ctx context.Context, objectKey string) (
 	}, nil
 }
 
-// 21. DeleteObject removes the target object from OSS storage.
+// 23. DeleteObject removes the target object from OSS storage.
 func (p *OSSStorageProvider) DeleteObject(ctx context.Context, objectKey string) error {
 	_, err := p.client.DeleteObject(ctx, &oss.DeleteObjectRequest{
 		Bucket: oss.Ptr(p.config.StorageBucket),
@@ -276,7 +333,7 @@ func (p *OSSStorageProvider) DeleteObject(ctx context.Context, objectKey string)
 	return nil
 }
 
-// 22. validateOSSConfig enforces the minimum configuration required for OSS uploads.
+// 24. validateOSSConfig enforces the minimum configuration required for OSS uploads.
 func validateOSSConfig(cfg *config.Config) error {
 	switch {
 	case strings.TrimSpace(cfg.StorageBucket) == "":
@@ -296,7 +353,7 @@ func validateOSSConfig(cfg *config.Config) error {
 	}
 }
 
-// 23. newOSSClient builds the Alibaba Cloud OSS SDK client.
+// 25. newOSSClient builds the Alibaba Cloud OSS SDK client.
 func newOSSClient(cfg *config.Config) *oss.Client {
 	ossConfig := oss.LoadDefaultConfig().
 		WithRegion(strings.TrimSpace(cfg.StorageRegion)).
@@ -319,7 +376,7 @@ func newOSSClient(cfg *config.Config) *oss.Client {
 	return oss.NewClient(ossConfig)
 }
 
-// 24. isOSSObjectNotFoundError checks whether OSS returned an object-not-found response.
+// 26. isOSSObjectNotFoundError checks whether OSS returned an object-not-found response.
 func isOSSObjectNotFoundError(err error) bool {
 	var serviceErr *oss.ServiceError
 	if !errors.As(err, &serviceErr) {

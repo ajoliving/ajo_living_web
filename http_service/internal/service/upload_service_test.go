@@ -32,7 +32,16 @@ func (s *uploadServiceStorageStub) PresignUpload(_ context.Context, input Presig
 	}, nil
 }
 
-// 3. HeadObject returns the configured object metadata for tests.
+// 3. PutObject accepts direct upload in tests.
+func (s *uploadServiceStorageStub) PutObject(_ context.Context, input PutObjectInput) (*StorageObjectInfo, error) {
+	return &StorageObjectInfo{
+		ObjectKey:     input.ObjectKey,
+		ContentType:   input.MimeType,
+		ContentLength: int64(len(input.Body)),
+	}, nil
+}
+
+// 4. HeadObject returns the configured object metadata for tests.
 func (s *uploadServiceStorageStub) HeadObject(_ context.Context, _ string) (*StorageObjectInfo, error) {
 	if s.headObjectErr != nil {
 		return nil, s.headObjectErr
@@ -44,12 +53,12 @@ func (s *uploadServiceStorageStub) HeadObject(_ context.Context, _ string) (*Sto
 	return &StorageObjectInfo{}, nil
 }
 
-// 4. DeleteObject returns the configured delete result for tests.
+// 5. DeleteObject returns the configured delete result for tests.
 func (s *uploadServiceStorageStub) DeleteObject(_ context.Context, _ string) error {
 	return s.deleteObjectErr
 }
 
-// 5. TestCompleteListGetAndDeleteMediaAsset verifies the member media asset lifecycle.
+// 6. TestCompleteListGetAndDeleteMediaAsset verifies the member media asset lifecycle.
 func TestCompleteListGetAndDeleteMediaAsset(t *testing.T) {
 	runtime := newTestRuntime(t)
 	uploadService := NewUploadService(runtime)
@@ -106,7 +115,7 @@ func TestCompleteListGetAndDeleteMediaAsset(t *testing.T) {
 	assertAppErrorCode(t, err, errcode.CodeNotFound)
 }
 
-// 6. TestCompleteUploadRejectsMissingStorageObject verifies storage object validation.
+// 7. TestCompleteUploadRejectsMissingStorageObject verifies storage object validation.
 func TestCompleteUploadRejectsMissingStorageObject(t *testing.T) {
 	runtime := newTestRuntime(t)
 	runtime.StorageProvider = &uploadServiceStorageStub{
@@ -126,7 +135,7 @@ func TestCompleteUploadRejectsMissingStorageObject(t *testing.T) {
 	assertAppErrorCode(t, err, errcode.CodeValidationError)
 }
 
-// 7. TestDeleteMediaAssetRejectsReferencedAsset verifies listing references block deletion.
+// 8. TestDeleteMediaAssetRejectsReferencedAsset verifies listing references block deletion.
 func TestDeleteMediaAssetRejectsReferencedAsset(t *testing.T) {
 	runtime := newTestRuntime(t)
 	uploadService := NewUploadService(runtime)
@@ -183,7 +192,7 @@ func TestDeleteMediaAssetRejectsReferencedAsset(t *testing.T) {
 	assertAppErrorCode(t, err, errcode.CodeValidationError)
 }
 
-// 8. assertAppErrorCode validates the business error code.
+// 9. assertAppErrorCode validates the business error code.
 func assertAppErrorCode(t *testing.T, err error, expectedCode string) {
 	t.Helper()
 
@@ -196,7 +205,7 @@ func assertAppErrorCode(t *testing.T, err error, expectedCode string) {
 	}
 }
 
-// 9. ptrInt returns an int pointer.
+// 10. ptrInt returns an int pointer.
 func ptrInt(value int) *int {
 	return &value
 }

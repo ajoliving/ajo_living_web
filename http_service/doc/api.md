@@ -50,10 +50,18 @@ go run ./http_service/cmd/server
 | 5 | /api/v1/auth/otp/verify | POST | 驗證 OTP 並登入 | 無 |
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
+| 49 | /api/v1/auth/email/register | POST | 建立郵箱與手機密碼帳戶 | 無 |
+| 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
+| 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
 | 7 | /api/v1/me | GET | 取得目前會員資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
 | 9 | /api/v1/me/secondhand/listings | GET | 取得我的二手帖子 | 會員 |
+| 52 | /api/v1/me/wallet | GET | 取得 AJO Point 錢包總覽 | 會員 |
+| 53 | /api/v1/me/wallet/transactions | GET | 查詢我的積分流水 | 會員 |
+| 54 | /api/v1/me/wallet/ad-tasks | GET | 查詢可領取的廣告積分任務 | 會員 |
+| 55 | /api/v1/me/wallet/ad-tasks/{taskId}/start | POST | 開始廣告觀看任務 | 會員 |
+| 56 | /api/v1/me/wallet/ad-tasks/{taskId}/claim | POST | 領取廣告積分 | 會員 |
 | 33 | /api/v1/me/orders | GET | 取得我的訂單列表 | 會員 |
 
 ### OSS 模組
@@ -80,11 +88,11 @@ go run ./http_service/cmd/server
 | 18 | /api/v1/secondhand/listings/{listingId}/mark-sold | POST | 標記帖子為已售 | 會員 |
 | 19 | /api/v1/secondhand/listings/{listingId}/deactivate | POST | 下架二手帖子 | 會員 |
 | 20 | /api/v1/listings/{listingId}/contact-access | POST | 取得可聯絡方式 | 會員 |
-| 44 | /api/v1/secondhand/settings/listings | GET | 設定頁查詢全部二手帖子 | 會員 |
-| 45 | /api/v1/secondhand/settings/discover-placements | GET | 設定頁查詢發現頁廣告位 | 會員 |
-| 46 | /api/v1/secondhand/settings/discover-placements | PUT | 設定頁儲存發現頁廣告位 | 會員 |
-| 47 | /api/v1/secondhand/settings/listings/{listingId}/mark-sold | POST | 設定頁標記任意帖子已售 | 會員 |
-| 48 | /api/v1/secondhand/settings/listings/{listingId}/deactivate | POST | 設定頁下架任意帖子 | 會員 |
+| 44 | /api/v1/secondhand/settings/listings | GET | 設定頁查詢全部二手帖子 | Staff |
+| 45 | /api/v1/secondhand/settings/discover-placements | GET | 設定頁查詢發現頁廣告位 | Staff |
+| 46 | /api/v1/secondhand/settings/discover-placements | PUT | 設定頁儲存發現頁廣告位 | Staff |
+| 47 | /api/v1/secondhand/settings/listings/{listingId}/mark-sold | POST | 設定頁標記任意帖子已售 | Staff |
+| 48 | /api/v1/secondhand/settings/listings/{listingId}/deactivate | POST | 設定頁下架任意帖子 | Staff |
 
 ### Chat 模組
 
@@ -124,6 +132,21 @@ go run ./http_service/cmd/server
 | 28 | /api/v1/staff/users | GET | 查詢會員與 staff 清單 | Staff |
 | 29 | /api/v1/staff/users/{userId}/role | PATCH | 更新目標帳號角色 | Staff |
 | 42 | /api/v1/staff/roles | GET | 查詢可用角色與權限矩陣 | Staff |
+| 57 | /api/v1/staff/wallet/transactions | GET | 查詢平台積分流水 | Staff |
+| 58 | /api/v1/staff/wallet/grants | POST | 手動發放 AJO Point | Staff |
+| 59 | /api/v1/staff/wallet/reward-ads | GET | 查詢廣告積分任務 | Staff |
+| 60 | /api/v1/staff/wallet/reward-ads | POST | 建立廣告積分任務 | Staff |
+| 61 | /api/v1/staff/wallet/reward-ads/{taskId} | PATCH | 更新廣告積分任務 | Staff |
+| 62 | /api/v1/staff/secondhand/listings | GET | 管理頁查詢二手帖子列表 | Staff |
+| 63 | /api/v1/staff/secondhand/listings/{listingId}/publish | POST | 管理頁上架二手帖子 | Staff |
+| 64 | /api/v1/staff/secondhand/listings/{listingId}/deactivate | POST | 管理頁下架二手帖子 | Staff |
+| 65 | /api/v1/staff/secondhand/listings/{listingId}/renew | POST | 管理頁續期二手帖子 | Staff |
+| 66 | /api/v1/staff/property-sales | GET | 管理頁查詢樓盤放售列表 | Staff |
+| 67 | /api/v1/staff/property-sales/{listingId}/publish | POST | 管理頁上架樓盤放售 | Staff |
+| 68 | /api/v1/staff/property-sales/{listingId}/deactivate | POST | 管理頁下架樓盤放售 | Staff |
+| 69 | /api/v1/staff/property-sales/{listingId}/renew | POST | 管理頁續期樓盤放售 | Staff |
+| 70 | /api/v1/staff/serviced-apartments | GET | 管理頁查詢服務式住宅列表 | Staff |
+| 71 | /api/v1/staff/serviced-apartments/{listingId}/renew | POST | 管理頁續期服務式住宅 | Staff |
 
 ---
 
@@ -479,6 +502,204 @@ $body=@{
   display_name="Email Member"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Method POST -Headers $headers -Body $body
+```
+
+---
+
+### 49. /api/v1/auth/email/register [POST]
+- **簡介**: 建立郵箱與手機密碼帳戶
+- **請求參數**
+```json
+{
+  "email": "member@example.com", // 必填
+  "password": "safe-password-123", // 必填，至少 8 個字元
+  "display_name": "Email Member", // 必填
+  "phone_country_code": "+852", // 必填
+  "phone_number": "91234567" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "access_token": "jwt-access-token",
+    "refresh_token": "jwt-refresh-token",
+    "expires_in": 7200,
+    "user": {
+      "public_id": "01KUSER001",
+      "member_status": "active",
+      "member_type": "user",
+      "is_staff": false,
+      "role": "user",
+      "roles": ["member"],
+      "permissions": [
+        "account.profile.read",
+        "account.profile.write",
+        "listing.own.manage",
+        "chat.use",
+        "order.create",
+        "order.own.manage",
+        "notification.read"
+      ],
+      "profile_completed": false
+    }
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:15:30Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "member@example.com",
+    "password": "safe-password-123",
+    "display_name": "Email Member",
+    "phone_country_code": "+852",
+    "phone_number": "91234567"
+  }'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Content-Type"="application/json"}
+$body=@{
+  email="member@example.com"
+  password="safe-password-123"
+  display_name="Email Member"
+  phone_country_code="+852"
+  phone_number="91234567"
+}|ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/register" -Method POST -Headers $headers -Body $body
+```
+
+---
+
+### 50. /api/v1/auth/email/login [POST]
+- **簡介**: 使用郵箱密碼登入
+- **請求參數**
+```json
+{
+  "email": "member@example.com", // 必填
+  "password": "safe-password-123" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "access_token": "jwt-access-token",
+    "refresh_token": "jwt-refresh-token",
+    "expires_in": 7200,
+    "user": {
+      "public_id": "01KUSER001",
+      "member_status": "active",
+      "member_type": "user",
+      "is_staff": false,
+      "role": "user",
+      "roles": ["member"],
+      "permissions": [
+        "account.profile.read",
+        "account.profile.write",
+        "listing.own.manage",
+        "chat.use",
+        "order.create",
+        "order.own.manage",
+        "notification.read"
+      ],
+      "profile_completed": false
+    }
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:16:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "member@example.com",
+    "password": "safe-password-123"
+  }'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Content-Type"="application/json"}
+$body=@{
+  email="member@example.com"
+  password="safe-password-123"
+}|ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/login" -Method POST -Headers $headers -Body $body
+```
+
+---
+
+### 51. /api/v1/auth/phone/login [POST]
+- **簡介**: 使用手機密碼登入
+- **請求參數**
+```json
+{
+  "phone_country_code": "+852", // 必填
+  "phone_number": "91234567", // 必填
+  "password": "safe-password-123" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "access_token": "jwt-access-token",
+    "refresh_token": "jwt-refresh-token",
+    "expires_in": 7200,
+    "user": {
+      "public_id": "01KUSER001",
+      "member_status": "active",
+      "member_type": "user",
+      "is_staff": false,
+      "role": "user",
+      "roles": ["member"],
+      "permissions": [
+        "account.profile.read",
+        "account.profile.write",
+        "listing.own.manage",
+        "chat.use",
+        "order.create",
+        "order.own.manage",
+        "notification.read"
+      ],
+      "profile_completed": false
+    }
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:16:30Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/phone/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone_country_code": "+852",
+    "phone_number": "91234567",
+    "password": "safe-password-123"
+  }'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Content-Type"="application/json"}
+$body=@{
+  phone_country_code="+852"
+  phone_number="91234567"
+  password="safe-password-123"
+}|ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/phone/login" -Method POST -Headers $headers -Body $body
 ```
 
 ---
@@ -2048,6 +2269,157 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 
 ## Staff 模組
 
+## Wallet 模組
+
+### 52. /api/v1/me/wallet [GET]
+- **簡介**: 取得目前會員 AJO Point 錢包總覽、扣費規則與最近流水。
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "account": {
+      "balance": 1200,
+      "total_earned": 1500,
+      "total_spent": 300,
+      "today_ad_reward_points": 50,
+      "daily_ad_reward_limit": 1000
+    },
+    "recent_transactions": [
+      {
+        "transaction_id": "01KTX001",
+        "direction": "debit",
+        "amount": 100,
+        "balance_before": 1300,
+        "balance_after": 1200,
+        "source_type": "listing_charge",
+        "biz_module": "secondhand",
+        "action_type": "publish",
+        "note": "secondhand publish",
+        "created_at": "2026-04-17T06:00:00Z"
+      }
+    ],
+    "charge_rules": [
+      { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "edit": 100, "republish": 100 },
+      { "biz_module": "property_sale", "label": "樓盤放售", "publish": 1000, "edit": 1000, "republish": 1000 },
+      { "biz_module": "serviced_apartment", "label": "服務式住宅", "publish": 800, "edit": 800, "republish": 800 }
+    ],
+    "recharge_enabled": false
+  }
+}
+```
+
+---
+
+### 53. /api/v1/me/wallet/transactions [GET]
+- **簡介**: 分頁查詢目前會員積分流水。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "transaction_id": "01KTX001",
+        "direction": "credit",
+        "amount": 50,
+        "balance_before": 100,
+        "balance_after": 150,
+        "source_type": "reward_ad",
+        "biz_module": "wallet",
+        "action_type": "ad_reward",
+        "note": "rewarded ad completed",
+        "created_at": "2026-04-17T06:10:00Z"
+      }
+    ],
+    "pagination": { "page": 1, "page_size": 20, "total": 1 }
+  }
+}
+```
+
+---
+
+### 54. /api/v1/me/wallet/ad-tasks [GET]
+- **簡介**: 查詢目前可用的看廣告得積分任務。後端會返回會員今日領取狀態與可領取狀態。
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "task_id": "01KAD001",
+        "title": "AJO Living Reward",
+        "summary": "Watch official video.",
+        "cover_url": "https://cdn.example.com/ad.png",
+        "media_url": "https://cdn.example.com/ad.mp4",
+        "target_url": "https://www.ajoliving.com",
+        "reward_points": 50,
+        "watch_seconds": 30,
+        "can_claim_today": true,
+        "claimed_today": false,
+        "remaining_budget": 950
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 55. /api/v1/me/wallet/ad-tasks/{taskId}/start [POST]
+- **簡介**: 開始廣告觀看任務，建立服務端計時會話。
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "claim_id": "01KCLAIM001",
+    "task_id": "01KAD001",
+    "watch_seconds": 30,
+    "started_at": "2026-04-17T06:15:00Z",
+    "available_at": "2026-04-17T06:15:30Z",
+    "reward_points": 50
+  }
+}
+```
+
+---
+
+### 56. /api/v1/me/wallet/ad-tasks/{taskId}/claim [POST]
+- **簡介**: 領取廣告積分。後端會校驗 30 秒觀看時間、每日上限、單任務每日重複領取與任務預算。
+- **請求參數**
+```json
+{
+  "claim_id": "01KCLAIM001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "points_charged": 50,
+    "points_balance_after": 150,
+    "points_transaction_id": "01KTX002"
+  }
+}
+```
+
+---
+
 ### 27. /api/v1/staff/me [GET]
 - **簡介**: 取得目前 staff 帳號摘要
 - **請求參數**
@@ -2123,6 +2495,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
   "page": 1, // 可選
   "page_size": 20, // 可選
   "keyword": "9123", // 可選
+  "status": "active", // 可選
   "member_type": "pro_user", // 可選，user / pro_user
   "role_code": "member", // 可選
   "is_staff": false // 可選
@@ -2303,6 +2676,279 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
         ]
       }
     ]
+  }
+}
+```
+
+---
+
+### 57. /api/v1/staff/wallet/transactions [GET]
+- **簡介**: Staff 查詢平台積分流水，可按會員、方向、來源與業務模組篩選。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "user_id": "01KUSER001",
+  "direction": "credit",
+  "source_type": "operator_grant",
+  "biz_module": "wallet"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "transaction_id": "01KTX003",
+        "direction": "credit",
+        "amount": 300,
+        "balance_before": 0,
+        "balance_after": 300,
+        "source_type": "operator_grant",
+        "biz_module": "wallet",
+        "action_type": "operator_grant",
+        "note": "Launch credit",
+        "target_user": {
+          "user_id": "01KUSER001",
+          "phone_country_code": "+852",
+          "phone_number": "91239999",
+          "display_name": "Member"
+        },
+        "operator_user": {
+          "user_id": "01KSTAFF001",
+          "phone_country_code": "+852",
+          "phone_number": "91238888",
+          "display_name": "Staff Operator"
+        },
+        "created_at": "2026-04-17T06:30:00Z"
+      }
+    ],
+    "pagination": { "page": 1, "page_size": 20, "total": 1 }
+  }
+}
+```
+
+---
+
+### 58. /api/v1/staff/wallet/grants [POST]
+- **簡介**: Staff 手動發放 AJO Point。必須提供發放原因，並寫入不可變積分流水。
+- **請求參數**
+```json
+{
+  "user_id": "01KUSER001",
+  "amount": 300,
+  "note": "Launch credit"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "charge": {
+      "points_charged": 300,
+      "points_balance_after": 300,
+      "points_transaction_id": "01KTX003"
+    },
+    "target_user": { "user_id": "01KUSER001" },
+    "operator": { "user_id": "01KSTAFF001" }
+  }
+}
+```
+
+---
+
+### 59. /api/v1/staff/wallet/reward-ads [GET]
+- **簡介**: Staff 查詢看廣告得積分任務。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "keyword": "AJO",
+  "is_active": true
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "task_id": "01KAD001",
+        "title": "AJO Living Reward",
+        "summary": "Watch official video.",
+        "cover_url": "https://cdn.example.com/ad.png",
+        "media_url": "https://cdn.example.com/ad.mp4",
+        "target_url": "https://www.ajoliving.com",
+        "reward_points": 50,
+        "watch_seconds": 30,
+        "total_budget": 1000,
+        "total_granted": 50,
+        "remaining_budget": 950,
+        "is_active": true,
+        "created_at": "2026-04-17T06:00:00Z",
+        "updated_at": "2026-04-17T06:00:00Z"
+      }
+    ],
+    "pagination": { "page": 1, "page_size": 20, "total": 1 }
+  }
+}
+```
+
+---
+
+### 60. /api/v1/staff/wallet/reward-ads [POST]
+- **簡介**: Staff 建立看廣告得積分任務。觀看秒數低於 30 會被後端提升為 30。
+- **請求參數**
+```json
+{
+  "title": "AJO Living Reward",
+  "summary": "Watch official video.",
+  "cover_url": "https://cdn.example.com/ad.png",
+  "media_url": "https://cdn.example.com/ad.mp4",
+  "target_url": "https://www.ajoliving.com",
+  "reward_points": 50,
+  "watch_seconds": 30,
+  "total_budget": 1000,
+  "is_active": true,
+  "starts_at": "2026-04-17T06:00:00Z",
+  "ends_at": "2026-05-17T06:00:00Z"
+}
+```
+
+---
+
+### 61. /api/v1/staff/wallet/reward-ads/{taskId} [PATCH]
+- **簡介**: Staff 更新看廣告得積分任務，可用於修改素材、預算或啟停任務。
+- **請求參數**
+```json
+{
+  "title": "AJO Living Reward",
+  "reward_points": 80,
+  "watch_seconds": 30,
+  "total_budget": 2000,
+  "is_active": false
+}
+```
+
+---
+
+### 62. /api/v1/staff/secondhand/listings [GET]
+- **簡介**: Staff 管理頁分頁查詢二手帖子，支援 keyword 與 status 篩選。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "keyword": "sofa",
+  "status": "active"
+}
+```
+- **回應參數**: 與 `/api/v1/secondhand/settings/listings` 相同。
+
+---
+
+### 63-65. /api/v1/staff/secondhand/listings/{listingId}/{action} [POST]
+- **簡介**: Staff 對二手帖子執行狀態操作。`action` 支援 `publish`、`deactivate`、`renew`。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "publication_status": "active",
+    "business_status": "available"
+  }
+}
+```
+
+---
+
+### 66. /api/v1/staff/property-sales [GET]
+- **簡介**: Staff 管理頁分頁查詢樓盤放售，支援 keyword 與 status 篩選。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "keyword": "Central",
+  "status": "active"
+}
+```
+- **回應參數**: 與 `/api/v1/property-sales` 列表項結構一致，管理頁可見全部狀態。
+
+---
+
+### 67-69. /api/v1/staff/property-sales/{listingId}/{action} [POST]
+- **簡介**: Staff 對樓盤放售執行狀態操作。`action` 支援 `publish`、`deactivate`、`renew`。
+- **請求參數**
+```json
+{
+  "listingId": "01KPROPERTY001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KPROPERTY001",
+    "publication_status": "active",
+    "business_status": "available"
+  }
+}
+```
+
+---
+
+### 70. /api/v1/staff/serviced-apartments [GET]
+- **簡介**: Staff 管理頁分頁查詢服務式住宅，支援 keyword 與 status 篩選。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20,
+  "keyword": "suite",
+  "status": "active"
+}
+```
+- **回應參數**: 與 `/api/v1/serviced-apartments` 列表項結構一致，管理頁可見全部狀態。
+
+---
+
+### 71. /api/v1/staff/serviced-apartments/{listingId}/renew [POST]
+- **簡介**: Staff 續期服務式住宅。
+- **請求參數**
+```json
+{
+  "listingId": "01KSERVICED001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSERVICED001",
+    "publication_status": "active",
+    "business_status": "available"
   }
 }
 ```

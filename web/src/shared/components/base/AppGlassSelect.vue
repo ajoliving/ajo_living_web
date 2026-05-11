@@ -143,7 +143,7 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #ffffff;
+  background: rgb(var(--color-surface));
   padding: 0 0.875rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;

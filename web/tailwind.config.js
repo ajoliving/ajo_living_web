@@ -20,6 +20,7 @@ export default {
         'field-surface': 'rgb(var(--color-field-surface) / <alpha-value>)',
         'dropdown-surface': 'rgb(var(--color-dropdown-surface) / <alpha-value>)',
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
+        'primary-contrast': 'rgb(var(--color-primary-contrast) / <alpha-value>)',
         'primary-soft': 'rgb(var(--color-primary-soft) / <alpha-value>)',
         text: 'rgb(var(--color-text) / <alpha-value>)',
         'text-muted': 'rgb(var(--color-text-muted) / <alpha-value>)',

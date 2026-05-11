@@ -12,9 +12,9 @@ import { DEFAULT_THEME_NAME, applyTheme } from '@/utils/theme';
 export type AppLocale = 'zh-HK' | 'en';
 
 // 2. 定義可選語系清單
-export const LOCALE_OPTIONS: Array<{ label: string; value: AppLocale }> = [
-  { label: '繁體中文', value: 'zh-HK' },
-  { label: 'English', value: 'en' },
+export const LOCALE_OPTIONS: Array<{ labelKey: string; value: AppLocale }> = [
+  { labelKey: 'common.locale.zhHk', value: 'zh-HK' },
+  { labelKey: 'common.locale.en', value: 'en' },
 ];
 
 const THEME_STORAGE_KEY = 'ajoliving.theme';

@@ -28,6 +28,7 @@ import type {
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
   resolvePropertyCommunityName,
@@ -38,6 +39,7 @@ import {
   resolvePropertySummary,
   resolvePropertyTitle,
 } from '@/utils/property';
+import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
 
 const props = defineProps<{
   channel: PropertyChannel;
@@ -49,6 +51,7 @@ type MyPropertyAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
+const sessionStore = useSessionStore();
 
 const loading = ref(false);
 const activeTab = ref<MyPropertyTab>('all');
@@ -64,6 +67,11 @@ const publishPath = computed(() =>
 const editorBasePath = computed(() =>
   props.channel === 'sale' ? '/properties/my/editor' : '/serviced-residences/my/editor',
 );
+const chargeCost = computed(() =>
+  resolveWalletChargeCost(props.channel === 'sale' ? 'property_sale' : 'serviced_apartment'),
+);
+const formatPoints = (value: number): string =>
+  formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 const tabOptions = computed<Array<{ label: string; value: MyPropertyTab }>>(() => [
   { label: t('property.mine.all'), value: 'all' },
   { label: t('property.mine.draft'), value: 'draft' },
@@ -119,6 +127,10 @@ const loadMyListings = async (): Promise<void> => {
 
 // 2. 執行狀態操作
 const runAction = async (action: MyPropertyAction, listingId: string): Promise<void> => {
+  if ((action === 'publish' || action === 'republish') &&
+    !window.confirm(`${t(action === 'publish' ? 'property.mine.confirmPublishCharge' : 'property.mine.confirmRepublishCharge')} ${formatPoints(chargeCost.value)}`)) {
+    return;
+  }
   if (action === 'deactivate' && !window.confirm(t('property.mine.confirmDeactivate'))) {
     return;
   }
@@ -153,6 +165,9 @@ const runAction = async (action: MyPropertyAction, listingId: string): Promise<v
     }
 
     feedbackStore.pushToast(t('property.mine.statusUpdated'), 'success');
+    if (action === 'publish' || action === 'republish') {
+      await sessionStore.loadCurrentUser();
+    }
     await loadMyListings();
   } catch (error: unknown) {
     feedbackStore.pushToast(
@@ -305,6 +320,7 @@ onMounted(() => {
             @click="runAction('publish', listing.listing_id)"
           >
             {{ t('property.mine.publish') }}
+            · {{ formatPoints(chargeCost) }}
           </button>
           <button
             v-if="listing.publication_status === 'expired'"
@@ -313,6 +329,7 @@ onMounted(() => {
             @click="runAction('republish', listing.listing_id)"
           >
             {{ t('property.mine.republish') }}
+            · {{ formatPoints(chargeCost) }}
           </button>
           <button
             v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
@@ -387,7 +404,7 @@ onMounted(() => {
 .property-button--primary {
   border: 1px solid rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: #fff;
+  color: rgb(var(--color-primary-contrast));
 }
 
 .property-button--secondary {

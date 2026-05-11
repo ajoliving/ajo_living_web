@@ -55,6 +55,7 @@ func (h *StaffHandler) ListUsers(c *gin.Context) {
 		Page:       page,
 		PageSize:   pageSize,
 		Keyword:    strings.TrimSpace(c.Query("keyword")),
+		Status:     strings.TrimSpace(c.Query("status")),
 		MemberType: strings.TrimSpace(c.Query("member_type")),
 		RoleCode:   strings.TrimSpace(c.Query("role_code")),
 		IsStaff:    parseOptionalBoolQuery(c, "is_staff"),

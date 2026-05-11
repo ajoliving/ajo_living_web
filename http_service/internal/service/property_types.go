@@ -156,7 +156,10 @@ type PropertyListingSummary struct {
 // 12. PropertyListingDetail defines detail payload for property channels.
 type PropertyListingDetail struct {
 	PropertyListingSummary
-	Description    string                 `json:"description"`
-	Images         []ListingImageResponse `json:"images"`
-	ContactSummary ListingContactSummary  `json:"contact_summary"`
+	Description         string                 `json:"description"`
+	Images              []ListingImageResponse `json:"images"`
+	ContactSummary      ListingContactSummary  `json:"contact_summary"`
+	PointsCharged       int64                  `json:"points_charged,omitempty"`
+	PointsBalanceAfter  *int64                 `json:"points_balance_after,omitempty"`
+	PointsTransactionID string                 `json:"points_transaction_id,omitempty"`
 }

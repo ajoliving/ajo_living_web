@@ -1,6 +1,7 @@
 export default {
   brand: {
     name: 'AJO Living',
+    pointsName: 'AJO Point',
     tagline: '屋苑二手及租住平台',
   },
   action: {
@@ -29,6 +30,14 @@ export default {
     mobilePreview: '手機預覽',
     desktopPreview: '桌面預覽',
   },
+  price: {
+    free: '免費',
+  },
+  unit: {
+    sqft: '{value} 平方呎',
+    leaseMonth: '{value} 個月',
+    roomSpec: '{area} 平方呎 · {months} 個月',
+  },
   locale: {
     zhHkShort: '繁中',
     enShort: 'EN',
@@ -50,6 +59,7 @@ export default {
   },
   footer: {
     statement: '香港屋苑二手及租住平台',
+    copyright: '© 2026 AJO Living',
   },
   state: {
     active: '上架中',
