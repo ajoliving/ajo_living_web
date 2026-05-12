@@ -30,12 +30,17 @@ func NewSecondhandService(runtime *Runtime) *SecondhandService {
 
 // 3. CreateSecondhandListing creates a secondhand draft.
 func (s *SecondhandService) CreateSecondhandListing(ctx context.Context, params UpsertSecondhandParams) (*SecondhandListingDetail, error) {
-	listingID, err := s.upsertSecondhand(ctx, params, true)
+	listingID, charge, err := s.createSecondhandWithCharge(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetSecondhandDetail(ctx, listingID, &params.OwnerUserID, nil)
+	result, err := s.GetSecondhandDetail(ctx, listingID, &params.OwnerUserID, nil)
+	if err != nil {
+		return nil, err
+	}
+	attachSecondhandCharge(result, charge)
+	return result, nil
 }
 
 // 4. UpdateSecondhandListing updates a secondhand listing owned by the current user.
@@ -63,7 +68,53 @@ func (s *SecondhandService) RepublishSecondhandListing(ctx context.Context, owne
 	return s.publishSecondhandWithCharge(ctx, ownerUserID, listingPublicID, WalletActionRepublish)
 }
 
-// 7. MarkSold marks a listing as sold and removes it from active discovery.
+// 7. RenewSecondhandListing renews an active listing and charges the owner.
+func (s *SecondhandService) RenewSecondhandListing(ctx context.Context, ownerUserID int64, listingPublicID string) (*SecondhandListingDetail, error) {
+	var listingPublicIDResult string
+	var charge *PointsChargeResponse
+	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, _, _, err := s.loadOwnedListingWithTx(ctx, tx, ownerUserID, listingPublicID)
+		if err != nil {
+			return err
+		}
+		if listing.PublicationStatus != "active" {
+			return errcode.New(errcode.CodeValidationError, "only active listings can be renewed")
+		}
+		if listing.BusinessStatus == "sold" {
+			return errcode.New(errcode.CodeValidationError, "sold listings cannot be renewed")
+		}
+
+		chargeResult, err := s.chargeListingAction(ctx, tx, listing, WalletActionRenew)
+		if err != nil {
+			return err
+		}
+		charge = chargeResult
+
+		now := s.runtime.Now()
+		if err := tx.Model(&model.Listing{}).Where("id = ?", listing.ID).Updates(map[string]any{
+			"publication_status": "active",
+			"business_status":    "available",
+			"sort_refreshed_at":  now,
+			"expire_at":          now.Add(14 * 24 * time.Hour),
+		}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to renew listing")
+		}
+		listingPublicIDResult = listing.PublicID
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.GetSecondhandDetail(ctx, listingPublicIDResult, &ownerUserID, nil)
+	if err != nil {
+		return nil, err
+	}
+	attachSecondhandCharge(result, charge)
+	return result, nil
+}
+
+// 8. MarkSold marks a listing as sold and removes it from active discovery.
 func (s *SecondhandService) MarkSold(ctx context.Context, ownerUserID int64, listingPublicID string) error {
 	listing, _, _, err := s.loadOwnedListing(ctx, ownerUserID, listingPublicID)
 	if err != nil {
@@ -75,7 +126,7 @@ func (s *SecondhandService) MarkSold(ctx context.Context, ownerUserID int64, lis
 		Update("business_status", "sold").Error
 }
 
-// 8. Deactivate hides a listing from public discovery.
+// 9. Deactivate hides a listing from public discovery.
 func (s *SecondhandService) Deactivate(ctx context.Context, ownerUserID int64, listingPublicID string) error {
 	listing, _, _, err := s.loadOwnedListing(ctx, ownerUserID, listingPublicID)
 	if err != nil {
@@ -87,7 +138,7 @@ func (s *SecondhandService) Deactivate(ctx context.Context, ownerUserID int64, l
 		Update("publication_status", "hidden").Error
 }
 
-// 9. ListPublicSecondhand returns public secondhand listings with visibility filtering.
+// 10. ListPublicSecondhand returns public secondhand listings with visibility filtering.
 func (s *SecondhandService) ListPublicSecondhand(ctx context.Context, filters SecondhandListFilters) ([]SecondhandListingSummary, *model.Pagination, error) {
 	page, pageSize := normalizePagination(filters.Page, filters.PageSize)
 	baseQuery := s.runtime.DB.WithContext(ctx).Table("listings").
@@ -116,7 +167,7 @@ func (s *SecondhandService) ListPublicSecondhand(ctx context.Context, filters Se
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load listings")
 	}
 
-	items, err := s.buildListingSummaries(ctx, rows)
+	items, err := s.buildListingSummaries(ctx, rows, filters.ViewerUserID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,7 +175,7 @@ func (s *SecondhandService) ListPublicSecondhand(ctx context.Context, filters Se
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 10. ListMySecondhand returns listings owned by the current user.
+// 11. ListMySecondhand returns listings owned by the current user.
 func (s *SecondhandService) ListMySecondhand(ctx context.Context, ownerUserID int64, filters MySecondhandFilters) ([]SecondhandListingSummary, *model.Pagination, error) {
 	page, pageSize := normalizePagination(filters.Page, filters.PageSize)
 	baseQuery := s.runtime.DB.WithContext(ctx).Table("listings").
@@ -150,7 +201,7 @@ func (s *SecondhandService) ListMySecondhand(ctx context.Context, ownerUserID in
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load owner listings")
 	}
 
-	items, err := s.buildListingSummaries(ctx, rows)
+	items, err := s.buildListingSummaries(ctx, rows, &ownerUserID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -158,7 +209,7 @@ func (s *SecondhandService) ListMySecondhand(ctx context.Context, ownerUserID in
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 11. GetSecondhandDetail returns a single secondhand listing detail payload.
+// 12. GetSecondhandDetail returns a single secondhand listing detail payload.
 func (s *SecondhandService) GetSecondhandDetail(ctx context.Context, listingPublicID string, viewerUserID *int64, viewerCommunityID *int64) (*SecondhandListingDetail, error) {
 	listing, secondhand, contact, err := s.loadListingByPublicID(ctx, listingPublicID)
 	if err != nil {
@@ -175,7 +226,7 @@ func (s *SecondhandService) GetSecondhandDetail(ctx context.Context, listingPubl
 		}
 	}
 
-	detail, err := s.buildListingDetail(ctx, listing, secondhand, contact)
+	detail, err := s.buildListingDetail(ctx, listing, secondhand, contact, viewerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +238,7 @@ func (s *SecondhandService) GetSecondhandDetail(ctx context.Context, listingPubl
 	return detail, nil
 }
 
-// 12. upsertSecondhand creates or updates the listing aggregate.
+// 13. upsertSecondhand creates or updates the listing aggregate.
 func (s *SecondhandService) upsertSecondhand(ctx context.Context, params UpsertSecondhandParams, creating bool) (string, error) {
 	if err := s.validateUpsertParams(params); err != nil {
 		return "", err
@@ -307,7 +358,109 @@ func (s *SecondhandService) upsertSecondhand(ctx context.Context, params UpsertS
 	return returnPublicID, nil
 }
 
-// 13. updateSecondhandWithCharge updates a listing and charges edit points.
+// 14. createSecondhandAggregate creates the listing aggregate inside a transaction.
+func (s *SecondhandService) createSecondhandAggregate(ctx context.Context, tx *gorm.DB, params UpsertSecondhandParams, communityID *int64) (*model.Listing, error) {
+	listing := model.Listing{
+		PublicID:              utils.NewPublicID(),
+		Module:                "secondhand",
+		OwnerUserID:           params.OwnerUserID,
+		Title:                 params.Title,
+		Summary:               params.Summary,
+		Description:           params.Description,
+		DistrictCode:          params.DistrictCode,
+		CommunityID:           communityID,
+		PublisherIdentityType: s.fallbackPublisherIdentity(params.PublisherIdentityType),
+		PublicationStatus:     "draft",
+		ModerationStatus:      "approved",
+		BusinessStatus:        "available",
+		IsDeleted:             false,
+	}
+	if err := tx.Create(&listing).Error; err != nil {
+		return nil, err
+	}
+
+	deliveryTags, err := marshalJSON(params.DeliveryTags)
+	if err != nil {
+		return nil, err
+	}
+	secondhand := model.SecondhandListing{
+		ListingID:          listing.ID,
+		CategoryCode:       params.CategoryCode,
+		PriceMode:          params.PriceMode,
+		PriceHKD:           normalizePrice(params.PriceMode, params.PriceHKD),
+		ConditionLevel:     params.ConditionLevel,
+		DimensionText:      params.DimensionText,
+		PickupRegionCode:   params.PickupRegionCode,
+		PickupLocationText: params.PickupLocationText,
+		DeliveryTags:       deliveryTags,
+		VisibilityScope:    params.VisibilityScope,
+		VisibleCommunityID: visibleCommunityID(params.VisibilityScope, communityID),
+		ContactMethod:      params.ContactMethod,
+		IsFreeGiveaway:     params.PriceMode == "free",
+	}
+	if err := tx.Create(&secondhand).Error; err != nil {
+		return nil, err
+	}
+
+	contact, err := s.buildListingContact(listing.ID, params.Contact, params.ContactMethod)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Create(contact).Error; err != nil {
+		return nil, err
+	}
+
+	images, err := s.resolveListingImages(ctx, tx, listing.ID, params.OwnerUserID, params.Images)
+	if err != nil {
+		return nil, err
+	}
+	if len(images) > 0 {
+		if err := tx.Create(&images).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	return &listing, nil
+}
+
+// 15. createSecondhandWithCharge creates a draft and optionally charges draft-save points.
+func (s *SecondhandService) createSecondhandWithCharge(ctx context.Context, params UpsertSecondhandParams) (string, *PointsChargeResponse, error) {
+	if !params.ChargeDraftSave {
+		listingID, err := s.upsertSecondhand(ctx, params, true)
+		return listingID, nil, err
+	}
+	if err := s.validateUpsertParams(params); err != nil {
+		return "", nil, err
+	}
+
+	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.VisibilityScope)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var returnPublicID string
+	var charge *PointsChargeResponse
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, err := s.createSecondhandAggregate(ctx, tx, params, communityID)
+		if err != nil {
+			return err
+		}
+		chargeResult, err := s.chargeListingAction(ctx, tx, listing, WalletActionSaveDraft)
+		if err != nil {
+			return err
+		}
+		returnPublicID = listing.PublicID
+		charge = chargeResult
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	return returnPublicID, charge, nil
+}
+
+// 16. updateSecondhandWithCharge updates a listing and charges edit points.
 func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, params UpsertSecondhandParams) (string, *PointsChargeResponse, error) {
 	if err := s.validateUpsertParams(params); err != nil {
 		return "", nil, err
@@ -327,8 +480,9 @@ func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, para
 		}
 		returnPublicID = listing.PublicID
 
-		if shouldChargeListingEdit(listing) {
-			chargeResult, err := s.chargeListingAction(ctx, tx, listing, WalletActionEdit)
+		if shouldChargeSecondhandUpdate(listing, params.ChargeDraftSave) {
+			action := secondhandUpdateChargeAction(listing, params.ChargeDraftSave)
+			chargeResult, err := s.chargeListingAction(ctx, tx, listing, action)
 			if err != nil {
 				return err
 			}
@@ -405,7 +559,7 @@ func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, para
 	return returnPublicID, charge, nil
 }
 
-// 14. publishSecondhandWithCharge publishes or republishes and charges points.
+// 17. publishSecondhandWithCharge publishes or republishes and charges points.
 func (s *SecondhandService) publishSecondhandWithCharge(ctx context.Context, ownerUserID int64, listingPublicID string, action string) (*SecondhandListingDetail, error) {
 	var listingPublicIDResult string
 	var charge *PointsChargeResponse
@@ -463,7 +617,26 @@ func (s *SecondhandService) publishSecondhandWithCharge(ctx context.Context, own
 	return result, nil
 }
 
-// 15. chargeListingAction charges the configured secondhand action cost.
+// 18. shouldChargeSecondhandUpdate returns whether a listing update should charge points.
+func shouldChargeSecondhandUpdate(listing *model.Listing, chargeDraftSave bool) bool {
+	if shouldChargeListingEdit(listing) {
+		return true
+	}
+	return chargeDraftSave
+}
+
+// 19. secondhandUpdateChargeAction returns the wallet action for one update.
+func secondhandUpdateChargeAction(listing *model.Listing, chargeDraftSave bool) string {
+	if shouldChargeListingEdit(listing) {
+		return WalletActionEdit
+	}
+	if chargeDraftSave {
+		return WalletActionSaveDraft
+	}
+	return ""
+}
+
+// 20. chargeListingAction charges the configured secondhand action cost.
 func (s *SecondhandService) chargeListingAction(ctx context.Context, tx *gorm.DB, listing *model.Listing, action string) (*PointsChargeResponse, error) {
 	if s.runtime.WalletService == nil {
 		return nil, errcode.New(errcode.CodeInternalError, "wallet service is not configured")
@@ -480,7 +653,7 @@ func (s *SecondhandService) chargeListingAction(ctx context.Context, tx *gorm.DB
 	})
 }
 
-// 16. attachSecondhandCharge attaches wallet charge metadata to a listing detail.
+// 21. attachSecondhandCharge attaches wallet charge metadata to a listing detail.
 func attachSecondhandCharge(detail *SecondhandListingDetail, charge *PointsChargeResponse) {
 	if detail == nil || charge == nil {
 		return
@@ -490,7 +663,7 @@ func attachSecondhandCharge(detail *SecondhandListingDetail, charge *PointsCharg
 	detail.PointsTransactionID = charge.PointsTransactionID
 }
 
-// 17. validateUpsertParams validates create and update payloads.
+// 22. validateUpsertParams validates create and update payloads.
 func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) error {
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.CategoryCode) == "" || strings.TrimSpace(params.PriceMode) == "" || strings.TrimSpace(params.ConditionLevel) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required listing fields")
@@ -539,7 +712,7 @@ func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) 
 	return nil
 }
 
-// 18. applyPublicFilters applies search and visibility filters to the list query.
+// 23. applyPublicFilters applies search and visibility filters to the list query.
 func (s *SecondhandService) applyPublicFilters(query *gorm.DB, filters SecondhandListFilters) *gorm.DB {
 	if filters.Keyword != "" {
 		likeKeyword := "%" + strings.TrimSpace(filters.Keyword) + "%"
@@ -592,7 +765,7 @@ func (s *SecondhandService) applyPublicFilters(query *gorm.DB, filters Secondhan
 	return query.Where("secondhand_listings.visibility_scope = ?", "public")
 }
 
-// 19. fallbackPublisherIdentity falls back to the stored profile identity when missing.
+// 24. fallbackPublisherIdentity falls back to the stored profile identity when missing.
 func (s *SecondhandService) fallbackPublisherIdentity(identity string) string {
 	if strings.TrimSpace(identity) == "" {
 		return "owner"
@@ -600,7 +773,7 @@ func (s *SecondhandService) fallbackPublisherIdentity(identity string) string {
 	return strings.TrimSpace(identity)
 }
 
-// 20. isAllowedSecondhandValue validates a normalized enum-like input.
+// 25. isAllowedSecondhandValue validates a normalized enum-like input.
 func isAllowedSecondhandValue(value string, allowedValues []string) bool {
 	normalizedValue := strings.TrimSpace(value)
 	for _, allowedValue := range allowedValues {

@@ -163,7 +163,7 @@ func (s *SecondhandService) ListSettingsSecondhand(ctx context.Context, filters 
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load settings listings")
 	}
 
-	items, err := s.buildListingSummaries(ctx, rows)
+	items, err := s.buildListingSummaries(ctx, rows, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -236,7 +236,7 @@ func (s *SecondhandService) loadPlacementListingSummaryMap(ctx context.Context, 
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load discover listings")
 	}
 
-	summaries, err := s.buildListingSummaries(ctx, rows)
+	summaries, err := s.buildListingSummaries(ctx, rows, nil)
 	if err != nil {
 		return nil, err
 	}

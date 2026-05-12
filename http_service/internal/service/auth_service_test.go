@@ -7,7 +7,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"ajoliving_web/http_service/internal/errcode"
+	"ajoliving_web/http_service/internal/model"
+	"ajoliving_web/http_service/internal/utils"
 )
 
 // 1. TestVerifyOTPAndUpdateProfile covers OTP verify and profile update flow.
@@ -73,7 +78,115 @@ func TestVerifyOTPAndUpdateProfile(t *testing.T) {
 	}
 }
 
-// 2. TestEmailPasswordRegisterAndLogin covers email account creation and sign-in.
+// 2. TestUpdateProfilePhoneAndAvatarCharge covers profile phone update and avatar point charge.
+func TestUpdateProfilePhoneAndAvatarCharge(t *testing.T) {
+	runtime := newTestRuntime(t)
+	userService := NewUserService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	user := mustCreateUser(t, runtime, "+852", "91230011", &communityA.ID)
+	mustGrantPoints(t, runtime, user.ID, 60)
+	avatarAssetID := mustCreateAccountAvatarAsset(t, runtime, user.ID)
+
+	updated, err := userService.UpdateProfile(context.Background(), user.ID, UpdateProfileParams{
+		DisplayName:      "Avatar Member",
+		PhoneCountryCode: "853",
+		PhoneNumber:      "66889900",
+		AvatarAssetID:    avatarAssetID,
+	})
+	if err != nil {
+		t.Fatalf("update profile avatar: %v", err)
+	}
+	if updated.PhoneCountryCode != "+853" || updated.PhoneNumber != "66889900" {
+		t.Fatalf("expected updated phone, got %+v", updated)
+	}
+	if updated.AJOBalance != 10 {
+		t.Fatalf("expected 10 points remaining, got %d", updated.AJOBalance)
+	}
+
+	var transaction model.WalletTransaction
+	if err := runtime.DB.Where("user_id = ? AND biz_module = ? AND action_type = ?", user.ID, "profile", WalletActionAvatar).First(&transaction).Error; err != nil {
+		t.Fatalf("load avatar charge transaction: %v", err)
+	}
+	if transaction.Amount != 50 || transaction.SourceType != WalletSourceProfileCharge {
+		t.Fatalf("unexpected avatar charge transaction: %#v", transaction)
+	}
+
+	var storedUser model.User
+	if err := runtime.DB.First(&storedUser, user.ID).Error; err != nil {
+		t.Fatalf("load stored user: %v", err)
+	}
+	if storedUser.IsVerifiedPhone {
+		t.Fatalf("expected changed phone to be marked unverified")
+	}
+}
+
+// 3. TestUpdateProfileAvatarRequiresPoints keeps avatar changes blocked without enough balance.
+func TestUpdateProfileAvatarRequiresPoints(t *testing.T) {
+	runtime := newTestRuntime(t)
+	userService := NewUserService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	user := mustCreateUser(t, runtime, "+852", "91230012", &communityA.ID)
+	avatarAssetID := mustCreateAccountAvatarAsset(t, runtime, user.ID)
+
+	_, err := userService.UpdateProfile(context.Background(), user.ID, UpdateProfileParams{
+		DisplayName:   "No Point Member",
+		AvatarAssetID: avatarAssetID,
+	})
+	var appErr *errcode.AppError
+	if !errors.As(err, &appErr) || appErr.Code != errcode.CodePointsInsufficient {
+		t.Fatalf("expected insufficient points, got %#v", err)
+	}
+
+	var profile model.UserProfile
+	if err := runtime.DB.Where("user_id = ?", user.ID).First(&profile).Error; err != nil {
+		t.Fatalf("load profile: %v", err)
+	}
+	if profile.AvatarAssetID != nil {
+		t.Fatalf("avatar should not be changed when charge fails")
+	}
+}
+
+// 4. TestUpdateProfileRejectsDuplicatePhone keeps phone numbers unique.
+func TestUpdateProfileRejectsDuplicatePhone(t *testing.T) {
+	runtime := newTestRuntime(t)
+	userService := NewUserService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	user := mustCreateUser(t, runtime, "+852", "91230013", &communityA.ID)
+	_ = mustCreateUser(t, runtime, "+852", "91230014", &communityA.ID)
+
+	_, err := userService.UpdateProfile(context.Background(), user.ID, UpdateProfileParams{
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91230014",
+	})
+	var appErr *errcode.AppError
+	if !errors.As(err, &appErr) || appErr.Code != errcode.CodeValidationError {
+		t.Fatalf("expected duplicate phone validation error, got %#v", err)
+	}
+}
+
+// 5. mustCreateAccountAvatarAsset creates an account directory image asset.
+func mustCreateAccountAvatarAsset(t *testing.T, runtime *Runtime, userID int64) string {
+	t.Helper()
+
+	publicID := utils.NewPublicID()
+	asset := model.MediaAsset{
+		PublicID:        publicID,
+		StorageProvider: runtime.Config.StorageProvider,
+		BucketName:      runtime.Config.StorageBucket,
+		ObjectKey:       accountMediaObjectPrefix + publicID + ".webp",
+		MimeType:        "image/webp",
+		FileSize:        1024,
+		CreatedBy:       &userID,
+		CreatedAt:       runtime.Now(),
+	}
+	if err := runtime.DB.Create(&asset).Error; err != nil {
+		t.Fatalf("create avatar asset: %v", err)
+	}
+
+	return asset.PublicID
+}
+
+// 6. TestEmailPasswordRegisterAndLogin covers email account creation and sign-in.
 func TestEmailPasswordRegisterAndLogin(t *testing.T) {
 	runtime := newTestRuntime(t)
 	authService := NewAuthService(runtime)

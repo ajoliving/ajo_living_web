@@ -51,6 +51,7 @@ export interface CurrentMemberProfile {
 // 5. 定義 Staff 會員列表資料
 export interface StaffUserSummary {
   public_id: string;
+  email: string;
   phone_country_code: string;
   phone_number: string;
   member_status: string;
@@ -67,7 +68,27 @@ export interface StaffUserSummary {
   updated_at: string;
 }
 
-// 6. 定義前端導覽用會員資料
+// 6. 定義 Staff 角色目錄項目
+export interface RoleCatalogItem {
+  code: string;
+  scope: string;
+  name: string;
+  description: string;
+  permissions: string[];
+}
+
+// 7. 定義 Staff 新建會員帳戶請求
+export interface StaffUserCreatePayload {
+  email: string;
+  password: string;
+  display_name: string;
+  phone_country_code: string;
+  phone_number: string;
+  member_type: string;
+  role_codes: string[];
+}
+
+// 8. 定義前端導覽用會員資料
 export interface SessionUserView {
   public_id: string;
   display_name: string;

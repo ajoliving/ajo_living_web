@@ -98,6 +98,7 @@
   font-size: 0.9rem;
   font-weight: 750;
   line-height: 1;
+  white-space: nowrap;
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
@@ -138,10 +139,16 @@
   width: 100%;
   min-width: 58rem;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.management-table--reward-ads {
+  min-width: 68rem;
 }
 
 .management-table th,
 .management-table td {
+  min-width: 0;
   border-bottom: 1px solid rgb(var(--color-border));
   padding: 0.8rem 1rem;
   text-align: left;
@@ -154,33 +161,71 @@
   font-weight: 800;
   letter-spacing: 0.08em;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .management-table td {
   color: rgb(var(--color-text-muted));
   font-size: 0.9rem;
   line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-table-nowrap {
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .management-table strong {
   display: block;
+  overflow: hidden;
   color: rgb(var(--color-text));
   font-size: 0.95rem;
   font-weight: 750;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .management-table small {
   display: block;
   margin-top: 0.25rem;
+  overflow: hidden;
   color: rgb(var(--color-text-muted));
   font-size: 0.78rem;
   line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-table-stacked {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.management-contact-cell {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.15rem;
+}
+
+.management-contact-cell span,
+.management-contact-cell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .management-status-pill {
   display: inline-flex;
+  max-width: 100%;
   min-height: 1.75rem;
   align-items: center;
   border-radius: 999px;
@@ -190,12 +235,21 @@
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .management-action-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.45rem;
+}
+
+.management-table-actions {
+  overflow: visible;
+  width: 16rem;
+  min-width: 16rem;
 }
 
 .management-list-empty,
@@ -240,6 +294,214 @@
   font-weight: 750;
 }
 
+.management-dialog {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 1rem;
+}
+
+.management-dialog-panel {
+  width: min(100%, 30rem);
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface-raised));
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.management-dialog-panel--wide {
+  width: min(100%, 42rem);
+}
+
+.management-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding: 1rem;
+}
+
+.management-dialog-header p,
+.management-renew-listing span {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.management-dialog-header h2 {
+  margin: 0.35rem 0 0;
+  color: rgb(var(--color-text));
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.management-dialog-close {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+.management-dialog-body {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.management-dialog-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.management-dialog-inline {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 0.55fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.management-dialog-grid .management-dialog-hint,
+.management-dialog-inline {
+  grid-column: 1 / -1;
+}
+
+.management-renew-listing {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  padding: 0.85rem;
+}
+
+.management-renew-listing strong {
+  overflow: hidden;
+  color: rgb(var(--color-text));
+  font-size: 0.98rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-renew-listing small,
+.management-dialog-hint,
+.management-dialog-error {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.83rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.management-dialog-field {
+  display: grid;
+  gap: 0.45rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.management-dialog-field input,
+.management-dialog-field select {
+  min-height: 2.75rem;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  padding: 0 0.85rem;
+  color: rgb(var(--color-text));
+  font-size: 1rem;
+  font-weight: 750;
+  outline: none;
+}
+
+.management-renew-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.management-renew-options button,
+.management-dialog-button {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  padding: 0 0.85rem;
+  color: rgb(var(--color-text));
+  font-size: 0.84rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.management-renew-options button.is-active {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
+}
+
+.management-dialog-error {
+  color: rgb(var(--color-danger));
+}
+
+.management-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 1rem;
+}
+
+.management-dialog-button--primary {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.management-dialog-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.management-dialog-enter-active,
+.management-dialog-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.management-dialog-enter-active .management-dialog-panel,
+.management-dialog-leave-active .management-dialog-panel {
+  transition: transform 0.18s ease;
+}
+
+.management-dialog-enter-from,
+.management-dialog-leave-to {
+  opacity: 0;
+}
+
+.management-dialog-enter-from .management-dialog-panel,
+.management-dialog-leave-to .management-dialog-panel {
+  transform: translateY(0.5rem);
+}
+
 @media (max-width: 767px) {
   .management-list-header,
   .management-pagination {
@@ -249,5 +511,18 @@
 
   .management-list-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .management-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .management-dialog-grid,
+  .management-dialog-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .management-dialog-button {
+    width: 100%;
   }
 }

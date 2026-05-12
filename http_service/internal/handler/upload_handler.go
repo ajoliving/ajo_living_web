@@ -37,12 +37,21 @@ type completeUploadRequest struct {
 	ChecksumSHA256 string `json:"checksum_sha256"`
 }
 
-// 4. NewUploadHandler creates an upload handler instance.
+// 4. uploadCallbackRequest defines the OSS callback payload.
+type uploadCallbackRequest struct {
+	BucketName string `json:"bucket_name" binding:"required"`
+	ObjectKey  string `json:"object_key" binding:"required"`
+	MimeType   string `json:"mime_type" binding:"required"`
+	FileSize   int64  `json:"file_size" binding:"required"`
+	ETag       string `json:"etag"`
+}
+
+// 5. NewUploadHandler creates an upload handler instance.
 func NewUploadHandler(uploadService *service.UploadService) *UploadHandler {
 	return &UploadHandler{uploadService: uploadService}
 }
 
-// 5. Presign creates an upload target.
+// 6. Presign creates an upload target.
 func (h *UploadHandler) Presign(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -71,7 +80,7 @@ func (h *UploadHandler) Presign(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 6. CompleteUpload persists uploaded media metadata.
+// 7. CompleteUpload persists uploaded media metadata.
 func (h *UploadHandler) CompleteUpload(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -102,7 +111,30 @@ func (h *UploadHandler) CompleteUpload(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 7. ListAssets returns paginated media assets owned by the current user.
+// 8. UploadCallback accepts an OSS upload callback acknowledgement.
+func (h *UploadHandler) UploadCallback(c *gin.Context) {
+	var request uploadCallbackRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid callback payload"))
+		return
+	}
+
+	result, err := h.uploadService.AcceptUploadCallback(c.Request.Context(), service.UploadCallbackParams{
+		BucketName: strings.TrimSpace(request.BucketName),
+		ObjectKey:  strings.TrimSpace(request.ObjectKey),
+		MimeType:   strings.TrimSpace(request.MimeType),
+		FileSize:   request.FileSize,
+		ETag:       strings.TrimSpace(request.ETag),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 9. ListAssets returns paginated media assets owned by the current user.
 func (h *UploadHandler) ListAssets(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -123,7 +155,7 @@ func (h *UploadHandler) ListAssets(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": result, "pagination": pagination})
 }
 
-// 8. GetAsset returns a single media asset owned by the current user.
+// 10. GetAsset returns a single media asset owned by the current user.
 func (h *UploadHandler) GetAsset(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -140,7 +172,7 @@ func (h *UploadHandler) GetAsset(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 9. DeleteAsset removes an unused media asset owned by the current user.
+// 11. DeleteAsset removes an unused media asset owned by the current user.
 func (h *UploadHandler) DeleteAsset(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

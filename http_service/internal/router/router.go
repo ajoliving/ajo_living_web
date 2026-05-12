@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"ajoliving_web/http_service/internal/config"
 	"ajoliving_web/http_service/internal/handler"
 	"ajoliving_web/http_service/internal/middleware"
 	"ajoliving_web/http_service/internal/service"
@@ -19,6 +20,7 @@ import (
 
 // 1. Dependencies groups objects required to build the router.
 type Dependencies struct {
+	Config              *config.Config
 	Logger              *slog.Logger
 	AuthService         *service.AuthService
 	UserService         *service.UserService
@@ -41,6 +43,7 @@ func New(deps *Dependencies) *gin.Engine {
 	requireStaff := middleware.RequireStaff(deps.AuthService)
 	optionalAuth := middleware.OptionalAuth(deps.AuthService)
 
+	engine.Use(middleware.CORS(deps.Config))
 	engine.Use(middleware.RequestID())
 	engine.Use(middleware.Recovery(deps.Logger))
 	engine.Use(middleware.AccessLog(deps.Logger))
@@ -154,10 +157,13 @@ func registerAppRoutes(
 	api.GET("/me/wallet/ad-tasks", requireAuth, walletHandler.ListAdTasks)
 	api.POST("/me/wallet/ad-tasks/:taskId/start", requireAuth, walletHandler.StartAdTask)
 	api.POST("/me/wallet/ad-tasks/:taskId/claim", requireAuth, walletHandler.ClaimAdTask)
+	api.POST("/me/wallet/ad-tasks/:taskId/click", requireAuth, walletHandler.TrackAdTaskClick)
 	api.GET("/me/secondhand/listings", requireAuth, secondhandHandler.MyListings)
+	api.GET("/me/secondhand/favorites", requireAuth, secondhandHandler.MyFavorites)
 	api.GET("/me/property-sales", requireAuth, propertyHandler.MyPropertySales)
 	api.GET("/me/serviced-apartments", requireAuth, propertyHandler.MyServicedApartments)
 	api.GET("/me/orders", requireAuth, orderHandler.MyOrders)
+	api.POST("/oss/callback", uploadHandler.UploadCallback)
 	api.POST("/oss/presign", requireAuth, uploadHandler.Presign)
 	api.POST("/oss/complete", requireAuth, uploadHandler.CompleteUpload)
 	api.GET("/oss/assets", requireAuth, uploadHandler.ListAssets)
@@ -170,14 +176,20 @@ func registerAppRoutes(
 	api.PATCH("/listings/:listingId", requireAuth, secondhandHandler.Update)
 	api.POST("/listings/:listingId/publish", requireAuth, secondhandHandler.Publish)
 	api.POST("/listings/:listingId/republish", requireAuth, secondhandHandler.Republish)
+	api.POST("/listings/:listingId/renew", requireAuth, secondhandHandler.Renew)
 	api.POST("/listings/:listingId/mark-sold", requireAuth, secondhandHandler.MarkSold)
 	api.POST("/listings/:listingId/deactivate", requireAuth, secondhandHandler.Deactivate)
+	api.POST("/listings/:listingId/favorite", requireAuth, secondhandHandler.Favorite)
+	api.DELETE("/listings/:listingId/favorite", requireAuth, secondhandHandler.Unfavorite)
 	api.POST("/secondhand/listings", requireAuth, secondhandHandler.Create)
 	api.PATCH("/secondhand/listings/:listingId", requireAuth, secondhandHandler.Update)
 	api.POST("/secondhand/listings/:listingId/publish", requireAuth, secondhandHandler.Publish)
 	api.POST("/secondhand/listings/:listingId/republish", requireAuth, secondhandHandler.Republish)
+	api.POST("/secondhand/listings/:listingId/renew", requireAuth, secondhandHandler.Renew)
 	api.POST("/secondhand/listings/:listingId/mark-sold", requireAuth, secondhandHandler.MarkSold)
 	api.POST("/secondhand/listings/:listingId/deactivate", requireAuth, secondhandHandler.Deactivate)
+	api.POST("/secondhand/listings/:listingId/favorite", requireAuth, secondhandHandler.Favorite)
+	api.DELETE("/secondhand/listings/:listingId/favorite", requireAuth, secondhandHandler.Unfavorite)
 	api.POST("/property-sales", requireAuth, propertyHandler.CreatePropertySale)
 	api.PATCH("/property-sales/:listingId", requireAuth, propertyHandler.UpdatePropertySale)
 	api.POST("/property-sales/:listingId/publish", requireAuth, propertyHandler.PublishPropertySale)
@@ -256,6 +268,7 @@ func registerStaffRoutes(
 	api.GET("/staff/me", requireStaff, staffHandler.GetMe)
 	api.GET("/staff/roles", requireStaff, staffHandler.ListRoles)
 	api.GET("/staff/users", requireStaff, staffHandler.ListUsers)
+	api.POST("/staff/users", requireStaff, staffHandler.CreateUser)
 	api.PATCH("/staff/users/:userId/role", requireStaff, staffHandler.UpdateUserRole)
 	api.GET("/staff/wallet/transactions", requireStaff, staffWalletHandler.ListTransactions)
 	api.POST("/staff/wallet/grants", requireStaff, staffWalletHandler.GrantPoints)

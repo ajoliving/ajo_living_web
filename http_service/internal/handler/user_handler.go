@@ -22,6 +22,8 @@ type UserHandler struct {
 // 2. updateProfileRequest defines the profile update payload.
 type updateProfileRequest struct {
 	DisplayName           string `json:"display_name"`
+	PhoneCountryCode      string `json:"phone_country_code"`
+	PhoneNumber           string `json:"phone_number"`
 	PublisherIdentityType string `json:"publisher_identity_type"`
 	PrimaryCommunityID    string `json:"primary_community_id"`
 	DistrictCode          string `json:"district_code"`
@@ -66,6 +68,8 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 	result, err := h.userService.UpdateProfile(c.Request.Context(), user.UserID, service.UpdateProfileParams{
 		DisplayName:           strings.TrimSpace(request.DisplayName),
+		PhoneCountryCode:      strings.TrimSpace(request.PhoneCountryCode),
+		PhoneNumber:           strings.TrimSpace(request.PhoneNumber),
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
 		PrimaryCommunityID:    strings.TrimSpace(request.PrimaryCommunityID),
 		DistrictCode:          strings.TrimSpace(request.DistrictCode),

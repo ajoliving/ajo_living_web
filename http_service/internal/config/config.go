@@ -21,6 +21,8 @@ type Config struct {
 	AppEnv                 string
 	AppPort                string
 	AppPublicBaseURL       string
+	AppAPIPublicBaseURL    string
+	CORSAllowedOrigins     string
 	DBDriver               string
 	DBDSN                  string
 	JWTSecret              string
@@ -45,6 +47,9 @@ type Config struct {
 	StorageUseCName        bool
 	StorageDisableSSL      bool
 	StoragePresignExpires  time.Duration
+	OSSCallbackEnabled     bool
+	OSSCallbackURL         string
+	OSSAllowedOrigins      string
 	MediaBaseURL           string
 	SeedCommunities        bool
 	SeedHomeContent        bool
@@ -62,6 +67,8 @@ func Load() *Config {
 		AppEnv:                 getEnv("APP_ENV", "development"),
 		AppPort:                getEnv("APP_PORT", "8080"),
 		AppPublicBaseURL:       getEnv("APP_PUBLIC_BASE_URL", "http://localhost:5173"),
+		AppAPIPublicBaseURL:    getEnv("APP_API_PUBLIC_BASE_URL", "http://localhost:8080"),
+		CORSAllowedOrigins:     getEnv("CORS_ALLOWED_ORIGINS", ""),
 		DBDriver:               getEnv("DB_DRIVER", "postgres"),
 		DBDSN:                  getEnv("DB_DSN", "host=127.0.0.1 user=postgres password=postgres dbname=ajoliving port=5432 sslmode=disable TimeZone=Asia/Shanghai"),
 		JWTSecret:              getEnv("JWT_SECRET", "dev-secret-key"),
@@ -86,6 +93,8 @@ func Load() *Config {
 		StorageUseCName:        getBoolEnvWithLegacy("OSS_USE_CNAME", "STORAGE_USE_CNAME", false),
 		StorageDisableSSL:      getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
 		StoragePresignExpires:  getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
+		OSSCallbackEnabled:     getBoolEnv("OSS_CALLBACK_ENABLED", false),
+		OSSAllowedOrigins:      getEnv("OSS_ALLOWED_ORIGINS", ""),
 		SeedCommunities:        getBoolEnv("SEED_COMMUNITIES", true),
 		SeedHomeContent:        getBoolEnv("SEED_HOME_CONTENT", true),
 		WebPublicDir:           getEnv("WEB_PUBLIC_DIR", "../web/public"),
@@ -95,6 +104,7 @@ func Load() *Config {
 	}
 
 	cfg.MediaBaseURL = getEnvWithLegacy("OSS_MEDIA_BASE_URL", "MEDIA_BASE_URL", defaultMediaBaseURL(cfg))
+	cfg.OSSCallbackURL = getEnv("OSS_CALLBACK_URL", defaultOSSCallbackURL(cfg))
 
 	return cfg
 }
@@ -239,7 +249,17 @@ func defaultOSSMediaBaseURL(cfg *Config) string {
 	return fmt.Sprintf("%s://%s.%s", scheme, bucket, endpoint)
 }
 
-// 14. trimEndpointScheme removes scheme and surrounding slashes from endpoint values.
+// 14. defaultOSSCallbackURL builds the public upload callback endpoint.
+func defaultOSSCallbackURL(cfg *Config) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.AppAPIPublicBaseURL), "/")
+	if baseURL == "" {
+		return ""
+	}
+
+	return baseURL + "/api/v1/oss/callback"
+}
+
+// 15. trimEndpointScheme removes scheme and surrounding slashes from endpoint values.
 func trimEndpointScheme(endpoint string) string {
 	value := strings.TrimSpace(endpoint)
 	value = strings.TrimPrefix(value, "https://")

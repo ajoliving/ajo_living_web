@@ -1,6 +1,6 @@
 /*
  * Wallet HTTP handlers.
- * 1. Bind member wallet balance, transaction, and rewarded ad endpoints.
+ * 1. Bind member wallet balance, transaction, rewarded ad, and ad metric endpoints.
  * 2. Delegate all AJO Point account and reward logic to the wallet service.
  * 3. Keep wallet responses aligned with the unified API envelope.
  */
@@ -119,6 +119,25 @@ func (h *WalletHandler) ClaimAdTask(c *gin.Context) {
 		strings.TrimSpace(request.ClaimID),
 		c.ClientIP(),
 		c.Request.UserAgent(),
+	)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 8. TrackAdTaskClick records one rewarded ad target link click.
+func (h *WalletHandler) TrackAdTaskClick(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.walletService.TrackRewardAdClick(
+		c.Request.Context(),
+		strings.TrimSpace(c.Param("taskId")),
 	)
 	if err != nil {
 		errcode.WriteError(c, err)

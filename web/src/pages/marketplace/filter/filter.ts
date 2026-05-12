@@ -8,7 +8,11 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
-import { fetchSecondhandListings } from '@/httpapis/secondhand-listings';
+import {
+  favoriteSecondhandListing,
+  fetchSecondhandListings,
+  unfavoriteSecondhandListing,
+} from '@/httpapis/secondhand-listings';
 import {
   buildMarketplaceAreaFilterOptions,
   getMarketplaceCategoryLabel,
@@ -24,6 +28,7 @@ import type { ListingListParams, SecondhandListingSummaryResponse } from '@/mode
 import { useFeedbackStore } from '@/stores/feedback';
 import type { AppLocale } from '@/stores/preferences';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 
 interface FilterCategoryItem {
@@ -43,6 +48,7 @@ interface FilterListingCard {
   districtCode: string;
   districtLabel: string;
   imageUrl?: string;
+  isFavorited: boolean;
 }
 
 type FilterSortValue = 'latest' | 'price_asc' | 'price_desc';
@@ -75,6 +81,7 @@ const buildListingCard = (
     districtCode: listing.district_code,
     districtLabel: getMarketplaceDistrictLabel(listing.district_code, locale),
     imageUrl: listing.cover_image?.url,
+    isFavorited: listing.is_favorited,
   };
 };
 
@@ -85,7 +92,9 @@ export const useMarketplaceFilterPage = () => {
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
+  const sessionStore = useSessionStore();
   const loading = ref(false);
+  const favoriteUpdatingIds = ref<string[]>([]);
   const keyword = ref('');
   const minPrice = ref('');
   const maxPrice = ref('');
@@ -127,6 +136,8 @@ export const useMarketplaceFilterPage = () => {
       .map((listing) => buildListingCard(listing, preferenceStore.locale, t))
       .filter((listing) => !withPhotos.value || Boolean(listing.imageUrl)),
   );
+  const isFavoriteUpdating = (listingID: string): boolean =>
+    favoriteUpdatingIds.value.includes(listingID);
 
   const categories = computed<FilterCategoryItem[]>(() =>
     marketplaceCategories.map((category) => ({
@@ -197,7 +208,50 @@ export const useMarketplaceFilterPage = () => {
     }
   };
 
-  // 3.4 將目前條件同步到 URL
+  // 3.4 切換帖子收藏狀態
+  const toggleFavorite = async (listingID: string): Promise<void> => {
+    const target = sourceListings.value.find((listing) => listing.listing_id === listingID);
+    if (!target || isFavoriteUpdating(listingID)) {
+      return;
+    }
+    if (!sessionStore.isAuthenticated) {
+      await router.push({
+        path: '/login',
+        query: { redirect: route.fullPath },
+      });
+      return;
+    }
+
+    favoriteUpdatingIds.value = [...favoriteUpdatingIds.value, listingID];
+
+    try {
+      const { data } = target.is_favorited
+        ? await unfavoriteSecondhandListing(listingID)
+        : await favoriteSecondhandListing(listingID);
+      sourceListings.value = sourceListings.value.map((listing) =>
+        listing.listing_id === listingID
+          ? { ...listing, is_favorited: data.data.is_favorited }
+          : listing,
+      );
+      feedbackStore.pushToast(
+        data.data.is_favorited
+          ? t('marketplace.detail.favoriteAdded')
+          : t('marketplace.detail.favoriteRemoved'),
+        'success',
+      );
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('marketplace.detail.favoriteError')
+          : t('marketplace.detail.favoriteError'),
+        'error',
+      );
+    } finally {
+      favoriteUpdatingIds.value = favoriteUpdatingIds.value.filter((id) => id !== listingID);
+    }
+  };
+
+  // 3.5 將目前條件同步到 URL
   const syncFiltersToQuery = async (nextPage = 1): Promise<void> => {
     const selectedArea = areaOptions.value.find((option) => option.value === area.value);
 
@@ -217,19 +271,19 @@ export const useMarketplaceFilterPage = () => {
     });
   };
 
-  // 3.5 切換主分類勾選
+  // 3.6 切換主分類勾選
   const toggleCategory = async (key: MarketplaceCategoryCode): Promise<void> => {
     selectedCategoryKeys.value = selectedCategoryKeys.value.includes(key) ? [] : [key];
     await syncFiltersToQuery();
   };
 
-  // 3.6 切換成色條件
+  // 3.7 切換成色條件
   const toggleCondition = async (value: MarketplaceConditionCode): Promise<void> => {
     selectedConditions.value = selectedConditions.value.includes(value) ? [] : [value];
     await syncFiltersToQuery();
   };
 
-  // 3.7 清除目前篩選條件
+  // 3.8 清除目前篩選條件
   const clearFilters = async (): Promise<void> => {
     keyword.value = '';
     minPrice.value = '';
@@ -242,7 +296,7 @@ export const useMarketplaceFilterPage = () => {
     await syncFiltersToQuery();
   };
 
-  // 3.8 切換分頁
+  // 3.9 切換分頁
   const setPage = async (value: number): Promise<void> => {
     page.value = Math.min(Math.max(value, 1), totalPages.value);
     await syncFiltersToQuery(page.value);
@@ -268,6 +322,7 @@ export const useMarketplaceFilterPage = () => {
     clearFilters,
     conditionOptions,
     getMarketplaceConditionLabel,
+    isFavoriteUpdating,
     keyword,
     listings,
     loading,
@@ -281,6 +336,7 @@ export const useMarketplaceFilterPage = () => {
     sortOptions,
     syncFiltersToQuery,
     t,
+    toggleFavorite,
     toggleCategory,
     toggleCondition,
     totalPages,

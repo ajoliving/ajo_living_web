@@ -13,6 +13,7 @@ import {
   fetchRewardAdTasks,
   fetchWalletOverview,
   startRewardAdTask,
+  trackRewardAdClick,
 } from '@/httpapis/wallet';
 import type {
   RewardAdSessionResponse,
@@ -64,6 +65,9 @@ const selectedAdRemainingSeconds = computed(() => {
   }
   return session.remainingSeconds;
 });
+const selectedAdIsRunning = computed(() => Boolean(
+  runningSession.value && runningSession.value.taskId === selectedAdTask.value?.task_id,
+));
 
 // 1. 格式化錢包主數字
 const formatPointNumber = (value: number): string => pointFormatter.format(value);
@@ -152,7 +156,16 @@ const handleStartSelectedAd = async (): Promise<void> => {
   }
 };
 
-// 7. 領取廣告積分
+// 7. 打開並立即開始廣告
+const openAndStartAd = async (task: RewardAdTaskResponse): Promise<void> => {
+  selectedAdTask.value = task;
+  showingExitConfirm.value = false;
+  adClaimSucceeded.value = false;
+  runningSession.value = null;
+  await handleStartSelectedAd();
+};
+
+// 8. 領取廣告積分
 const handleClaimSelectedAd = async (): Promise<void> => {
   const task = selectedAdTask.value;
   if (!task) {
@@ -179,7 +192,22 @@ const handleClaimSelectedAd = async (): Promise<void> => {
   }
 };
 
-// 8. 輸出廣告按鈕文案
+// 9. 記錄並打開廣告連結
+const openSelectedAdLink = (): void => {
+  const task = selectedAdTask.value;
+  if (!task?.target_url) {
+    return;
+  }
+
+  window.open(task.target_url, '_blank', 'noopener,noreferrer');
+  void trackRewardAdClick(task.task_id)
+    .then(() => loadWallet())
+    .catch((error: unknown) => {
+      feedbackStore.pushToast(readErrorMessage(error, t('account.wallet.adClickTrackError')), 'error');
+    });
+};
+
+// 10. 輸出廣告按鈕文案
 const resolveAdActionLabel = (task: RewardAdTaskResponse): string => {
   if (task.claimed_today) {
     return t('account.wallet.claimedToday');
@@ -190,7 +218,7 @@ const resolveAdActionLabel = (task: RewardAdTaskResponse): string => {
   return t('account.wallet.startAd');
 };
 
-// 9. 判斷廣告按鈕是否停用
+// 11. 判斷廣告按鈕是否停用
 const isAdActionDisabled = (task: RewardAdTaskResponse): boolean =>
   claiming.value ||
   startingAd.value ||
@@ -198,18 +226,15 @@ const isAdActionDisabled = (task: RewardAdTaskResponse): boolean =>
   !task.can_claim_today ||
   runningSession.value !== null;
 
-// 10. 處理廣告主動作
+// 12. 處理廣告主動作
 const runAdAction = async (task: RewardAdTaskResponse): Promise<void> => {
   if (isAdActionDisabled(task)) {
     return;
   }
-  selectedAdTask.value = task;
-  showingExitConfirm.value = false;
-  adClaimSucceeded.value = false;
-  runningSession.value = null;
+  await openAndStartAd(task);
 };
 
-// 11. 要求關閉廣告彈窗
+// 13. 要求關閉廣告彈窗
 const requestCloseAdDialog = (): void => {
   if (claiming.value || startingAd.value) {
     return;
@@ -221,7 +246,7 @@ const requestCloseAdDialog = (): void => {
   closeAdDialog();
 };
 
-// 12. 關閉廣告彈窗
+// 14. 關閉廣告彈窗
 const closeAdDialog = (): void => {
   stopCountdown();
   runningSession.value = null;
@@ -230,7 +255,7 @@ const closeAdDialog = (): void => {
   adClaimSucceeded.value = false;
 };
 
-// 13. 確認未完成觀看時離開
+// 15. 確認未完成觀看時離開
 const confirmExitAdDialog = (): void => {
   closeAdDialog();
 };
@@ -431,7 +456,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="wallet-ad-dialog__header-actions">
                 <span
-                  v-if="runningSession"
+                  v-if="selectedAdIsRunning"
                   class="wallet-ad-countdown"
                   :class="{ 'wallet-ad-countdown--done': selectedAdRemainingSeconds <= 0 }"
                 >
@@ -479,9 +504,9 @@ onBeforeUnmount(() => {
                 <a
                   v-if="selectedAdTask.target_url"
                   class="wallet-action-button wallet-action-button--secondary"
-                  :href="selectedAdTask.target_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="#"
+                  role="button"
+                  @click.prevent="openSelectedAdLink"
                 >
                   {{ t('account.wallet.openAdLink') }}
                 </a>
@@ -500,7 +525,7 @@ onBeforeUnmount(() => {
                 :disabled="startingAd || claiming || (Boolean(runningSession) && selectedAdRemainingSeconds > 0)"
                 @click="runningSession && selectedAdRemainingSeconds <= 0 ? handleClaimSelectedAd() : handleStartSelectedAd()"
               >
-                {{ claiming ? t('account.wallet.claiming') : startingAd ? t('common.status.loading') : runningSession && selectedAdRemainingSeconds <= 0 ? t('account.wallet.claimAd') : runningSession ? t('account.wallet.watching', { seconds: selectedAdRemainingSeconds }) : t('account.wallet.confirmStartAd') }}
+                {{ claiming ? t('account.wallet.claiming') : startingAd ? t('common.status.loading') : runningSession && selectedAdRemainingSeconds <= 0 ? t('account.wallet.claimAd') : runningSession ? t('account.wallet.watching', { seconds: selectedAdRemainingSeconds }) : t('account.wallet.startAd') }}
               </button>
             </footer>
           </div>
@@ -813,14 +838,27 @@ onBeforeUnmount(() => {
 }
 
 .wallet-ad-body h3 {
+  overflow: hidden;
   font-size: 0.96rem;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-ad-body span {
+  overflow: hidden;
   color: rgb(var(--color-primary));
   font-size: 0.83rem;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-ad-body p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .wallet-action-button {
@@ -860,7 +898,16 @@ onBeforeUnmount(() => {
 
 .wallet-transaction-row div {
   display: grid;
+  min-width: 0;
   gap: 0.25rem;
+}
+
+.wallet-transaction-row strong,
+.wallet-transaction-row span,
+.wallet-transaction-row time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-transaction-row time {
@@ -968,16 +1015,20 @@ onBeforeUnmount(() => {
 
 .wallet-ad-dialog__media {
   display: grid;
-  min-height: 18rem;
-  max-height: min(58vh, 34rem);
+  place-items: center;
+  min-height: min(62vh, 28rem);
+  max-height: min(68vh, 38rem);
   overflow: hidden;
-  background: rgb(var(--color-border) / 0.2);
+  background: rgb(3 7 18 / 0.92);
 }
 
 .wallet-ad-dialog__media img,
 .wallet-ad-dialog__media video {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(68vh, 38rem);
   object-fit: contain;
 }
 

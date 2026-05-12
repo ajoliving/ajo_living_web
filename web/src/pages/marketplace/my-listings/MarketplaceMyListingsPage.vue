@@ -34,6 +34,7 @@ const {
   runAction,
   searchQuery,
   secondhandChargeCost,
+  secondhandRenewChargeCost,
   setActiveTab,
   t,
   tabOptions,
@@ -244,6 +245,21 @@ const {
               />
               <span>
                 {{ t('marketplace.mine.republishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
+              </span>
+            </button>
+
+            <button
+              v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
+              type="button"
+              class="my-action-button my-action-button-primary"
+              @click="runAction('renew', listing.listing_id)"
+            >
+              <AppIcon
+                name="clock"
+                :size="16"
+              />
+              <span>
+                {{ t('marketplace.mine.renewAction') }} · {{ formatAjoPoints(secondhandRenewChargeCost) }}
               </span>
             </button>
 

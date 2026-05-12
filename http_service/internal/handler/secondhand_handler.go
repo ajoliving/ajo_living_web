@@ -97,6 +97,7 @@ func (h *SecondhandHandler) ListPublic(c *gin.Context) {
 	}
 	if current != nil {
 		filters.CommunityID = current.PrimaryCommunityID
+		filters.ViewerUserID = &current.UserID
 	}
 
 	items, pagination, err := h.secondhandService.ListPublicSecondhand(c.Request.Context(), filters)
@@ -218,7 +219,24 @@ func (h *SecondhandHandler) Republish(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 13. MarkSold marks a secondhand listing as sold.
+// 13. Renew renews an active secondhand listing.
+func (h *SecondhandHandler) Renew(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.secondhandService.RenewSecondhandListing(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 14. MarkSold marks a secondhand listing as sold.
 func (h *SecondhandHandler) MarkSold(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -234,7 +252,7 @@ func (h *SecondhandHandler) MarkSold(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": strings.TrimSpace(c.Param("listingId")), "business_status": "sold"})
 }
 
-// 14. Deactivate hides a secondhand listing.
+// 15. Deactivate hides a secondhand listing.
 func (h *SecondhandHandler) Deactivate(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -250,7 +268,7 @@ func (h *SecondhandHandler) Deactivate(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": strings.TrimSpace(c.Param("listingId")), "publication_status": "hidden"})
 }
 
-// 15. MyListings returns owned secondhand listings.
+// 16. MyListings returns owned secondhand listings.
 func (h *SecondhandHandler) MyListings(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -272,7 +290,62 @@ func (h *SecondhandHandler) MyListings(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 16. SettingsListings returns all secondhand listings for the settings page.
+// 17. MyFavorites returns saved secondhand listings.
+func (h *SecondhandHandler) MyFavorites(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	page, pageSize := parsePagination(c)
+	items, pagination, err := h.secondhandService.ListFavoriteSecondhand(c.Request.Context(), user.UserID, user.PrimaryCommunityID, service.MySecondhandFilters{
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+}
+
+// 18. Favorite adds a secondhand listing to current member favorites.
+func (h *SecondhandHandler) Favorite(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.secondhandService.AddFavoriteSecondhand(c.Request.Context(), user.UserID, user.PrimaryCommunityID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 19. Unfavorite removes a secondhand listing from current member favorites.
+func (h *SecondhandHandler) Unfavorite(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.secondhandService.RemoveFavoriteSecondhand(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 20. SettingsListings returns all secondhand listings for the settings page.
 func (h *SecondhandHandler) SettingsListings(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
@@ -295,7 +368,7 @@ func (h *SecondhandHandler) SettingsListings(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 17. SettingsDiscoverPlacements returns the settings slot matrix.
+// 21. SettingsDiscoverPlacements returns the settings slot matrix.
 func (h *SecondhandHandler) SettingsDiscoverPlacements(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
@@ -311,7 +384,7 @@ func (h *SecondhandHandler) SettingsDiscoverPlacements(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 18. SaveSettingsDiscoverPlacements saves the settings slot matrix.
+// 22. SaveSettingsDiscoverPlacements saves the settings slot matrix.
 func (h *SecondhandHandler) SaveSettingsDiscoverPlacements(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -339,7 +412,7 @@ func (h *SecondhandHandler) SaveSettingsDiscoverPlacements(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 19. SettingsMarkSold marks any secondhand listing as sold.
+// 23. SettingsMarkSold marks any secondhand listing as sold.
 func (h *SecondhandHandler) SettingsMarkSold(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
@@ -355,7 +428,7 @@ func (h *SecondhandHandler) SettingsMarkSold(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": listingID, "business_status": "sold"})
 }
 
-// 20. SettingsDeactivate hides any secondhand listing.
+// 24. SettingsDeactivate hides any secondhand listing.
 func (h *SecondhandHandler) SettingsDeactivate(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
@@ -371,7 +444,7 @@ func (h *SecondhandHandler) SettingsDeactivate(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": listingID, "publication_status": "hidden"})
 }
 
-// 21. ContactAccess validates contact access and returns allowed payload.
+// 25. ContactAccess validates contact access and returns allowed payload.
 func (h *SecondhandHandler) ContactAccess(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -395,7 +468,7 @@ func (h *SecondhandHandler) ContactAccess(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 22. bindSecondhandRequest binds and normalizes secondhand create or update payloads.
+// 26. bindSecondhandRequest binds and normalizes secondhand create or update payloads.
 func (h *SecondhandHandler) bindSecondhandRequest(c *gin.Context, listingPublicID string) (service.UpsertSecondhandParams, bool) {
 	var request secondhandRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -422,6 +495,7 @@ func (h *SecondhandHandler) bindSecondhandRequest(c *gin.Context, listingPublicI
 		VisibilityScope:       strings.TrimSpace(request.VisibilityScope),
 		ContactMethod:         strings.TrimSpace(request.ContactMethod),
 		BusinessStatus:        strings.TrimSpace(request.BusinessStatus),
+		ChargeDraftSave:       c.Query("charge_draft") == "true",
 		Images:                request.Images,
 		Contact: service.ListingContactInput{
 			Phone:           strings.TrimSpace(request.Contact.Phone),

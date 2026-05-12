@@ -1,7 +1,7 @@
 /*
  * Secondhand staff management business logic.
  * 1. Provide staff-only secondhand listing queries.
- * 2. Provide owner-independent publish, deactivate, and renew actions.
+ * 2. Provide owner-independent publish, deactivate, and configurable renew actions.
  */
 package service
 
@@ -12,6 +12,11 @@ import (
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
+)
+
+const (
+	defaultStaffSecondhandRenewalDays = 14
+	maxStaffSecondhandRenewalDays     = 365
 )
 
 // 1. ListStaffSecondhand returns all secondhand listings for staff management.
@@ -32,7 +37,7 @@ func (s *SecondhandService) PublishForStaff(ctx context.Context, listingPublicID
 		"moderation_status":  "approved",
 		"business_status":    "available",
 		"sort_refreshed_at":  now,
-		"expire_at":          now.Add(14 * 24 * time.Hour),
+		"expire_at":          now.Add(time.Duration(defaultStaffSecondhandRenewalDays) * 24 * time.Hour),
 	}
 	if listing.PublishedAt == nil {
 		updates["published_at"] = now
@@ -51,8 +56,13 @@ func (s *SecondhandService) DeactivateForStaff(ctx context.Context, listingPubli
 }
 
 // 4. RenewForStaff refreshes any secondhand listing validity.
-func (s *SecondhandService) RenewForStaff(ctx context.Context, listingPublicID string) error {
+func (s *SecondhandService) RenewForStaff(ctx context.Context, listingPublicID string, renewalDays int) error {
 	listing, _, _, err := s.loadListingByPublicID(ctx, strings.TrimSpace(listingPublicID))
+	if err != nil {
+		return err
+	}
+
+	renewalDuration, err := resolveStaffSecondhandRenewalDuration(renewalDays)
 	if err != nil {
 		return err
 	}
@@ -63,10 +73,25 @@ func (s *SecondhandService) RenewForStaff(ctx context.Context, listingPublicID s
 		"moderation_status":  "approved",
 		"business_status":    "available",
 		"sort_refreshed_at":  now,
-		"expire_at":          now.Add(14 * 24 * time.Hour),
+		"expire_at":          now.Add(renewalDuration),
 	}).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to renew listing")
 	}
 
 	return nil
+}
+
+// 5. resolveStaffSecondhandRenewalDuration validates renewal days.
+func resolveStaffSecondhandRenewalDuration(renewalDays int) (time.Duration, error) {
+	if renewalDays == 0 {
+		renewalDays = defaultStaffSecondhandRenewalDays
+	}
+	if renewalDays < 0 {
+		return 0, errcode.New(errcode.CodeValidationError, "renewal_days must be positive")
+	}
+	if renewalDays > maxStaffSecondhandRenewalDays {
+		return 0, errcode.New(errcode.CodeValidationError, "renewal_days is too long")
+	}
+
+	return time.Duration(renewalDays) * 24 * time.Hour, nil
 }

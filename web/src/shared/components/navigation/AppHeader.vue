@@ -437,11 +437,17 @@ watch(
 
 .app-topbar {
   --topbar-glass-border: rgb(var(--color-border) / 0.3);
+  --topbar-glass-fallback: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.94),
+    rgb(var(--color-toolbar-surface) / 0.88)
+  );
   --topbar-glass-background: linear-gradient(
     180deg,
-    rgb(var(--color-topbar-surface) / 0.76),
-    rgb(var(--color-toolbar-surface) / 0.64)
+    rgb(var(--color-topbar-surface) / 0.88),
+    rgb(var(--color-toolbar-surface) / 0.78)
   );
+  --topbar-glass-texture-opacity: 0.38;
   --topbar-glass-shadow:
     0 16px 40px rgb(15 23 42 / 0.1),
     inset 0 -1px 0 rgb(255 255 255 / 0.06);
@@ -457,23 +463,52 @@ watch(
   inset-inline: 0;
   top: 0;
   z-index: 40;
-  background: var(--topbar-glass-background);
+  overflow: hidden;
+  isolation: isolate;
+  background: rgb(var(--color-topbar-surface));
+  background: var(--topbar-glass-fallback);
   box-shadow: var(--topbar-glass-shadow);
-  backdrop-filter: var(--topbar-glass-filter);
-  -webkit-backdrop-filter: var(--topbar-glass-filter);
   transition:
     background 0.28s ease,
     border-color 0.28s ease,
     box-shadow 0.28s ease;
 }
 
+.app-topbar::before,
+.app-topbar::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+}
+
+.app-topbar::before {
+  z-index: 0;
+  background: var(--topbar-glass-background);
+}
+
+.app-topbar::after {
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.16), transparent 42%),
+    linear-gradient(90deg, rgb(255 255 255 / 0.08), transparent 26%, rgb(255 255 255 / 0.06) 74%, transparent),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 5px);
+  opacity: var(--topbar-glass-texture-opacity);
+}
+
 .app-topbar-home {
   --topbar-glass-border: rgb(var(--color-border) / 0.16);
+  --topbar-glass-fallback: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.82),
+    rgb(var(--color-toolbar-surface) / 0.66)
+  );
   --topbar-glass-background: linear-gradient(
     180deg,
-    rgb(var(--color-topbar-surface) / 0.5),
-    rgb(var(--color-toolbar-surface) / 0.36)
+    rgb(var(--color-topbar-surface) / 0.72),
+    rgb(var(--color-toolbar-surface) / 0.56)
   );
+  --topbar-glass-texture-opacity: 0.32;
   --topbar-glass-shadow:
     0 12px 30px rgb(15 23 42 / 0.06),
     inset 0 -1px 0 rgb(255 255 255 / 0.08);
@@ -482,15 +517,43 @@ watch(
 
 .app-topbar-solid {
   --topbar-glass-border: rgb(var(--color-border) / 0.3);
+  --topbar-glass-fallback: linear-gradient(
+    180deg,
+    rgb(var(--color-topbar-surface) / 0.94),
+    rgb(var(--color-toolbar-surface) / 0.88)
+  );
   --topbar-glass-background: linear-gradient(
     180deg,
-    rgb(var(--color-topbar-surface) / 0.76),
-    rgb(var(--color-toolbar-surface) / 0.64)
+    rgb(var(--color-topbar-surface) / 0.88),
+    rgb(var(--color-toolbar-surface) / 0.78)
   );
+  --topbar-glass-texture-opacity: 0.38;
   --topbar-glass-shadow:
     0 16px 40px rgb(15 23 42 / 0.1),
     inset 0 -1px 0 rgb(255 255 255 / 0.06);
   --topbar-glass-filter: blur(28px) saturate(184%);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .app-topbar::before {
+    backdrop-filter: var(--topbar-glass-filter);
+  }
+}
+
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .app-topbar::before {
+    -webkit-backdrop-filter: var(--topbar-glass-filter);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-topbar::before {
+    background: var(--topbar-glass-fallback);
+  }
+
+  .app-topbar::after {
+    opacity: 0.5;
+  }
 }
 
 :global(html[data-theme='default']) .app-topbar {
@@ -647,7 +710,7 @@ watch(
 
 .app-subnav {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   border-bottom: 1px solid var(--topbar-glass-border);
 }
 

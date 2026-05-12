@@ -1,7 +1,7 @@
 /*
  * Wallet and AJO Point data models.
  * 1. Store member point balances and immutable point transactions.
- * 2. Store operator-managed reward ads and member ad claim records.
+ * 2. Store operator-managed reward ads, engagement metrics, and member ad claim records.
  * 3. Keep all wallet audit fields explicit for production traceability.
  */
 package model
@@ -42,24 +42,27 @@ type WalletTransaction struct {
 
 // 3. RewardAd stores an operator-managed rewarded ad task.
 type RewardAd struct {
-	ID             int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	PublicID       string     `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
-	Title          string     `gorm:"type:varchar(160);not null" json:"title"`
-	Summary        string     `gorm:"type:varchar(500)" json:"summary"`
-	CoverURL       string     `gorm:"type:varchar(800)" json:"cover_url"`
-	MediaURL       string     `gorm:"type:varchar(800)" json:"media_url"`
-	MediaType      string     `gorm:"type:varchar(32);not null;default:'image';index" json:"media_type"`
-	TargetURL      string     `gorm:"type:varchar(800)" json:"target_url"`
-	RewardPoints   int64      `gorm:"not null" json:"reward_points"`
-	WatchSeconds   int        `gorm:"not null;default:30" json:"watch_seconds"`
-	DailyUserLimit int        `gorm:"not null;default:1" json:"daily_user_limit"`
-	TotalBudget    int64      `gorm:"not null;default:0" json:"total_budget"`
-	TotalGranted   int64      `gorm:"not null;default:0" json:"total_granted"`
-	IsActive       bool       `gorm:"not null;default:true;index" json:"is_active"`
-	StartsAt       *time.Time `gorm:"index" json:"starts_at"`
-	EndsAt         *time.Time `gorm:"index" json:"ends_at"`
-	CreatedBy      *int64     `gorm:"index" json:"created_by"`
-	UpdatedBy      *int64     `gorm:"index" json:"updated_by"`
+	ID                int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID          string     `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	Title             string     `gorm:"type:varchar(160);not null" json:"title"`
+	Summary           string     `gorm:"type:varchar(500)" json:"summary"`
+	CoverURL          string     `gorm:"type:varchar(800)" json:"cover_url"`
+	MediaURL          string     `gorm:"type:varchar(800)" json:"media_url"`
+	MediaType         string     `gorm:"type:varchar(32);not null;default:'image';index" json:"media_type"`
+	TargetURL         string     `gorm:"type:varchar(800)" json:"target_url"`
+	RewardPoints      int64      `gorm:"not null" json:"reward_points"`
+	WatchSeconds      int        `gorm:"not null;default:30" json:"watch_seconds"`
+	DailyUserLimit    int        `gorm:"not null;default:1" json:"daily_user_limit"`
+	TotalBudget       int64      `gorm:"not null;default:0" json:"total_budget"`
+	TotalGranted      int64      `gorm:"not null;default:0" json:"total_granted"`
+	WatchCount        int64      `gorm:"not null;default:0" json:"watch_count"`
+	TotalWatchSeconds int64      `gorm:"not null;default:0" json:"total_watch_seconds"`
+	LinkClickCount    int64      `gorm:"not null;default:0" json:"link_click_count"`
+	IsActive          bool       `gorm:"not null;default:true;index" json:"is_active"`
+	StartsAt          *time.Time `gorm:"index" json:"starts_at"`
+	EndsAt            *time.Time `gorm:"index" json:"ends_at"`
+	CreatedBy         *int64     `gorm:"index" json:"created_by"`
+	UpdatedBy         *int64     `gorm:"index" json:"updated_by"`
 	TimestampModel
 }
 

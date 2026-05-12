@@ -9,6 +9,8 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -183,11 +185,16 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 	extension := path.Ext(input.FileName)
 	objectKey := fmt.Sprintf("%s%s%s", normalizeMediaObjectPrefix(input.ObjectPrefix), strings.ToLower(utils.NewPublicID()), extension)
 
-	result, err := p.client.Presign(ctx, &oss.PutObjectRequest{
+	request := &oss.PutObjectRequest{
 		Bucket:      oss.Ptr(p.config.StorageBucket),
 		Key:         oss.Ptr(objectKey),
 		ContentType: oss.Ptr(input.MimeType),
-	}, oss.PresignExpires(p.config.StoragePresignExpires))
+	}
+	if callback := buildOSSUploadCallback(p.config, input, objectKey); callback != "" {
+		request.Callback = oss.Ptr(callback)
+	}
+
+	result, err := p.client.Presign(ctx, request, oss.PresignExpires(p.config.StoragePresignExpires))
 	if err != nil {
 		return nil, fmt.Errorf("presign oss upload: %w", err)
 	}
@@ -207,7 +214,45 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 	}, nil
 }
 
-// 18. PutObject uploads bytes directly to OSS from the server.
+// 18. buildOSSUploadCallback returns the optional OSS upload callback payload.
+func buildOSSUploadCallback(cfg *config.Config, input PresignUploadInput, objectKey string) string {
+	if cfg == nil || !cfg.OSSCallbackEnabled {
+		return ""
+	}
+	callbackURL := strings.TrimSpace(cfg.OSSCallbackURL)
+	if callbackURL == "" {
+		return ""
+	}
+
+	payload := map[string]string{
+		"callbackUrl":      callbackURL,
+		"callbackHost":     callbackHost(callbackURL),
+		"callbackBodyType": "application/json",
+		"callbackBody":     `{"object_key":"${object}","bucket_name":"${bucket}","mime_type":"${mimeType}","file_size":${size},"etag":"${etag}"}`,
+	}
+	if strings.TrimSpace(input.MimeType) != "" {
+		payload["callbackBody"] = strings.ReplaceAll(payload["callbackBody"], "${mimeType}", input.MimeType)
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+
+	return base64.StdEncoding.EncodeToString(encoded)
+}
+
+// 19. callbackHost returns the host value expected by OSS callback config.
+func callbackHost(callbackURL string) string {
+	parsed, err := url.Parse(callbackURL)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+
+	return parsed.Host
+}
+
+// 20. PutObject uploads bytes directly to OSS from the server.
 func (p *OSSStorageProvider) PutObject(ctx context.Context, input PutObjectInput) (*StorageObjectInfo, error) {
 	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.MimeType) == "" || len(input.Body) == 0 {
 		return nil, fmt.Errorf("invalid object upload payload")
@@ -230,7 +275,7 @@ func (p *OSSStorageProvider) PutObject(ctx context.Context, input PutObjectInput
 	}, nil
 }
 
-// 19. normalizeMediaObjectPrefix keeps upload object keys in approved media directories.
+// 21. normalizeMediaObjectPrefix keeps upload object keys in approved media directories.
 func normalizeMediaObjectPrefix(prefix string) string {
 	normalizedPrefix := strings.Trim(strings.TrimSpace(prefix), "/")
 	switch normalizedPrefix {
@@ -254,7 +299,7 @@ func normalizeMediaObjectPrefix(prefix string) string {
 	}
 }
 
-// 20. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.
+// 22. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.
 func normalizeListingMediaObjectPrefix(prefix string) (string, bool) {
 	cleanedPrefix := strings.TrimPrefix(prefix, "ajo_living/")
 	if !strings.HasPrefix(cleanedPrefix, "listings/") {
@@ -274,7 +319,7 @@ func normalizeListingMediaObjectPrefix(prefix string) (string, bool) {
 	return mediaObjectPrefix + strings.Join(segments, "/") + "/", true
 }
 
-// 21. isSafeObjectPrefixSegment validates one object prefix segment.
+// 23. isSafeObjectPrefixSegment validates one object prefix segment.
 func isSafeObjectPrefixSegment(segment string) bool {
 	if segment == "" {
 		return false
@@ -299,7 +344,7 @@ func isSafeObjectPrefixSegment(segment string) bool {
 	return true
 }
 
-// 22. HeadObject returns object metadata from OSS for server-side verification.
+// 24. HeadObject returns object metadata from OSS for server-side verification.
 func (p *OSSStorageProvider) HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error) {
 	result, err := p.client.HeadObject(ctx, &oss.HeadObjectRequest{
 		Bucket: oss.Ptr(p.config.StorageBucket),

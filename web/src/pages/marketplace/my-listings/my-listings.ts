@@ -14,6 +14,7 @@ import {
   markSecondhandListingSold,
   publishSecondhandListing,
   republishSecondhandListing,
+  renewSecondhandListing,
 } from '@/httpapis/secondhand-listings';
 import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
@@ -31,10 +32,10 @@ import {
   resolveListingTitle,
   resolveListingVisibility,
 } from '@/utils/marketplace';
-import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
+import { formatAjoPoints, resolveWalletChargeCost, resolveWalletRenewChargeCost } from '@/utils/wallet';
 
 type MyListingsTab = 'all' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
-type MyListingsAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+type MyListingsAction = 'publish' | 'republish' | 'renew' | 'mark-sold' | 'deactivate';
 
 // 1. 管理我的帖子頁資料與動作
 export const useMarketplaceMyListingsPage = () => {
@@ -114,8 +115,8 @@ export const useMarketplaceMyListingsPage = () => {
 
   // 1.4 執行帖子狀態操作
   const runAction = async (action: MyListingsAction, listingId: string): Promise<void> => {
-    if ((action === 'publish' || action === 'republish') &&
-      !window.confirm(`${t(action === 'publish' ? 'marketplace.mine.confirmPublishCharge' : 'marketplace.mine.confirmRepublishCharge')} ${formatPoints(resolveWalletChargeCost('secondhand'))}`)) {
+    if ((action === 'publish' || action === 'republish' || action === 'renew') &&
+      !window.confirm(`${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`)) {
       return;
     }
     if (
@@ -134,6 +135,10 @@ export const useMarketplaceMyListingsPage = () => {
         await republishSecondhandListing(listingId);
       }
 
+      if (action === 'renew') {
+        await renewSecondhandListing(listingId);
+      }
+
       if (action === 'mark-sold') {
         await markSecondhandListingSold(listingId);
       }
@@ -143,7 +148,7 @@ export const useMarketplaceMyListingsPage = () => {
       }
 
       feedbackStore.pushToast(t('marketplace.mine.statusUpdated'), 'success');
-      if (action === 'publish' || action === 'republish') {
+      if (action === 'publish' || action === 'republish' || action === 'renew') {
         await sessionStore.loadCurrentUser();
       }
       await loadMyListings();
@@ -176,6 +181,23 @@ export const useMarketplaceMyListingsPage = () => {
   const openPublicDetail = async (listingId: string): Promise<void> => {
     await router.push(`/marketplace/listing/${listingId}`);
   };
+
+  // 1.9 輸出扣費確認文案 key
+  const resolveChargeConfirmKey = (action: MyListingsAction): string => {
+    if (action === 'publish') {
+      return 'marketplace.mine.confirmPublishCharge';
+    }
+    if (action === 'republish') {
+      return 'marketplace.mine.confirmRepublishCharge';
+    }
+    return 'marketplace.mine.confirmRenewCharge';
+  };
+
+  // 1.10 輸出指定動作扣費
+  const resolveActionChargeCost = (action: MyListingsAction): number =>
+    action === 'renew'
+      ? resolveWalletRenewChargeCost('secondhand')
+      : resolveWalletChargeCost('secondhand');
 
   watch(activeTab, () => {
     void loadMyListings();
@@ -210,6 +232,7 @@ export const useMarketplaceMyListingsPage = () => {
     searchQuery,
     formatAjoPoints: formatPoints,
     secondhandChargeCost: resolveWalletChargeCost('secondhand'),
+    secondhandRenewChargeCost: resolveWalletRenewChargeCost('secondhand'),
     setActiveTab,
     t,
     tabOptions,

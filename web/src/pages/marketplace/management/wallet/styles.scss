@@ -56,6 +56,7 @@
 
 .wallet-settings-panel-header {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -63,13 +64,42 @@
   padding: 1rem;
 }
 
+.wallet-settings-panel-header--compact {
+  min-height: 3.75rem;
+}
+
+.wallet-settings-panel-header > div {
+  min-width: 0;
+}
+
+.wallet-settings-panel-header > span {
+  overflow: hidden;
+  color: rgb(var(--color-text));
+  font-size: 0.92rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wallet-settings-panel-header h2,
 .wallet-settings-card-title h3 {
   margin: 0;
+  overflow: hidden;
   color: rgb(var(--color-text));
   font-size: 1rem;
   font-weight: 750;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-settings-panel-header p,
+.wallet-settings-ad-body p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .wallet-settings-form,
@@ -90,15 +120,24 @@
 }
 
 .wallet-settings-three-column,
-.wallet-settings-toolbar-two {
+.wallet-settings-toolbar-two,
+.wallet-settings-toolbar-three {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
+  align-items: center;
+}
+
+.wallet-settings-ad-controls {
   align-items: end;
 }
 
 .wallet-settings-toolbar-two {
   grid-template-columns: minmax(0, 1fr) 10rem;
+}
+
+.wallet-settings-toolbar-three {
+  grid-template-columns: minmax(0, 1fr) 10rem auto;
 }
 
 .wallet-settings-field {
@@ -131,6 +170,7 @@
 .wallet-settings-field textarea,
 .wallet-settings-field select,
 .wallet-settings-select {
+  min-height: 2.75rem;
   padding: 0.75rem;
   line-height: 1.5;
 }
@@ -148,6 +188,19 @@
   border-radius: 8px;
   background: rgb(var(--color-surface));
   padding: 0 0.75rem;
+}
+
+.wallet-settings-switch-field .wallet-settings-check {
+  min-height: 2.75rem;
+}
+
+.wallet-settings-switch-field .wallet-settings-check input {
+  width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  flex: 0 0 auto;
+  padding: 0;
+  accent-color: rgb(var(--color-primary));
 }
 
 .wallet-settings-search {
@@ -205,13 +258,13 @@
 }
 
 .wallet-settings-secondary-button {
-  min-height: 2.65rem;
+  min-height: 2.75rem;
   padding: 0 0.95rem;
 }
 
 .wallet-settings-icon-button {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 .wallet-settings-mini-button {
@@ -280,10 +333,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .wallet-settings-member-meta span,
 .wallet-settings-member-badge {
+  max-width: 100%;
+  overflow: hidden;
   border-radius: 999px;
   background: rgb(var(--color-surface-muted));
   color: rgb(var(--color-text-muted));
@@ -291,6 +347,8 @@
   font-size: 0.72rem;
   font-weight: 750;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-settings-member-badge {
@@ -371,6 +429,7 @@
 
 .wallet-settings-card-title {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
@@ -405,6 +464,13 @@
   font-weight: 700;
 }
 
+.wallet-settings-meta span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wallet-settings-transaction-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -421,17 +487,31 @@
 
 .wallet-settings-transaction-row div {
   display: grid;
+  min-width: 0;
   gap: 0.2rem;
 }
 
 .wallet-settings-transaction-row strong {
+  overflow: hidden;
   color: rgb(var(--color-text));
   font-size: 0.95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-settings-transaction-row time {
+  overflow: hidden;
   color: rgb(var(--color-text-muted));
   font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-settings-transaction-row span,
+.wallet-settings-transaction-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-settings-empty {
@@ -445,6 +525,7 @@
   .wallet-settings-two-column,
   .wallet-settings-three-column,
   .wallet-settings-toolbar-two,
+  .wallet-settings-toolbar-three,
   .wallet-settings-grant-toolbar,
   .wallet-settings-grant-row {
     grid-template-columns: 1fr;

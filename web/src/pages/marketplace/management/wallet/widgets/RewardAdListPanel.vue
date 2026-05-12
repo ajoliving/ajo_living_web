@@ -116,6 +116,9 @@ const emit = defineEmits<{
             <span>{{ ad.media_type === 'video' ? t('marketplace.management.walletAdMediaTypeVideo') : t('marketplace.management.walletAdMediaTypeImage') }}</span>
             <span>{{ formatAjoPoints(ad.reward_points) }}</span>
             <span>{{ t('marketplace.management.walletAdWatchSecondsValue', { seconds: ad.watch_seconds }) }}</span>
+            <span>{{ t('marketplace.management.walletAdWatchCountValue', { count: ad.watch_count }) }}</span>
+            <span>{{ t('marketplace.management.walletAdWatchTimeValue', { seconds: ad.total_watch_seconds }) }}</span>
+            <span>{{ t('marketplace.management.walletAdClickRateValue', { rate: ad.link_click_rate.toFixed(2) }) }}</span>
             <span v-if="ad.ends_at">{{ t('marketplace.management.walletAdEndsAtValue', { date: ad.ends_at.slice(0, 10) }) }}</span>
           </div>
           <div class="wallet-settings-actions wallet-settings-actions-left">
@@ -124,7 +127,7 @@ const emit = defineEmits<{
               class="wallet-settings-mini-button"
               @click="emit('edit', ad)"
             >
-              {{ t('marketplace.mine.edit') }}
+              {{ t('marketplace.management.walletAdEditAction') }}
             </button>
             <button
               type="button"

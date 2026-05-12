@@ -495,12 +495,14 @@ onMounted(() => {
 .property-my-card__body,
 .property-my-actions {
   display: grid;
+  min-width: 0;
   gap: 0.75rem;
   padding: 1rem;
 }
 
 .property-my-card__top {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
   gap: 1rem;
 }
@@ -520,8 +522,11 @@ onMounted(() => {
 }
 
 .property-my-card h2 {
+  overflow: hidden;
   font-size: 1.1rem;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-my-card p,
@@ -530,6 +535,21 @@ onMounted(() => {
   color: rgb(var(--color-text-muted));
   font-size: 0.9rem;
   line-height: 1.55;
+}
+
+.property-my-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.property-my-card__community,
+.property-my-card__date,
+.property-my-card__top strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-my-actions {

@@ -1,7 +1,7 @@
 /*
  * Wallet service tests.
  * 1. Validate AJO Point debit, insufficient balance, and transaction records.
- * 2. Validate rewarded ad timing, duplicate claim, and balance updates.
+ * 2. Validate rewarded ad timing, repeated claims, metrics, and balance updates.
  */
 package service
 
@@ -62,7 +62,7 @@ func TestWalletSpendPoints(t *testing.T) {
 	}
 }
 
-// 2. TestRewardAdClaimRequiresThirtySeconds validates rewarded ad claim safeguards.
+// 2. TestRewardAdClaimRequiresThirtySeconds validates rewarded ad claim safeguards and metrics.
 func TestRewardAdClaimRequiresThirtySeconds(t *testing.T) {
 	runtime := newTestRuntime(t)
 	walletService := NewWalletService(runtime)
@@ -104,6 +104,14 @@ func TestRewardAdClaimRequiresThirtySeconds(t *testing.T) {
 	if !errors.As(err, &appErr) || appErr.Code != errcode.CodeWalletActionUnavailable {
 		t.Fatalf("expected duplicate claim rejection, got %#v", err)
 	}
+
+	var updatedAd model.RewardAd
+	if err := runtime.DB.Where("id = ?", ad.ID).First(&updatedAd).Error; err != nil {
+		t.Fatalf("load reward ad metrics: %v", err)
+	}
+	if updatedAd.WatchCount != 1 || updatedAd.TotalWatchSeconds != 30 || updatedAd.TotalGranted != 50 {
+		t.Fatalf("unexpected reward ad metrics: %#v", updatedAd)
+	}
 }
 
 // 3. TestRewardAdDailyLimitAllowsOneThousandPoints validates the daily ad reward cap.
@@ -123,12 +131,7 @@ func TestRewardAdDailyLimitAllowsOneThousandPoints(t *testing.T) {
 		t.Fatalf("expected balance to reach daily cap, got %#v", secondCharge)
 	}
 
-	session, err := walletService.StartRewardAd(context.Background(), user.ID, thirdAd.PublicID, "127.0.0.1", "unit-test")
-	if err != nil {
-		t.Fatalf("start third reward ad: %v", err)
-	}
-	runtime.Now = func() time.Time { return fixedNow.Add(3*time.Minute + 1*time.Second) }
-	_, err = walletService.ClaimRewardAd(context.Background(), user.ID, thirdAd.PublicID, session.ClaimID, "127.0.0.1", "unit-test")
+	_, err := walletService.StartRewardAd(context.Background(), user.ID, thirdAd.PublicID, "127.0.0.1", "unit-test")
 	var appErr *errcode.AppError
 	if !errors.As(err, &appErr) || appErr.Code != errcode.CodeWalletActionUnavailable {
 		t.Fatalf("expected daily reward cap rejection, got %#v", err)
@@ -143,7 +146,43 @@ func TestRewardAdDailyLimitAllowsOneThousandPoints(t *testing.T) {
 	}
 }
 
-// 4. TestStaffWalletGrantAndLedger validates operator grants and staff ledger search.
+// 4. TestRewardAdAllowsRepeatedClaimsAndTracksClicks validates repeated watches and click rate.
+func TestRewardAdAllowsRepeatedClaimsAndTracksClicks(t *testing.T) {
+	runtime := newTestRuntime(t)
+	walletService := NewWalletService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	user := mustCreateUser(t, runtime, "+852", "93000007", &communityA.ID)
+	ad := mustCreateRewardAd(t, runtime, 50, 1000)
+	ad.TargetURL = "https://example.com"
+	if err := runtime.DB.Save(&ad).Error; err != nil {
+		t.Fatalf("save reward ad target URL: %v", err)
+	}
+
+	firstCharge := mustClaimRewardAd(t, runtime, walletService, user.ID, ad.PublicID)
+	runtime.Now = func() time.Time { return fixedNow.Add(2 * time.Minute) }
+	secondCharge := mustClaimRewardAd(t, runtime, walletService, user.ID, ad.PublicID)
+	if firstCharge.PointsBalanceAfter != 50 || secondCharge.PointsBalanceAfter != 100 {
+		t.Fatalf("unexpected repeated reward balances: first=%#v second=%#v", firstCharge, secondCharge)
+	}
+
+	click, err := walletService.TrackRewardAdClick(context.Background(), ad.PublicID)
+	if err != nil {
+		t.Fatalf("track reward ad click: %v", err)
+	}
+	if click.LinkClickCount != 1 || click.WatchCount != 2 || click.LinkClickRate != 50 {
+		t.Fatalf("unexpected click metrics: %#v", click)
+	}
+
+	var updatedAd model.RewardAd
+	if err := runtime.DB.Where("id = ?", ad.ID).First(&updatedAd).Error; err != nil {
+		t.Fatalf("load reward ad metrics: %v", err)
+	}
+	if updatedAd.WatchCount != 2 || updatedAd.TotalWatchSeconds != 60 || updatedAd.LinkClickCount != 1 {
+		t.Fatalf("unexpected stored metrics: %#v", updatedAd)
+	}
+}
+
+// 5. TestStaffWalletGrantAndLedger validates operator grants and staff ledger search.
 func TestStaffWalletGrantAndLedger(t *testing.T) {
 	runtime := newTestRuntime(t)
 	walletService := NewWalletService(runtime)
@@ -180,7 +219,7 @@ func TestStaffWalletGrantAndLedger(t *testing.T) {
 	}
 }
 
-// 5. TestStaffRewardAdManagement validates operator reward ad create and update.
+// 6. TestStaffRewardAdManagement validates operator reward ad create and update.
 func TestStaffRewardAdManagement(t *testing.T) {
 	runtime := newTestRuntime(t)
 	walletService := NewWalletService(runtime)
@@ -228,7 +267,7 @@ func TestStaffRewardAdManagement(t *testing.T) {
 	}
 }
 
-// 6. mustCreateRewardAd creates an active rewarded ad fixture.
+// 7. mustCreateRewardAd creates an active rewarded ad fixture.
 func mustCreateRewardAd(t *testing.T, runtime *Runtime, rewardPoints int64, totalBudget int64) model.RewardAd {
 	t.Helper()
 
@@ -248,7 +287,7 @@ func mustCreateRewardAd(t *testing.T, runtime *Runtime, rewardPoints int64, tota
 	return ad
 }
 
-// 7. mustClaimRewardAd completes one rewarded ad claim.
+// 8. mustClaimRewardAd completes one rewarded ad claim.
 func mustClaimRewardAd(t *testing.T, runtime *Runtime, walletService *WalletService, userID int64, taskID string) *PointsChargeResponse {
 	t.Helper()
 

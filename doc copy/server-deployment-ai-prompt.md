@@ -34,6 +34,8 @@
 | `apis.hk.skylinedances.com` | 47.239.117.108 | :20036 | nginx 静态 | 独立 |
 | `svavo.smart.databoard.skylinedances.com` | 47.239.117.108 | :20038 | nginx 静态 | 独立 |
 | `svavo.smart.databoard.service.skylinedances.com` | 47.239.117.108 | :20037 | Go + Supervisor | 独立 |
+| `ajoliving.skylinedances.com` | 47.239.117.108 | :20041 | nginx 静态 | 待申请 |
+| `ajoliving.server.skylinedances.com` | 47.239.117.108 | :20042 | Go + Supervisor | 待申请 |
 
 
 ---
@@ -353,6 +355,8 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 20036 | 47.239.117.108 | hk-dashboard | 0.0.0.0 |
 | 20037 | 47.239.117.108 | svavo 后端 API | 127.0.0.1 |
 | 20038 | 47.239.117.108 | svavo 前端 nginx | 127.0.0.1 |
+| 20041 | 47.239.117.108 | ajoliving 前端 nginx | 127.0.0.1 |
+| 20042 | 47.239.117.108 | ajoliving 后端 API | 127.0.0.1 |
 | 9002 | 47.239.117.108 | iboard 前端 | 0.0.0.0 |
 | 10031 | 47.239.117.108 | iboard 后端 | 0.0.0.0 |
 | 32001 | 47.239.117.108 | icctv 后端 | 0.0.0.0 |
@@ -363,6 +367,7 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 3311 | 47.239.117.108 | MySQL(pos_web) | 127.0.0.1 |
 | 3312 | 47.239.117.108 | MySQL(icctv) | 127.0.0.1 |
 | 6381 | 47.239.117.108 | Redis(iboard) | 127.0.0.1 |
+| 45432 | 47.239.117.108 | ajoliving PostgreSQL(Docker) | 127.0.0.1 |
 
 ---
 
@@ -401,6 +406,108 @@ curl -I https://svavo.smart.databoard.skylinedances.com/
 curl -I https://svavo.smart.databoard.service.skylinedances.com/api/health
 ssh admin@47.239.117.108 "sudo supervisorctl status svavo_smart_databoard frpc"
 ssh admin@47.239.117.108 "sudo docker ps --filter name=svavo-postgres"
+```
+
+---
+
+## 九、AJOLIVING 项目固定配置（已落地）
+
+### 1. 应用服务器 47.239.117.108
+
+- 项目目录：`/home/admin/ajoliving`
+- 后端 Supervisor：`/etc/supervisor/conf.d/ajoliving_server.conf`
+- 后端本地地址：`127.0.0.1:20042`
+- 前端 nginx 站点：`/etc/nginx/sites-available/ajoliving_web`
+- 前端本地地址：`127.0.0.1:20041`
+- 数据库容器：`ajoliving_postgres`
+- 数据库端口：`127.0.0.1:45432`
+
+### 2. frpc 代理（应用服务器）
+
+`/home/admin/frp/frpc.toml` 已追加：
+
+- `ajoliving.skylinedances.com -> 127.0.0.1:20041`（前端）
+- `ajoliving.server.skylinedances.com -> 127.0.0.1:20042`（API）
+
+### 3. 目录结构（应用服务器）
+
+```
+/home/admin/ajoliving/
+├── server/                    # Go 后端
+│   ├── ajoliving_server       # 可执行文件
+│   ├── .env                   # 环境变量（生产配置）
+│   ├── run.sh                 # Supervisor 启动脚本
+│   └── tmp/                   # 日志目录
+├── web/                       # Vue 3 前端
+│   ├── dist/                  # 编译产物（nginx 托管）
+│   └── public/                # 静态资源
+└── db/                        # 数据库容器配置
+    ├── docker-compose.yml     # PostgreSQL 16
+    └── backups/               # 部署前生产库备份
+```
+
+### 4. 本地更新部署命令
+
+正常发布前端和后端：
+
+```bash
+cd /Users/yangliu/Documents/Code/ajoliving_web
+./deploy-ajoliving.sh
+```
+
+默认行为：
+
+- 会本地构建 Go 后端与 Vue 前端，并发布到服务器新的 release 目录。
+- 会保留服务器 PostgreSQL volume，不会删除、重建或覆盖生产数据。
+- 会在后端重启前备份服务器生产库到 `/home/admin/ajoliving/db/backups/ajoliving_<release_id>.dump`。
+- 后端启动时会执行 GORM `AutoMigrate`，新增字段会自动补齐；正常情况下不会删除已有表或已有字段。
+- `.env` 默认保留服务器现有版本；只有显式设置 `SYNC_ENV=1` 才会用本地 `.env` 覆盖服务器 `.env`。
+
+危险操作：
+
+```bash
+RESTORE_DB=1 RESTORE_DB_CONFIRM=RESTORE_PRODUCTION_AJOLIVING ./deploy-ajoliving.sh
+```
+
+只有同时设置以上两个变量，脚本才允许把本地 dump 恢复到服务器。正常更新前后端不要设置 `RESTORE_DB=1`。
+
+### 5. 验收命令
+
+```bash
+# 前端可访问
+curl -I http://127.0.0.1:20041/
+
+# 后端 API 可访问
+curl -I http://127.0.0.1:20042/api/v1/health
+
+# 服务运行状态
+ssh admin@47.239.117.108 "sudo supervisorctl status ajoliving_server frpc"
+
+# 数据库容器
+ssh admin@47.239.117.108 "sudo docker ps --filter name=ajoliving_postgres"
+
+# 最近生产库备份
+ssh admin@47.239.117.108 "ls -lt /home/admin/ajoliving/db/backups | head"
+
+# frpc 代理确认
+ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 3 'name = \"ajoliving'"
+
+# SSL 申请完成后验证 HTTPS
+curl -I https://ajoliving.skylinedances.com/
+curl -I https://ajoliving.server.skylinedances.com/api/v1/health
+```
+
+### 6. 后续 SSL 配置
+
+待网关 47.83.21.100 申请证书后，新增两个 nginx HTTPS 反代站点：
+
+```bash
+# 申请证书（需停 frps）
+ssh admin@47.83.21.100 "sudo supervisorctl stop frps"
+ssh admin@47.83.21.100 "sudo certbot certonly --standalone -d ajoliving.skylinedances.com -d ajoliving.server.skylinedances.com"
+ssh admin@47.83.21.100 "sudo supervisorctl start frps"
+
+# 创建 nginx HTTPS 反代（参考 SVAVO 或通用场景 V-5）
 ```
 
 ---

@@ -12,7 +12,7 @@ import (
 	"ajoliving_web/http_service/internal/model"
 )
 
-// 1. TestBootstrapStaffAndUpdateUserRole validates staff bootstrap and role updates.
+// 1. TestBootstrapStaffCreateUserAndUpdateUserRole validates staff account management.
 func TestBootstrapStaffAndUpdateUserRole(t *testing.T) {
 	runtime := newTestRuntime(t)
 	runtime.Config.BootstrapStaffPhones = "+85291238888"
@@ -97,5 +97,38 @@ func TestBootstrapStaffAndUpdateUserRole(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected promoted user to appear in staff list")
+	}
+
+	created, err := staffService.CreateUser(context.Background(), identity.UserID, StaffUserCreateParams{
+		Email:            "staff-created@example.com",
+		Password:         "staffpass123",
+		DisplayName:      "Created Staff",
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "91237777",
+		MemberType:       MemberTypeUser,
+		RoleCodes:        []string{model.RoleCodeStaff},
+	})
+	if err != nil {
+		t.Fatalf("create staff user: %v", err)
+	}
+	if !created.IsStaff || created.Role != RoleStaff || created.DisplayName != "Created Staff" {
+		t.Fatalf("expected created staff account, got %+v", created)
+	}
+	if created.Email != "staff-created@example.com" {
+		t.Fatalf("expected created staff email, got %q", created.Email)
+	}
+	if len(created.Roles) != 2 || created.Roles[0] != model.RoleCodeStaff || created.Roles[1] != model.RoleCodeMember {
+		t.Fatalf("expected staff and member roles, got %+v", created.Roles)
+	}
+
+	loggedIn, err := authService.LoginWithEmail(context.Background(), EmailPasswordParams{
+		Email:    "staff-created@example.com",
+		Password: "staffpass123",
+	})
+	if err != nil {
+		t.Fatalf("login created staff user: %v", err)
+	}
+	if !loggedIn.User.IsStaff || loggedIn.User.Role != RoleStaff {
+		t.Fatalf("expected created account to login as staff, got %+v", loggedIn.User)
 	}
 }

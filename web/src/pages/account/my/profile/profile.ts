@@ -4,6 +4,7 @@
  * 2. 上傳 OSS 頭像並同步會員狀態。
  * 3. 儲存會員資料並同步全域會員狀態。
  */
+import axios from 'axios';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -55,24 +56,46 @@ export const useAccountProfilePage = () => {
   const formState = reactive({
     display_name: '',
     email: '',
-    phone: '',
+    phone_country_code: '+852',
+    phone_number: '',
     district_code: '',
     publisher_identity_type: '',
   });
 
-  // 2.1 輸出缺省顯示文案
+  // 2.1 計算可提交的電話欄位
+  const buildPhonePayload = (): { phone_country_code?: string; phone_number?: string } => {
+    const phoneNumber = formState.phone_number.trim();
+    if (!phoneNumber) {
+      return {};
+    }
+
+    return {
+      phone_country_code: formState.phone_country_code.trim() || '+852',
+      phone_number: phoneNumber,
+    };
+  };
+
+  // 2.2 讀取 API 錯誤訊息
+  const readErrorMessage = (error: unknown, fallback: string): string =>
+    axios.isAxiosError<{ message?: string }>(error)
+      ? error.response?.data?.message ?? fallback
+      : fallback;
+
+  // 2.3 輸出缺省顯示文案
   const fallbackValue = computed(() => t('marketplace.myProfile.emptyValue'));
 
-  // 2.2 顯示帳戶電話資料
+  // 2.4 顯示帳戶電話資料
   const phoneDisplay = computed(() => {
     if (sessionStore.me?.phone_country_code === 'email') {
       return t('account.profile.phoneUnavailable');
     }
 
-    return formState.phone || t('account.profile.phoneUnavailable');
+    const countryCode = formState.phone_country_code.trim();
+    const phoneNumber = formState.phone_number.trim();
+    return phoneNumber ? `${countryCode || '+852'} ${phoneNumber}`.trim() : t('account.profile.phoneUnavailable');
   });
 
-  // 2.3 顯示主要屋苑資料
+  // 2.5 顯示主要屋苑資料
   const communityDisplay = computed(() => {
     const community = sessionStore.me?.primary_community;
 
@@ -84,7 +107,7 @@ export const useAccountProfilePage = () => {
     );
   });
 
-  // 2.4 顯示帳戶資料行
+  // 2.6 顯示帳戶資料行
   const profileRows = computed<ProfileInfoRow[]>(() => [
     {
       key: 'display_name',
@@ -118,7 +141,7 @@ export const useAccountProfilePage = () => {
     },
   ]);
 
-  // 2.5 顯示身份狀態資料行
+  // 2.7 顯示身份狀態資料行
   const accountRows = computed<ProfileInfoRow[]>(() => [
     {
       key: 'public_id',
@@ -152,7 +175,7 @@ export const useAccountProfilePage = () => {
     },
   ]);
 
-  // 2.6 顯示角色與權限
+  // 2.8 顯示角色與權限
   const roleChips = computed<string[]>(() =>
     sessionStore.me?.roles?.length ? sessionStore.me.roles : [t('marketplace.myProfile.noRoles')],
   );
@@ -160,18 +183,21 @@ export const useAccountProfilePage = () => {
     sessionStore.me?.permissions?.length ? sessionStore.me.permissions : [t('marketplace.myProfile.noPermissions')],
   );
 
-  // 2.7 同步表單內容
+  // 2.9 同步表單內容
   const syncFormState = (): void => {
     formState.display_name = sessionStore.me?.display_name ?? sessionStore.currentUser.display_name;
     formState.email = sessionStore.me?.email ?? '';
-    formState.phone = sessionStore.me?.phone_number
-      ? `${sessionStore.me.phone_country_code || '+852'} ${sessionStore.me.phone_number}`.trim()
-      : '';
+    formState.phone_country_code = sessionStore.me?.phone_country_code === 'email'
+      ? '+852'
+      : sessionStore.me?.phone_country_code || '+852';
+    formState.phone_number = sessionStore.me?.phone_country_code === 'email'
+      ? ''
+      : sessionStore.me?.phone_number ?? '';
     formState.district_code = sessionStore.me?.district_code ?? '';
     formState.publisher_identity_type = sessionStore.me?.publisher_identity_type ?? '';
   };
 
-  // 2.8 讀取會員資料
+  // 2.10 讀取會員資料
   const loadProfile = async (): Promise<void> => {
     if (sessionStore.me) {
       syncFormState();
@@ -185,26 +211,26 @@ export const useAccountProfilePage = () => {
       syncFormState();
     } catch (error) {
       console.error(error);
-      feedbackStore.pushToast(t('account.profile.loadError'), 'error');
+      feedbackStore.pushToast(readErrorMessage(error, t('account.profile.loadError')), 'error');
     } finally {
       isLoading.value = false;
     }
   };
 
-  // 2.9 開啟編輯彈窗
+  // 2.11 開啟編輯彈窗
   const openEditModal = (): void => {
     syncFormState();
     isEditModalOpen.value = true;
   };
 
-  // 2.10 關閉編輯彈窗
+  // 2.12 關閉編輯彈窗
   const closeEditModal = (): void => {
     if (!isSaving.value && !isUploadingAvatar.value) {
       isEditModalOpen.value = false;
     }
   };
 
-  // 2.11 上傳頭像並更新會員資料
+  // 2.13 上傳頭像並更新會員資料
   const handleAvatarFileChange = async (event: Event): Promise<void> => {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -249,6 +275,7 @@ export const useAccountProfilePage = () => {
       });
       const profileResponse = await updateMe({
         display_name: formState.display_name.trim(),
+        ...buildPhonePayload(),
         publisher_identity_type: formState.publisher_identity_type.trim(),
         district_code: formState.district_code.trim(),
         avatar_asset_id: completeResponse.data.data.media_asset_id,
@@ -256,22 +283,23 @@ export const useAccountProfilePage = () => {
 
       sessionStore.me = profileResponse.data.data;
       syncFormState();
-      feedbackStore.pushToast(t('account.profile.avatarUploadSuccess'), 'success');
+      feedbackStore.pushToast(t('account.profile.avatarUploadSuccess', { points: 50 }), 'success');
     } catch (error) {
       console.error(error);
-      feedbackStore.pushToast(t('account.profile.avatarUploadError'), 'error');
+      feedbackStore.pushToast(readErrorMessage(error, t('account.profile.avatarUploadError')), 'error');
     } finally {
       isUploadingAvatar.value = false;
     }
   };
 
-  // 2.12 儲存會員資料
+  // 2.14 儲存會員資料
   const handleSaveProfile = async (): Promise<void> => {
     isSaving.value = true;
 
     try {
       const { data } = await updateMe({
         display_name: formState.display_name.trim(),
+        ...buildPhonePayload(),
         publisher_identity_type: formState.publisher_identity_type.trim(),
         district_code: formState.district_code.trim(),
       });
@@ -282,13 +310,13 @@ export const useAccountProfilePage = () => {
       feedbackStore.pushToast(t('account.profile.updateSuccess'), 'success');
     } catch (error) {
       console.error(error);
-      feedbackStore.pushToast(t('account.profile.updateError'), 'error');
+      feedbackStore.pushToast(readErrorMessage(error, t('account.profile.updateError')), 'error');
     } finally {
       isSaving.value = false;
     }
   };
 
-  // 2.13 執行登出
+  // 2.15 執行登出
   const handleSignOut = async (): Promise<void> => {
     isSigningOut.value = true;
 
@@ -300,7 +328,7 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.14 初始化會員資料
+  // 2.16 初始化會員資料
   onMounted(() => {
     void loadProfile();
   });

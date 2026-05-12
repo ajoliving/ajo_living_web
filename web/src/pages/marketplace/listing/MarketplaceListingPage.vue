@@ -28,7 +28,10 @@ const {
   ownerName,
   publishedAt,
   revealContact,
+  isFavorited,
   t,
+  toggleFavorite,
+  updatingFavorite,
 } = useMarketplaceListingPage();
 </script>
 
@@ -157,6 +160,19 @@ const {
           </div>
         </div>
         <div class="detail-actions">
+          <button
+            type="button"
+            class="detail-action"
+            :class="isFavorited ? 'detail-action--saved' : ''"
+            :disabled="updatingFavorite"
+            @click="toggleFavorite"
+          >
+            <AppIcon
+              name="star"
+              :size="17"
+            />
+            {{ updatingFavorite ? t('common.status.loading') : isFavorited ? t('marketplace.detail.favoritedAction') : t('marketplace.detail.favoriteAction') }}
+          </button>
           <button
             type="button"
             class="detail-action detail-action--primary"
@@ -437,6 +453,12 @@ const {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
+}
+
+.detail-action--saved {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
 }
 
 .detail-mini-list {

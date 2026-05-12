@@ -156,7 +156,9 @@ const formatOptionalDate = (value?: string | null): string =>
               <td>{{ formatOptionalDate(listing.published_at) }}</td>
               <td>{{ formatOptionalDate(listing.expire_at) }}</td>
               <td>{{ formatDate(listing.updated_at) }}</td>
-              <td>
+              <td
+                class="management-table-actions"
+              >
                 <div class="management-action-group">
                   <button
                     v-if="listing.publication_status !== 'active'"

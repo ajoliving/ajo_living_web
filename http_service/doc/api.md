@@ -57,11 +57,13 @@ go run ./http_service/cmd/server
 | 7 | /api/v1/me | GET | 取得目前會員資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
 | 9 | /api/v1/me/secondhand/listings | GET | 取得我的二手帖子 | 會員 |
+| 66 | /api/v1/me/secondhand/favorites | GET | 取得我的二手收藏 | 會員 |
 | 52 | /api/v1/me/wallet | GET | 取得 AJO Point 錢包總覽 | 會員 |
 | 53 | /api/v1/me/wallet/transactions | GET | 查詢我的積分流水 | 會員 |
 | 54 | /api/v1/me/wallet/ad-tasks | GET | 查詢可領取的廣告積分任務 | 會員 |
 | 55 | /api/v1/me/wallet/ad-tasks/{taskId}/start | POST | 開始廣告觀看任務 | 會員 |
 | 56 | /api/v1/me/wallet/ad-tasks/{taskId}/claim | POST | 領取廣告積分 | 會員 |
+| 66 | /api/v1/me/wallet/ad-tasks/{taskId}/click | POST | 記錄廣告連結點擊 | 會員 |
 | 33 | /api/v1/me/orders | GET | 取得我的訂單列表 | 會員 |
 
 ### OSS 模組
@@ -85,8 +87,11 @@ go run ./http_service/cmd/server
 | 15 | /api/v1/secondhand/listings/{listingId} | PATCH | 更新二手帖子內容 | 會員 |
 | 16 | /api/v1/secondhand/listings/{listingId}/publish | POST | 發佈二手帖子 | 會員 |
 | 17 | /api/v1/secondhand/listings/{listingId}/republish | POST | 重新發佈過期帖子 | 會員 |
+| 72 | /api/v1/secondhand/listings/{listingId}/renew | POST | 續期上架中二手帖子 | 會員 |
 | 18 | /api/v1/secondhand/listings/{listingId}/mark-sold | POST | 標記帖子為已售 | 會員 |
 | 19 | /api/v1/secondhand/listings/{listingId}/deactivate | POST | 下架二手帖子 | 會員 |
+| 67 | /api/v1/secondhand/listings/{listingId}/favorite | POST | 收藏二手帖子 | 會員 |
+| 68 | /api/v1/secondhand/listings/{listingId}/favorite | DELETE | 取消收藏二手帖子 | 會員 |
 | 20 | /api/v1/listings/{listingId}/contact-access | POST | 取得可聯絡方式 | 會員 |
 | 44 | /api/v1/secondhand/settings/listings | GET | 設定頁查詢全部二手帖子 | Staff |
 | 45 | /api/v1/secondhand/settings/discover-placements | GET | 設定頁查詢發現頁廣告位 | Staff |
@@ -130,7 +135,8 @@ go run ./http_service/cmd/server
 | --- | --- | --- | --- | --- |
 | 27 | /api/v1/staff/me | GET | 取得目前 staff 帳號摘要 | Staff |
 | 28 | /api/v1/staff/users | GET | 查詢會員與 staff 清單 | Staff |
-| 29 | /api/v1/staff/users/{userId}/role | PATCH | 更新目標帳號角色 | Staff |
+| 29 | /api/v1/staff/users | POST | 新增管理員帳戶 | Staff |
+| 30 | /api/v1/staff/users/{userId}/role | PATCH | 更新目標帳號角色 | Staff |
 | 42 | /api/v1/staff/roles | GET | 查詢可用角色與權限矩陣 | Staff |
 | 57 | /api/v1/staff/wallet/transactions | GET | 查詢平台積分流水 | Staff |
 | 58 | /api/v1/staff/wallet/grants | POST | 手動發放 AJO Point | Staff |
@@ -1256,6 +1262,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/oss/assets/01KMEDIA001" -Me
         "publisher_identity_type": "owner",
         "publication_status": "active",
         "business_status": "available",
+        "is_favorited": true,
         "updated_at": "2026-04-17T05:20:00Z",
         "owner": {
           "user_id": "1001",
@@ -1368,6 +1375,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/discover" -Metho
     "pickup_region_code": "kwun_tong",
     "pickup_location_text": "屋苑樓下自提",
     "delivery_tags": ["self_pickup", "elevator"],
+    "is_favorited": true,
     "owner": {
       "user_id": "1001",
       "public_id": "01KUSERSELLER001",
@@ -1410,6 +1418,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECO
 - **請求參數**
 ```json
 {
+  "charge_draft": true, // 可選 Query，true 時儲存草稿扣 50 AJO Point
   "title": "九成新洗衣機", // 必填
   "summary": "保養良好，可即日自提", // 可選
   "description": "使用正常，附基本保養資訊", // 可選
@@ -1453,7 +1462,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECO
     "listing_id": "01KSECONDHAND001",
     "title": "九成新洗衣機",
     "publication_status": "draft",
-    "business_status": "available"
+    "business_status": "available",
+    "points_charged": 50,
+    "points_balance_after": 950
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:22:00Z"
@@ -1461,7 +1472,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECO
 ```
 - **Curl測試**
 ```bash
-curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/listings" \
+curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/listings?charge_draft=true" \
   -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1508,7 +1519,7 @@ $body=@{
   images=@(@{media_asset_id="01KMEDIA001";sort_order=1;is_cover=$true})
   contact=@{show_phone=$false;show_whatsapp=$true;show_chat=$true;show_inquiry_form=$false;whatsapp="+85291234567"}
 }|ConvertTo-Json -Depth 6
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings" -Method POST -Headers $headers -Body $body
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings?charge_draft=true" -Method POST -Headers $headers -Body $body
 ```
 
 ---
@@ -1519,6 +1530,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings" -Metho
 ```json
 {
   "listingId": "01KSECONDHAND001", // 路徑參數
+  "charge_draft": true, // 可選 Query，草稿儲存時扣 50 AJO Point；已發佈帖子編輯仍按編輯費扣除
   "title": "九成新洗衣機 - 已更新", // 必填
   "summary": "已更新描述", // 可選
   "description": "更新後說明", // 可選
@@ -1541,7 +1553,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings" -Metho
   "data": {
     "listing_id": "01KSECONDHAND001",
     "title": "九成新洗衣機 - 已更新",
-    "publication_status": "draft"
+    "publication_status": "draft",
+    "points_charged": 50,
+    "points_balance_after": 900
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:23:00Z"
@@ -1549,7 +1563,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings" -Metho
 ```
 - **Curl測試**
 ```bash
-curl -X PATCH "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001" \
+curl -X PATCH "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001?charge_draft=true" \
   -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1596,7 +1610,7 @@ $body=@{
   images=@(@{media_asset_id="01KMEDIA001";sort_order=1;is_cover=$true})
   contact=@{show_phone=$false;show_whatsapp=$true;show_chat=$true;show_inquiry_form=$false;whatsapp="+85291234567"}
 }|ConvertTo-Json -Depth 6
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001" -Method PATCH -Headers $headers -Body $body
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001?charge_draft=true" -Method PATCH -Headers $headers -Body $body
 ```
 
 ---
@@ -1673,6 +1687,45 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECO
 
 ---
 
+### 72. /api/v1/secondhand/listings/{listingId}/renew [POST]
+- **簡介**: 續期上架中的二手帖子，扣除 50 AJO Point，並以目前時間重新計算 14 天到期時間。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001" // 路徑參數
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "publication_status": "active",
+    "business_status": "available",
+    "expire_at": "2026-05-01T05:25:00Z",
+    "points_charged": 50,
+    "points_balance_after": 950,
+    "points_transaction_id": "01KTXRENEW001"
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:25:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001/renew" \
+  -H "Authorization: Bearer $token"
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $token"}
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001/renew" -Method POST -Headers $headers
+```
+
+---
+
 ### 18. /api/v1/secondhand/listings/{listingId}/mark-sold [POST]
 - **簡介**: 標記帖子為已售
 - **請求參數**
@@ -1737,6 +1790,72 @@ curl -X POST "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001/
 ```powershell
 $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings/01KSECONDHAND001/deactivate" -Method POST -Headers $headers
+```
+
+---
+
+### 66. /api/v1/me/secondhand/favorites [GET]
+- **簡介**: 取得我的二手收藏列表。
+- **請求參數**
+```json
+{
+  "page": 1,
+  "page_size": 20
+}
+```
+- **回應參數**: 與 `/api/v1/secondhand/listings` 列表項相同，`is_favorited` 固定為 `true`。
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/me/secondhand/favorites?page=1&page_size=20" \
+  -H "Authorization: Bearer $token"
+```
+
+---
+
+### 67. /api/v1/secondhand/listings/{listingId}/favorite [POST]
+- **簡介**: 收藏一個目前可見的二手帖子。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "is_favorited": true
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:28:00Z"
+}
+```
+
+---
+
+### 68. /api/v1/secondhand/listings/{listingId}/favorite [DELETE]
+- **簡介**: 取消收藏二手帖子。
+- **請求參數**
+```json
+{
+  "listingId": "01KSECONDHAND001"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "listing_id": "01KSECONDHAND001",
+    "is_favorited": false
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:29:00Z"
+}
 ```
 
 ---
@@ -2301,7 +2420,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
       }
     ],
     "charge_rules": [
-      { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "edit": 100, "republish": 100 },
+      { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "draft_save": 50, "edit": 100, "republish": 100, "renew": 50 },
       { "biz_module": "property_sale", "label": "樓盤放售", "publish": 1000, "edit": 1000, "republish": 1000 },
       { "biz_module": "serviced_apartment", "label": "服務式住宅", "publish": 800, "edit": 800, "republish": 800 }
     ],
@@ -2349,7 +2468,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 ---
 
 ### 54. /api/v1/me/wallet/ad-tasks [GET]
-- **簡介**: 查詢目前可用的看廣告得積分任務。後端會返回會員今日領取狀態與可領取狀態。
+- **簡介**: 查詢目前可用的看廣告得積分任務。後端會返回每日積分上限、任務預算與廣告統計狀態；同一廣告可多次觀看，直到每日總積分上限或任務預算用完。
 - **回應參數**
 ```json
 {
@@ -2368,7 +2487,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
         "watch_seconds": 30,
         "can_claim_today": true,
         "claimed_today": false,
-        "remaining_budget": 950
+        "remaining_budget": 950,
+        "watch_count": 120,
+        "total_watch_seconds": 3600,
+        "link_click_count": 18,
+        "link_click_rate": 15
       }
     ]
   }
@@ -2378,7 +2501,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 ---
 
 ### 55. /api/v1/me/wallet/ad-tasks/{taskId}/start [POST]
-- **簡介**: 開始廣告觀看任務，建立服務端計時會話。
+- **簡介**: 開始廣告觀看任務，建立服務端計時會話，並原子增加廣告觀看次數。
 - **回應參數**
 ```json
 {
@@ -2398,7 +2521,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 ---
 
 ### 56. /api/v1/me/wallet/ad-tasks/{taskId}/claim [POST]
-- **簡介**: 領取廣告積分。後端會校驗 30 秒觀看時間、每日上限、單任務每日重複領取與任務預算。
+- **簡介**: 領取廣告積分。後端會校驗觀看時間、每日總積分上限與任務預算，成功後原子增加總觀看時間與已發積分。
 - **請求參數**
 ```json
 {
@@ -2414,6 +2537,25 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     "points_charged": 50,
     "points_balance_after": 150,
     "points_transaction_id": "01KTX002"
+  }
+}
+```
+
+---
+
+### 66. /api/v1/me/wallet/ad-tasks/{taskId}/click [POST]
+- **簡介**: 記錄廣告跳轉連結點擊，原子增加點擊次數並返回最新點擊率。
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "task_id": "01KAD001",
+    "target_url": "https://www.ajoliving.com",
+    "watch_count": 120,
+    "link_click_count": 19,
+    "link_click_rate": 15.8333333333
   }
 }
 ```
@@ -2510,6 +2652,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
     "items": [
       {
         "public_id": "01KUSERPRO001",
+        "email": "pro@example.com",
         "phone_country_code": "+852",
         "phone_number": "91239999",
         "member_status": "active",
@@ -2556,7 +2699,26 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_siz
 
 ---
 
-### 29. /api/v1/staff/users/{userId}/role [PATCH]
+### 29. /api/v1/staff/users [POST]
+- **簡介**: 新增可登入的管理員帳戶，並套用指定 staff 角色。
+- **請求參數**
+```json
+{
+  "email": "ops@example.com",
+  "password": "staffpass123",
+  "display_name": "Operations Staff",
+  "phone_country_code": "+852",
+  "phone_number": "91237777",
+  "member_type": "user",
+  "role_codes": ["staff"]
+}
+```
+- `role_codes` 必須包含 staff 範圍角色，例如 `staff` 或 `super_admin`。
+- **回應參數**: 與 `/api/v1/staff/users` 列表項相同。
+
+---
+
+### 30. /api/v1/staff/users/{userId}/role [PATCH]
 - **簡介**: 更新目標帳號角色
 - **請求參數**
 ```json
@@ -2793,6 +2955,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
         "total_budget": 1000,
         "total_granted": 50,
         "remaining_budget": 950,
+        "watch_count": 120,
+        "total_watch_seconds": 3600,
+        "link_click_count": 18,
+        "link_click_rate": 15,
         "is_active": true,
         "created_at": "2026-04-17T06:00:00Z",
         "updated_at": "2026-04-17T06:00:00Z"
@@ -2861,9 +3027,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 - **請求參數**
 ```json
 {
-  "listingId": "01KSECONDHAND001"
+  "listingId": "01KSECONDHAND001",
+  "renewal_days": 14
 }
 ```
+- `renewal_days` 僅 `renew` 使用，未傳時預設 14 天，允許 1 至 365 天。
 - **回應參數**
 ```json
 {

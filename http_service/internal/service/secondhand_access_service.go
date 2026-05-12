@@ -176,7 +176,7 @@ func (s *SecondhandService) loadListingByPublicIDWithDB(ctx context.Context, db 
 }
 
 // 8. buildListingDetail builds a detail response from listing aggregate models.
-func (s *SecondhandService) buildListingDetail(ctx context.Context, listing *model.Listing, secondhand *model.SecondhandListing, contact *model.ListingContact) (*SecondhandListingDetail, error) {
+func (s *SecondhandService) buildListingDetail(ctx context.Context, listing *model.Listing, secondhand *model.SecondhandListing, contact *model.ListingContact, viewerUserID *int64) (*SecondhandListingDetail, error) {
 	summaries, err := s.buildListingSummaries(ctx, []secondhandListingRow{
 		{
 			Listing:         *listing,
@@ -188,7 +188,7 @@ func (s *SecondhandService) buildListingDetail(ctx context.Context, listing *mod
 			ContactMethod:   secondhand.ContactMethod,
 			IsFreeGiveaway:  secondhand.IsFreeGiveaway,
 		},
-	})
+	}, viewerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (s *SecondhandService) buildListingDetail(ctx context.Context, listing *mod
 }
 
 // 9. buildListingSummaries maps list query rows into response payloads.
-func (s *SecondhandService) buildListingSummaries(ctx context.Context, rows []secondhandListingRow) ([]SecondhandListingSummary, error) {
+func (s *SecondhandService) buildListingSummaries(ctx context.Context, rows []secondhandListingRow, viewerUserID *int64) ([]SecondhandListingSummary, error) {
 	listingIDs := make([]int64, 0, len(rows))
 	ownerUserIDs := make([]int64, 0, len(rows))
 	communityIDs := make([]int64, 0, len(rows))
@@ -238,6 +238,10 @@ func (s *SecondhandService) buildListingSummaries(ctx context.Context, rows []se
 		return nil, err
 	}
 	communityMap, err := s.loadCommunityMap(ctx, communityIDs)
+	if err != nil {
+		return nil, err
+	}
+	favoriteMap, err := s.loadFavoriteMap(ctx, listingIDs, viewerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +292,7 @@ func (s *SecondhandService) buildListingSummaries(ctx context.Context, rows []se
 			BusinessStatus:        item.BusinessStatus,
 			ExpireAt:              expireAtPtr,
 			UpdatedAt:             item.UpdatedAt.UTC().Format(time.RFC3339),
+			IsFavorited:           favoriteMap[item.ID],
 			Community:             community,
 			Owner:                 owner,
 			CoverImage:            cover,
@@ -393,7 +398,28 @@ func (s *SecondhandService) loadCommunityMap(ctx context.Context, communityIDs [
 	return result, nil
 }
 
-// 13. buildListingContact builds the encrypted listing contact record.
+// 13. loadFavoriteMap loads current member favorite flags for listing IDs.
+func (s *SecondhandService) loadFavoriteMap(ctx context.Context, listingIDs []int64, viewerUserID *int64) (map[int64]bool, error) {
+	result := make(map[int64]bool)
+	if viewerUserID == nil || len(listingIDs) == 0 {
+		return result, nil
+	}
+
+	var favorites []model.ListingFavorite
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("user_id = ? AND listing_id IN ?", *viewerUserID, listingIDs).
+		Find(&favorites).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load favorites")
+	}
+
+	for _, favorite := range favorites {
+		result[favorite.ListingID] = true
+	}
+
+	return result, nil
+}
+
+// 14. buildListingContact builds the encrypted listing contact record.
 func (s *SecondhandService) buildListingContact(listingID int64, input ListingContactInput, contactMethod string) (*model.ListingContact, error) {
 	contact := &model.ListingContact{
 		ListingID:       listingID,
@@ -425,7 +451,7 @@ func (s *SecondhandService) buildListingContact(listingID int64, input ListingCo
 	return contact, nil
 }
 
-// 14. resolveCommunityID resolves explicit or profile-based community selection.
+// 15. resolveCommunityID resolves explicit or profile-based community selection.
 func (s *SecondhandService) resolveCommunityID(ctx context.Context, ownerUserID int64, communityPublicID string, visibilityScope string) (*int64, error) {
 	if strings.TrimSpace(communityPublicID) != "" {
 		community, err := s.findCommunityByPublicID(ctx, communityPublicID)
@@ -447,7 +473,7 @@ func (s *SecondhandService) resolveCommunityID(ctx context.Context, ownerUserID 
 	return nil, nil
 }
 
-// 15. findCommunityByPublicID loads a community by public ID.
+// 16. findCommunityByPublicID loads a community by public ID.
 func (s *SecondhandService) findCommunityByPublicID(ctx context.Context, publicID string) (*model.Community, error) {
 	var community model.Community
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", publicID).First(&community).Error; err != nil {
@@ -460,7 +486,7 @@ func (s *SecondhandService) findCommunityByPublicID(ctx context.Context, publicI
 	return &community, nil
 }
 
-// 16. resolveListingImages validates referenced media assets and builds listing image records.
+// 17. resolveListingImages validates referenced media assets and builds listing image records.
 func (s *SecondhandService) resolveListingImages(ctx context.Context, tx *gorm.DB, listingID int64, ownerUserID int64, inputs []ListingImageInput) ([]model.ListingImage, error) {
 	if len(inputs) == 0 {
 		return []model.ListingImage{}, nil
@@ -503,12 +529,12 @@ func (s *SecondhandService) resolveListingImages(ctx context.Context, tx *gorm.D
 	return images, nil
 }
 
-// 17. validateListingReady ensures draft listing has publishable content.
+// 18. validateListingReady ensures draft listing has publishable content.
 func (s *SecondhandService) validateListingReady(ctx context.Context, ownerUserID int64, listingID int64) error {
 	return s.validateListingReadyWithTx(ctx, s.runtime.DB, ownerUserID, listingID)
 }
 
-// 18. validateListingReadyWithTx ensures listing has publishable content inside a transaction.
+// 19. validateListingReadyWithTx ensures listing has publishable content inside a transaction.
 func (s *SecondhandService) validateListingReadyWithTx(ctx context.Context, tx *gorm.DB, ownerUserID int64, listingID int64) error {
 	var imageCount int64
 	if err := tx.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
@@ -529,7 +555,7 @@ func (s *SecondhandService) validateListingReadyWithTx(ctx context.Context, tx *
 	return nil
 }
 
-// 19. canViewListing checks secondhand visibility rules for the current viewer.
+// 20. canViewListing checks secondhand visibility rules for the current viewer.
 func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *model.SecondhandListing, viewerCommunityID *int64) bool {
 	if secondhand.VisibilityScope == "public" {
 		return true
@@ -537,7 +563,7 @@ func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *m
 	return viewerCommunityID != nil && secondhand.VisibleCommunityID != nil && *viewerCommunityID == *secondhand.VisibleCommunityID
 }
 
-// 20. findCommunityByID loads a community by numeric ID.
+// 21. findCommunityByID loads a community by numeric ID.
 func (s *SecondhandService) findCommunityByID(ctx context.Context, communityID *int64) (*model.Community, error) {
 	if communityID == nil {
 		return nil, nil
@@ -551,7 +577,7 @@ func (s *SecondhandService) findCommunityByID(ctx context.Context, communityID *
 	return &community, nil
 }
 
-// 20. buildWhatsAppURL creates a prefilled WhatsApp deep link.
+// 22. buildWhatsAppURL creates a prefilled WhatsApp deep link.
 func buildWhatsAppURL(phone string, title string, listingPublicID string, baseURL string) string {
 	digits := strings.NewReplacer("+", "", " ", "", "-", "", "(", "", ")", "").Replace(phone)
 	message := fmt.Sprintf("I am interested in %s %s/secondhand/%s", title, strings.TrimRight(baseURL, "/"), listingPublicID)

@@ -19,6 +19,7 @@ const {
   categories,
   clearFilters,
   conditionOptions,
+  isFavoriteUpdating,
   keyword,
   listings,
   loading,
@@ -34,6 +35,7 @@ const {
   t,
   toggleCategory,
   toggleCondition,
+  toggleFavorite,
   totalPages,
   totalResults,
   withPhotos,
@@ -302,6 +304,19 @@ const viewMode = ref<ResultViewMode>('grid');
             >
               {{ t('marketplace.filter.newBadge') }}
             </span>
+            <button
+              type="button"
+              class="favorite-card-button"
+              :class="listing.isFavorited ? 'favorite-card-button--active' : ''"
+              :aria-label="listing.isFavorited ? t('marketplace.detail.favoritedAction') : t('marketplace.detail.favoriteAction')"
+              :disabled="isFavoriteUpdating(listing.id)"
+              @click.prevent="toggleFavorite(listing.id)"
+            >
+              <AppIcon
+                name="star"
+                :size="16"
+              />
+            </button>
           </div>
 
           <div class="marketplace-result-card__body">
@@ -575,8 +590,39 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .marketplace-result-card__media {
+  position: relative;
   height: 9.25rem;
   flex-shrink: 0;
+}
+
+.favorite-card-button {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.72);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.88);
+  color: rgb(var(--color-text-muted));
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.favorite-card-button--active {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.favorite-card-button:disabled {
+  opacity: 0.55;
 }
 
 .marketplace-result-card__body {

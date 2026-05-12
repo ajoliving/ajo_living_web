@@ -4,6 +4,8 @@
  * 2. 提供上架、下架與續期狀態操作。
 -->
 <script setup lang="ts">
+import { computed, ref } from 'vue';
+
 import {
   deactivateStaffSecondhandListing,
   fetchStaffSecondhandListings,
@@ -38,6 +40,15 @@ const {
   fetcher: fetchStaffSecondhandListings,
   loadErrorKey: 'marketplace.management.loadListingsError',
 });
+const renewalDialogListing = ref<SecondhandListingSummaryResponse | null>(null);
+const renewalDays = ref(14);
+const renewing = ref(false);
+const renewalDayOptions = [7, 14, 30, 60, 90];
+const canSubmitRenewal = computed(() =>
+  Number.isInteger(Number(renewalDays.value)) &&
+  Number(renewalDays.value) > 0 &&
+  Number(renewalDays.value) <= 365,
+);
 
 // 1. 格式化狀態標籤
 const formatStatus = (listing: SecondhandListingSummaryResponse): string =>
@@ -46,6 +57,36 @@ const formatStatus = (listing: SecondhandListingSummaryResponse): string =>
 // 2. 格式化可選日期
 const formatOptionalDate = (value?: string | null): string =>
   value ? formatDate(value) : '-';
+
+// 3. 開啟續期彈窗
+const openRenewalDialog = (listing: SecondhandListingSummaryResponse): void => {
+  renewalDialogListing.value = listing;
+  renewalDays.value = 14;
+};
+
+// 4. 關閉續期彈窗
+const closeRenewalDialog = (): void => {
+  renewalDialogListing.value = null;
+  renewalDays.value = 14;
+};
+
+// 5. 提交續期設定
+const submitRenewal = async (): Promise<void> => {
+  if (!renewalDialogListing.value || !canSubmitRenewal.value) {
+    return;
+  }
+
+  const listingId = renewalDialogListing.value.listing_id;
+  const targetRenewalDays = Number(renewalDays.value);
+  renewing.value = true;
+  const renewed = await runAction(() => renewStaffSecondhandListing(listingId, {
+    renewal_days: targetRenewalDays,
+  }));
+  renewing.value = false;
+  if (renewed) {
+    closeRenewalDialog();
+  }
+};
 </script>
 
 <template>
@@ -133,7 +174,7 @@ const formatOptionalDate = (value?: string | null): string =>
               <th>{{ t('common.label.publishedAt') }}</th>
               <th>{{ t('common.label.expiresAt') }}</th>
               <th>{{ t('marketplace.management.columnUpdatedAt') }}</th>
-              <th>{{ t('marketplace.management.columnActions') }}</th>
+              <th class="management-table-actions">{{ t('marketplace.management.columnActions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -152,7 +193,9 @@ const formatOptionalDate = (value?: string | null): string =>
               <td>{{ formatOptionalDate(listing.published_at) }}</td>
               <td>{{ formatOptionalDate(listing.expire_at) }}</td>
               <td>{{ formatDate(listing.updated_at) }}</td>
-              <td>
+              <td
+                class="management-table-actions"
+              >
                 <div class="management-action-group">
                   <button
                     v-if="listing.publication_status !== 'active'"
@@ -173,7 +216,7 @@ const formatOptionalDate = (value?: string | null): string =>
                   <button
                     type="button"
                     class="management-list-action"
-                    @click="runAction(() => renewStaffSecondhandListing(listing.listing_id))"
+                    @click="openRenewalDialog(listing)"
                   >
                     {{ t('marketplace.management.renewAction') }}
                   </button>
@@ -196,5 +239,95 @@ const formatOptionalDate = (value?: string | null): string =>
         @previous="previous"
       />
     </article>
+
+    <Teleport to="body">
+      <Transition name="management-dialog">
+        <div
+          v-if="renewalDialogListing"
+          class="management-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('marketplace.management.renewDialogTitle')"
+          @click.self="closeRenewalDialog"
+        >
+          <section class="management-dialog-panel">
+            <header class="management-dialog-header">
+              <div>
+                <p>{{ t('marketplace.management.renewDialogKicker') }}</p>
+                <h2>{{ t('marketplace.management.renewDialogTitle') }}</h2>
+              </div>
+              <button
+                type="button"
+                class="management-dialog-close"
+                :aria-label="t('marketplace.management.renewDialogClose')"
+                @click="closeRenewalDialog"
+              >
+                <AppIcon
+                  name="close"
+                  :size="18"
+                />
+              </button>
+            </header>
+
+            <div class="management-dialog-body">
+              <div class="management-renew-listing">
+                <span>{{ t('marketplace.management.renewDialogListing') }}</span>
+                <strong>{{ renewalDialogListing.title }}</strong>
+                <small>{{ renewalDialogListing.listing_id }}</small>
+              </div>
+              <label class="management-dialog-field">
+                <span>{{ t('marketplace.management.renewDaysField') }}</span>
+                <input
+                  v-model.number="renewalDays"
+                  type="number"
+                  min="1"
+                  max="365"
+                  step="1"
+                  inputmode="numeric"
+                />
+              </label>
+              <div class="management-renew-options">
+                <button
+                  v-for="dayOption in renewalDayOptions"
+                  :key="dayOption"
+                  type="button"
+                  :class="{ 'is-active': renewalDays === dayOption }"
+                  @click="renewalDays = dayOption"
+                >
+                  {{ t('marketplace.management.renewDaysOption', { days: dayOption }) }}
+                </button>
+              </div>
+              <p
+                v-if="!canSubmitRenewal"
+                class="management-dialog-error"
+              >
+                {{ t('marketplace.management.renewDaysInvalid') }}
+              </p>
+              <p class="management-dialog-hint">
+                {{ t('marketplace.management.renewDialogHint') }}
+              </p>
+            </div>
+
+            <footer class="management-dialog-actions">
+              <button
+                type="button"
+                class="management-dialog-button management-dialog-button--secondary"
+                @click="closeRenewalDialog"
+              >
+                {{ t('marketplace.management.cancelAction') }}
+              </button>
+              <button
+                type="button"
+                class="management-dialog-button management-dialog-button--primary"
+                :disabled="!canSubmitRenewal || renewing"
+                @click="submitRenewal"
+              >
+                {{ renewing ? t('marketplace.management.saving') : t('marketplace.management.renewConfirmAction') }}
+              </button>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>

@@ -99,6 +99,7 @@ func main() {
 	}
 
 	engine := router.New(&router.Dependencies{
+		Config:              cfg,
 		Logger:              logg,
 		AuthService:         authService,
 		UserService:         userService,

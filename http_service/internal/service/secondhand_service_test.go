@@ -169,7 +169,53 @@ func TestOwnerLifecycleActions(t *testing.T) {
 	}
 }
 
-// 5. TestRepublishExpiredListing validates owner renewal for expired listings.
+// 5. TestSecondhandFavorites validates saved listing lifecycle.
+func TestSecondhandFavorites(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000041", &communityA.ID)
+	viewer := mustCreateUser(t, runtime, "+852", "90000042", &communityA.ID)
+	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+
+	favorite, err := secondhandService.AddFavoriteSecondhand(context.Background(), viewer.ID, viewerProfileCommunityID(&viewer, runtime), listingID)
+	if err != nil {
+		t.Fatalf("add favorite: %v", err)
+	}
+	if favorite.ListingID != listingID || !favorite.IsFavorited {
+		t.Fatalf("expected favorite result, got %#v", favorite)
+	}
+
+	items, pagination, err := secondhandService.ListFavoriteSecondhand(context.Background(), viewer.ID, viewerProfileCommunityID(&viewer, runtime), MySecondhandFilters{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("list favorites: %v", err)
+	}
+	if pagination.Total != 1 || len(items) != 1 || !items[0].IsFavorited {
+		t.Fatalf("expected one favorited listing, got items=%#v pagination=%#v", items, pagination)
+	}
+
+	publicItems, _, err := secondhandService.ListPublicSecondhand(context.Background(), SecondhandListFilters{
+		Page:         1,
+		PageSize:     20,
+		ViewerUserID: &viewer.ID,
+	})
+	if err != nil {
+		t.Fatalf("list public secondhand: %v", err)
+	}
+	if len(publicItems) != 1 || !publicItems[0].IsFavorited {
+		t.Fatalf("expected public item to carry favorite state, got %#v", publicItems)
+	}
+
+	removed, err := secondhandService.RemoveFavoriteSecondhand(context.Background(), viewer.ID, listingID)
+	if err != nil {
+		t.Fatalf("remove favorite: %v", err)
+	}
+	if removed.IsFavorited {
+		t.Fatalf("expected removed favorite state, got %#v", removed)
+	}
+}
+
+// 6. TestRepublishExpiredListing validates owner renewal for expired listings.
 func TestRepublishExpiredListing(t *testing.T) {
 	runtime := newTestRuntime(t)
 	secondhandService := NewSecondhandService(runtime)
@@ -195,7 +241,7 @@ func TestRepublishExpiredListing(t *testing.T) {
 	}
 }
 
-// 6. TestUpdateSecondhandListingRefreshesEditableFields validates edit flow persistence.
+// 7. TestUpdateSecondhandListingRefreshesEditableFields validates edit flow persistence.
 func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 	runtime := newTestRuntime(t)
 	secondhandService := NewSecondhandService(runtime)
@@ -250,7 +296,181 @@ func TestUpdateSecondhandListingRefreshesEditableFields(t *testing.T) {
 	}
 }
 
-// 7. viewerProfileCommunityID returns the viewer primary community ID.
+// 8. TestCreateSecondhandDraftChargesHalfPublishCost validates paid draft creation.
+func TestCreateSecondhandDraftChargesHalfPublishCost(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000035", &communityA.ID)
+
+	mustGrantPoints(t, runtime, owner.ID, 50)
+	created, err := secondhandService.CreateSecondhandListing(context.Background(), UpsertSecondhandParams{
+		OwnerUserID:           owner.ID,
+		Title:                 "Draft Chair",
+		Summary:               "Draft summary",
+		Description:           "Draft detail description.",
+		DistrictCode:          "eastern",
+		CommunityID:           communityA.PublicID,
+		PublisherIdentityType: "owner",
+		CategoryCode:          "home_furniture",
+		PriceMode:             "fixed",
+		PriceHKD:              ptrFloat64(100),
+		ConditionLevel:        "used_good",
+		PickupRegionCode:      "eastern",
+		PickupLocationText:    "Lobby",
+		DeliveryTags:          []string{"self_pickup"},
+		VisibilityScope:       "public",
+		ContactMethod:         "chat",
+		ChargeDraftSave:       true,
+		Contact: ListingContactInput{
+			ShowChat: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create draft listing: %v", err)
+	}
+	if created.PointsCharged != 50 || created.PointsBalanceAfter == nil || *created.PointsBalanceAfter != 0 {
+		t.Fatalf("expected half publish draft creation charge, got %#v", created)
+	}
+}
+
+// 9. TestDraftSecondhandSaveChargesHalfPublishCost validates paid draft saves.
+func TestDraftSecondhandSaveChargesHalfPublishCost(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000036", &communityA.ID)
+	created, err := secondhandService.CreateSecondhandListing(context.Background(), UpsertSecondhandParams{
+		OwnerUserID:           owner.ID,
+		Title:                 "Draft Chair",
+		Summary:               "Draft summary",
+		Description:           "Draft detail description.",
+		DistrictCode:          "eastern",
+		CommunityID:           communityA.PublicID,
+		PublisherIdentityType: "owner",
+		CategoryCode:          "home_furniture",
+		PriceMode:             "fixed",
+		PriceHKD:              ptrFloat64(100),
+		ConditionLevel:        "used_good",
+		PickupRegionCode:      "eastern",
+		PickupLocationText:    "Lobby",
+		DeliveryTags:          []string{"self_pickup"},
+		VisibilityScope:       "public",
+		ContactMethod:         "chat",
+		Contact: ListingContactInput{
+			ShowChat: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create draft listing: %v", err)
+	}
+	mustGrantPoints(t, runtime, owner.ID, 50)
+
+	updated, err := secondhandService.UpdateSecondhandListing(context.Background(), UpsertSecondhandParams{
+		OwnerUserID:           owner.ID,
+		ListingPublicID:       created.ListingID,
+		Title:                 "Draft Chair Updated",
+		Summary:               "Draft summary",
+		Description:           "Draft detail description.",
+		DistrictCode:          "eastern",
+		CommunityID:           communityA.PublicID,
+		PublisherIdentityType: "owner",
+		CategoryCode:          "home_furniture",
+		PriceMode:             "fixed",
+		PriceHKD:              ptrFloat64(100),
+		ConditionLevel:        "used_good",
+		PickupRegionCode:      "eastern",
+		PickupLocationText:    "Lobby",
+		DeliveryTags:          []string{"self_pickup"},
+		VisibilityScope:       "public",
+		ContactMethod:         "chat",
+		ChargeDraftSave:       true,
+		Contact: ListingContactInput{
+			ShowChat: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("update draft listing: %v", err)
+	}
+	if updated.PointsCharged != 50 || updated.PointsBalanceAfter == nil || *updated.PointsBalanceAfter != 0 {
+		t.Fatalf("expected half publish draft charge, got %#v", updated)
+	}
+}
+
+// 10. TestRenewSecondhandListingChargesHalfPublishCost validates member renewal charge.
+func TestRenewSecondhandListingChargesHalfPublishCost(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000037", &communityA.ID)
+	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+	mustGrantPoints(t, runtime, owner.ID, 50)
+
+	renewed, err := secondhandService.RenewSecondhandListing(context.Background(), owner.ID, listingID)
+	if err != nil {
+		t.Fatalf("renew listing: %v", err)
+	}
+	if renewed.PointsCharged != 50 || renewed.PointsBalanceAfter == nil || *renewed.PointsBalanceAfter != 900 {
+		t.Fatalf("expected renewal charge, got %#v", renewed)
+	}
+	if renewed.PublicationStatus != "active" || renewed.BusinessStatus != "available" {
+		t.Fatalf("expected active available listing, got %#v", renewed)
+	}
+
+	listing, _, _, err := secondhandService.loadListingByPublicID(context.Background(), listingID)
+	if err != nil {
+		t.Fatalf("load renewed listing: %v", err)
+	}
+	expectedExpireAt := fixedNow.Add(14 * 24 * time.Hour)
+	if listing.ExpireAt == nil || !listing.ExpireAt.Equal(expectedExpireAt) {
+		t.Fatalf("expected expire_at %s, got %#v", expectedExpireAt, listing.ExpireAt)
+	}
+}
+
+// 11. TestRenewSecondhandListingRejectsExpired validates member renewal state guard.
+func TestRenewSecondhandListingRejectsExpired(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000038", &communityA.ID)
+	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+	mustGrantPoints(t, runtime, owner.ID, 50)
+
+	if err := runtime.DB.Model(&model.Listing{}).Where("public_id = ?", listingID).Update("publication_status", "expired").Error; err != nil {
+		t.Fatalf("expire listing: %v", err)
+	}
+
+	if _, err := secondhandService.RenewSecondhandListing(context.Background(), owner.ID, listingID); err == nil {
+		t.Fatalf("expected renewal to reject expired listing")
+	}
+}
+
+// 12. TestStaffRenewSecondhandListingUsesCustomDays validates staff renewal duration.
+func TestStaffRenewSecondhandListingUsesCustomDays(t *testing.T) {
+	runtime := newTestRuntime(t)
+	secondhandService := NewSecondhandService(runtime)
+	communityA, _ := mustGetCommunities(t, runtime)
+	owner := mustCreateUser(t, runtime, "+852", "90000034", &communityA.ID)
+	listingID := mustCreatePublishedListing(t, runtime, owner, "public", communityA.PublicID)
+
+	if err := secondhandService.RenewForStaff(context.Background(), listingID, 21); err != nil {
+		t.Fatalf("staff renew listing: %v", err)
+	}
+
+	listing, _, _, err := secondhandService.loadListingByPublicID(context.Background(), listingID)
+	if err != nil {
+		t.Fatalf("load renewed listing: %v", err)
+	}
+	expectedExpireAt := fixedNow.Add(21 * 24 * time.Hour)
+	if listing.ExpireAt == nil || !listing.ExpireAt.Equal(expectedExpireAt) {
+		t.Fatalf("expected expire_at %s, got %#v", expectedExpireAt, listing.ExpireAt)
+	}
+	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+		t.Fatalf("expected active available listing, got %#v", listing)
+	}
+}
+
+// 10. viewerProfileCommunityID returns the viewer primary community ID.
 func viewerProfileCommunityID(user *model.User, runtime *Runtime) *int64 {
 	var profile model.UserProfile
 	if err := runtime.DB.Where("user_id = ?", user.ID).First(&profile).Error; err != nil {

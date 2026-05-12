@@ -14,6 +14,7 @@ import (
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
+	"ajoliving_web/http_service/internal/utils"
 )
 
 // 1. UserService handles member profile and community reads.
@@ -55,11 +56,15 @@ type CommunityResponse struct {
 // 4. UpdateProfileParams defines profile update input.
 type UpdateProfileParams struct {
 	DisplayName           string
+	PhoneCountryCode      string
+	PhoneNumber           string
 	PublisherIdentityType string
 	PrimaryCommunityID    string
 	DistrictCode          string
 	AvatarAssetID         string
 }
+
+const profileAvatarUpdateCost = int64(50)
 
 // 5. ChannelHomeOverview defines the channel home payload.
 type ChannelHomeOverview struct {
@@ -124,10 +129,25 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 
 // 8. UpdateProfile updates the authenticated profile.
 func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params UpdateProfileParams) (*MeResponse, error) {
+	var user model.User
+	if err := s.runtime.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
+		return nil, errcode.New(errcode.CodeNotFound, "user not found")
+	}
+
 	updates := map[string]any{
 		"display_name":            params.DisplayName,
 		"publisher_identity_type": params.PublisherIdentityType,
 		"district_code":           params.DistrictCode,
+	}
+	userUpdates := map[string]any{}
+	phoneCountryCode, phoneNumber, shouldUpdatePhone, err := profilePhoneUpdate(user, params)
+	if err != nil {
+		return nil, err
+	}
+	if shouldUpdatePhone {
+		userUpdates["phone_country_code"] = phoneCountryCode
+		userUpdates["phone_number"] = phoneNumber
+		userUpdates["is_verified_phone"] = false
 	}
 
 	if params.PrimaryCommunityID != "" {
@@ -151,8 +171,50 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 		updates["avatar_asset_id"] = asset.ID
 	}
 
-	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).Assign(updates).FirstOrCreate(&model.UserProfile{UserID: userID}).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to update profile")
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var currentProfile model.UserProfile
+		profileErr := tx.Where("user_id = ?", userID).First(&currentProfile).Error
+		if profileErr != nil && !errors.Is(profileErr, gorm.ErrRecordNotFound) {
+			return errcode.New(errcode.CodeInternalError, "failed to load profile")
+		}
+
+		if len(userUpdates) > 0 {
+			if err := s.ensurePhoneAvailable(ctx, tx, userID, phoneCountryCode, phoneNumber); err != nil {
+				return err
+			}
+		}
+
+		if params.AvatarAssetID != "" && shouldChargeAvatarUpdate(&currentProfile, updates["avatar_asset_id"]) {
+			if s.runtime.WalletService == nil {
+				return errcode.New(errcode.CodeInternalError, "wallet service is not configured")
+			}
+			if _, err := s.runtime.WalletService.SpendPointsWithTx(ctx, tx, WalletSpendParams{
+				UserID:         userID,
+				Amount:         profileAvatarUpdateCost,
+				SourceType:     WalletSourceProfileCharge,
+				BizModule:      "profile",
+				ActionType:     WalletActionAvatar,
+				IdempotencyKey: "profile:avatar:" + utils.NewPublicID(),
+				Note:           "profile avatar update",
+			}); err != nil {
+				return err
+			}
+		}
+
+		if len(userUpdates) > 0 {
+			if err := tx.Model(&model.User{}).Where("id = ?", userID).Updates(userUpdates).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update user phone")
+			}
+		}
+
+		if err := tx.Where("user_id = ?", userID).Assign(updates).FirstOrCreate(&model.UserProfile{UserID: userID}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to update profile")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return s.GetMe(ctx, userID)
@@ -208,7 +270,22 @@ func (s *UserService) findCommunityByPublicID(ctx context.Context, publicID stri
 	return &community, nil
 }
 
-// 12. loadOwnedAvatarAsset resolves an uploaded account avatar media asset.
+// 12. ensurePhoneAvailable validates a changed phone number is not used by another account.
+func (s *UserService) ensurePhoneAvailable(ctx context.Context, tx *gorm.DB, userID int64, countryCode string, phoneNumber string) error {
+	var count int64
+	if err := tx.WithContext(ctx).Model(&model.User{}).
+		Where("id <> ? AND phone_country_code = ? AND phone_number = ?", userID, countryCode, phoneNumber).
+		Count(&count).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to validate phone number")
+	}
+	if count > 0 {
+		return errcode.New(errcode.CodeValidationError, "phone number is already registered")
+	}
+
+	return nil
+}
+
+// 13. loadOwnedAvatarAsset resolves an uploaded account avatar media asset.
 func (s *UserService) loadOwnedAvatarAsset(ctx context.Context, userID int64, mediaAssetID string) (*model.MediaAsset, error) {
 	var asset model.MediaAsset
 	if err := s.runtime.DB.WithContext(ctx).
@@ -230,7 +307,7 @@ func (s *UserService) loadOwnedAvatarAsset(ctx context.Context, userID int64, me
 	return &asset, nil
 }
 
-// 13. userEmail returns the verified email credential for the current member.
+// 14. userEmail returns the verified email credential for the current member.
 func (s *UserService) userEmail(ctx context.Context, userID int64) string {
 	var credential model.UserCredential
 	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error; err != nil {
@@ -240,7 +317,7 @@ func (s *UserService) userEmail(ctx context.Context, userID int64) string {
 	return credential.Email
 }
 
-// 14. avatarURL builds the public URL for a profile avatar asset.
+// 15. avatarURL builds the public URL for a profile avatar asset.
 func (s *UserService) avatarURL(ctx context.Context, avatarAssetID *int64) string {
 	if avatarAssetID == nil {
 		return ""
@@ -254,7 +331,39 @@ func (s *UserService) avatarURL(ctx context.Context, avatarAssetID *int64) strin
 	return buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
 }
 
-// 15. toCommunityResponse maps a community model to response data.
+// 16. profilePhoneUpdate normalizes an optional profile phone update.
+func profilePhoneUpdate(user model.User, params UpdateProfileParams) (string, string, bool, error) {
+	if strings.TrimSpace(params.PhoneCountryCode) == "" && strings.TrimSpace(params.PhoneNumber) == "" {
+		return "", "", false, nil
+	}
+
+	countryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
+	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
+	if !isValidPhone(countryCode, phoneNumber) {
+		return "", "", false, errcode.New(errcode.CodeValidationError, "valid phone number is required")
+	}
+
+	if user.PhoneCountryCode == countryCode && user.PhoneNumber == phoneNumber {
+		return countryCode, phoneNumber, false, nil
+	}
+
+	return countryCode, phoneNumber, true, nil
+}
+
+// 17. shouldChargeAvatarUpdate returns whether the avatar update needs a point charge.
+func shouldChargeAvatarUpdate(profile *model.UserProfile, nextAssetID any) bool {
+	assetID, ok := nextAssetID.(int64)
+	if !ok || assetID <= 0 {
+		return false
+	}
+	if profile == nil || profile.UserID == 0 || profile.AvatarAssetID == nil {
+		return true
+	}
+
+	return *profile.AvatarAssetID != assetID
+}
+
+// 18. toCommunityResponse maps a community model to response data.
 func toCommunityResponse(community *model.Community) *CommunityResponse {
 	if community == nil {
 		return nil

@@ -27,7 +27,6 @@ const {
   isUploadingAvatar,
   openEditModal,
   permissionChips,
-  phoneDisplay,
   profileRows,
   roleChips,
   sessionStore,
@@ -211,6 +210,30 @@ const {
             />
           </label>
 
+          <div class="account-profile-phone-grid">
+            <label class="account-profile-field">
+              <span>{{ t('account.profile.phoneCountryCode') }}</span>
+              <BaseInput
+                :model-value="formState.phone_country_code"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel-country-code"
+                @update:model-value="formState.phone_country_code = $event"
+              />
+            </label>
+
+            <label class="account-profile-field">
+              <span>{{ t('account.profile.phoneNumber') }}</span>
+              <BaseInput
+                :model-value="formState.phone_number"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel-national"
+                @update:model-value="formState.phone_number = $event"
+              />
+            </label>
+          </div>
+
           <label class="account-profile-field">
             <span>{{ t('account.profile.publisherIdentity') }}</span>
             <BaseInput
@@ -232,10 +255,6 @@ const {
           <div>
             <span>{{ t('account.profile.email') }}</span>
             <strong>{{ formState.email || t('account.profile.emailUnavailable') }}</strong>
-          </div>
-          <div>
-            <span>{{ t('account.profile.phone') }}</span>
-            <strong>{{ phoneDisplay }}</strong>
           </div>
         </div>
 
@@ -601,6 +620,12 @@ const {
   padding: 1.25rem;
 }
 
+.account-profile-phone-grid {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 0.45fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
 .account-profile-field {
   display: grid;
   gap: 0.5rem;
@@ -658,6 +683,7 @@ const {
   .account-profile-grid,
   .account-profile-row,
   .account-avatar-editor,
+  .account-profile-phone-grid,
   .account-profile-dialog__readonly {
     grid-template-columns: minmax(0, 1fr);
   }

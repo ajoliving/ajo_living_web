@@ -114,7 +114,7 @@ const handleMediaFileChange = (event: Event): void => {
         />
       </div>
 
-      <div class="wallet-settings-three-column">
+      <div class="wallet-settings-three-column wallet-settings-ad-controls">
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdWatchSecondsField') }}</span>
           <input
@@ -126,21 +126,24 @@ const handleMediaFileChange = (event: Event): void => {
         </label>
 
         <label class="wallet-settings-field">
-          <span>{{ t('marketplace.management.walletAdRetentionDaysField') }}</span>
+          <span>{{ isEditingAd ? t('marketplace.management.walletAdRenewDaysField') : t('marketplace.management.walletAdRetentionDaysField') }}</span>
           <input
             v-model.number="adForm.retentionDays"
             type="number"
             min="1"
+            max="365"
             step="1"
           />
         </label>
 
-        <label class="wallet-settings-check">
-          <input
-            v-model="adForm.isActive"
-            type="checkbox"
-          />
+        <label class="wallet-settings-field wallet-settings-switch-field">
           <span>{{ t('marketplace.management.walletAdActiveField') }}</span>
+          <span class="wallet-settings-check">
+            <input
+              v-model="adForm.isActive"
+              type="checkbox"
+            />
+          </span>
         </label>
       </div>
 

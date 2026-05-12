@@ -46,6 +46,7 @@ type UpsertSecondhandParams struct {
 	VisibilityScope       string
 	ContactMethod         string
 	BusinessStatus        string
+	ChargeDraftSave       bool
 	Images                []ListingImageInput
 	Contact               ListingContactInput
 }
@@ -68,6 +69,7 @@ type SecondhandListFilters struct {
 	ExcludeFree     bool
 	SortBy          string
 	CommunityID     *int64
+	ViewerUserID    *int64
 }
 
 // 5. MySecondhandFilters defines owner list filters.
@@ -149,6 +151,7 @@ type SecondhandListingSummary struct {
 	BusinessStatus        string                `json:"business_status"`
 	ExpireAt              *string               `json:"expire_at,omitempty"`
 	UpdatedAt             string                `json:"updated_at"`
+	IsFavorited           bool                  `json:"is_favorited"`
 	Community             *CommunityResponse    `json:"community,omitempty"`
 	Owner                 *UserPreviewResponse  `json:"owner,omitempty"`
 	CoverImage            *ListingImageResponse `json:"cover_image,omitempty"`
@@ -178,14 +181,20 @@ type SecondhandListingDetail struct {
 	PointsTransactionID string                 `json:"points_transaction_id,omitempty"`
 }
 
-// 16. ContactAccessResult defines contact access payload.
+// 16. FavoriteResult defines saved listing mutation result.
+type FavoriteResult struct {
+	ListingID   string `json:"listing_id"`
+	IsFavorited bool   `json:"is_favorited"`
+}
+
+// 17. ContactAccessResult defines contact access payload.
 type ContactAccessResult struct {
 	ListingID       string            `json:"listing_id"`
 	AllowedChannels map[string]bool   `json:"allowed_channels"`
 	ContactPayload  map[string]string `json:"contact_payload,omitempty"`
 }
 
-// 17. toISOTime converts a time pointer to RFC3339 string pointer.
+// 18. toISOTime converts a time pointer to RFC3339 string pointer.
 func toISOTime(value *model.Listing) *string {
 	if value == nil || value.ExpireAt == nil {
 		return nil

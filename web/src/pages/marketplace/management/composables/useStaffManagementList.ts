@@ -81,13 +81,15 @@ export const useStaffManagementList = <T>(options: UseStaffManagementListOptions
     await loadItems(page.value + 1);
   };
 
-  const runAction = async (action: () => Promise<unknown>): Promise<void> => {
+  const runAction = async (action: () => Promise<unknown>): Promise<boolean> => {
     try {
       await action();
       feedbackStore.pushToast(t(options.updateSuccessKey ?? 'marketplace.management.statusUpdated'), 'success');
       await loadItems(page.value);
+      return true;
     } catch (error) {
       feedbackStore.pushToast(readManagementError(error, t(options.updateErrorKey ?? 'marketplace.management.statusUpdateError')), 'error');
+      return false;
     }
   };
 

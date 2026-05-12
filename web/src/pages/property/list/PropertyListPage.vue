@@ -459,6 +459,7 @@ onMounted(() => {
 
 .property-card__body {
   display: grid;
+  min-width: 0;
   gap: 0.9rem;
   padding: 1rem;
 }
@@ -473,11 +474,22 @@ onMounted(() => {
   font-weight: 800;
 }
 
+.property-card__meta span,
+.property-card__footer span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .property-card h2 {
   margin: 0;
+  overflow: hidden;
   font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-card p {
@@ -507,9 +519,12 @@ onMounted(() => {
 
 .property-card__specs dd {
   margin: 0.2rem 0 0;
+  overflow: hidden;
   font-size: 0.92rem;
   font-weight: 800;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-card__footer {

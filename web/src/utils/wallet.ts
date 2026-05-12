@@ -10,8 +10,16 @@ export const WALLET_CHARGE_COSTS = {
   serviced_apartment: 800,
 } as const;
 
+export const WALLET_DRAFT_CHARGE_COSTS = {
+  secondhand: WALLET_CHARGE_COSTS.secondhand / 2,
+} as const;
+
+export const WALLET_RENEW_CHARGE_COSTS = {
+  secondhand: WALLET_CHARGE_COSTS.secondhand / 2,
+} as const;
+
 export type WalletBizModule = keyof typeof WALLET_CHARGE_COSTS;
-export type WalletChargeAction = 'publish' | 'edit' | 'republish';
+export type WalletChargeAction = 'publish' | 'edit' | 'republish' | 'renew';
 
 // 1. 格式化積分數字
 export const formatAjoPoints = (value: number, pointName: string, locale: string): string =>
@@ -20,3 +28,11 @@ export const formatAjoPoints = (value: number, pointName: string, locale: string
 // 2. 取得模組扣費
 export const resolveWalletChargeCost = (module: WalletBizModule): number =>
   WALLET_CHARGE_COSTS[module];
+
+// 3. 取得草稿保存扣費
+export const resolveWalletDraftChargeCost = (module: 'secondhand'): number =>
+  WALLET_DRAFT_CHARGE_COSTS[module];
+
+// 4. 取得續期扣費
+export const resolveWalletRenewChargeCost = (module: 'secondhand'): number =>
+  WALLET_RENEW_CHARGE_COSTS[module];

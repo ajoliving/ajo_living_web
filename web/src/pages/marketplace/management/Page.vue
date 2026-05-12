@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-type ManagementIconName = 'layout-list' | 'star' | 'plus-square' | 'browse' | 'home' | 'user';
+type ManagementIconName = 'layout-list' | 'plus-square' | 'browse' | 'home' | 'user';
 
 interface ManagementRouteItem {
   label: string;
@@ -42,11 +42,6 @@ const managementRoutes = computed<ManagementRouteItem[]>(() => [
     label: t('marketplace.management.servicedApartments'),
     to: '/account/marketplace/management/serviced-apartments',
     icon: 'browse',
-  },
-  {
-    label: t('marketplace.management.walletGrantSection'),
-    to: '/account/marketplace/management/wallet-grants',
-    icon: 'star',
   },
   {
     label: t('marketplace.management.walletAdPublishSection'),

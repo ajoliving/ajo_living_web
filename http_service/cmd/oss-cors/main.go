@@ -112,6 +112,9 @@ func allowedOrigins(cfg *config.Config) []string {
 		"http://localhost:5173",
 		"http://127.0.0.1:5173",
 	}
+	if strings.TrimSpace(cfg.OSSAllowedOrigins) != "" {
+		candidates = append(candidates, strings.Split(cfg.OSSAllowedOrigins, ",")...)
+	}
 
 	seen := map[string]bool{}
 	origins := []string{}

@@ -26,12 +26,16 @@ const (
 	WalletDirectionDebit  = "debit"
 
 	WalletSourceListingCharge = "listing_charge"
+	WalletSourceProfileCharge = "profile_charge"
 	WalletSourceRewardAd      = "reward_ad"
 	WalletSourceOperatorGrant = "operator_grant"
 
+	WalletActionSaveDraft = "save_draft"
 	WalletActionPublish   = "publish"
 	WalletActionEdit      = "edit"
 	WalletActionRepublish = "republish"
+	WalletActionRenew     = "renew"
+	WalletActionAvatar    = "avatar_update"
 	WalletActionAdReward  = "ad_reward"
 
 	RewardClaimStatusStarted = "started"
@@ -82,8 +86,10 @@ type WalletChargeRuleResponse struct {
 	BizModule string `json:"biz_module"`
 	Label     string `json:"label"`
 	Publish   int64  `json:"publish"`
+	DraftSave int64  `json:"draft_save,omitempty"`
 	Edit      int64  `json:"edit"`
 	Republish int64  `json:"republish"`
+	Renew     int64  `json:"renew,omitempty"`
 }
 
 // 6. PointsChargeResponse defines charge metadata attached to listing mutations.
@@ -95,18 +101,22 @@ type PointsChargeResponse struct {
 
 // 7. RewardAdTaskResponse defines a member-visible rewarded ad task.
 type RewardAdTaskResponse struct {
-	TaskID          string `json:"task_id"`
-	Title           string `json:"title"`
-	Summary         string `json:"summary"`
-	CoverURL        string `json:"cover_url"`
-	MediaURL        string `json:"media_url"`
-	MediaType       string `json:"media_type"`
-	TargetURL       string `json:"target_url"`
-	RewardPoints    int64  `json:"reward_points"`
-	WatchSeconds    int    `json:"watch_seconds"`
-	CanClaimToday   bool   `json:"can_claim_today"`
-	ClaimedToday    bool   `json:"claimed_today"`
-	RemainingBudget int64  `json:"remaining_budget"`
+	TaskID            string  `json:"task_id"`
+	Title             string  `json:"title"`
+	Summary           string  `json:"summary"`
+	CoverURL          string  `json:"cover_url"`
+	MediaURL          string  `json:"media_url"`
+	MediaType         string  `json:"media_type"`
+	TargetURL         string  `json:"target_url"`
+	RewardPoints      int64   `json:"reward_points"`
+	WatchSeconds      int     `json:"watch_seconds"`
+	CanClaimToday     bool    `json:"can_claim_today"`
+	ClaimedToday      bool    `json:"claimed_today"`
+	RemainingBudget   int64   `json:"remaining_budget"`
+	WatchCount        int64   `json:"watch_count"`
+	TotalWatchSeconds int64   `json:"total_watch_seconds"`
+	LinkClickCount    int64   `json:"link_click_count"`
+	LinkClickRate     float64 `json:"link_click_rate"`
 }
 
 // 8. RewardAdSessionResponse defines a watch session payload.
@@ -119,10 +129,20 @@ type RewardAdSessionResponse struct {
 	RewardPoints int64  `json:"reward_points"`
 }
 
-// 9. WalletSpendParams defines a point debit request.
+// 9. RewardAdClickResponse defines a tracked ad link click payload.
+type RewardAdClickResponse struct {
+	TaskID         string  `json:"task_id"`
+	TargetURL      string  `json:"target_url"`
+	WatchCount     int64   `json:"watch_count"`
+	LinkClickCount int64   `json:"link_click_count"`
+	LinkClickRate  float64 `json:"link_click_rate"`
+}
+
+// 10. WalletSpendParams defines a point debit request.
 type WalletSpendParams struct {
 	UserID         int64
 	Amount         int64
+	SourceType     string
 	BizModule      string
 	ActionType     string
 	ListingID      *int64
@@ -130,7 +150,7 @@ type WalletSpendParams struct {
 	Note           string
 }
 
-// 10. WalletCreditParams defines a point credit request.
+// 11. WalletCreditParams defines a point credit request.
 type WalletCreditParams struct {
 	UserID         int64
 	Amount         int64
@@ -144,16 +164,21 @@ type WalletCreditParams struct {
 	Note           string
 }
 
-// 11. NewWalletService creates a wallet service instance.
+// 12. NewWalletService creates a wallet service instance.
 func NewWalletService(runtime *Runtime) *WalletService {
 	return &WalletService{runtime: runtime}
 }
 
-// 12. ListingActionCost returns the configured cost for one module action.
+// 13. ListingActionCost returns the configured cost for one module action.
 func ListingActionCost(module string, action string) int64 {
 	switch strings.TrimSpace(module) {
 	case "secondhand":
-		return 100
+		switch strings.TrimSpace(action) {
+		case WalletActionSaveDraft, WalletActionRenew:
+			return 50
+		default:
+			return 100
+		}
 	case "property_sale":
 		return 1000
 	case "serviced_apartment":
@@ -163,7 +188,7 @@ func ListingActionCost(module string, action string) int64 {
 	}
 }
 
-// 13. shouldChargeListingEdit returns whether an edit is billable.
+// 14. shouldChargeListingEdit returns whether an edit is billable.
 func shouldChargeListingEdit(listing *model.Listing) bool {
 	if listing == nil {
 		return false
@@ -171,16 +196,16 @@ func shouldChargeListingEdit(listing *model.Listing) bool {
 	return listing.PublicationStatus != "draft" || listing.PublishedAt != nil
 }
 
-// 14. WalletChargeRules returns all member-facing listing charge rules.
+// 15. WalletChargeRules returns all member-facing listing charge rules.
 func WalletChargeRules() []WalletChargeRuleResponse {
 	return []WalletChargeRuleResponse{
-		{BizModule: "secondhand", Label: "二手交易", Publish: 100, Edit: 100, Republish: 100},
+		{BizModule: "secondhand", Label: "二手交易", Publish: 100, DraftSave: 50, Edit: 100, Republish: 100, Renew: 50},
 		{BizModule: "property_sale", Label: "樓盤放售", Publish: 1000, Edit: 1000, Republish: 1000},
 		{BizModule: "serviced_apartment", Label: "服務式住宅", Publish: 800, Edit: 800, Republish: 800},
 	}
 }
 
-// 15. GetWalletOverview returns account, recent transactions, and charge rules.
+// 16. GetWalletOverview returns account, recent transactions, and charge rules.
 func (s *WalletService) GetWalletOverview(ctx context.Context, userID int64) (*WalletOverviewResponse, error) {
 	account, err := s.ensureAccount(ctx, s.runtime.DB, userID)
 	if err != nil {
@@ -210,7 +235,7 @@ func (s *WalletService) GetWalletOverview(ctx context.Context, userID int64) (*W
 	}, nil
 }
 
-// 16. ListTransactions returns paged wallet transactions.
+// 17. ListTransactions returns paged wallet transactions.
 func (s *WalletService) ListTransactions(ctx context.Context, userID int64, page int, pageSize int) ([]WalletTransactionResponse, *model.Pagination, error) {
 	page, pageSize = normalizePagination(page, pageSize)
 
@@ -233,7 +258,7 @@ func (s *WalletService) ListTransactions(ctx context.Context, userID int64, page
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 17. SpendPointsWithTx debits points inside an existing business transaction.
+// 18. SpendPointsWithTx debits points inside an existing business transaction.
 func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, params WalletSpendParams) (*PointsChargeResponse, error) {
 	if params.Amount <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "points amount must be positive")
@@ -261,6 +286,10 @@ func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, para
 
 	before := account.Balance
 	after := before - params.Amount
+	sourceType := strings.TrimSpace(params.SourceType)
+	if sourceType == "" {
+		sourceType = WalletSourceListingCharge
+	}
 	transaction := model.WalletTransaction{
 		PublicID:       utils.NewPublicID(),
 		UserID:         params.UserID,
@@ -268,7 +297,7 @@ func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, para
 		Amount:         params.Amount,
 		BalanceBefore:  before,
 		BalanceAfter:   after,
-		SourceType:     WalletSourceListingCharge,
+		SourceType:     sourceType,
 		BizModule:      strings.TrimSpace(params.BizModule),
 		ActionType:     strings.TrimSpace(params.ActionType),
 		ListingID:      params.ListingID,
@@ -295,7 +324,7 @@ func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, para
 	}, nil
 }
 
-// 18. CreditPointsWithTx credits points inside an existing transaction.
+// 19. CreditPointsWithTx credits points inside an existing transaction.
 func (s *WalletService) CreditPointsWithTx(ctx context.Context, tx *gorm.DB, params WalletCreditParams) (*PointsChargeResponse, error) {
 	if params.Amount <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "points amount must be positive")
@@ -356,7 +385,7 @@ func (s *WalletService) CreditPointsWithTx(ctx context.Context, tx *gorm.DB, par
 	}, nil
 }
 
-// 19. GrantOperatorPoints credits points from an operator adjustment.
+// 20. GrantOperatorPoints credits points from an operator adjustment.
 func (s *WalletService) GrantOperatorPoints(ctx context.Context, operatorUserID int64, userID int64, amount int64, note string) (*PointsChargeResponse, error) {
 	var result *PointsChargeResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -379,7 +408,7 @@ func (s *WalletService) GrantOperatorPoints(ctx context.Context, operatorUserID 
 	return result, err
 }
 
-// 20. ListRewardAdTasks returns active ad tasks and member claim state.
+// 21. ListRewardAdTasks returns active ad tasks and member claim state.
 func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]RewardAdTaskResponse, error) {
 	now := s.runtime.Now()
 	var ads []model.RewardAd
@@ -392,7 +421,6 @@ func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load reward ads")
 	}
 
-	claimDate := walletDate(now)
 	todayReward, err := s.todayAdRewardPoints(ctx, s.runtime.DB, userID)
 	if err != nil {
 		return nil, err
@@ -400,74 +428,89 @@ func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]
 
 	items := make([]RewardAdTaskResponse, 0, len(ads))
 	for _, ad := range ads {
-		claimed, err := s.hasClaimedRewardAdToday(ctx, s.runtime.DB, userID, ad.ID, claimDate)
-		if err != nil {
-			return nil, err
-		}
 		remainingBudget := ad.TotalBudget - ad.TotalGranted
 		if ad.TotalBudget <= 0 {
 			remainingBudget = ad.RewardPoints
 		}
+		canClaimToday := todayReward+ad.RewardPoints <= WalletDailyAdRewardLimit && remainingBudget >= ad.RewardPoints
 		items = append(items, RewardAdTaskResponse{
-			TaskID:          ad.PublicID,
-			Title:           ad.Title,
-			Summary:         ad.Summary,
-			CoverURL:        ad.CoverURL,
-			MediaURL:        ad.MediaURL,
-			MediaType:       normalizedRewardAdMediaType(ad.MediaType),
-			TargetURL:       ad.TargetURL,
-			RewardPoints:    ad.RewardPoints,
-			WatchSeconds:    normalizedWatchSeconds(ad.WatchSeconds),
-			ClaimedToday:    claimed,
-			CanClaimToday:   !claimed && todayReward+ad.RewardPoints <= WalletDailyAdRewardLimit && remainingBudget >= ad.RewardPoints,
-			RemainingBudget: remainingBudget,
+			TaskID:            ad.PublicID,
+			Title:             ad.Title,
+			Summary:           ad.Summary,
+			CoverURL:          ad.CoverURL,
+			MediaURL:          ad.MediaURL,
+			MediaType:         normalizedRewardAdMediaType(ad.MediaType),
+			TargetURL:         ad.TargetURL,
+			RewardPoints:      ad.RewardPoints,
+			WatchSeconds:      normalizedWatchSeconds(ad.WatchSeconds),
+			ClaimedToday:      false,
+			CanClaimToday:     canClaimToday,
+			RemainingBudget:   remainingBudget,
+			WatchCount:        ad.WatchCount,
+			TotalWatchSeconds: ad.TotalWatchSeconds,
+			LinkClickCount:    ad.LinkClickCount,
+			LinkClickRate:     rewardAdClickRate(ad.WatchCount, ad.LinkClickCount),
 		})
 	}
 
 	return items, nil
 }
 
-// 21. StartRewardAd starts a rewarded ad watch session.
+// 22. StartRewardAd starts a rewarded ad watch session.
 func (s *WalletService) StartRewardAd(ctx context.Context, userID int64, taskPublicID string, ipAddress string, userAgent string) (*RewardAdSessionResponse, error) {
-	ad, err := s.loadActiveRewardAd(ctx, s.runtime.DB, taskPublicID)
-	if err != nil {
-		return nil, err
-	}
-	now := s.runtime.Now()
-	claimDate := walletDate(now)
-	if claimed, err := s.hasClaimedRewardAdToday(ctx, s.runtime.DB, userID, ad.ID, claimDate); err != nil {
-		return nil, err
-	} else if claimed {
-		return nil, errcode.New(errcode.CodeWalletActionUnavailable, "reward already claimed today")
-	}
+	var result *RewardAdSessionResponse
+	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ad, err := s.loadActiveRewardAd(ctx, tx, taskPublicID)
+		if err != nil {
+			return err
+		}
+		now := s.runtime.Now()
+		todayReward, err := s.todayAdRewardPoints(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		if todayReward+ad.RewardPoints > WalletDailyAdRewardLimit {
+			return errcode.New(errcode.CodeWalletActionUnavailable, "daily ad reward limit reached")
+		}
+		if ad.TotalBudget > 0 && ad.TotalGranted+ad.RewardPoints > ad.TotalBudget {
+			return errcode.New(errcode.CodeWalletActionUnavailable, "reward ad budget reached")
+		}
 
-	claim := model.RewardAdClaim{
-		PublicID:       utils.NewPublicID(),
-		RewardAdID:     ad.ID,
-		UserID:         userID,
-		ClaimDate:      claimDate,
-		Status:         RewardClaimStatusStarted,
-		WatchStartedAt: now,
-		RewardPoints:   ad.RewardPoints,
-		IPAddress:      strings.TrimSpace(ipAddress),
-		UserAgent:      strings.TrimSpace(userAgent),
-	}
-	if err := s.runtime.DB.WithContext(ctx).Create(&claim).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to start reward ad")
-	}
+		claim := model.RewardAdClaim{
+			PublicID:       utils.NewPublicID(),
+			RewardAdID:     ad.ID,
+			UserID:         userID,
+			ClaimDate:      walletDate(now),
+			Status:         RewardClaimStatusStarted,
+			WatchStartedAt: now,
+			RewardPoints:   ad.RewardPoints,
+			IPAddress:      strings.TrimSpace(ipAddress),
+			UserAgent:      strings.TrimSpace(userAgent),
+		}
+		if err := tx.WithContext(ctx).Create(&claim).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to start reward ad")
+		}
+		if err := tx.WithContext(ctx).Model(&model.RewardAd{}).
+			Where("id = ?", ad.ID).
+			UpdateColumn("watch_count", gorm.Expr("watch_count + ?", 1)).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to update reward ad watch count")
+		}
 
-	watchSeconds := normalizedWatchSeconds(ad.WatchSeconds)
-	return &RewardAdSessionResponse{
-		ClaimID:      claim.PublicID,
-		TaskID:       ad.PublicID,
-		WatchSeconds: watchSeconds,
-		StartedAt:    now.Format(time.RFC3339),
-		AvailableAt:  now.Add(time.Duration(watchSeconds) * time.Second).Format(time.RFC3339),
-		RewardPoints: ad.RewardPoints,
-	}, nil
+		watchSeconds := normalizedWatchSeconds(ad.WatchSeconds)
+		result = &RewardAdSessionResponse{
+			ClaimID:      claim.PublicID,
+			TaskID:       ad.PublicID,
+			WatchSeconds: watchSeconds,
+			StartedAt:    now.Format(time.RFC3339),
+			AvailableAt:  now.Add(time.Duration(watchSeconds) * time.Second).Format(time.RFC3339),
+			RewardPoints: ad.RewardPoints,
+		}
+		return nil
+	})
+	return result, err
 }
 
-// 22. ClaimRewardAd grants points for a completed rewarded ad session.
+// 23. ClaimRewardAd grants points for a completed rewarded ad session.
 func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPublicID string, claimPublicID string, ipAddress string, userAgent string) (*PointsChargeResponse, error) {
 	var result *PointsChargeResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -501,12 +544,6 @@ func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPub
 		if ad.TotalBudget > 0 && ad.TotalGranted+ad.RewardPoints > ad.TotalBudget {
 			return errcode.New(errcode.CodeWalletActionUnavailable, "reward ad budget reached")
 		}
-		if claimed, err := s.hasClaimedRewardAdToday(ctx, tx, userID, ad.ID, walletDate(now)); err != nil {
-			return err
-		} else if claimed {
-			return errcode.New(errcode.CodeWalletActionUnavailable, "reward already claimed today")
-		}
-
 		claim.Status = RewardClaimStatusClaimed
 		claim.ClaimedAt = &now
 		claim.IPAddress = strings.TrimSpace(ipAddress)
@@ -531,8 +568,11 @@ func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPub
 		}
 		result = credit
 
-		if err := tx.WithContext(ctx).Model(&model.RewardAd{}).Where("id = ?", ad.ID).Update("total_granted", ad.TotalGranted+ad.RewardPoints).Error; err != nil {
-			return errcode.New(errcode.CodeInternalError, "failed to update reward ad budget")
+		if err := tx.WithContext(ctx).Model(&model.RewardAd{}).Where("id = ?", ad.ID).UpdateColumns(map[string]any{
+			"total_granted":       gorm.Expr("total_granted + ?", ad.RewardPoints),
+			"total_watch_seconds": gorm.Expr("total_watch_seconds + ?", int64(normalizedWatchSeconds(ad.WatchSeconds))),
+		}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to update reward ad metrics")
 		}
 		var transaction model.WalletTransaction
 		if err := tx.WithContext(ctx).Where("public_id = ?", credit.PointsTransactionID).First(&transaction).Error; err != nil {
@@ -546,7 +586,37 @@ func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPub
 	return result, err
 }
 
-// 23. ensureAccount creates a wallet account when missing.
+// 24. TrackRewardAdClick records one rewarded ad target link click.
+func (s *WalletService) TrackRewardAdClick(ctx context.Context, taskPublicID string) (*RewardAdClickResponse, error) {
+	var result *RewardAdClickResponse
+	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ad, err := s.loadActiveRewardAd(ctx, tx, taskPublicID)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(ad.TargetURL) == "" {
+			return errcode.New(errcode.CodeWalletActionUnavailable, "reward ad target URL is empty")
+		}
+		if err := tx.WithContext(ctx).Model(&model.RewardAd{}).
+			Where("id = ?", ad.ID).
+			UpdateColumn("link_click_count", gorm.Expr("link_click_count + ?", 1)).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to update reward ad link clicks")
+		}
+
+		linkClickCount := ad.LinkClickCount + 1
+		result = &RewardAdClickResponse{
+			TaskID:         ad.PublicID,
+			TargetURL:      ad.TargetURL,
+			WatchCount:     ad.WatchCount,
+			LinkClickCount: linkClickCount,
+			LinkClickRate:  rewardAdClickRate(ad.WatchCount, linkClickCount),
+		}
+		return nil
+	})
+	return result, err
+}
+
+// 25. ensureAccount creates a wallet account when missing.
 func (s *WalletService) ensureAccount(ctx context.Context, tx *gorm.DB, userID int64) (*model.WalletAccount, error) {
 	var account model.WalletAccount
 	if err := tx.WithContext(ctx).Where("user_id = ?", userID).First(&account).Error; err != nil {
@@ -561,7 +631,7 @@ func (s *WalletService) ensureAccount(ctx context.Context, tx *gorm.DB, userID i
 	return &account, nil
 }
 
-// 24. ensureAccountForUpdate creates and locks a wallet account.
+// 26. ensureAccountForUpdate creates and locks a wallet account.
 func (s *WalletService) ensureAccountForUpdate(ctx context.Context, tx *gorm.DB, userID int64) (*model.WalletAccount, error) {
 	if _, err := s.ensureAccount(ctx, tx, userID); err != nil {
 		return nil, err
@@ -573,7 +643,7 @@ func (s *WalletService) ensureAccountForUpdate(ctx context.Context, tx *gorm.DB,
 	return &account, nil
 }
 
-// 25. findTransactionByIdempotencyKey loads a previous wallet transaction.
+// 27. findTransactionByIdempotencyKey loads a previous wallet transaction.
 func (s *WalletService) findTransactionByIdempotencyKey(ctx context.Context, tx *gorm.DB, key string) (*model.WalletTransaction, bool, error) {
 	var transaction model.WalletTransaction
 	if err := tx.WithContext(ctx).Where("idempotency_key = ?", strings.TrimSpace(key)).First(&transaction).Error; err != nil {
@@ -585,7 +655,7 @@ func (s *WalletService) findTransactionByIdempotencyKey(ctx context.Context, tx 
 	return &transaction, true, nil
 }
 
-// 26. todayAdRewardPoints sums claimed ad rewards for the current wallet day.
+// 28. todayAdRewardPoints sums claimed ad rewards for the current wallet day.
 func (s *WalletService) todayAdRewardPoints(ctx context.Context, tx *gorm.DB, userID int64) (int64, error) {
 	var total int64
 	if err := tx.WithContext(ctx).Model(&model.WalletTransaction{}).
@@ -603,18 +673,7 @@ func (s *WalletService) todayAdRewardPoints(ctx context.Context, tx *gorm.DB, us
 	return total, nil
 }
 
-// 27. hasClaimedRewardAdToday checks completed claims for one ad and date.
-func (s *WalletService) hasClaimedRewardAdToday(ctx context.Context, tx *gorm.DB, userID int64, adID int64, claimDate string) (bool, error) {
-	var count int64
-	if err := tx.WithContext(ctx).Model(&model.RewardAdClaim{}).
-		Where("user_id = ? AND reward_ad_id = ? AND claim_date = ? AND status = ?", userID, adID, claimDate, RewardClaimStatusClaimed).
-		Count(&count).Error; err != nil {
-		return false, errcode.New(errcode.CodeInternalError, "failed to load reward claim state")
-	}
-	return count > 0, nil
-}
-
-// 28. loadActiveRewardAd loads a currently claimable reward ad.
+// 29. loadActiveRewardAd loads a currently claimable reward ad.
 func (s *WalletService) loadActiveRewardAd(ctx context.Context, tx *gorm.DB, publicID string) (*model.RewardAd, error) {
 	now := s.runtime.Now()
 	var ad model.RewardAd
@@ -631,7 +690,7 @@ func (s *WalletService) loadActiveRewardAd(ctx context.Context, tx *gorm.DB, pub
 	return &ad, nil
 }
 
-// 29. toWalletTransactionResponse maps a transaction model to API shape.
+// 30. toWalletTransactionResponse maps a transaction model to API shape.
 func toWalletTransactionResponse(transaction model.WalletTransaction) WalletTransactionResponse {
 	return WalletTransactionResponse{
 		TransactionID: transaction.PublicID,
@@ -647,18 +706,26 @@ func toWalletTransactionResponse(transaction model.WalletTransaction) WalletTran
 	}
 }
 
-// 30. walletDate returns the server-side wallet date string.
+// 31. rewardAdClickRate returns the link click rate as a percentage.
+func rewardAdClickRate(watchCount int64, linkClickCount int64) float64 {
+	if watchCount <= 0 || linkClickCount <= 0 {
+		return 0
+	}
+	return float64(linkClickCount) / float64(watchCount) * 100
+}
+
+// 32. walletDate returns the server-side wallet date string.
 func walletDate(value time.Time) string {
 	return value.Format("2006-01-02")
 }
 
-// 31. walletDayStart returns the start of the current wallet day.
+// 33. walletDayStart returns the start of the current wallet day.
 func walletDayStart(value time.Time) time.Time {
 	year, month, day := value.Date()
 	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
 }
 
-// 32. normalizedWatchSeconds enforces the minimum watch duration.
+// 34. normalizedWatchSeconds enforces the minimum watch duration.
 func normalizedWatchSeconds(value int) int {
 	if value < 1 {
 		return 1

@@ -26,25 +26,7 @@ const emit = defineEmits<{
 
 <template>
   <article class="wallet-settings-panel">
-    <div class="wallet-settings-panel-header">
-      <div>
-        <h2>{{ t('marketplace.management.walletTransactionsTitle') }}</h2>
-        <p>{{ t('marketplace.management.walletTransactionsDescription') }}</p>
-      </div>
-      <button
-        type="button"
-        class="wallet-settings-icon-button"
-        :aria-label="t('marketplace.management.refresh')"
-        @click="emit('load')"
-      >
-        <AppIcon
-          name="reload"
-          :size="16"
-        />
-      </button>
-    </div>
-
-    <div class="wallet-settings-toolbar wallet-settings-toolbar-two">
+    <div class="wallet-settings-toolbar wallet-settings-toolbar-three">
       <label class="wallet-settings-search">
         <AppIcon
           name="user"
@@ -73,6 +55,17 @@ const emit = defineEmits<{
           {{ t('account.wallet.debit') }}
         </option>
       </select>
+      <button
+        type="button"
+        class="wallet-settings-icon-button"
+        :aria-label="t('marketplace.management.refresh')"
+        @click="emit('load')"
+      >
+        <AppIcon
+          name="reload"
+          :size="16"
+        />
+      </button>
     </div>
 
     <div

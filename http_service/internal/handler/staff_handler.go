@@ -1,6 +1,6 @@
 /*
  * Staff HTTP handlers.
- * 1. Bind staff-only user query and role update requests.
+ * 1. Bind staff-only user query, account creation, and role update requests.
  * 2. Delegate staff business rules to the service layer.
  */
 package handler
@@ -26,12 +26,23 @@ type updateStaffUserRoleRequest struct {
 	IsStaff    *bool     `json:"is_staff"`
 }
 
-// 3. NewStaffHandler creates a staff handler instance.
+// 3. createStaffUserRequest defines the staff account creation payload.
+type createStaffUserRequest struct {
+	Email            string   `json:"email"`
+	Password         string   `json:"password"`
+	DisplayName      string   `json:"display_name"`
+	PhoneCountryCode string   `json:"phone_country_code"`
+	PhoneNumber      string   `json:"phone_number"`
+	MemberType       string   `json:"member_type"`
+	RoleCodes        []string `json:"role_codes"`
+}
+
+// 4. NewStaffHandler creates a staff handler instance.
 func NewStaffHandler(staffService *service.StaffService) *StaffHandler {
 	return &StaffHandler{staffService: staffService}
 }
 
-// 4. GetMe returns the current staff account summary.
+// 5. GetMe returns the current staff account summary.
 func (h *StaffHandler) GetMe(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -48,7 +59,7 @@ func (h *StaffHandler) GetMe(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 5. ListUsers returns staff-visible user records.
+// 6. ListUsers returns staff-visible user records.
 func (h *StaffHandler) ListUsers(c *gin.Context) {
 	page, pageSize := parsePagination(c)
 	result, pagination, err := h.staffService.ListUsers(c.Request.Context(), service.StaffUserListFilters{
@@ -68,7 +79,38 @@ func (h *StaffHandler) ListUsers(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": result, "pagination": pagination})
 }
 
-// 6. UpdateUserRole updates the target user's role fields.
+// 7. CreateUser creates a staff-managed account.
+func (h *StaffHandler) CreateUser(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	var request createStaffUserRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.staffService.CreateUser(c.Request.Context(), user.UserID, service.StaffUserCreateParams{
+		Email:            strings.TrimSpace(request.Email),
+		Password:         request.Password,
+		DisplayName:      strings.TrimSpace(request.DisplayName),
+		PhoneCountryCode: strings.TrimSpace(request.PhoneCountryCode),
+		PhoneNumber:      strings.TrimSpace(request.PhoneNumber),
+		MemberType:       strings.TrimSpace(request.MemberType),
+		RoleCodes:        request.RoleCodes,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 8. UpdateUserRole updates the target user's role fields.
 func (h *StaffHandler) UpdateUserRole(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -100,7 +142,7 @@ func (h *StaffHandler) UpdateUserRole(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 7. ListRoles returns the staff-visible role catalog.
+// 9. ListRoles returns the staff-visible role catalog.
 func (h *StaffHandler) ListRoles(c *gin.Context) {
 	result, err := h.staffService.ListRoles(c.Request.Context())
 	if err != nil {

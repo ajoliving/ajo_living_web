@@ -10,8 +10,10 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { createOrReuseChat } from '@/httpapis/chats';
 import {
+  favoriteSecondhandListing,
   fetchListingContactAccess,
   fetchSecondhandListingDetail,
+  unfavoriteSecondhandListing,
 } from '@/httpapis/secondhand-listings';
 import {
   getMarketplaceCategoryLabel,
@@ -20,6 +22,7 @@ import {
 } from '@/constants/marketplace';
 import type { ContactAccessResult, SecondhandListingDetailResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
+import { useSessionStore } from '@/stores/session';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
@@ -35,11 +38,13 @@ export const useMarketplaceListingPage = () => {
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
+  const sessionStore = useSessionStore();
   const listing = ref<SecondhandListingDetailResponse | null>(null);
   const contactAccess = ref<ContactAccessResult | null>(null);
   const loading = ref(false);
   const loadingContact = ref(false);
   const openingChat = ref(false);
+  const updatingFavorite = ref(false);
 
   const listingId = computed(() => String(route.params.listingId ?? ''));
   const galleryImages = computed(() => listing.value ? resolveListingImages(listing.value) : []);
@@ -68,6 +73,7 @@ export const useMarketplaceListingPage = () => {
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );
   const contactPayload = computed(() => contactAccess.value?.contact_payload ?? {});
+  const isFavorited = computed(() => Boolean(listing.value?.is_favorited));
   const formatDeliveryTag = (tag: string): string => {
     const translationKey = getDeliveryTagTranslationKey(tag);
     return translationKey ? t(translationKey) : tag;
@@ -119,7 +125,48 @@ export const useMarketplaceListingPage = () => {
     }
   };
 
-  // 1.3 建立或重用聊天
+  // 1.3 切換收藏狀態
+  const toggleFavorite = async (): Promise<void> => {
+    if (!listing.value || updatingFavorite.value) {
+      return;
+    }
+    if (!sessionStore.isAuthenticated) {
+      await router.push({
+        path: '/login',
+        query: { redirect: route.fullPath },
+      });
+      return;
+    }
+
+    updatingFavorite.value = true;
+
+    try {
+      const { data } = isFavorited.value
+        ? await unfavoriteSecondhandListing(listing.value.listing_id)
+        : await favoriteSecondhandListing(listing.value.listing_id);
+      listing.value = {
+        ...listing.value,
+        is_favorited: data.data.is_favorited,
+      };
+      feedbackStore.pushToast(
+        data.data.is_favorited
+          ? t('marketplace.detail.favoriteAdded')
+          : t('marketplace.detail.favoriteRemoved'),
+        'success',
+      );
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('marketplace.detail.favoriteError')
+          : t('marketplace.detail.favoriteError'),
+        'error',
+      );
+    } finally {
+      updatingFavorite.value = false;
+    }
+  };
+
+  // 1.4 建立或重用聊天
   const openChat = async (): Promise<void> => {
     if (!listing.value) {
       return;
@@ -165,6 +212,9 @@ export const useMarketplaceListingPage = () => {
     ownerName,
     publishedAt,
     revealContact,
+    isFavorited,
     t,
+    toggleFavorite,
+    updatingFavorite,
   };
 };

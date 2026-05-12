@@ -15,6 +15,7 @@ import {
   markSecondhandListingSold,
   publishSecondhandListing,
   republishSecondhandListing,
+  renewSecondhandListing,
 } from '@/httpapis/secondhand-listings';
 import {
   getMarketplaceCategoryLabel,
@@ -23,10 +24,12 @@ import {
 import type { SecondhandListingDetailResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import { formatDate, formatPrice } from '@/utils/format';
 import { resolveListingCoverImage, resolveListingStatus } from '@/utils/marketplace';
+import { formatAjoPoints, resolveWalletChargeCost, resolveWalletRenewChargeCost } from '@/utils/wallet';
 
-type MyListingDetailAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+type MyListingDetailAction = 'publish' | 'republish' | 'renew' | 'mark-sold' | 'deactivate';
 
 // 1. 管理我的帖子預覽頁資料
 export const useMarketplaceMyListingPreviewPage = () => {
@@ -35,6 +38,7 @@ export const useMarketplaceMyListingPreviewPage = () => {
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
   const preferenceStore = usePreferenceStore();
+  const sessionStore = useSessionStore();
   const loading = ref(false);
   const actionLoading = ref(false);
   const listing = ref<SecondhandListingDetailResponse | null>(null);
@@ -61,6 +65,10 @@ export const useMarketplaceMyListingPreviewPage = () => {
   );
   const canPublish = computed(() => listing.value?.publication_status === 'draft');
   const canRepublish = computed(() => listing.value?.publication_status === 'expired');
+  const canRenew = computed(() => {
+    const currentListing = listing.value;
+    return currentListing?.publication_status === 'active' && currentListing.business_status !== 'sold';
+  });
   const canMarkSold = computed(() => {
     const currentListing = listing.value;
     return currentListing?.publication_status === 'active' && currentListing.business_status !== 'sold';
@@ -69,6 +77,10 @@ export const useMarketplaceMyListingPreviewPage = () => {
     const currentListing = listing.value;
     return currentListing?.publication_status === 'active' && currentListing.business_status !== 'sold';
   });
+  const formatPoints = (value: number): string =>
+    formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+  const secondhandChargeCost = resolveWalletChargeCost('secondhand');
+  const secondhandRenewChargeCost = resolveWalletRenewChargeCost('secondhand');
 
   // 1.1 讀取帖子詳情
   const loadPreview = async (): Promise<void> => {
@@ -117,6 +129,11 @@ export const useMarketplaceMyListingPreviewPage = () => {
       return;
     }
 
+    if ((action === 'publish' || action === 'republish' || action === 'renew') &&
+      !window.confirm(`${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`)) {
+      return;
+    }
+
     if (
       (action === 'mark-sold' || action === 'deactivate') &&
       !window.confirm(t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate'))
@@ -135,6 +152,10 @@ export const useMarketplaceMyListingPreviewPage = () => {
         await republishSecondhandListing(listingId.value);
       }
 
+      if (action === 'renew') {
+        await renewSecondhandListing(listingId.value);
+      }
+
       if (action === 'mark-sold') {
         await markSecondhandListingSold(listingId.value);
       }
@@ -144,6 +165,9 @@ export const useMarketplaceMyListingPreviewPage = () => {
       }
 
       feedbackStore.pushToast(t('marketplace.mine.statusUpdated'), 'success');
+      if (action === 'publish' || action === 'republish' || action === 'renew') {
+        await sessionStore.loadCurrentUser();
+      }
       await loadPreview();
     } catch (error) {
       feedbackStore.pushToast(
@@ -157,6 +181,21 @@ export const useMarketplaceMyListingPreviewPage = () => {
     }
   };
 
+  // 1.5 輸出扣費確認文案 key
+  const resolveChargeConfirmKey = (action: MyListingDetailAction): string => {
+    if (action === 'publish') {
+      return 'marketplace.mine.confirmPublishCharge';
+    }
+    if (action === 'republish') {
+      return 'marketplace.mine.confirmRepublishCharge';
+    }
+    return 'marketplace.mine.confirmRenewCharge';
+  };
+
+  // 1.6 輸出指定動作扣費
+  const resolveActionChargeCost = (action: MyListingDetailAction): number =>
+    action === 'renew' ? secondhandRenewChargeCost : secondhandChargeCost;
+
   onMounted(() => {
     void loadPreview();
   });
@@ -167,6 +206,7 @@ export const useMarketplaceMyListingPreviewPage = () => {
     canMarkSold,
     canPublish,
     canRepublish,
+    canRenew,
     categoryLabel,
     coverImage,
     districtLabel,
@@ -178,6 +218,9 @@ export const useMarketplaceMyListingPreviewPage = () => {
     openPublicDetail,
     publishedAt,
     runAction,
+    secondhandChargeCost,
+    secondhandRenewChargeCost,
+    formatAjoPoints: formatPoints,
     statusLabel,
     t,
   };

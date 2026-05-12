@@ -100,7 +100,17 @@ type DiscoverPlacement struct {
 	TimestampModel
 }
 
-// 7. SecondhandListing stores secondhand-only listing fields.
+// 7. ListingFavorite stores member saved listing relationships.
+type ListingFavorite struct {
+	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    int64     `gorm:"not null;uniqueIndex:uk_listing_favorite_user_listing,priority:1;index" json:"user_id"`
+	ListingID int64     `gorm:"not null;uniqueIndex:uk_listing_favorite_user_listing,priority:2;index" json:"listing_id"`
+	CreatedAt time.Time `json:"created_at"`
+	User      *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Listing   *Listing  `gorm:"foreignKey:ListingID" json:"listing,omitempty"`
+}
+
+// 8. SecondhandListing stores secondhand-only listing fields.
 type SecondhandListing struct {
 	ListingID          int64          `gorm:"primaryKey" json:"listing_id"`
 	CategoryCode       string         `gorm:"type:varchar(64);not null" json:"category_code"`
@@ -117,7 +127,7 @@ type SecondhandListing struct {
 	IsFreeGiveaway     bool           `gorm:"not null" json:"is_free_giveaway"`
 }
 
-// 8. PropertySaleListing stores property sale listing fields.
+// 9. PropertySaleListing stores property sale listing fields.
 type PropertySaleListing struct {
 	ListingID          int64          `gorm:"primaryKey" json:"listing_id"`
 	PropertyType       string         `gorm:"type:varchar(64);not null" json:"property_type"`
@@ -137,7 +147,7 @@ type PropertySaleListing struct {
 	PublisherRoleLabel string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
 }
 
-// 9. ServicedApartmentProject stores serviced apartment project fields.
+// 10. ServicedApartmentProject stores serviced apartment project fields.
 type ServicedApartmentProject struct {
 	ListingID            int64          `gorm:"primaryKey" json:"listing_id"`
 	ProjectName          string         `gorm:"type:varchar(200);not null" json:"project_name"`

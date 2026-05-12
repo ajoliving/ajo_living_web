@@ -57,23 +57,27 @@ type StaffWalletGrantResponse struct {
 
 // 5. StaffRewardAdResponse defines an operator-visible rewarded ad task.
 type StaffRewardAdResponse struct {
-	TaskID          string `json:"task_id"`
-	Title           string `json:"title"`
-	Summary         string `json:"summary"`
-	CoverURL        string `json:"cover_url"`
-	MediaURL        string `json:"media_url"`
-	MediaType       string `json:"media_type"`
-	TargetURL       string `json:"target_url"`
-	RewardPoints    int64  `json:"reward_points"`
-	WatchSeconds    int    `json:"watch_seconds"`
-	TotalBudget     int64  `json:"total_budget"`
-	TotalGranted    int64  `json:"total_granted"`
-	RemainingBudget int64  `json:"remaining_budget"`
-	IsActive        bool   `json:"is_active"`
-	StartsAt        string `json:"starts_at,omitempty"`
-	EndsAt          string `json:"ends_at,omitempty"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	TaskID            string  `json:"task_id"`
+	Title             string  `json:"title"`
+	Summary           string  `json:"summary"`
+	CoverURL          string  `json:"cover_url"`
+	MediaURL          string  `json:"media_url"`
+	MediaType         string  `json:"media_type"`
+	TargetURL         string  `json:"target_url"`
+	RewardPoints      int64   `json:"reward_points"`
+	WatchSeconds      int     `json:"watch_seconds"`
+	TotalBudget       int64   `json:"total_budget"`
+	TotalGranted      int64   `json:"total_granted"`
+	RemainingBudget   int64   `json:"remaining_budget"`
+	WatchCount        int64   `json:"watch_count"`
+	TotalWatchSeconds int64   `json:"total_watch_seconds"`
+	LinkClickCount    int64   `json:"link_click_count"`
+	LinkClickRate     float64 `json:"link_click_rate"`
+	IsActive          bool    `json:"is_active"`
+	StartsAt          string  `json:"starts_at,omitempty"`
+	EndsAt            string  `json:"ends_at,omitempty"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 // 6. StaffRewardAdFilters defines rewarded ad search filters.

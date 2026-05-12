@@ -42,7 +42,23 @@ type CompleteUploadParams struct {
 	ChecksumSHA256 string
 }
 
-// 4. CompleteUploadResult defines the upload complete output.
+// 4. UploadCallbackParams defines the OSS upload callback payload.
+type UploadCallbackParams struct {
+	BucketName string
+	ObjectKey  string
+	MimeType   string
+	FileSize   int64
+	ETag       string
+}
+
+// 5. UploadCallbackResult defines the callback acknowledgement payload.
+type UploadCallbackResult struct {
+	BucketName string `json:"bucket_name"`
+	ObjectKey  string `json:"object_key"`
+	Accepted   bool   `json:"accepted"`
+}
+
+// 6. CompleteUploadResult defines the upload complete output.
 type CompleteUploadResult struct {
 	MediaAssetID    string    `json:"media_asset_id"`
 	StorageProvider string    `json:"storage_provider"`
@@ -58,12 +74,12 @@ type CompleteUploadResult struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-// 5. NewUploadService creates an upload service instance.
+// 7. NewUploadService creates an upload service instance.
 func NewUploadService(runtime *Runtime) *UploadService {
 	return &UploadService{runtime: runtime}
 }
 
-// 6. Presign creates an upload target through the configured storage provider.
+// 8. Presign creates an upload target through the configured storage provider.
 func (s *UploadService) Presign(ctx context.Context, params PresignParams) (*PresignUploadResult, error) {
 	if strings.TrimSpace(params.FileName) == "" || strings.TrimSpace(params.MimeType) == "" || params.FileSize <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "invalid upload payload")
@@ -81,7 +97,7 @@ func (s *UploadService) Presign(ctx context.Context, params PresignParams) (*Pre
 	})
 }
 
-// 8. isSupportedPresignUpload validates browser direct upload media types and target directory.
+// 9. isSupportedPresignUpload validates browser direct upload media types and target directory.
 func isSupportedPresignUpload(mimeType string, objectPrefix string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(mimeType))
 	if strings.HasPrefix(normalized, "image/") {
@@ -90,7 +106,7 @@ func isSupportedPresignUpload(mimeType string, objectPrefix string) bool {
 	return strings.HasPrefix(normalized, "video/") && normalizeMediaObjectPrefix(objectPrefix) == advertisementVideoObjectPrefix
 }
 
-// 7. CompleteUpload persists media asset metadata after upload.
+// 10. CompleteUpload persists media asset metadata after upload.
 func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploadParams) (*CompleteUploadResult, error) {
 	if strings.TrimSpace(params.ObjectKey) == "" || strings.TrimSpace(params.MimeType) == "" || params.FileSize <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "invalid upload complete payload")
@@ -147,7 +163,29 @@ func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploa
 	return s.buildMediaAssetResult(ctx, &media)
 }
 
-// 9. isSupportedCompleteUpload validates completed upload media types and object key.
+// 11. AcceptUploadCallback validates and acknowledges an OSS upload callback.
+func (s *UploadService) AcceptUploadCallback(_ context.Context, params UploadCallbackParams) (*UploadCallbackResult, error) {
+	if strings.TrimSpace(params.BucketName) != strings.TrimSpace(s.runtime.Config.StorageBucket) {
+		return nil, errcode.New(errcode.CodeValidationError, "bucket_name is invalid")
+	}
+	if strings.TrimSpace(params.ObjectKey) == "" || strings.TrimSpace(params.MimeType) == "" || params.FileSize <= 0 {
+		return nil, errcode.New(errcode.CodeValidationError, "invalid upload callback payload")
+	}
+	if !isSupportedCompleteUpload(params.MimeType, params.ObjectKey) {
+		return nil, errcode.New(errcode.CodeValidationError, "only image or video callbacks are supported")
+	}
+	if !strings.HasPrefix(strings.TrimSpace(params.ObjectKey), mediaObjectPrefix) {
+		return nil, errcode.New(errcode.CodeValidationError, "object_key is invalid")
+	}
+
+	return &UploadCallbackResult{
+		BucketName: strings.TrimSpace(params.BucketName),
+		ObjectKey:  strings.TrimSpace(params.ObjectKey),
+		Accepted:   true,
+	}, nil
+}
+
+// 12. isSupportedCompleteUpload validates completed upload media types and object key.
 func isSupportedCompleteUpload(mimeType string, objectKey string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(mimeType))
 	if strings.HasPrefix(normalized, "image/") {

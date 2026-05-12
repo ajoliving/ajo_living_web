@@ -14,9 +14,11 @@ const {
   canMarkSold,
   canPublish,
   canRepublish,
+  canRenew,
   categoryLabel,
   coverImage,
   districtLabel,
+  formatAjoPoints,
   listing,
   listingId,
   listingPrice,
@@ -25,6 +27,7 @@ const {
   openPublicDetail,
   publishedAt,
   runAction,
+  secondhandRenewChargeCost,
   statusLabel,
   t,
 } = useMarketplaceMyListingPreviewPage();
@@ -101,6 +104,19 @@ const {
             :size="16"
           />
           {{ t('marketplace.mine.republishAction') }}
+        </button>
+        <button
+          v-if="canRenew"
+          type="button"
+          class="preview-action preview-action--primary"
+          :disabled="actionLoading"
+          @click="runAction('renew')"
+        >
+          <AppIcon
+            name="clock"
+            :size="16"
+          />
+          {{ t('marketplace.mine.renewAction') }} · {{ formatAjoPoints(secondhandRenewChargeCost) }}
         </button>
         <button
           v-if="canMarkSold"

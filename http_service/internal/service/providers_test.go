@@ -8,6 +8,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +34,43 @@ func TestNewStorageProviderRejectsInvalidOSSConfig(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "storage region is required") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// 4. TestBuildOSSUploadCallback verifies optional OSS callback header payload.
+func TestBuildOSSUploadCallback(t *testing.T) {
+	disabled := buildOSSUploadCallback(&config.Config{
+		OSSCallbackEnabled: false,
+		OSSCallbackURL:     "https://api.example.com/api/v1/oss/callback",
+	}, PresignUploadInput{MimeType: "image/png"}, "ajo_living/account/demo.png")
+	if disabled != "" {
+		t.Fatalf("expected disabled callback to be empty")
+	}
+
+	encoded := buildOSSUploadCallback(&config.Config{
+		OSSCallbackEnabled: true,
+		OSSCallbackURL:     "https://api.example.com/api/v1/oss/callback",
+	}, PresignUploadInput{MimeType: "image/png"}, "ajo_living/account/demo.png")
+	if encoded == "" {
+		t.Fatalf("expected callback payload")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode callback payload: %v", err)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		t.Fatalf("unmarshal callback payload: %v", err)
+	}
+	if payload["callbackUrl"] != "https://api.example.com/api/v1/oss/callback" {
+		t.Fatalf("unexpected callback url: %#v", payload)
+	}
+	if payload["callbackHost"] != "api.example.com" {
+		t.Fatalf("unexpected callback host: %#v", payload)
+	}
+	if !strings.Contains(payload["callbackBody"], `"object_key":"${object}"`) {
+		t.Fatalf("unexpected callback body: %#v", payload)
 	}
 }
 

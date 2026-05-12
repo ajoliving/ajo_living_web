@@ -32,7 +32,6 @@ import MarketplaceManagementRewardAdEditorPage from '@/pages/marketplace/managem
 import MarketplaceManagementRewardAdsPage from '@/pages/marketplace/management/reward-ads/Page.vue';
 import MarketplaceManagementSecondhandListingsPage from '@/pages/marketplace/management/secondhand-listings/Page.vue';
 import MarketplaceManagementServicedApartmentsPage from '@/pages/marketplace/management/serviced-apartments/Page.vue';
-import MarketplaceManagementWalletGrantsPage from '@/pages/marketplace/management/wallet-grants/Page.vue';
 import MarketplaceManagementWalletTransactionsPage from '@/pages/marketplace/management/wallet-transactions/Page.vue';
 
 // 1. 輸出會員中心路由
@@ -162,7 +161,7 @@ export const accountRoutes: RouteRecordRaw[] = [
           },
           {
             path: 'wallet-grants',
-            redirect: '/account/marketplace/management/wallet-grants',
+            redirect: '/account/marketplace/management/members',
           },
           {
             path: 'reward-ad-editor/:taskId?',
@@ -184,7 +183,7 @@ export const accountRoutes: RouteRecordRaw[] = [
           },
           {
             path: 'wallet',
-            redirect: '/account/marketplace/management/wallet-grants',
+            redirect: '/account/marketplace/management/members',
           },
           {
             path: 'notice',
@@ -230,9 +229,7 @@ export const accountRoutes: RouteRecordRaw[] = [
           },
           {
             path: 'wallet-grants',
-            name: 'MarketplaceManagementWalletGrants',
-            component: MarketplaceManagementWalletGrantsPage,
-            meta: { titleKey: 'marketplace.management.walletGrantSection', requiresAuth: true, requiresStaff: true },
+            redirect: '/account/marketplace/management/members',
           },
           {
             path: 'reward-ad-editor/:taskId?',

@@ -7,6 +7,7 @@ import httpClient from '@/httpapis';
 import type { ApiListData, ApiResponse, PaginatedResult } from '@/model/api';
 import type {
   PointsChargeResponse,
+  RewardAdClickResponse,
   RewardAdSessionResponse,
   RewardAdTaskResponse,
   StaffRewardAdPayload,
@@ -42,7 +43,11 @@ export const claimRewardAdTask = (taskId: string, claimId: string) =>
     claim_id: claimId,
   });
 
-// 6. Staff 查詢積分流水
+// 6. 記錄廣告連結點擊
+export const trackRewardAdClick = (taskId: string) =>
+  httpClient.post<ApiResponse<RewardAdClickResponse>>(`/me/wallet/ad-tasks/${taskId}/click`);
+
+// 7. Staff 查詢積分流水
 export const fetchStaffWalletTransactions = (params: {
   page?: number;
   page_size?: number;
@@ -56,14 +61,14 @@ export const fetchStaffWalletTransactions = (params: {
     { params },
   );
 
-// 7. Staff 發放積分
+// 8. Staff 發放積分
 export const grantStaffWalletPoints = (payload: {
   user_id: string;
   amount: number;
   note: string;
 }) => httpClient.post<ApiResponse<StaffWalletGrantResponse>>('/staff/wallet/grants', payload);
 
-// 8. Staff 查詢廣告任務
+// 9. Staff 查詢廣告任務
 export const fetchStaffRewardAds = (params: {
   page?: number;
   page_size?: number;
@@ -75,14 +80,21 @@ export const fetchStaffRewardAds = (params: {
     { params },
   );
 
-// 9. Staff 建立廣告任務
+// 10. Staff 建立廣告任務
 export const createStaffRewardAd = (payload: StaffRewardAdPayload) =>
   httpClient.post<ApiResponse<StaffRewardAdResponse>>('/staff/wallet/reward-ads', payload);
 
-// 10. Staff 取得單個廣告任務
+// 11. Staff 取得單個廣告任務
 export const fetchStaffRewardAd = (taskId: string) =>
   httpClient.get<ApiResponse<StaffRewardAdResponse>>(`/staff/wallet/reward-ads/${taskId}`);
 
-// 11. Staff 更新廣告任務
+// 12. Staff 更新廣告任務
 export const updateStaffRewardAd = (taskId: string, payload: StaffRewardAdPayload) =>
   httpClient.patch<ApiResponse<StaffRewardAdResponse>>(`/staff/wallet/reward-ads/${taskId}`, payload);
+
+// 13. Staff 續期廣告任務
+export const renewStaffRewardAd = (taskId: string, payload: { retention_days: number }) =>
+  httpClient.patch<ApiResponse<StaffRewardAdResponse>>(`/staff/wallet/reward-ads/${taskId}`, {
+    retention_days: payload.retention_days,
+    is_active: true,
+  });

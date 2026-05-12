@@ -13,6 +13,8 @@ export const fetchMe = () => httpClient.get<ApiResponse<CurrentMemberProfile>>('
 // 2. 更新當前會員資料
 export const updateMe = (payload: {
   display_name?: string;
+  phone_country_code?: string;
+  phone_number?: string;
   publisher_identity_type?: string;
   primary_community_id?: string;
   district_code?: string;

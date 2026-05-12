@@ -32,8 +32,10 @@ export interface WalletChargeRuleResponse {
   biz_module: 'secondhand' | 'property_sale' | 'serviced_apartment';
   label: string;
   publish: number;
+  draft_save?: number;
   edit: number;
   republish: number;
+  renew?: number;
 }
 
 // 4. 定義錢包總覽
@@ -58,6 +60,10 @@ export interface RewardAdTaskResponse {
   can_claim_today: boolean;
   claimed_today: boolean;
   remaining_budget: number;
+  watch_count: number;
+  total_watch_seconds: number;
+  link_click_count: number;
+  link_click_rate: number;
 }
 
 // 6. 定義廣告觀看會話
@@ -70,14 +76,23 @@ export interface RewardAdSessionResponse {
   reward_points: number;
 }
 
-// 7. 定義扣費或獎勵結果
+// 7. 定義廣告點擊統計結果
+export interface RewardAdClickResponse {
+  task_id: string;
+  target_url: string;
+  watch_count: number;
+  link_click_count: number;
+  link_click_rate: number;
+}
+
+// 8. 定義扣費或獎勵結果
 export interface PointsChargeResponse {
   points_charged: number;
   points_balance_after: number;
   points_transaction_id: string;
 }
 
-// 8. 定義 Staff 錢包會員摘要
+// 9. 定義 Staff 錢包會員摘要
 export interface StaffWalletUserResponse {
   user_id: string;
   phone_country_code: string;
@@ -85,7 +100,7 @@ export interface StaffWalletUserResponse {
   display_name: string;
 }
 
-// 9. 定義 Staff 錢包流水
+// 10. 定義 Staff 錢包流水
 export interface StaffWalletTransactionResponse {
   transaction_id: string;
   direction: 'credit' | 'debit';
@@ -101,14 +116,14 @@ export interface StaffWalletTransactionResponse {
   created_at: string;
 }
 
-// 10. 定義 Staff 積分發放結果
+// 11. 定義 Staff 積分發放結果
 export interface StaffWalletGrantResponse {
   charge: PointsChargeResponse;
   target_user: StaffWalletUserResponse;
   operator: StaffWalletUserResponse;
 }
 
-// 11. 定義 Staff 廣告任務
+// 12. 定義 Staff 廣告任務
 export interface StaffRewardAdResponse {
   task_id: string;
   title: string;
@@ -122,6 +137,10 @@ export interface StaffRewardAdResponse {
   total_budget: number;
   total_granted: number;
   remaining_budget: number;
+  watch_count: number;
+  total_watch_seconds: number;
+  link_click_count: number;
+  link_click_rate: number;
   is_active: boolean;
   starts_at?: string;
   ends_at?: string;
@@ -129,7 +148,7 @@ export interface StaffRewardAdResponse {
   updated_at: string;
 }
 
-// 12. 定義 Staff 廣告任務保存資料
+// 13. 定義 Staff 廣告任務保存資料
 export interface StaffRewardAdPayload {
   title?: string;
   summary?: string;

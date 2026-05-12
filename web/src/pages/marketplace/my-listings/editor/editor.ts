@@ -40,7 +40,7 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
-import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
+import { formatAjoPoints, resolveWalletChargeCost, resolveWalletDraftChargeCost } from '@/utils/wallet';
 
 export type ListingEditorVisibility = 'public' | 'building_only';
 export type ListingEditorBusinessStatus = 'available' | 'sold';
@@ -328,6 +328,7 @@ export const useMarketplaceListingEditorPage = () => {
   const formState = reactive(createInitialFormState());
   const imageSlots = ref<EditorImageSlot[]>(createEmptyImageSlots());
   const listingId = ref(String(route.params.listingId ?? ''));
+  const publicationStatus = ref('');
   const isLoading = ref(false);
   const isSaving = ref(false);
   const isPublishing = ref(false);
@@ -337,6 +338,7 @@ export const useMarketplaceListingEditorPage = () => {
   let resolveLeavePrompt: ((decision: EditorLeaveDecision) => void) | null = null;
 
   const isEditing = computed(() => listingId.value.trim().length > 0);
+  const isDraftListing = computed(() => !isEditing.value || publicationStatus.value === 'draft');
 
   const categoryOptions = computed<EditorOption<MarketplaceCategoryCode>[]>(() =>
     marketplaceCategories.map((category) => ({
@@ -440,12 +442,23 @@ export const useMarketplaceListingEditorPage = () => {
 
   const readyToPublish = computed(() => checklist.value.every((item) => item.complete));
   const chargeCost = computed(() => resolveWalletChargeCost('secondhand'));
+  const draftChargeCost = computed(() => resolveWalletDraftChargeCost('secondhand'));
   const walletBalance = computed(() => sessionStore.me?.ajo_balance ?? 0);
   const formatPoints = (value: number): string =>
     formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
-  const chargeHint = computed(() =>
-    `${t(isEditing.value ? 'marketplace.editor.editChargeHint' : 'marketplace.editor.publishChargeHint')} ${formatPoints(chargeCost.value)} · ${t('marketplace.editor.walletBalance')} ${formatPoints(walletBalance.value)}`,
+  const chargeHint = computed(() => {
+    const balanceText = `${t('marketplace.editor.walletBalance')} ${formatPoints(walletBalance.value)}`;
+
+    if (!isDraftListing.value) {
+      return `${t('marketplace.editor.editChargeHint')} ${formatPoints(chargeCost.value)} · ${balanceText}`;
+    }
+
+    return `${t('marketplace.editor.publishChargeHint')} ${formatPoints(chargeCost.value)} · ${t('marketplace.editor.draftChargeHint')} ${formatPoints(draftChargeCost.value)} · ${balanceText}`;
+  });
+  const canAffordDraftSave = computed(() =>
+    !isDraftListing.value || walletBalance.value >= draftChargeCost.value,
   );
+  const canAffordPublish = computed(() => walletBalance.value >= chargeCost.value);
 
   const workflowSteps = computed<EditorWorkflowStep[]>(() => [
     {
@@ -517,7 +530,7 @@ export const useMarketplaceListingEditorPage = () => {
       return true;
     }
 
-    const savedListingId = await saveDraft({ uploadImages: true });
+    const savedListingId = await saveDraft({ chargeDraft: true, uploadImages: true });
     return savedListingId.length > 0;
   };
 
@@ -541,6 +554,7 @@ export const useMarketplaceListingEditorPage = () => {
 
     try {
       const { data } = await fetchSecondhandListingDetail(listingId.value);
+      publicationStatus.value = data.data.publication_status;
       syncDetailToForm(data.data, formState);
       imageSlots.value.forEach(revokeImageSlotPreview);
       const detailSlots = data.data.images.map<EditorImageSlot>((image, index) => ({
@@ -833,7 +847,7 @@ export const useMarketplaceListingEditorPage = () => {
   };
 
   // 14.18 儲存草稿
-  const saveDraft = async (options: { uploadImages?: boolean } = {}): Promise<string> => {
+  const saveDraft = async (options: { chargeDraft?: boolean; uploadImages?: boolean } = {}): Promise<string> => {
     if (!readyToSaveDraft.value) {
       feedbackStore.pushToast(t('marketplace.editor.saveBlocked'), 'error');
       return '';
@@ -844,10 +858,21 @@ export const useMarketplaceListingEditorPage = () => {
     try {
       const wasEditing = isEditing.value;
       const shouldUploadImages = options.uploadImages ?? wasEditing;
+      const shouldChargeDraft = options.chargeDraft === true && isDraftListing.value;
+      if (shouldChargeDraft && !canAffordDraftSave.value) {
+        feedbackStore.pushToast(t('marketplace.editor.draftChargeInsufficient'), 'error');
+        return '';
+      }
 
       if (!listingId.value) {
-        const createResponse = await createSecondhandListing(buildPayload());
+        const createResponse = await createSecondhandListing(buildPayload(), {
+          charge_draft: shouldChargeDraft,
+        });
         listingId.value = createResponse.data.data.listing_id;
+        publicationStatus.value = createResponse.data.data.publication_status;
+        if (typeof createResponse.data.data.points_balance_after === 'number') {
+          await sessionStore.loadCurrentUser();
+        }
 
         if (!shouldUploadImages) {
           markCurrentStateSaved();
@@ -866,8 +891,11 @@ export const useMarketplaceListingEditorPage = () => {
       }
 
       const payload = buildPayload();
-      const response = await updateSecondhandListing(listingId.value, payload);
+      const response = await updateSecondhandListing(listingId.value, payload, {
+        charge_draft: shouldChargeDraft && wasEditing,
+      });
       listingId.value = response.data.data.listing_id;
+      publicationStatus.value = response.data.data.publication_status;
       if (typeof response.data.data.points_balance_after === 'number') {
         await sessionStore.loadCurrentUser();
       }
@@ -893,6 +921,10 @@ export const useMarketplaceListingEditorPage = () => {
     isPublishing.value = true;
 
     try {
+      if (!canAffordPublish.value) {
+        feedbackStore.pushToast(t('marketplace.editor.publishChargeInsufficient'), 'error');
+        return;
+      }
       const savedListingId = await saveDraft({ uploadImages: true });
       if (!savedListingId) {
         return;
@@ -912,7 +944,7 @@ export const useMarketplaceListingEditorPage = () => {
 
   // 14.20 儲存並返回我的帖子列表
   const saveAndBackToList = async (): Promise<void> => {
-    const savedListingId = await saveDraft({ uploadImages: true });
+    const savedListingId = await saveDraft({ chargeDraft: true, uploadImages: true });
     if (savedListingId) {
       isProgrammaticNavigation.value = true;
       await router.push('/account/marketplace/my/listings');
@@ -935,6 +967,7 @@ export const useMarketplaceListingEditorPage = () => {
       }
 
       resetFormState(formState, imageSlots);
+      publicationStatus.value = '';
       markCurrentStateSaved();
     },
     { immediate: true },

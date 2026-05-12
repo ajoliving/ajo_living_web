@@ -55,13 +55,7 @@ const {
   <section class="settings-page">
     <header class="settings-local-header">
       <div>
-        <p class="settings-kicker">
-          {{ t('marketplace.settings.discoverSection') }}
-        </p>
         <h1>{{ t('marketplace.settings.discoverPlacements') }}</h1>
-        <p class="settings-description">
-          {{ t('marketplace.settings.discoverDescription') }}
-        </p>
       </div>
 
       <button
@@ -80,15 +74,6 @@ const {
 
     <section class="settings-content">
       <section class="settings-discover">
-        <div class="settings-section-header">
-          <div>
-            <p class="settings-kicker">
-              {{ t('marketplace.settings.discoverSection') }}
-            </p>
-            <h2>{{ t('marketplace.settings.discoverPlacements') }}</h2>
-          </div>
-        </div>
-
         <div class="settings-grid">
           <aside class="settings-panel settings-listings-panel">
             <div class="settings-panel-header">
@@ -232,7 +217,7 @@ const {
           <section class="settings-panel settings-slots-panel">
             <div class="settings-panel-header">
               <div>
-                <h2>{{ t('marketplace.settings.discoverPlacements') }}</h2>
+                <h2>{{ t('marketplace.settings.placementSlots') }}</h2>
                 <p>{{ t('marketplace.settings.selectedListing', { id: selectedListingId || '-' }) }}</p>
               </div>
             </div>
