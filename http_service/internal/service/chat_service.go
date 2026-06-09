@@ -591,27 +591,27 @@ func (s *ChatService) loadSystemNotificationUser(ctx context.Context) (*model.Us
 func defaultSystemNoticeMessages(now time.Time) []defaultNoticeMessage {
 	return []defaultNoticeMessage{
 		{
-			Content:     "分百萬紅包，領 IP 周邊\n水豚噜噜、讚萌 Loopy、奶龍等你投餵",
-			ActionLabel: "立即參與",
-			ActionURL:   "/marketplace/discover",
+			Content:     "家具精選更新\n查看近期上架家具與家電",
+			ActionLabel: "查看家具",
+			ActionURL:   "/furniture",
 			CreatedAt:   now.Add(-5 * time.Minute),
 		},
 		{
-			Content:     "紅包到賬提醒\n拼手氣，瓜分 HK$35999 現金紅包",
-			ActionLabel: "去查看",
-			ActionURL:   "/marketplace/discover",
+			Content:     "樓盤租售更新\n瀏覽最新可租售樓盤",
+			ActionLabel: "查看樓盤",
+			ActionURL:   "/properties",
 			CreatedAt:   now.Add(-4 * time.Minute),
 		},
 		{
-			Content:     "恭喜您獲得副業任務獎勵\n恭喜您本月賣出 1 筆副業寶貝，快去領取獎勵吧",
-			ActionLabel: "去領獎",
-			ActionURL:   "/marketplace/my/orders",
+			Content:     "會員中心提醒\n查看你的收藏、發布與聊天",
+			ActionLabel: "前往會員中心",
+			ActionURL:   "/member",
 			CreatedAt:   now.Add(-3 * time.Minute),
 		},
 		{
-			Content:     "閒魚幣登入獎勵到賬\n最高 100 幣，可以當錢花",
-			ActionLabel: "去兌換",
-			ActionURL:   "/marketplace/discover",
+			Content:     "服務式住宅更新\n查看最新服務式住宅資訊",
+			ActionLabel: "查看住宅",
+			ActionURL:   "/serviced-residences",
 			CreatedAt:   now.Add(-2 * time.Minute),
 		},
 	}

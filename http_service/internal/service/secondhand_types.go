@@ -34,6 +34,7 @@ type UpsertSecondhandParams struct {
 	Description           string
 	DistrictCode          string
 	CommunityID           string
+	CommunityName         string
 	PublisherIdentityType string
 	CategoryCode          string
 	PriceMode             string
@@ -64,6 +65,7 @@ type SecondhandListFilters struct {
 	VisibilityScope string
 	MinPriceHKD     *float64
 	MaxPriceHKD     *float64
+	HasMedia        bool
 	OnlyBuilding    bool
 	OnlyFree        bool
 	ExcludeFree     bool
@@ -189,9 +191,15 @@ type FavoriteResult struct {
 
 // 17. ContactAccessResult defines contact access payload.
 type ContactAccessResult struct {
-	ListingID       string            `json:"listing_id"`
-	AllowedChannels map[string]bool   `json:"allowed_channels"`
-	ContactPayload  map[string]string `json:"contact_payload,omitempty"`
+	ListingID            string            `json:"listing_id"`
+	AllowedChannels      map[string]bool   `json:"allowed_channels"`
+	ContactPayload       map[string]string `json:"contact_payload,omitempty"`
+	PointsCost           int64             `json:"points_cost,omitempty"`
+	PointsCharged        int64             `json:"points_charged,omitempty"`
+	PointsBalanceAfter   *int64            `json:"points_balance_after,omitempty"`
+	PointsTransactionID  string            `json:"points_transaction_id,omitempty"`
+	ContactAlreadyPaid   bool              `json:"contact_already_paid,omitempty"`
+	ContactAccessGranted bool              `json:"contact_access_granted,omitempty"`
 }
 
 // 18. toISOTime converts a time pointer to RFC3339 string pointer.

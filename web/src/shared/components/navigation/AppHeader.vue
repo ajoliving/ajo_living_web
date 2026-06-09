@@ -1,11 +1,11 @@
 <!--
  * 全域頂部導航。
- * 1. 提供平台主路由與當前業務子路由雙層導航。
- * 2. 整合主題切換、語系切換與登入狀態操作。
+ * 1. 提供平台主路由導航。
+ * 2. 整合主題切換、語系切換與帳戶下拉操作。
  * 3. 提供自定義 mobile 抽屜導航。
 -->
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
@@ -14,16 +14,17 @@ import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
 import BaseButton from '@/shared/components/base/BaseButton.vue';
 import BaseSelect from '@/shared/components/base/BaseSelect.vue';
 import TopbarDropdown from '@/shared/components/navigation/TopbarDropdown.vue';
-import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
-import { useHeaderSubnav } from '@/shared/navigation/useHeaderSubnav';
-import { useSessionStore } from '@/stores/session';
-import { type AppThemeName } from '@/utils/theme';
+import { type AppLocale, usePreferenceStore } from '@/app/stores/preferences';
+import { useSessionStore } from '@/app/stores/session';
+import { type AppThemeName } from '@/shared/utils/theme';
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
+const accountDropdownRef = ref<HTMLElement | null>(null);
+const isAccountDropdownOpen = ref(false);
 const headerLocaleOptions = computed(() => [
   { label: t('common.locale.zhHkShort'), value: 'zh-HK' as AppLocale },
   { label: t('common.locale.enShort'), value: 'en' as AppLocale },
@@ -55,28 +56,21 @@ const primaryNavigationItems = computed<PrimaryNavigationItem[]>(() => [
   { key: 'home', to: '/', label: t('nav.home'), match: ['/'] },
   { key: 'properties', to: '/properties', label: t('nav.properties'), match: ['/properties'] },
   { key: 'servicedResidences', to: '/serviced-residences', label: t('nav.servicedResidences'), match: ['/serviced-residences'] },
-  {
-    key: 'marketplace',
-    to: '/marketplace/discover',
-    label: t('nav.marketplace'),
-    match: ['/marketplace'],
-  },
-  { key: 'account', to: '/account/profile', label: t('nav.account'), match: ['/account', '/login'] },
+  { key: 'furniture', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'] },
+  { key: 'supermarketOffers', to: '/supermarket-offers', label: t('nav.supermarketOffers'), match: ['/supermarket-offers'] },
+  { key: 'payments', to: '/payments', label: t('nav.payments'), match: ['/payments'] },
+  { key: 'member', to: '/member', label: t('nav.member'), match: ['/member', '/login'] },
+  ...(sessionStore.currentUser.is_staff
+    ? [
+        { key: 'settings', to: '/settings', label: t('nav.settings'), match: ['/settings'] },
+        { key: 'management', to: '/management', label: t('nav.management'), match: ['/management'] },
+      ]
+    : []),
 ]);
-
-const accountNavigationItem = computed<NavigationItem>(() => ({
-  key: 'account',
-  to: sessionStore.isAuthenticated ? '/account/profile' : '/login',
-  label: t('nav.account'),
-  match: ['/account', '/login'],
-}));
 
 const desktopNavigationItems = computed<PrimaryNavigationItem[]>(() => [
-  ...primaryNavigationItems.value.filter((item) => item.key !== 'account'),
-  accountNavigationItem.value,
+  ...primaryNavigationItems.value,
 ]);
-
-const { subnavItems, isSubnavActive } = useHeaderSubnav();
 
 const mobileNavigationItems = computed<PrimaryNavigationItem[]>(() => [
   ...desktopNavigationItems.value,
@@ -96,62 +90,86 @@ const mobileDrawerOpen = computed({
   },
 });
 
-// 2. 判斷目前頁面是否有子路由導航
-const hasSubNavigation = computed(() => subnavItems.value.length > 0);
-
-// 3. 依目前主路由輸出 mobile 子導航標題
-const mobileSubnavLabel = computed(() => {
-  if (route.path.startsWith('/account')) {
-    return t('nav.account');
-  }
-
-  if (route.path.startsWith('/properties')) {
-    return t('nav.properties');
-  }
-
-  if (route.path.startsWith('/serviced-residences')) {
-    return t('nav.servicedResidences');
-  }
-
-  return t('nav.marketplaceSubroutes');
-});
-
-// 4. 切換主題
+// 2. 切換主題
 const handleThemeChange = (value: string | number) => {
   preferenceStore.setTheme(value as AppThemeName);
 };
 
-// 5. 切換語系
+// 3. 切換語系
 const handleLocaleChange = (value: string | number) => {
   preferenceStore.setLocale(value as AppLocale);
 };
 
-// 6. 導向登入頁
+// 4. 導向登入頁
 const handleNavigateLogin = async () => {
   mobileDrawerOpen.value = false;
   await router.push('/login');
 };
 
-// 7. 導向會員中心
+// 5. 導向會員中心
 const handleNavigateAccount = async () => {
   mobileDrawerOpen.value = false;
-  await router.push('/account/profile');
+  await router.push('/member');
 };
 
-// 8. 執行登出
+// 6. 切換帳戶下拉選單
+const toggleAccountDropdown = () => {
+  isAccountDropdownOpen.value = !isAccountDropdownOpen.value;
+};
+
+// 7. 導向個人資料
+const handleNavigateProfile = async () => {
+  isAccountDropdownOpen.value = false;
+  mobileDrawerOpen.value = false;
+  await router.push({ path: '/member', query: { tab: 'profile' } });
+};
+
+// 8. 點擊外部時關閉帳戶下拉選單
+const handleAccountPointerDown = (event: PointerEvent) => {
+  const target = event.target;
+
+  if (!(target instanceof Node)) {
+    return;
+  }
+
+  if (!accountDropdownRef.value?.contains(target)) {
+    isAccountDropdownOpen.value = false;
+  }
+};
+
+// 9. 使用 Esc 關閉帳戶下拉選單
+const handleAccountKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    isAccountDropdownOpen.value = false;
+  }
+};
+
+// 10. 執行登出
 const handleSignOut = async () => {
+  isAccountDropdownOpen.value = false;
   mobileDrawerOpen.value = false;
   await sessionStore.signOut();
   await router.push('/login');
 };
 
-// 9. 路由切換時自動收起 mobile 抽屜
+// 11. 路由切換時自動收起 mobile 抽屜與帳戶下拉選單
 watch(
   () => route.fullPath,
   () => {
     mobileDrawerOpen.value = false;
+    isAccountDropdownOpen.value = false;
   },
 );
+
+onMounted(() => {
+  window.addEventListener('pointerdown', handleAccountPointerDown);
+  window.addEventListener('keydown', handleAccountKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', handleAccountPointerDown);
+  window.removeEventListener('keydown', handleAccountKeydown);
+});
 </script>
 
 <template>
@@ -211,25 +229,58 @@ watch(
           />
         </div>
 
-        <button
+        <div
           v-if="sessionStore.isAuthenticated"
-          type="button"
-          class="nav-account-avatar-button"
-          :aria-label="t('nav.account')"
-          @click="handleNavigateAccount"
+          ref="accountDropdownRef"
+          class="nav-account-dropdown relative"
         >
-          <BaseAvatar
-            :src="sessionStore.currentUser.avatar_url"
-            :name="sessionStore.currentUser.display_name"
-            :size="34"
-          />
-        </button>
+          <button
+            type="button"
+            class="nav-account-avatar-button"
+            :class="{ 'nav-account-avatar-button-open': isAccountDropdownOpen }"
+            :aria-label="t('nav.account')"
+            aria-haspopup="menu"
+            :aria-expanded="isAccountDropdownOpen"
+            @click="toggleAccountDropdown"
+          >
+            <BaseAvatar
+              :src="sessionStore.currentUser.avatar_url"
+              :name="sessionStore.currentUser.display_name"
+              :size="34"
+            />
+          </button>
+
+          <Transition name="topbar-dropdown">
+            <div
+              v-if="isAccountDropdownOpen"
+              class="nav-account-dropdown-panel"
+              role="menu"
+            >
+              <button
+                type="button"
+                class="nav-account-dropdown-option"
+                role="menuitem"
+                @click="handleNavigateProfile"
+              >
+                {{ t('account.profile.title') }}
+              </button>
+              <button
+                type="button"
+                class="nav-account-dropdown-option nav-account-dropdown-option-danger"
+                role="menuitem"
+                @click="handleSignOut"
+              >
+                {{ t('account.actions.signOut') }}
+              </button>
+            </div>
+          </Transition>
+        </div>
 
         <button
           v-else
           type="button"
           class="topbar-auth-link"
-          :class="isRouteActive(accountNavigationItem) ? 'topbar-auth-link-active' : 'topbar-auth-link-idle'"
+          :class="route.path.startsWith('/login') ? 'topbar-auth-link-active' : 'topbar-auth-link-idle'"
           @click="handleNavigateLogin"
         >
           {{ t('common.action.signIn') }}
@@ -249,27 +300,6 @@ watch(
         </template>
       </BaseButton>
     </div>
-
-    <transition name="subnav-fade">
-      <div
-        v-if="hasSubNavigation"
-        class="app-subnav hidden border-t border-border/40 lg:block"
-      >
-        <div class="app-subnav__inner">
-          <nav class="flex min-w-0 items-center gap-2 overflow-x-auto">
-            <RouterLink
-              v-for="item in subnavItems"
-              :key="item.key"
-              :to="item.to"
-              class="subnav-link inline-flex items-center rounded-pill px-4 py-2 text-sm font-semibold whitespace-nowrap transition"
-              :class="isSubnavActive(item) ? 'subnav-link-active' : 'subnav-link-idle'"
-            >
-              {{ item.label }}
-            </RouterLink>
-          </nav>
-        </div>
-      </div>
-    </transition>
 
     <Teleport to="body">
       <transition name="drawer-fade">
@@ -309,15 +339,12 @@ watch(
             <p class="text-sm font-semibold text-text">
               {{ sessionStore.currentUser.display_name }}
             </p>
-            <p class="mt-1 text-sm text-text-muted">
-              {{ sessionStore.currentUser.primary_community.name }}
-            </p>
             <BaseButton
               class="mt-4"
               block
               @click="handleNavigateAccount"
             >
-              {{ t('nav.account') }}
+              {{ t('nav.member') }}
             </BaseButton>
           </div>
 
@@ -332,24 +359,6 @@ watch(
                   ? 'border-primary/30 bg-primary/10 text-primary'
                   : 'border-border/80 bg-surface text-text'
               "
-            >
-              <span>{{ item.label }}</span>
-            </RouterLink>
-          </div>
-
-          <div
-            v-if="hasSubNavigation"
-            class="space-y-2 border-t border-border/70 pt-4"
-          >
-            <p class="px-1 text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
-              {{ mobileSubnavLabel }}
-            </p>
-            <RouterLink
-              v-for="item in subnavItems"
-              :key="item.key"
-              :to="item.to"
-              class="topbar-subnav-link-mobile flex items-center rounded-2xl border px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
-              :class="isSubnavActive(item) ? 'topbar-subnav-link-mobile-active' : 'topbar-subnav-link-mobile-idle'"
             >
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -405,7 +414,7 @@ watch(
 <style scoped>
 .app-topbar__inner {
   position: relative;
-  z-index: 3;
+  z-index: 6;
   border-bottom: 1px solid var(--topbar-glass-border);
   transform: none;
   transition:
@@ -463,11 +472,13 @@ watch(
   inset-inline: 0;
   top: 0;
   z-index: 40;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
-  background: rgb(var(--color-topbar-surface));
+  background: rgb(var(--color-topbar-surface) / 0.92);
   background: var(--topbar-glass-fallback);
   box-shadow: var(--topbar-glass-shadow);
+  -webkit-backdrop-filter: var(--topbar-glass-filter);
+  backdrop-filter: var(--topbar-glass-filter);
   transition:
     background 0.28s ease,
     border-color 0.28s ease,
@@ -484,7 +495,7 @@ watch(
 
 .app-topbar::before {
   z-index: 0;
-  background: var(--topbar-glass-background);
+  background: transparent;
 }
 
 .app-topbar::after {
@@ -534,21 +545,17 @@ watch(
   --topbar-glass-filter: blur(28px) saturate(184%);
 }
 
-@supports (backdrop-filter: blur(1px)) {
-  .app-topbar::before {
-    backdrop-filter: var(--topbar-glass-filter);
-  }
-}
-
-@supports (-webkit-backdrop-filter: blur(1px)) {
-  .app-topbar::before {
-    -webkit-backdrop-filter: var(--topbar-glass-filter);
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-topbar {
+    background: var(--topbar-glass-background);
   }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .app-topbar::before {
+  .app-topbar {
     background: var(--topbar-glass-fallback);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .app-topbar::after {
@@ -663,117 +670,6 @@ watch(
   font-family: var(--font-display);
 }
 
-.topbar-subnav-link-mobile {
-  border-color: rgb(var(--color-border) / 0.28);
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.72),
-      rgb(var(--color-toolbar-surface) / 0.56)
-    );
-  font-family: var(--font-display);
-  box-shadow:
-    0 12px 28px rgb(15 23 42 / 0.08),
-    inset 0 1px 0 rgb(255 255 255 / 0.08);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.topbar-subnav-link-mobile-idle {
-  color: rgb(var(--color-text-muted));
-}
-
-.topbar-subnav-link-mobile-active,
-.topbar-subnav-link-mobile-active:hover {
-  border-color: rgb(var(--color-primary) / 0.28);
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.86),
-      rgb(var(--color-primary-soft) / 0.24)
-    );
-  color: var(--topbar-nav-active-color);
-  box-shadow:
-    0 14px 32px rgb(var(--color-primary) / 0.1),
-    inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
-
-.topbar-subnav-link-mobile-idle:hover {
-  border-color: rgb(var(--color-border) / 0.4);
-  color: rgb(var(--color-text));
-}
-
-.app-subnav {
-  position: relative;
-  z-index: 3;
-  border-bottom: 1px solid var(--topbar-glass-border);
-}
-
-.app-subnav__inner {
-  display: flex;
-  min-height: 2.65rem;
-  width: 100%;
-  max-width: var(--layout-page-max-width);
-  align-items: center;
-  margin: 0 auto;
-  padding-right: var(--layout-page-padding-inline);
-  padding-left: var(--layout-page-padding-inline);
-}
-
-.app-subnav__inner nav {
-  margin-left: -1rem;
-}
-
-.app-topbar-home .app-subnav {
-  border-top-color: var(--topbar-glass-border);
-  border-bottom-color: var(--topbar-glass-border);
-}
-
-.subnav-link {
-  position: relative;
-  font-family: var(--font-display);
-  color: rgb(var(--color-text) / 0.98);
-  border: 1px solid transparent;
-  background: transparent;
-  text-shadow: none;
-}
-
-.subnav-link::after {
-  position: absolute;
-  left: 0.9rem;
-  right: 0.9rem;
-  bottom: 0.32rem;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--topbar-nav-underline);
-  transform: scaleX(0);
-  transform-origin: left center;
-  opacity: 0;
-  transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
-  content: '';
-}
-
-.subnav-link-idle:hover {
-  color: rgb(var(--color-text));
-}
-
-.subnav-link-active {
-  color: var(--topbar-nav-active-color) !important;
-  text-shadow: var(--topbar-nav-active-shadow);
-}
-
-.subnav-link-active::after {
-  transform: scaleX(1);
-  opacity: 1;
-}
-
 .topbar-auth-link {
   position: relative;
   border: 1px solid transparent;
@@ -839,7 +735,8 @@ watch(
     transform 0.2s ease;
 }
 
-.nav-account-avatar-button:hover {
+.nav-account-avatar-button:hover,
+.nav-account-avatar-button-open {
   opacity: 0.86;
   transform: translateY(-1px);
 }
@@ -847,6 +744,71 @@ watch(
 .nav-account-avatar-button:focus-visible {
   outline: 2px solid rgb(var(--color-primary));
   outline-offset: 3px;
+}
+
+.nav-account-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 80;
+  display: flex;
+  min-width: 9.25rem;
+  transform-origin: top right;
+  flex-direction: column;
+  gap: 0.12rem;
+  border: var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      rgb(var(--color-dropdown-surface) / 0.985),
+      rgb(var(--color-surface) / 0.95)
+    );
+  padding: 0.35rem;
+  box-shadow: var(--shadow-floating);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.nav-account-dropdown-option {
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-display);
+  color: rgb(var(--color-text-muted));
+  padding: 0.62rem 0.8rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.nav-account-dropdown-option:hover {
+  background: rgb(var(--color-toolbar-surface) / 0.9);
+  color: rgb(var(--color-text));
+  transform: translateY(-1px);
+}
+
+.nav-account-dropdown-option-danger:hover {
+  color: rgb(var(--color-danger, 220 38 38));
+}
+
+.topbar-dropdown-enter-active,
+.topbar-dropdown-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.topbar-dropdown-enter-from,
+.topbar-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
 }
 
 .drawer-fade-enter-active,
@@ -867,19 +829,6 @@ watch(
 .drawer-slide-leave-to {
   opacity: 0;
   transform: translateX(20px);
-}
-
-.subnav-fade-enter-active,
-.subnav-fade-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.subnav-fade-enter-from,
-.subnav-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
 }
 
 @media (min-width: 1280px) {

@@ -17,33 +17,28 @@ var allowedSecondhandCategoryCodes = []string{
 	"other",
 }
 
-// 2. Secondhand district codes grouped by Hong Kong region.
+// 2. Secondhand district codes grouped by top-level Hong Kong region.
 var secondhandDistrictCodesByRegion = map[string][]string{
 	"hong_kong_island": {
-		"central_western",
-		"wan_chai",
-		"eastern",
-		"southern",
+		"hong_kong_island",
 	},
 	"kowloon": {
-		"yau_tsim_mong",
-		"sham_shui_po",
-		"kowloon_city",
-		"wong_tai_sin",
-		"kwun_tong",
+		"kowloon",
 	},
 	"new_territories": {
-		"kwai_tsing",
-		"tsuen_wan",
-		"tuen_mun",
-		"yuen_long",
-		"north",
-		"tai_po",
-		"sha_tin",
-		"sai_kung",
+		"new_territories",
 	},
 	"outlying_islands": {
-		"islands",
+		"outlying_islands",
+	},
+	"primary_school_net": {
+		"primary_school_net",
+	},
+	"secondary_school_net": {
+		"secondary_school_net",
+	},
+	"tertiary_institution": {
+		"tertiary_institution",
 	},
 }
 

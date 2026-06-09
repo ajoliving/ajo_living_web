@@ -1,7 +1,7 @@
 <!--
  * 玻璃質感下拉選擇器。
  * 1. 提供可控位置的自繪單選彈層。
- * 2. 統一磨砂玻璃質感、選中狀態與外部關閉行為。
+ * 2. 統一磨砂玻璃質感、選中狀態、禁用狀態與外部關閉行為。
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -17,10 +17,14 @@ interface AppGlassSelectProps {
   modelValue: string;
   options: GlassSelectOption[];
   panelMaxHeight?: string;
+  panelMinWidth?: string;
+  disabled?: boolean;
 }
 
 const props = withDefaults(defineProps<AppGlassSelectProps>(), {
   panelMaxHeight: '14rem',
+  panelMinWidth: '100%',
+  disabled: false,
 });
 
 const emit = defineEmits<{
@@ -37,15 +41,24 @@ const currentOption = computed(
 
 const panelStyle = computed(() => ({
   maxHeight: props.panelMaxHeight,
+  minWidth: props.panelMinWidth,
 }));
 
 // 1. 切換下拉開合狀態
 const toggleOpen = (): void => {
+  if (props.disabled) {
+    return;
+  }
+
   isOpen.value = !isOpen.value;
 };
 
 // 2. 選擇選項並同步給父層
 const handleSelect = (value: string): void => {
+  if (props.disabled) {
+    return;
+  }
+
   emit('update:modelValue', value);
   emit('change', value);
   isOpen.value = false;
@@ -92,6 +105,7 @@ onBeforeUnmount(() => {
       class="app-glass-select__trigger"
       aria-haspopup="listbox"
       :aria-expanded="isOpen"
+      :disabled="props.disabled"
       @click="toggleOpen"
     >
       <span>{{ currentOption?.label }}</span>
@@ -142,17 +156,17 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.75rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: rgb(var(--color-surface));
-  padding: 0 0.875rem;
+  padding: 0 1rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
-  line-height: 1.4;
+  line-height: 1.6;
   outline: none;
   transition:
+    background-color 0.2s ease,
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+    box-shadow 0.2s ease;
 }
 
 .app-glass-select__trigger:hover,
@@ -161,14 +175,24 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.16);
 }
 
+.app-glass-select__trigger:disabled {
+  cursor: not-allowed;
+  border-color: rgb(var(--color-border) / 0.72);
+  background: color-mix(in srgb, rgb(var(--color-surface)) 82%, rgb(var(--color-page-tint)) 18%);
+  color: rgb(var(--color-text-muted));
+  box-shadow: none;
+}
+
 .app-glass-select__trigger span {
   min-width: 0;
   overflow: hidden;
   color: inherit;
   font-size: inherit;
-  font-weight: 650;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: inherit;
   text-overflow: ellipsis;
+  text-transform: none;
   white-space: nowrap;
 }
 
@@ -179,28 +203,17 @@ onBeforeUnmount(() => {
 .app-glass-select__menu {
   position: absolute;
   z-index: 40;
-  top: calc(100% - 1px);
+  top: 100%;
   right: 0;
   left: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: 0;
   overflow-y: auto;
-  border: 1px solid rgb(var(--color-border) / 0.62);
-  border-radius: 0 0 8px 8px;
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0.08) 46%, transparent 100%),
-    linear-gradient(
-      180deg,
-      rgb(var(--color-dropdown-surface) / 0.52),
-      rgb(var(--color-surface) / 0.28)
-    );
-  padding: 0.45rem;
-  box-shadow:
-    0 20px 48px rgb(15 23 42 / 0.18),
-    inset 0 1px 0 rgb(255 255 255 / 0.42),
-    inset 0 -1px 0 rgb(255 255 255 / 0.16);
-  backdrop-filter: blur(34px) saturate(190%);
-  -webkit-backdrop-filter: blur(34px) saturate(190%);
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.25rem;
+  background: rgb(var(--color-surface));
+  padding: 0.25rem 0;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.12);
   scrollbar-color: rgb(var(--color-border)) transparent;
   scrollbar-width: thin;
 }
@@ -220,12 +233,12 @@ onBeforeUnmount(() => {
   cursor: pointer;
   align-items: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
-  padding: 0.65rem 0.7rem;
+  padding: 0.48rem 0.7rem;
   color: rgb(var(--color-text));
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.3;
   text-align: left;
   transition:
@@ -234,12 +247,13 @@ onBeforeUnmount(() => {
 }
 
 .app-glass-select__option:hover {
-  background: rgb(255 255 255 / 0.28);
+  background: rgb(var(--color-surface-muted));
 }
 
 .app-glass-select__option--active {
-  background: rgb(var(--color-primary-soft) / 0.42);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary-soft) / 0.32);
+  color: rgb(var(--color-text));
+  font-weight: 700;
 }
 
 .app-glass-select-enter-active,
@@ -252,6 +266,6 @@ onBeforeUnmount(() => {
 .app-glass-select-enter-from,
 .app-glass-select-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-2px);
 }
 </style>

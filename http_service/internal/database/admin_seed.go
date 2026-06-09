@@ -1,14 +1,13 @@
 /*
  * Default admin account seed utilities.
  * 1. Ensure the local default admin email account exists.
- * 2. Keep the default password and super admin role synchronized at startup.
+ * 2. Keep the default password and staff flag synchronized at startup.
  */
 package database
 
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -37,10 +36,6 @@ func SeedDefaultAdminAccount(ctx context.Context, db *gorm.DB) error {
 			}
 
 			if err := upsertDefaultAdminProfile(tx, user.ID); err != nil {
-				return err
-			}
-
-			if err := upsertDefaultAdminRole(tx, user.ID); err != nil {
 				return err
 			}
 		}
@@ -108,7 +103,7 @@ func upsertDefaultAdminCredential(tx *gorm.DB, userID int64, email string) error
 	if credential.UserID == 0 {
 		return tx.Create(&model.UserCredential{
 			UserID:       userID,
-			Email:        email,
+			Email:        &email,
 			PasswordHash: passwordHash,
 			IsVerified:   true,
 		}).Error
@@ -141,26 +136,4 @@ func upsertDefaultAdminProfile(tx *gorm.DB, userID int64) error {
 	}
 
 	return tx.Model(&profile).Update("display_name", defaultAdminDisplayName).Error
-}
-
-// 5. upsertDefaultAdminRole binds the default admin user to the super admin role.
-func upsertDefaultAdminRole(tx *gorm.DB, userID int64) error {
-	var role model.Role
-	if err := tx.Where("code = ?", model.RoleCodeSuperAdmin).First(&role).Error; err != nil {
-		return err
-	}
-
-	var binding model.UserRoleBinding
-	if err := tx.Where("user_id = ? AND role_id = ?", userID, role.ID).Limit(1).Find(&binding).Error; err != nil {
-		return err
-	}
-	if binding.ID > 0 {
-		return nil
-	}
-
-	return tx.Create(&model.UserRoleBinding{
-		UserID:     userID,
-		RoleID:     role.ID,
-		AssignedAt: time.Now(),
-	}).Error
 }

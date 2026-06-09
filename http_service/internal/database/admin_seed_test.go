@@ -1,7 +1,7 @@
 /*
  * Default admin account seed tests.
  * 1. Validate default admin email credential creation.
- * 2. Validate staff role binding and password reset behavior.
+ * 2. Validate staff flag and password reset behavior.
  */
 package database
 
@@ -26,9 +26,6 @@ func TestSeedDefaultAdminAccountCreatesLoginCredential(t *testing.T) {
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
-	if err := SeedAccessControl(context.Background(), db); err != nil {
-		t.Fatalf("seed access control: %v", err)
-	}
 	if err := SeedDefaultAdminAccount(context.Background(), db); err != nil {
 		t.Fatalf("seed default admin: %v", err)
 	}
@@ -50,14 +47,5 @@ func TestSeedDefaultAdminAccountCreatesLoginCredential(t *testing.T) {
 			t.Fatalf("expected active staff user for %s, got %+v", email, user)
 		}
 
-		var binding model.UserRoleBinding
-		err = db.
-			Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
-			Where("user_role_bindings.user_id = ? AND roles.code = ?", user.ID, model.RoleCodeSuperAdmin).
-			First(&binding).
-			Error
-		if err != nil {
-			t.Fatalf("load default admin role binding %s: %v", email, err)
-		}
 	}
 }

@@ -6,13 +6,13 @@
 import { createApp } from 'vue';
 
 import App from '@/App.vue';
-import { AUTH_SESSION_EXPIRED_EVENT } from '@/httpapis/auth-session';
-import i18n from '@/i18n';
-import { pinia } from '@/pinia';
-import router from '@/router';
-import { useSessionStore } from '@/stores/session';
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/shared/utils/http/auth-session';
+import i18n from '@/app/i18n';
+import { pinia } from '@/app/stores';
+import router from '@/app/router';
+import { useSessionStore } from '@/app/stores/session';
 
-import '@/styles/index.css';
+import '@/app/styles/index.css';
 
 // 1. 建立並掛載 Vue 應用程式
 const app = createApp(App);

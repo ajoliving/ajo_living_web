@@ -192,7 +192,7 @@ load_env_file() {
     source "${ENV_FILE}"
     set +a
   fi
-  BASE_URL="${BASE_URL:-http://127.0.0.1:${APP_PORT:-8080}}"
+  BASE_URL="${BASE_URL:-http://127.0.0.1:${APP_PORT:-8081}}"
 }
 
 docker_compose() {
@@ -402,7 +402,7 @@ create_listing() {
   "title":"${title}",
   "summary":"測試腳本建立的帖子",
   "description":"本筆資料由測試腳本自動建立。",
-  "district_code":"kwun_tong",
+  "district_code":"kowloon",
   "community_id":"${community_id}",
   "publisher_identity_type":"owner",
   "category_code":"home_appliance",
@@ -410,7 +410,7 @@ create_listing() {
   "price_hkd":1200,
   "condition_level":"used_good",
   "dimension_text":"60 x 60 x 85 cm",
-  "pickup_region_code":"kwun_tong",
+  "pickup_region_code":"kowloon",
   "pickup_location_text":"屋苑樓下自提",
   "delivery_tags":["self_pickup","elevator"],
   "visibility_scope":"${visibility_scope}",
@@ -438,7 +438,7 @@ update_listing() {
   "title":"${title}",
   "summary":"更新後摘要",
   "description":"更新後內容",
-  "district_code":"kwun_tong",
+  "district_code":"kowloon",
   "community_id":"${community_id}",
   "publisher_identity_type":"owner",
   "category_code":"home_appliance",
@@ -446,7 +446,7 @@ update_listing() {
   "price_hkd":1100,
   "condition_level":"used_good",
   "dimension_text":"60 x 60 x 85 cm",
-  "pickup_region_code":"kwun_tong",
+  "pickup_region_code":"kowloon",
   "pickup_location_text":"大堂交收",
   "delivery_tags":["self_pickup","elevator"],
   "visibility_scope":"public",

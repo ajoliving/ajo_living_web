@@ -29,9 +29,6 @@ func main() {
 	if err := database.Migrate(db); err != nil {
 		log.Fatal(err)
 	}
-	if err := database.SeedAccessControl(context.Background(), db); err != nil {
-		log.Fatal(err)
-	}
 	if err := database.SeedDefaultAdminAccount(context.Background(), db); err != nil {
 		log.Fatal(err)
 	}

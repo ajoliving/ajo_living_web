@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@studio-freight/lenis": "^1.0.42",
+    "@types/qrcode": "^1.5.6",
     "axios": "^1.15.0",
     "gsap": "^3.15.0",
     "pinia": "^3.0.4",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.32",
     "vue-i18n": "^11.3.2",
     "vue-router": "^4.6.3"

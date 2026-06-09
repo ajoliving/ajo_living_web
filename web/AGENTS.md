@@ -11,103 +11,251 @@
 - 路徑別名統一使用 `@/` 映射到 `src/`。
 - 樣式以 `Tailwind CSS` 為主，局部元件樣式可使用 `<style scoped lang="scss">`。
 
+## 產品與資訊架構定位
+- Web 前端是 `AJO Living` 物業管理主系統的入口，不是單一 marketplace 或內容展示站。
+- 新增頁面前必須先判斷使用者身份與入口層級：公開訪客、業主、租客、職員、管理員或管理公司後台。
+- 大廈、單位、成員身份、權限與可見範圍是物業管理功能的核心上下文；涉及住戶能力的頁面不得只按普通公開網站列表邏輯設計。
+- 舊系統功能遷移到 Web 時，需先映射到 AJO 的主模組與路由樹，再設計頁面；不得直接照搬舊系統頁面結構。
+- UI 保持正式、清楚、簡約，避免行銷式說明、舞台式提示、實作過程文案與對使用者無價值的佔位描述。
+- 新增大型功能時，優先做清晰入口、可驗證主流程與必要狀態，不提前堆疊複雜設定頁或用不到的操作。
+- 舊業務後台仍繼續使用時，AJO Web 優先承擔統一查看、狀態展示、會員入口與跨系統跳轉，不默認重做舊後台的全部管理能力。
+- 接入 POS、iBoard、iCCTV、iLock、Intercom 等舊系統時，頁面文案與導航必須以 AJO 的物業管理語義呈現，不暴露舊系統工程名或內部服務名。
+- 外部舊系統連結只能作為明確的跳轉入口或嵌入入口；業務資料展示應優先經由 AJO 後端 API 整理後返回前端。
+
 ## 目錄結構
 
 ```text
 src/
-  httpapis/          # API 請求函式
-  model/             # TypeScript 型別定義
-  pinia/             # Pinia 全域狀態
-  router/            # 路由定義與導航守衛
-  stores/            # 額外共享狀態
-  utils/             # 無業務狀態工具函式
-  components/        # 跨頁面通用元件
+  main.ts
+  App.vue
+  app/               # 應用裝配層
+    router/
+      index.ts
+      guards.ts
+      modules/
+        home.ts
+        properties.ts
+        furniture.ts
+        account.ts
+        management.ts
+        communications.ts
+        payments.ts
+        security.ts
+        system.ts
+    stores/
+    i18n/
+    styles/
+  domains/           # 業務域 API、型別與常量
+    account/
+    building/
+    communications/
+    payments/
+    security/
+    property/
+    marketplace/
   pages/
-    404.vue
     home/
       HomePage.vue
       composables/
       widgets/
-    building/
-      BuildingPage.vue
-    first/
-      FirstPage.vue
-    marketplace/
+    properties/
       Page.vue
-      composables/
-      widgets/
-      <sub-route>/
+      detail/
         Page.vue
-        composables/
-        widgets/
-        modals/
-        constants/
-        types/
-        styles.ts
+      editor/
+        Page.vue
+    serviced-residences/
+      Page.vue
+      detail/
+        Page.vue
+      editor/
+        Page.vue
+    furniture/
+      Page.vue
+      listing/
+        Page.vue
+      seller/
+        Page.vue
+      chat/
+        Page.vue
+    member/
+      Page.vue
+      profile/
+        info/
+          Page.vue
+        wallet/
+          Page.vue
+      property/
+        Page.vue
+      listings/
+        Page.vue
+        editor/
+          Page.vue
+        preview/
+          Page.vue
+      favorites/
+        Page.vue
+      widgets/
+    management/
+      Page.vue
+      users/
+        Page.vue
+      property-sales/
+        Page.vue
+      serviced-apartments/
+        Page.vue
+      secondhand-listings/
+        Page.vue
+      reward-ads/
+        Page.vue
+      wallet-transactions/
+        Page.vue
+      content/
+        Page.vue
+      settings/
+        display-ads/
+          Page.vue
+        home-carousel/
+          Page.vue
+        home-hero-cards/
+          Page.vue
+        login-hero/
+          Page.vue
+        notice/
+          Page.vue
+      integrations/
+        Page.vue
+    communications/
+      Page.vue
+      messages/
+        Page.vue
+      notices/
+        Page.vue
+    payments/
+      Page.vue
+      bills/
+        Page.vue
+      records/
+        Page.vue
+    security/
+      Page.vue
+      cctv/
+        Page.vue
+      access-control/
+        Page.vue
+      intercom/
+        Page.vue
+    building/
+      Page.vue
+      detail/
+        Page.vue
     account/
       login/
         Page.vue
         composables/
         widgets/
-      my/
-        Page.vue
-        composables/
-        widgets/
-        <sub-route>/
-          Page.vue
-          composables/
-          widgets/
-          modals/
-          constants/
-          types/
-          styles.ts
+    not-found/
+      Page.vue
+  shared/            # 跨模組復用能力
+    components/
+      base/
+      layout/
+      navigation/
+      feedback/
+      data-display/
+    composables/
+    utils/
+    assets/
+  mock/
 ```
 
 ## Page 單例 Skill
 
-- 以 `pages` 作為主路由模組邊界，主模組以業務路由劃分，例如 `account`、`home`、`building`、`first`、`marketplace`。
-- `src/pages` 只承載頁面樹，不承載模組級 `routes.ts`、`api/`、`types/`；這些內容分別放在 `src/router`、`src/httpapis`、`src/model`。
-- 主路由可直接以單檔 page 形式存在，例如 `home/HomePage.vue`、`building/BuildingPage.vue`、`first/FirstPage.vue`。
-- 若主路由本身承載子路由外框，可在主模組根目錄放 `Page.vue`，例如 `marketplace/Page.vue`、`account/my/Page.vue`。
-- `pages/` 下的每個子目錄代表一個實際路由 page，不論是主路由或子路由，都必須有自己的單獨目錄。
-- 每個 page 目錄必須有且僅有一個主入口檔，命名優先使用 `Page.vue`；只有像 `HomePage.vue`、`BuildingPage.vue`、`FirstPage.vue` 這類明確單頁主路由可保留語義化命名。
+- 以 `pages` 作為主路由模組邊界，主模組需優先貼近實際公開入口與 URL，例如 `home`、`properties`、`serviced-residences`、`furniture`、`member`、`management`；平台能力入口再按 `communications`、`payments`、`security`、`building`、`account/login` 保持清楚邊界。
+- `src/pages` 只承載頁面樹，不承載模組級 `routes.ts`、`api/`、`types/`；路由放在 `src/app/router/modules`，API、型別與常量放在 `src/domains`。
+- 主路由可直接以單檔 page 形式存在，例如 `home/HomePage.vue`、`properties/Page.vue`、`serviced-residences/Page.vue`、`furniture/Page.vue`、`member/Page.vue`、`management/Page.vue`。
+- 若主路由本身承載子路由或 tab 外框，可在主模組根目錄放 `Page.vue`，例如 `member/Page.vue`、`management/Page.vue`。
+- `pages/` 下的每個子目錄代表一個實際路由 page 或主路由下的實際 tab page，不論是主路由或子頁，都必須有自己的單獨目錄。
+- 每個 page 目錄必須有且僅有一個主入口檔，命名優先使用 `Page.vue`；只有像 `HomePage.vue` 這類已穩定的明確單頁主路由可保留語義化命名。
 - page 私有元件放在 `widgets/`，page 私有彈窗放在 `modals/`，page 私有狀態與資料協調放在 `composables/`。
 - page 專用常量放在 `constants/`，page 專用樣式變數或樣式設定放在 `styles.ts` 或 `styles.scss`。
 - 若 page 很簡單，可只保留 `<Route>Page.vue`；若 page 較重，再按需增加 `widgets/`、`modals/`、`composables/`、`constants/`、`styles.*`。
-- 主模組根目錄可保留主路由入口與該主路由私有 `widgets/`、`composables/`；不得再混入其他子路由的私有元件或私有 composable。
-- 只有跨 page 復用的元件，才可提升到模組級共享目錄或全域 `components/`；僅在單一路由使用的元件不可上提。
+- 主模組根目錄可保留主路由入口與該主路由私有 `widgets/`、`composables/`；不得再混入其他主入口或無路由使用的歷史檔案。
+- 只有跨 page 復用的元件，才可提升到 `src/shared/components/`；僅在單一路由使用的元件不可上提。
 - page 的資料流、查詢條件、彈窗開關、提交流程與事件協調，必須集中在 page 入口或 page composable 中，不可分散到多個平級 page 檔案。
 
-### Account 範例
+### 主入口範例
 
 ```text
 pages/
-  account/
-    login/
+  properties/
+    Page.vue
+    detail/
       Page.vue
-      composables/
-      widgets/
-      modals/
-    my/
+    editor/
       Page.vue
-      widgets/
-      composables/
-      overview/
+  serviced-residences/
+    Page.vue
+    detail/
+      Page.vue
+    editor/
+      Page.vue
+  member/
+    Page.vue
+    profile/
+      info/
         Page.vue
-      profile/
+      wallet/
         Page.vue
-      preferences/
+    property/
+      Page.vue
+    listings/
+      Page.vue
+      editor/
         Page.vue
-        widgets/
-        modals/
-        composables/
-        styles.ts
+      preview/
+        Page.vue
+    favorites/
+      Page.vue
+  management/
+    Page.vue
+    users/
+      Page.vue
+    property-sales/
+      Page.vue
+    serviced-apartments/
+      Page.vue
+    secondhand-listings/
+      Page.vue
+    reward-ads/
+      Page.vue
+    wallet-transactions/
+      Page.vue
 ```
 
 - `account/login/` 是登入主路由專屬 page 目錄，登入頁相關邏輯、局部元件、彈窗都收在這個目錄內。
-- `account/my/` 是會員中心主路由外框，負責側欄、內容區與子路由承載。
-- `account/my/preferences/` 是設定頁專屬 page 目錄，可像參考專案 `pages/auth/preferences/` 一樣拆成 `widgets/`、`modals/`、`styles.ts`。
-- 若未來 `account/profile/`、`account/notifications/`、`marketplace/publish/` 等頁面變重，沿用相同單例 page 結構，不得回退到模組根目錄平鋪。
+- `properties/` 對應樓盤租售主入口；`serviced-residences/` 對應服務式住宅主入口。兩者可復用同一底層物業能力，但 page 入口必須分開，避免從目錄上看不出公開主路由。
+- `member/` 是會員中心主入口，內部以 tab 或子頁承載個人資料、錢包、發布、收藏與站內信入口；不得放回 `account/my/` 或 `marketplace/my/`。
+- `management/` 是管理主入口，管理 tab page 放在 `management/` 下；無實際入口的歷史檔案應刪除，不保留在 page 樹中。
+- `account/` 僅保留登入、註冊、驗證等帳戶入口；會員中心使用 `member/`。
+- `furniture/` 對應二手傢俬公開入口；不要再用 `marketplace/` 作為公開 page 目錄名。
+
+### 舊系統接入建議目錄
+
+```text
+pages/
+  communications/      # 站內信、通告、通知中心
+  payments/            # 物業費、賬單、付款紀錄
+  security/            # CCTV、門禁、對講、智能設備
+  building/            # 大廈與單位上下文
+  member/              # 會員中心
+  account/             # 登入與帳戶驗證
+  management/          # AJO 自身管理端入口
+```
+
+- 若只是展示舊系統資料，頁面放在 AJO 對應主域下，例如 `security/cctv/`，不要放在 `legacy/icctv/`。
+- 若需要跳轉舊後台，只在管理端或明確操作入口提供連結，不把舊後台頁面拆進 AJO page 目錄。
+- 每個舊系統接入頁只保留必要的列表、詳情、狀態與操作入口；複雜設定仍回到原後台處理。
 
 ## 命名規範
 
@@ -181,11 +329,11 @@ pages/
 - composable 不直接操作 DOM。
 
 ## API 請求規範
-- Axios 實例統一放在 `src/httpapis/index.ts`。
+- Axios 實例統一放在 `src/shared/utils/http/index.ts`。
 - `baseURL` 透過 Vite proxy 或環境變數配置，不在程式碼中硬編碼域名。
 - 請求攔截器統一注入 `Authorization` header。
 - 響應攔截器統一處理 `401`、登入態失效與跳轉登入頁。
-- 每個資源一個 API 檔案。
+- 每個業務域的 API 檔案放在 `src/domains/<domain>/` 下。
 - API 函式不做 UI 錯誤提示，錯誤由呼叫方處理。
 - API 路徑與後端保持一致，不額外封裝路徑語義。
 
@@ -247,8 +395,12 @@ const fetchList = async () => { ... };
 - 所有上傳流程只能調用後端簽發的上傳介面，不可在前端保存阿里雲 `OSS` 密鑰。
 - 權限判斷以前端引導為輔、後端校驗為準，不可只依賴前端隱藏按鈕。
 - 聯絡方式、聊天、會員身份與 `building_only` 可見性，全部以前後端介面契約為準。
+- 站內信、聊天與未讀數應按平台級通訊入口設計，不應長期綁死在 `marketplace` 路由與文案下。
+- 若聊天入口來自二手交易、物業服務、維修、大廈或管理端，前端需保留來源模組與上下文展示，但會話列表與通知狀態應能被統一承載。
+- 未來群聊 UI 不得直接複製一對一聊天頁；需要先明確群類型、參與者身份、可見性、管理權限、退出或封存規則。
 
 ## 實作偏好
 - 優先完成列表頁、詳情頁、發布頁、會員中心等主流程。
 - 響應式體驗需同時覆蓋 desktop 與 mobile。
+- 本子專案是 Web 網頁，不是原生 App；涉及「手機」時，預設只表示手機號碼或 mobile viewport，不應按 App 下載、App 入口、App 內操作或原生 App 語義設計。
 - 不預設引入重量級抽象與狀態管理。

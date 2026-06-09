@@ -5,7 +5,11 @@
  */
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/datatypes"
+)
 
 const (
 	SystemNotificationPhoneCountryCode = "system"
@@ -26,28 +30,33 @@ type User struct {
 	TimestampModel
 }
 
-// 2. UserCredential stores email and password login credentials.
+// 2. UserCredential stores optional email and password login credentials.
 type UserCredential struct {
-	UserID       int64     `gorm:"primaryKey" json:"user_id"`
-	Email        string    `gorm:"type:varchar(255);not null;uniqueIndex" json:"email"`
-	PasswordHash string    `gorm:"type:text" json:"password_hash"`
-	IsVerified   bool      `gorm:"not null;default:true" json:"is_verified"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	User         *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	UserID            int64     `gorm:"primaryKey" json:"user_id"`
+	Email             *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
+	PasswordHash      string    `gorm:"type:text" json:"password_hash"`
+	PasswordEncrypted string    `gorm:"type:text" json:"-"`
+	IsVerified        bool      `gorm:"not null;default:false" json:"is_verified"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	User              *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // 3. UserProfile stores profile details and community linkage.
 type UserProfile struct {
-	UserID                int64      `gorm:"primaryKey" json:"user_id"`
-	DisplayName           string     `gorm:"type:varchar(120)" json:"display_name"`
-	PublisherIdentityType string     `gorm:"type:varchar(32)" json:"publisher_identity_type"`
-	PrimaryCommunityID    *int64     `gorm:"index" json:"primary_community_id"`
-	DistrictCode          string     `gorm:"type:varchar(32)" json:"district_code"`
-	AvatarAssetID         *int64     `json:"avatar_asset_id"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
-	PrimaryCommunity      *Community `gorm:"foreignKey:PrimaryCommunityID" json:"primary_community,omitempty"`
+	UserID                int64          `gorm:"primaryKey" json:"user_id"`
+	DisplayName           string         `gorm:"type:varchar(120)" json:"display_name"`
+	PublisherIdentityType string         `gorm:"type:varchar(32)" json:"publisher_identity_type"`
+	PrimaryCommunityID    *int64         `gorm:"index" json:"primary_community_id"`
+	BoundBuildingIDs      datatypes.JSON `gorm:"type:jsonb" json:"bound_building_ids"`
+	BoundFlatUnitIDs      datatypes.JSON `gorm:"type:jsonb" json:"bound_flat_unit_ids"`
+	ResidenceFloor        string         `gorm:"type:varchar(32)" json:"residence_floor"`
+	ResidenceUnit         string         `gorm:"type:varchar(32)" json:"residence_unit"`
+	DistrictCode          string         `gorm:"type:varchar(32)" json:"district_code"`
+	AvatarAssetID         *int64         `json:"avatar_asset_id"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	PrimaryCommunity      *Community     `gorm:"foreignKey:PrimaryCommunityID" json:"primary_community,omitempty"`
 }
 
 // 4. Community stores estate and building records.

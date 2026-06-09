@@ -1,6 +1,6 @@
 /*
  * HTTP handler helpers.
- * 1. Normalize pagination and boolean query parsing.
+ * 1. Normalize pagination and query parsing.
  * 2. Keep current user access consistent across handlers.
  */
 package handler
@@ -42,7 +42,16 @@ func parseOptionalBoolQuery(c *gin.Context, key string) *bool {
 	return &value
 }
 
-// 4. currentUser returns the current authenticated user from gin context.
+// 4. parsePositiveIntQuery reads a positive integer query parameter.
+func parsePositiveIntQuery(c *gin.Context, key string) int {
+	value, _ := strconv.Atoi(strings.TrimSpace(c.Query(key)))
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+// 5. currentUser returns the current authenticated user from gin context.
 func currentUser(c *gin.Context) *middleware.CurrentUser {
 	return middleware.GetCurrentUser(c)
 }

@@ -9,6 +9,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,6 +31,16 @@ func (s *WalletService) ListStaffRewardAds(ctx context.Context, filters StaffRew
 	}
 	if filters.IsActive != nil {
 		query = query.Where("is_active = ?", *filters.IsActive)
+	}
+	if adType := normalizedRewardAdType(filters.AdType); adType != "" {
+		if adType == rewardAdTypeReward {
+			query = query.Where("(ad_type = ? OR ad_type = '')", rewardAdTypeReward)
+		} else {
+			query = query.Where("ad_type = ?", adType)
+		}
+	}
+	if channel := normalizedDisplayAdChannel(filters.DisplayChannel); channel != "" {
+		query = query.Where("display_channel = ?", channel)
 	}
 
 	var total int64
@@ -60,6 +71,85 @@ func (s *WalletService) GetStaffRewardAd(ctx context.Context, taskPublicID strin
 	return &result, nil
 }
 
+// 2.1 ListDisplayAdSettings returns configured listing-side display ad slots.
+func (s *WalletService) ListDisplayAdSettings(ctx context.Context, channel string) (*DisplayAdChannelSettingsResponse, error) {
+	normalizedChannel := normalizedDisplayAdChannel(channel)
+	if normalizedChannel == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "display ad channel is invalid")
+	}
+
+	var assignments []model.DisplayAdSlotAssignment
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("display_channel = ? AND display_placement = ?", normalizedChannel, displayAdPlacementListingSide).
+		Order("slot_index asc, sort_order asc, id asc").
+		Find(&assignments).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ad settings")
+	}
+
+	adIDs := make([]int64, 0, len(assignments))
+	for _, assignment := range assignments {
+		adIDs = append(adIDs, assignment.RewardAdID)
+	}
+
+	adMap, err := s.loadDisplayAdMap(ctx, normalizedChannel, adIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildDisplayAdSettingsResponse(normalizedChannel, assignments, adMap), nil
+}
+
+// 2.2 SaveDisplayAdSettings replaces one channel's listing-side slot settings.
+func (s *WalletService) SaveDisplayAdSettings(ctx context.Context, operatorUserID int64, channel string, inputs []DisplayAdSlotInput) (*DisplayAdChannelSettingsResponse, error) {
+	normalizedChannel := normalizedDisplayAdChannel(channel)
+	if normalizedChannel == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "display ad channel is invalid")
+	}
+	normalizedInputs, adTaskIDs, err := normalizeDisplayAdSlotInputs(inputs)
+	if err != nil {
+		return nil, err
+	}
+	adMap, err := s.loadDisplayAdPublicIDMap(ctx, normalizedChannel, adTaskIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("display_channel = ? AND display_placement = ?", normalizedChannel, displayAdPlacementListingSide).Delete(&model.DisplayAdSlotAssignment{}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to clear display ad settings")
+		}
+		for _, input := range normalizedInputs {
+			for index, slotAd := range input.Ads {
+				ad := adMap[slotAd.AdTaskID]
+				if normalizedDisplayAdLayout(ad.DisplayLayout) != displayAdLayoutForSlot(input.SlotIndex) {
+					return errcode.New(errcode.CodeValidationError, "display ad layout does not match slot")
+				}
+				assignment := model.DisplayAdSlotAssignment{
+					DisplayChannel:   normalizedChannel,
+					DisplayPlacement: displayAdPlacementListingSide,
+					SlotIndex:        input.SlotIndex,
+					RewardAdID:       ad.ID,
+					SortOrder:        index + 1,
+					DisplayTitle:     slotAd.DisplayTitle,
+					DisplayText:      slotAd.DisplayText,
+					TargetURL:        slotAd.TargetURL,
+					CreatedBy:        &operatorUserID,
+					UpdatedBy:        &operatorUserID,
+				}
+				if err := tx.Create(&assignment).Error; err != nil {
+					return errcode.New(errcode.CodeInternalError, "failed to save display ad settings")
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.ListDisplayAdSettings(ctx, normalizedChannel)
+}
+
 // 3. CreateStaffRewardAd creates an operator-managed rewarded ad task.
 func (s *WalletService) CreateStaffRewardAd(ctx context.Context, operatorUserID int64, params RewardAdCreateParams) (*StaffRewardAdResponse, error) {
 	if err := validateRewardAdCreate(params); err != nil {
@@ -77,22 +167,27 @@ func (s *WalletService) CreateStaffRewardAd(ctx context.Context, operatorUserID 
 		endsAt = &calculatedEnd
 	}
 	ad := model.RewardAd{
-		PublicID:       utils.NewPublicID(),
-		Title:          strings.TrimSpace(params.Title),
-		Summary:        strings.TrimSpace(params.Summary),
-		CoverURL:       "",
-		MediaURL:       strings.TrimSpace(params.MediaURL),
-		MediaType:      normalizedRewardAdMediaType(params.MediaType),
-		TargetURL:      strings.TrimSpace(params.TargetURL),
-		RewardPoints:   params.RewardPoints,
-		WatchSeconds:   normalizedWatchSeconds(params.WatchSeconds),
-		DailyUserLimit: 1,
-		TotalBudget:    0,
-		IsActive:       params.IsActive,
-		StartsAt:       startsAt,
-		EndsAt:         endsAt,
-		CreatedBy:      &operatorUserID,
-		UpdatedBy:      &operatorUserID,
+		PublicID:         utils.NewPublicID(),
+		AdType:           normalizedRewardAdType(params.AdType),
+		Title:            strings.TrimSpace(params.Title),
+		Summary:          strings.TrimSpace(params.Summary),
+		CoverURL:         "",
+		MediaURL:         strings.TrimSpace(params.MediaURL),
+		MediaType:        normalizedRewardAdMediaType(params.MediaType),
+		TargetURL:        strings.TrimSpace(params.TargetURL),
+		DisplayChannel:   normalizedDisplayAdChannel(params.DisplayChannel),
+		DisplayPlacement: normalizedDisplayAdPlacement(params.DisplayPlacement),
+		DisplayLayout:    normalizedDisplayAdLayout(params.DisplayLayout),
+		SortOrder:        params.SortOrder,
+		RewardPoints:     params.RewardPoints,
+		WatchSeconds:     normalizedWatchSeconds(params.WatchSeconds),
+		DailyUserLimit:   1,
+		TotalBudget:      0,
+		IsActive:         params.IsActive,
+		StartsAt:         startsAt,
+		EndsAt:           endsAt,
+		CreatedBy:        &operatorUserID,
+		UpdatedBy:        &operatorUserID,
 	}
 	ad.CreatedAt = now
 	ad.UpdatedAt = now
@@ -139,20 +234,26 @@ func (s *WalletService) loadStaffRewardAd(ctx context.Context, taskPublicID stri
 // 6. validateRewardAdCreate validates rewarded ad creation input.
 func validateRewardAdCreate(params RewardAdCreateParams) error {
 	ad := model.RewardAd{
-		Title:        strings.TrimSpace(params.Title),
-		Summary:      strings.TrimSpace(params.Summary),
-		MediaURL:     strings.TrimSpace(params.MediaURL),
-		MediaType:    normalizedRewardAdMediaType(params.MediaType),
-		RewardPoints: params.RewardPoints,
-		WatchSeconds: normalizedWatchSeconds(params.WatchSeconds),
-		StartsAt:     params.StartsAt,
-		EndsAt:       params.EndsAt,
+		AdType:           normalizedRewardAdType(params.AdType),
+		Title:            strings.TrimSpace(params.Title),
+		Summary:          strings.TrimSpace(params.Summary),
+		MediaURL:         strings.TrimSpace(params.MediaURL),
+		MediaType:        normalizedRewardAdMediaType(params.MediaType),
+		DisplayChannel:   normalizedDisplayAdChannel(params.DisplayChannel),
+		DisplayPlacement: normalizedDisplayAdPlacement(params.DisplayPlacement),
+		DisplayLayout:    normalizedDisplayAdLayout(params.DisplayLayout),
+		RewardPoints:     params.RewardPoints,
+		WatchSeconds:     normalizedWatchSeconds(params.WatchSeconds),
+		StartsAt:         params.StartsAt,
+		EndsAt:           params.EndsAt,
 	}
-	if params.RetentionDays <= 0 {
-		return errcode.New(errcode.CodeValidationError, "reward ad retention days must be positive")
-	}
-	if params.RetentionDays > maxRewardAdRetentionDays {
-		return errcode.New(errcode.CodeValidationError, "reward ad retention days is too long")
+	if ad.AdType == rewardAdTypeReward {
+		if params.RetentionDays <= 0 {
+			return errcode.New(errcode.CodeValidationError, "reward ad retention days must be positive")
+		}
+		if params.RetentionDays > maxRewardAdRetentionDays {
+			return errcode.New(errcode.CodeValidationError, "reward ad retention days is too long")
+		}
 	}
 	return validateRewardAdState(ad)
 }
@@ -162,20 +263,32 @@ func validateRewardAdState(ad model.RewardAd) error {
 	if strings.TrimSpace(ad.Title) == "" {
 		return errcode.New(errcode.CodeValidationError, "reward ad title is required")
 	}
-	if strings.TrimSpace(ad.Summary) == "" {
+	adType := normalizedRewardAdType(ad.AdType)
+	if adType == "" {
+		return errcode.New(errcode.CodeValidationError, "ad type is invalid")
+	}
+	if strings.TrimSpace(ad.Summary) == "" && adType == rewardAdTypeReward {
 		return errcode.New(errcode.CodeValidationError, "reward ad summary is required")
 	}
 	if strings.TrimSpace(ad.MediaURL) == "" {
 		return errcode.New(errcode.CodeValidationError, "reward ad media is required")
 	}
-	if ad.RewardPoints <= 0 {
+	if adType == rewardAdTypeReward && ad.RewardPoints <= 0 {
 		return errcode.New(errcode.CodeValidationError, "reward points must be positive")
 	}
-	if normalizedWatchSeconds(ad.WatchSeconds) < 1 {
+	if adType == rewardAdTypeReward && normalizedWatchSeconds(ad.WatchSeconds) < 1 {
 		return errcode.New(errcode.CodeValidationError, "watch seconds must be positive")
 	}
 	if normalizedRewardAdMediaType(ad.MediaType) == "" {
 		return errcode.New(errcode.CodeValidationError, "reward ad media type is invalid")
+	}
+	if adType == rewardAdTypeDisplay {
+		if normalizedDisplayAdLayout(ad.DisplayLayout) == "" {
+			return errcode.New(errcode.CodeValidationError, "display ad layout is invalid")
+		}
+		if normalizedRewardAdMediaType(ad.MediaType) != rewardAdMediaTypeImage {
+			return errcode.New(errcode.CodeValidationError, "display ad media must be image")
+		}
 	}
 	if ad.StartsAt != nil && ad.EndsAt != nil && !ad.EndsAt.After(*ad.StartsAt) {
 		return errcode.New(errcode.CodeValidationError, "reward ad end time must be later than start time")
@@ -191,6 +304,9 @@ func applyRewardAdUpdates(ad *model.RewardAd, params RewardAdUpdateParams, opera
 	if params.Title != nil {
 		ad.Title = strings.TrimSpace(*params.Title)
 	}
+	if params.AdType != nil {
+		ad.AdType = normalizedRewardAdType(*params.AdType)
+	}
 	if params.Summary != nil {
 		ad.Summary = strings.TrimSpace(*params.Summary)
 	}
@@ -205,6 +321,18 @@ func applyRewardAdUpdates(ad *model.RewardAd, params RewardAdUpdateParams, opera
 	}
 	if params.TargetURL != nil {
 		ad.TargetURL = strings.TrimSpace(*params.TargetURL)
+	}
+	if params.DisplayChannel != nil {
+		ad.DisplayChannel = normalizedDisplayAdChannel(*params.DisplayChannel)
+	}
+	if params.DisplayPlacement != nil {
+		ad.DisplayPlacement = normalizedDisplayAdPlacement(*params.DisplayPlacement)
+	}
+	if params.DisplayLayout != nil {
+		ad.DisplayLayout = normalizedDisplayAdLayout(*params.DisplayLayout)
+	}
+	if params.SortOrder != nil {
+		ad.SortOrder = *params.SortOrder
 	}
 	if params.RewardPoints != nil {
 		ad.RewardPoints = *params.RewardPoints
@@ -247,12 +375,20 @@ func toStaffRewardAdResponse(ad model.RewardAd) StaffRewardAdResponse {
 	}
 	result := StaffRewardAdResponse{
 		TaskID:            ad.PublicID,
+		AdType:            normalizedRewardAdType(ad.AdType),
 		Title:             ad.Title,
 		Summary:           ad.Summary,
 		CoverURL:          ad.CoverURL,
 		MediaURL:          ad.MediaURL,
 		MediaType:         normalizedRewardAdMediaType(ad.MediaType),
 		TargetURL:         ad.TargetURL,
+		DisplayChannel:    normalizedDisplayAdChannel(ad.DisplayChannel),
+		DisplayPlacement:  normalizedDisplayAdPlacement(ad.DisplayPlacement),
+		DisplayLayout:     normalizedDisplayAdLayout(ad.DisplayLayout),
+		SlotDisplayTitle:  "",
+		DisplayText:       "",
+		SlotTargetURL:     "",
+		SortOrder:         ad.SortOrder,
 		RewardPoints:      ad.RewardPoints,
 		WatchSeconds:      normalizedWatchSeconds(ad.WatchSeconds),
 		TotalBudget:       ad.TotalBudget,
@@ -285,4 +421,221 @@ func normalizedRewardAdMediaType(value string) string {
 	default:
 		return ""
 	}
+}
+
+// 11. normalizedRewardAdType returns a supported ad task type.
+func normalizedRewardAdType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", rewardAdTypeReward:
+		return rewardAdTypeReward
+	case rewardAdTypeDisplay:
+		return rewardAdTypeDisplay
+	default:
+		return ""
+	}
+}
+
+// 12. normalizedDisplayAdChannel returns a supported listing display channel.
+func normalizedDisplayAdChannel(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case displayAdChannelPropertySale:
+		return displayAdChannelPropertySale
+	case displayAdChannelServicedApartment:
+		return displayAdChannelServicedApartment
+	case displayAdChannelFurniture:
+		return displayAdChannelFurniture
+	default:
+		return ""
+	}
+}
+
+// 13. normalizedDisplayAdPlacement returns a supported display ad placement.
+func normalizedDisplayAdPlacement(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case displayAdPlacementListingSide:
+		return displayAdPlacementListingSide
+	default:
+		return ""
+	}
+}
+
+// 14. normalizedDisplayAdLayout returns a supported display ad layout.
+func normalizedDisplayAdLayout(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", displayAdLayoutImageText:
+		return displayAdLayoutImageText
+	case displayAdLayoutImageFull:
+		return displayAdLayoutImageFull
+	case displayAdLayoutTextCompact:
+		return displayAdLayoutTextCompact
+	default:
+		return ""
+	}
+}
+
+// 15. displayAdLayoutForSlot returns the fixed visual layout for one listing-side slot.
+func displayAdLayoutForSlot(slotIndex int) string {
+	switch {
+	case slotIndex >= 1 && slotIndex <= 3:
+		return displayAdLayoutTextCompact
+	case slotIndex >= 4 && slotIndex <= 6:
+		return displayAdLayoutImageText
+	default:
+		return displayAdLayoutImageFull
+	}
+}
+
+// 16. normalizeDisplayAdSlotInputs validates fixed listing-side ad slots.
+func normalizeDisplayAdSlotInputs(inputs []DisplayAdSlotInput) ([]DisplayAdSlotInput, []string, error) {
+	slotMap := map[int]DisplayAdSlotInput{}
+	adTaskIDs := []string{}
+	for _, input := range inputs {
+		if input.SlotIndex < 1 || input.SlotIndex > displayAdSlotCount {
+			return nil, nil, errcode.New(errcode.CodeValidationError, "display ad slot is invalid")
+		}
+		seenTaskIDs := map[string]bool{}
+		sourceAds := input.Ads
+		if len(sourceAds) == 0 {
+			for _, taskID := range input.AdTaskIDs {
+				sourceAds = append(sourceAds, DisplayAdSlotAdInput{AdTaskID: taskID})
+			}
+		}
+		normalizedAds := make([]DisplayAdSlotAdInput, 0, len(sourceAds))
+		for _, slotAd := range sourceAds {
+			trimmedTaskID := strings.TrimSpace(slotAd.AdTaskID)
+			if trimmedTaskID == "" || seenTaskIDs[trimmedTaskID] {
+				continue
+			}
+			seenTaskIDs[trimmedTaskID] = true
+			normalizedAds = append(normalizedAds, DisplayAdSlotAdInput{
+				AdTaskID:     trimmedTaskID,
+				DisplayTitle: trimDisplayAdSlotTitle(slotAd.DisplayTitle),
+				DisplayText:  trimDisplayAdSlotText(slotAd.DisplayText),
+				TargetURL:    trimDisplayAdSlotURL(slotAd.TargetURL),
+			})
+			adTaskIDs = append(adTaskIDs, trimmedTaskID)
+		}
+		slotMap[input.SlotIndex] = DisplayAdSlotInput{
+			SlotIndex: input.SlotIndex,
+			Ads:       normalizedAds,
+		}
+	}
+
+	result := make([]DisplayAdSlotInput, 0, displayAdSlotCount)
+	for slotIndex := 1; slotIndex <= displayAdSlotCount; slotIndex++ {
+		input, exists := slotMap[slotIndex]
+		if !exists {
+			input = DisplayAdSlotInput{SlotIndex: slotIndex, Ads: []DisplayAdSlotAdInput{}}
+		}
+		result = append(result, input)
+	}
+
+	return result, adTaskIDs, nil
+}
+
+// 17. loadDisplayAdPublicIDMap loads valid display ads by public task IDs.
+func (s *WalletService) loadDisplayAdPublicIDMap(ctx context.Context, channel string, taskIDs []string) (map[string]model.RewardAd, error) {
+	result := map[string]model.RewardAd{}
+	if len(taskIDs) == 0 {
+		return result, nil
+	}
+
+	var ads []model.RewardAd
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("public_id IN ?", taskIDs).
+		Where("ad_type = ?", rewardAdTypeDisplay).
+		Where("media_type = ?", rewardAdMediaTypeImage).
+		Find(&ads).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load image ads")
+	}
+	for _, ad := range ads {
+		result[ad.PublicID] = ad
+	}
+	for _, taskID := range taskIDs {
+		if _, exists := result[taskID]; !exists {
+			return nil, errcode.New(errcode.CodeValidationError, "image ad task not found")
+		}
+	}
+	return result, nil
+}
+
+// 18. loadDisplayAdMap loads display ads by numeric IDs.
+func (s *WalletService) loadDisplayAdMap(ctx context.Context, channel string, adIDs []int64) (map[int64]model.RewardAd, error) {
+	result := map[int64]model.RewardAd{}
+	if len(adIDs) == 0 {
+		return result, nil
+	}
+
+	var ads []model.RewardAd
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("id IN ?", adIDs).
+		Where("ad_type = ?", rewardAdTypeDisplay).
+		Where("media_type = ?", rewardAdMediaTypeImage).
+		Find(&ads).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load image ads")
+	}
+	for _, ad := range ads {
+		result[ad.ID] = ad
+	}
+	return result, nil
+}
+
+// 19. buildDisplayAdSettingsResponse maps slot assignments into fixed 10 slots.
+func buildDisplayAdSettingsResponse(channel string, assignments []model.DisplayAdSlotAssignment, adMap map[int64]model.RewardAd) *DisplayAdChannelSettingsResponse {
+	slotAssignments := map[int][]model.DisplayAdSlotAssignment{}
+	for _, assignment := range assignments {
+		slotAssignments[assignment.SlotIndex] = append(slotAssignments[assignment.SlotIndex], assignment)
+	}
+
+	slots := make([]DisplayAdSlotResponse, 0, displayAdSlotCount)
+	for slotIndex := 1; slotIndex <= displayAdSlotCount; slotIndex++ {
+		assignmentsForSlot := slotAssignments[slotIndex]
+		sort.SliceStable(assignmentsForSlot, func(left int, right int) bool {
+			return assignmentsForSlot[left].SortOrder < assignmentsForSlot[right].SortOrder
+		})
+		ads := make([]StaffRewardAdResponse, 0, len(assignmentsForSlot))
+		for _, assignment := range assignmentsForSlot {
+			if ad, exists := adMap[assignment.RewardAdID]; exists {
+				response := toStaffRewardAdResponse(ad)
+				response.SlotDisplayTitle = assignment.DisplayTitle
+				response.DisplayText = assignment.DisplayText
+				response.SlotTargetURL = assignment.TargetURL
+				ads = append(ads, response)
+			}
+		}
+		slots = append(slots, DisplayAdSlotResponse{
+			SlotIndex: slotIndex,
+			Layout:    displayAdLayoutForSlot(slotIndex),
+			Ads:       ads,
+		})
+	}
+
+	return &DisplayAdChannelSettingsResponse{Channel: channel, Slots: slots}
+}
+
+// 20. trimDisplayAdSlotTitle normalizes optional slot display title.
+func trimDisplayAdSlotTitle(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if len([]rune(trimmed)) <= 160 {
+		return trimmed
+	}
+	return string([]rune(trimmed)[:160])
+}
+
+// 21. trimDisplayAdSlotText normalizes optional slot display text.
+func trimDisplayAdSlotText(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if len([]rune(trimmed)) <= 255 {
+		return trimmed
+	}
+	return string([]rune(trimmed)[:255])
+}
+
+// 22. trimDisplayAdSlotURL normalizes optional slot target URL.
+func trimDisplayAdSlotURL(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if len([]rune(trimmed)) <= 1024 {
+		return trimmed
+	}
+	return string([]rune(trimmed)[:1024])
 }

@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 
-import { useFeedbackStore } from '@/stores/feedback';
+import { useFeedbackStore } from '@/app/stores/feedback';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import BaseButton from '@/shared/components/base/BaseButton.vue';

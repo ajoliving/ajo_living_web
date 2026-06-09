@@ -4,7 +4,7 @@
  * 2. 補足分類大類、小類、商品類型與地區篩選所需欄位。
  * 3. 覆蓋 public、building_only、active、expired、sold 等一期狀態。
  */
-import type { Listing } from '@/model/listing';
+import type { Listing } from '@/domains/marketplace/listing-model';
 
 import { communities } from '@/mock/communities';
 import { buildMockImage } from '@/mock/image';

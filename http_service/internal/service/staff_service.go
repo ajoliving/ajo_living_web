@@ -1,7 +1,7 @@
 /*
  * Staff management business logic.
- * 1. Provide staff-only user listing and role management APIs.
- * 2. Keep role promotion and staff access rules centralized.
+ * 1. Provide staff-only user listing and account creation APIs.
+ * 2. Keep staff access controlled by the is_staff flag only.
  */
 package service
 
@@ -38,38 +38,42 @@ type StaffUserSummary struct {
 	DisplayName       string             `json:"display_name"`
 	PublisherIdentity string             `json:"publisher_identity_type"`
 	DistrictCode      string             `json:"district_code"`
+	ResidenceFloor    string             `json:"residence_floor"`
+	ResidenceUnit     string             `json:"residence_unit"`
 	PrimaryCommunity  *CommunityResponse `json:"primary_community,omitempty"`
+	AJOBalance        int64              `json:"ajo_balance"`
 	CreatedAt         time.Time          `json:"created_at"`
 	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 // 3. StaffUserListFilters defines staff user list filters.
 type StaffUserListFilters struct {
-	Page       int
-	PageSize   int
-	Keyword    string
-	Status     string
-	MemberType string
-	RoleCode   string
-	IsStaff    *bool
+	Page     int
+	PageSize int
+	Keyword  string
+	Status   string
+	IsStaff  *bool
 }
 
-// 4. StaffUserRoleUpdateParams defines staff role update input.
+// 4. StaffUserRoleUpdateParams defines staff flag update input.
 type StaffUserRoleUpdateParams struct {
-	MemberType *string
-	RoleCodes  *[]string
-	IsStaff    *bool
+	IsStaff *bool
 }
 
 // 5. StaffUserCreateParams defines staff-created account input.
 type StaffUserCreateParams struct {
-	Email            string
-	Password         string
-	DisplayName      string
-	PhoneCountryCode string
-	PhoneNumber      string
-	MemberType       string
-	RoleCodes        []string
+	Email                 string
+	Password              string
+	DisplayName           string
+	PhoneCountryCode      string
+	PhoneNumber           string
+	PublisherIdentityType string
+	PrimaryCommunityID    string
+	PrimaryCommunityName  string
+	ResidenceFloor        string
+	ResidenceUnit         string
+	DistrictCode          string
+	IsStaff               bool
 }
 
 // 6. NewStaffService creates a staff service instance.
@@ -84,17 +88,17 @@ func (s *StaffService) GetStaffMe(ctx context.Context, userID int64) (*StaffUser
 		return nil, err
 	}
 
-	access, err := NewAccessService(s.runtime).ResolveUserAccess(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-
 	emails, err := s.loadCredentialEmailsByUserIDs(ctx, []model.User{*user})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.toStaffUserSummary(user, profile, access, emails[user.ID]), nil
+	balances, err := s.loadWalletBalancesByUserIDs(ctx, []model.User{*user})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.toStaffUserSummary(user, profile, emails[user.ID], balances[user.ID]), nil
 }
 
 // 8. ListUsers returns paginated user records for staff operations.
@@ -112,23 +116,8 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 		)
 	}
 
-	if memberType := strings.TrimSpace(filters.MemberType); memberType != "" {
-		if !isValidMemberType(memberType) {
-			return nil, nil, errcode.New(errcode.CodeValidationError, "member_type is invalid")
-		}
-		query = query.Where("member_type = ?", normalizeMemberType(memberType))
-	}
-
 	if status := strings.TrimSpace(filters.Status); status != "" {
 		query = query.Where("member_status = ?", status)
-	}
-
-	if roleCode := strings.TrimSpace(filters.RoleCode); roleCode != "" {
-		query = query.
-			Joins("JOIN user_role_bindings ON user_role_bindings.user_id = users.id").
-			Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
-			Where("roles.code = ?", roleCode).
-			Distinct("users.id")
 	}
 
 	if filters.IsStaff != nil {
@@ -155,15 +144,15 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 		return nil, nil, err
 	}
 
-	accessService := NewAccessService(s.runtime)
+	balances, err := s.loadWalletBalancesByUserIDs(ctx, users)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	items := make([]StaffUserSummary, 0, len(users))
 	for _, user := range users {
 		profile := profiles[user.ID]
-		access, err := accessService.ResolveUserAccess(ctx, &user)
-		if err != nil {
-			return nil, nil, err
-		}
-		items = append(items, *s.toStaffUserSummary(&user, profile, access, emails[user.ID]))
+		items = append(items, *s.toStaffUserSummary(&user, profile, emails[user.ID], balances[user.ID]))
 	}
 
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
@@ -171,24 +160,14 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 
 // 9. CreateUser creates a staff-managed email password account.
 func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, params StaffUserCreateParams) (*StaffUserSummary, error) {
+	_ = operatorUserID
+
 	email := normalizeEmail(params.Email)
 	password := strings.TrimSpace(params.Password)
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
 	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
-	requestedMemberType := strings.TrimSpace(params.MemberType)
-	memberType := normalizeMemberType(requestedMemberType)
-	roleCodes, err := normalizeExplicitRoleCodes(params.RoleCodes)
-	if err != nil {
-		return nil, err
-	}
 	if !isValidEmail(email) || !isValidPhone(phoneCountryCode, phoneNumber) || len(password) < 8 {
 		return nil, errcode.New(errcode.CodeValidationError, "valid email, phone number, and password are required")
-	}
-	if !containsStaffRole(roleCodes) {
-		return nil, errcode.New(errcode.CodeValidationError, "role_codes must include a staff role")
-	}
-	if requestedMemberType != "" && !isValidMemberType(requestedMemberType) {
-		return nil, errcode.New(errcode.CodeValidationError, "member_type is invalid")
 	}
 
 	passwordHash, err := utils.HashPassword(password)
@@ -197,7 +176,6 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 	}
 
 	var user model.User
-	accessService := NewAccessService(s.runtime)
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&model.UserCredential{}).Where("email = ?", email).Count(&count).Error; err != nil {
@@ -218,8 +196,8 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 			PhoneCountryCode: phoneCountryCode,
 			PhoneNumber:      phoneNumber,
 			MemberStatus:     "active",
-			MemberType:       memberType,
-			IsStaff:          true,
+			MemberType:       MemberTypeUser,
+			IsStaff:          params.IsStaff,
 			IsVerifiedPhone:  false,
 		}
 		if err := tx.Create(&user).Error; err != nil {
@@ -227,7 +205,7 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 		}
 		if err := tx.Create(&model.UserCredential{
 			UserID:       user.ID,
-			Email:        email,
+			Email:        &email,
 			PasswordHash: passwordHash,
 			IsVerified:   true,
 		}).Error; err != nil {
@@ -238,14 +216,29 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 		if displayName == "" {
 			displayName = email
 		}
-		if err := tx.Create(&model.UserProfile{
-			UserID:      user.ID,
-			DisplayName: displayName,
-		}).Error; err != nil {
+		profile := model.UserProfile{
+			UserID:                user.ID,
+			DisplayName:           displayName,
+			PublisherIdentityType: strings.TrimSpace(params.PublisherIdentityType),
+			ResidenceFloor:        strings.TrimSpace(params.ResidenceFloor),
+			ResidenceUnit:         strings.TrimSpace(params.ResidenceUnit),
+			DistrictCode:          strings.TrimSpace(params.DistrictCode),
+		}
+		if strings.TrimSpace(params.PrimaryCommunityID) != "" {
+			community, err := s.resolveStaffCreateCommunity(ctx, tx, params.PrimaryCommunityID, params.PrimaryCommunityName)
+			if err != nil {
+				return err
+			}
+			profile.PrimaryCommunityID = &community.ID
+			if profile.DistrictCode == "" {
+				profile.DistrictCode = community.DistrictCode
+			}
+		}
+		if err := tx.Create(&profile).Error; err != nil {
 			return err
 		}
 
-		return accessService.SetUserRoleCodes(ctx, tx, &user, roleCodes, &operatorUserID, model.RoleCodeStaff)
+		return nil
 	})
 	if err != nil {
 		var appErr *errcode.AppError
@@ -258,10 +251,45 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 	return s.GetStaffMe(ctx, user.ID)
 }
 
-// 10. UpdateUserRole updates a target user's front-end member type and staff flag.
+// 9.1 resolveStaffCreateCommunity loads or mirrors a POS building for staff-created users.
+func (s *StaffService) resolveStaffCreateCommunity(ctx context.Context, tx *gorm.DB, publicID string, name string) (*model.Community, error) {
+	trimmedPublicID := strings.TrimSpace(publicID)
+	var community model.Community
+	err := tx.WithContext(ctx).Where("public_id = ?", trimmedPublicID).First(&community).Error
+	if err == nil {
+		return &community, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load community")
+	}
+	if len(trimmedPublicID) == 0 || len(trimmedPublicID) > 26 {
+		return nil, errcode.New(errcode.CodeValidationError, "invalid primary community")
+	}
+
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = trimmedPublicID
+	}
+
+	community = model.Community{
+		PublicID:      trimmedPublicID,
+		CommunityType: "building",
+		NameZH:        displayName,
+		NameEN:        displayName,
+		DistrictCode:  "",
+		AddressText:   displayName,
+	}
+	if err := tx.WithContext(ctx).Create(&community).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create community")
+	}
+
+	return &community, nil
+}
+
+// 10. UpdateUserRole updates a target user's staff flag.
 func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64, targetPublicID string, params StaffUserRoleUpdateParams) (*StaffUserSummary, error) {
-	if params.MemberType == nil && params.RoleCodes == nil && params.IsStaff == nil {
-		return nil, errcode.New(errcode.CodeValidationError, "at least one role field is required")
+	if params.IsStaff == nil {
+		return nil, errcode.New(errcode.CodeValidationError, "is_staff is required")
 	}
 
 	var user model.User
@@ -272,38 +300,9 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load user")
 	}
 
-	accessService := NewAccessService(s.runtime)
-	currentAccess, err := accessService.ResolveUserAccess(ctx, &user)
-	if err != nil {
-		return nil, err
-	}
-
-	roleCodes := append([]string{}, currentAccess.RoleCodes...)
-	if params.RoleCodes != nil {
-		roleCodes = append([]string{}, *params.RoleCodes...)
-	}
-	if params.IsStaff != nil && !*params.IsStaff && containsStaffRole(roleCodes) && params.RoleCodes != nil {
-		return nil, errcode.New(errcode.CodeValidationError, "role_codes contains staff roles while is_staff is false")
-	}
-	if params.IsStaff != nil && !*params.IsStaff {
-		roleCodes = dropStaffRoles(roleCodes)
-	}
-	if params.IsStaff != nil && *params.IsStaff && !containsStaffRole(roleCodes) {
-		roleCodes = append(roleCodes, model.RoleCodeStaff)
-	}
-
-	if params.MemberType != nil {
-		memberType := strings.TrimSpace(*params.MemberType)
-		if !isValidMemberType(memberType) {
-			return nil, errcode.New(errcode.CodeValidationError, "member_type is invalid")
-		}
-		user.MemberType = normalizeMemberType(memberType)
-	}
-
-	user.IsStaff = containsStaffRole(roleCodes)
-	if params.IsStaff != nil {
-		user.IsStaff = *params.IsStaff
-	}
+	_ = operatorUserID
+	user.MemberType = MemberTypeUser
+	user.IsStaff = *params.IsStaff
 
 	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
@@ -313,7 +312,7 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 			return errcode.New(errcode.CodeInternalError, "failed to update user role")
 		}
 
-		return accessService.SetUserRoleCodes(ctx, tx, &user, roleCodes, &operatorUserID, model.RoleCodeStaff)
+		return nil
 	}); err != nil {
 		return nil, err
 	}
@@ -387,26 +386,45 @@ func (s *StaffService) loadCredentialEmailsByUserIDs(ctx context.Context, users 
 
 	result := make(map[int64]string, len(credentials))
 	for _, credential := range credentials {
-		result[credential.UserID] = credential.Email
+		if credential.Email != nil {
+			result[credential.UserID] = *credential.Email
+		}
 	}
 
 	return result, nil
 }
 
-// 14. toStaffUserSummary maps a user model to the staff-facing payload.
-func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserProfile, access *AccessSnapshot, email string) *StaffUserSummary {
+// 14. loadWalletBalancesByUserIDs loads current AJO Point balances for staff lists.
+func (s *StaffService) loadWalletBalancesByUserIDs(ctx context.Context, users []model.User) (map[int64]int64, error) {
+	if len(users) == 0 {
+		return map[int64]int64{}, nil
+	}
+
+	userIDs := make([]int64, 0, len(users))
+	for _, user := range users {
+		userIDs = append(userIDs, user.ID)
+	}
+
+	var accounts []model.WalletAccount
+	if err := s.runtime.DB.WithContext(ctx).Select("user_id", "balance").Where("user_id IN ?", userIDs).Find(&accounts).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load wallet balances")
+	}
+
+	result := make(map[int64]int64, len(accounts))
+	for _, account := range accounts {
+		result[account.UserID] = account.Balance
+	}
+
+	return result, nil
+}
+
+// 15. toStaffUserSummary maps a user model to the staff-facing payload.
+func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserProfile, email string, ajoBalance int64) *StaffUserSummary {
 	if user == nil {
 		return nil
 	}
 
-	roleCodes := []string{}
-	permissionCodes := []string{}
-	isStaff := false
-	if access != nil {
-		roleCodes = access.RoleCodes
-		permissionCodes = access.Permissions
-		isStaff = access.IsStaff
-	}
+	access := buildAccessSnapshot(user.IsStaff)
 
 	summary := &StaffUserSummary{
 		PublicID:         user.PublicID,
@@ -415,10 +433,11 @@ func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserP
 		PhoneNumber:      user.PhoneNumber,
 		MemberStatus:     user.MemberStatus,
 		MemberType:       normalizeMemberType(user.MemberType),
-		IsStaff:          isStaff,
-		Role:             resolveUserRole(user.MemberType, isStaff),
-		Roles:            roleCodes,
-		Permissions:      permissionCodes,
+		IsStaff:          access.IsStaff,
+		Role:             resolveUserRole(user.MemberType, access.IsStaff),
+		Roles:            access.RoleCodes,
+		Permissions:      access.Permissions,
+		AJOBalance:       ajoBalance,
 		CreatedAt:        user.CreatedAt,
 		UpdatedAt:        user.UpdatedAt,
 	}
@@ -427,13 +446,10 @@ func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserP
 		summary.DisplayName = profile.DisplayName
 		summary.PublisherIdentity = profile.PublisherIdentityType
 		summary.DistrictCode = profile.DistrictCode
+		summary.ResidenceFloor = profile.ResidenceFloor
+		summary.ResidenceUnit = profile.ResidenceUnit
 		summary.PrimaryCommunity = toCommunityResponse(profile.PrimaryCommunity)
 	}
 
 	return summary
-}
-
-// 15. ListRoles returns the available role catalog for staff tooling.
-func (s *StaffService) ListRoles(ctx context.Context) ([]RoleCatalogItem, error) {
-	return NewAccessService(s.runtime).ListRoles(ctx)
 }

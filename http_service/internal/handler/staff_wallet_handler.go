@@ -30,44 +30,59 @@ type staffWalletGrantRequest struct {
 
 // 3. staffRewardAdCreateRequest defines a rewarded ad creation payload.
 type staffRewardAdCreateRequest struct {
-	Title         string `json:"title"`
-	Summary       string `json:"summary"`
-	CoverURL      string `json:"cover_url"`
-	MediaURL      string `json:"media_url"`
-	MediaType     string `json:"media_type"`
-	TargetURL     string `json:"target_url"`
-	RewardPoints  int64  `json:"reward_points"`
-	WatchSeconds  int    `json:"watch_seconds"`
-	TotalBudget   int64  `json:"total_budget"`
-	IsActive      *bool  `json:"is_active"`
-	StartsAt      string `json:"starts_at"`
-	EndsAt        string `json:"ends_at"`
-	RetentionDays int    `json:"retention_days"`
+	Title            string `json:"title"`
+	AdType           string `json:"ad_type"`
+	Summary          string `json:"summary"`
+	CoverURL         string `json:"cover_url"`
+	MediaURL         string `json:"media_url"`
+	MediaType        string `json:"media_type"`
+	TargetURL        string `json:"target_url"`
+	DisplayChannel   string `json:"display_channel"`
+	DisplayPlacement string `json:"display_placement"`
+	DisplayLayout    string `json:"display_layout"`
+	SortOrder        int    `json:"sort_order"`
+	RewardPoints     int64  `json:"reward_points"`
+	WatchSeconds     int    `json:"watch_seconds"`
+	TotalBudget      int64  `json:"total_budget"`
+	IsActive         *bool  `json:"is_active"`
+	StartsAt         string `json:"starts_at"`
+	EndsAt           string `json:"ends_at"`
+	RetentionDays    int    `json:"retention_days"`
 }
 
 // 4. staffRewardAdUpdateRequest defines a rewarded ad update payload.
 type staffRewardAdUpdateRequest struct {
-	Title         *string `json:"title"`
-	Summary       *string `json:"summary"`
-	CoverURL      *string `json:"cover_url"`
-	MediaURL      *string `json:"media_url"`
-	MediaType     *string `json:"media_type"`
-	TargetURL     *string `json:"target_url"`
-	RewardPoints  *int64  `json:"reward_points"`
-	WatchSeconds  *int    `json:"watch_seconds"`
-	TotalBudget   *int64  `json:"total_budget"`
-	IsActive      *bool   `json:"is_active"`
-	StartsAt      *string `json:"starts_at"`
-	EndsAt        *string `json:"ends_at"`
-	RetentionDays *int    `json:"retention_days"`
+	Title            *string `json:"title"`
+	AdType           *string `json:"ad_type"`
+	Summary          *string `json:"summary"`
+	CoverURL         *string `json:"cover_url"`
+	MediaURL         *string `json:"media_url"`
+	MediaType        *string `json:"media_type"`
+	TargetURL        *string `json:"target_url"`
+	DisplayChannel   *string `json:"display_channel"`
+	DisplayPlacement *string `json:"display_placement"`
+	DisplayLayout    *string `json:"display_layout"`
+	SortOrder        *int    `json:"sort_order"`
+	RewardPoints     *int64  `json:"reward_points"`
+	WatchSeconds     *int    `json:"watch_seconds"`
+	TotalBudget      *int64  `json:"total_budget"`
+	IsActive         *bool   `json:"is_active"`
+	StartsAt         *string `json:"starts_at"`
+	EndsAt           *string `json:"ends_at"`
+	RetentionDays    *int    `json:"retention_days"`
 }
 
-// 5. NewStaffWalletHandler creates a staff wallet handler instance.
+// 5. staffDisplayAdSettingsRequest defines display ad slot settings payload.
+type staffDisplayAdSettingsRequest struct {
+	Slots []service.DisplayAdSlotInput `json:"slots"`
+}
+
+// 6. NewStaffWalletHandler creates a staff wallet handler instance.
 func NewStaffWalletHandler(walletService *service.WalletService) *StaffWalletHandler {
 	return &StaffWalletHandler{walletService: walletService}
 }
 
-// 6. ListTransactions returns staff-visible wallet transactions.
+// 7. ListTransactions returns staff-visible wallet transactions.
 func (h *StaffWalletHandler) ListTransactions(c *gin.Context) {
 	page, pageSize := parsePagination(c)
 	result, pagination, err := h.walletService.ListStaffWalletTransactions(c.Request.Context(), service.StaffWalletTransactionFilters{
@@ -86,7 +101,7 @@ func (h *StaffWalletHandler) ListTransactions(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": result, "pagination": pagination})
 }
 
-// 7. GrantPoints credits AJO Points to a selected member.
+// 8. GrantPoints credits AJO Points to a selected member.
 func (h *StaffWalletHandler) GrantPoints(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -114,14 +129,16 @@ func (h *StaffWalletHandler) GrantPoints(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 8. ListRewardAds returns staff-visible rewarded ad tasks.
+// 9. ListRewardAds returns staff-visible rewarded ad tasks.
 func (h *StaffWalletHandler) ListRewardAds(c *gin.Context) {
 	page, pageSize := parsePagination(c)
 	result, pagination, err := h.walletService.ListStaffRewardAds(c.Request.Context(), service.StaffRewardAdFilters{
-		Page:     page,
-		PageSize: pageSize,
-		Keyword:  strings.TrimSpace(c.Query("keyword")),
-		IsActive: parseOptionalBoolQuery(c, "is_active"),
+		Page:           page,
+		PageSize:       pageSize,
+		Keyword:        strings.TrimSpace(c.Query("keyword")),
+		IsActive:       parseOptionalBoolQuery(c, "is_active"),
+		AdType:         strings.TrimSpace(c.Query("ad_type")),
+		DisplayChannel: strings.TrimSpace(c.Query("display_channel")),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -131,7 +148,7 @@ func (h *StaffWalletHandler) ListRewardAds(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": result, "pagination": pagination})
 }
 
-// 9. GetRewardAd returns one staff-visible rewarded ad task.
+// 10. GetRewardAd returns one staff-visible rewarded ad task.
 func (h *StaffWalletHandler) GetRewardAd(c *gin.Context) {
 	result, err := h.walletService.GetStaffRewardAd(c.Request.Context(), strings.TrimSpace(c.Param("taskId")))
 	if err != nil {
@@ -142,7 +159,41 @@ func (h *StaffWalletHandler) GetRewardAd(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 10. CreateRewardAd creates a rewarded ad task.
+// 11. GetDisplayAdSettings returns listing-side display ad slot settings.
+func (h *StaffWalletHandler) GetDisplayAdSettings(c *gin.Context) {
+	result, err := h.walletService.ListDisplayAdSettings(c.Request.Context(), strings.TrimSpace(c.Query("channel")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 12. SaveDisplayAdSettings saves listing-side display ad slot settings.
+func (h *StaffWalletHandler) SaveDisplayAdSettings(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	var request staffDisplayAdSettingsRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.walletService.SaveDisplayAdSettings(c.Request.Context(), user.UserID, strings.TrimSpace(c.Query("channel")), request.Slots)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 13. CreateRewardAd creates a rewarded ad task.
 func (h *StaffWalletHandler) CreateRewardAd(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -166,19 +217,24 @@ func (h *StaffWalletHandler) CreateRewardAd(c *gin.Context) {
 	}
 
 	result, err := h.walletService.CreateStaffRewardAd(c.Request.Context(), user.UserID, service.RewardAdCreateParams{
-		Title:         strings.TrimSpace(request.Title),
-		Summary:       strings.TrimSpace(request.Summary),
-		CoverURL:      strings.TrimSpace(request.CoverURL),
-		MediaURL:      strings.TrimSpace(request.MediaURL),
-		MediaType:     strings.TrimSpace(request.MediaType),
-		TargetURL:     strings.TrimSpace(request.TargetURL),
-		RewardPoints:  request.RewardPoints,
-		WatchSeconds:  request.WatchSeconds,
-		TotalBudget:   0,
-		IsActive:      isActive,
-		StartsAt:      startsAt,
-		EndsAt:        endsAt,
-		RetentionDays: request.RetentionDays,
+		Title:            strings.TrimSpace(request.Title),
+		AdType:           strings.TrimSpace(request.AdType),
+		Summary:          strings.TrimSpace(request.Summary),
+		CoverURL:         strings.TrimSpace(request.CoverURL),
+		MediaURL:         strings.TrimSpace(request.MediaURL),
+		MediaType:        strings.TrimSpace(request.MediaType),
+		TargetURL:        strings.TrimSpace(request.TargetURL),
+		DisplayChannel:   strings.TrimSpace(request.DisplayChannel),
+		DisplayPlacement: strings.TrimSpace(request.DisplayPlacement),
+		DisplayLayout:    strings.TrimSpace(request.DisplayLayout),
+		SortOrder:        request.SortOrder,
+		RewardPoints:     request.RewardPoints,
+		WatchSeconds:     request.WatchSeconds,
+		TotalBudget:      0,
+		IsActive:         isActive,
+		StartsAt:         startsAt,
+		EndsAt:           endsAt,
+		RetentionDays:    request.RetentionDays,
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -187,7 +243,7 @@ func (h *StaffWalletHandler) CreateRewardAd(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 11. UpdateRewardAd updates a rewarded ad task.
+// 14. UpdateRewardAd updates a rewarded ad task.
 func (h *StaffWalletHandler) UpdateRewardAd(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -219,20 +275,25 @@ func (h *StaffWalletHandler) UpdateRewardAd(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 12. rewardAdUpdateParams converts a handler request to service params.
+// 15. rewardAdUpdateParams converts a handler request to service params.
 func rewardAdUpdateParams(request staffRewardAdUpdateRequest) (service.RewardAdUpdateParams, error) {
 	params := service.RewardAdUpdateParams{
-		Title:         trimmedStringPointer(request.Title),
-		Summary:       trimmedStringPointer(request.Summary),
-		CoverURL:      trimmedStringPointer(request.CoverURL),
-		MediaURL:      trimmedStringPointer(request.MediaURL),
-		MediaType:     trimmedStringPointer(request.MediaType),
-		TargetURL:     trimmedStringPointer(request.TargetURL),
-		RewardPoints:  request.RewardPoints,
-		WatchSeconds:  request.WatchSeconds,
-		TotalBudget:   request.TotalBudget,
-		IsActive:      request.IsActive,
-		RetentionDays: request.RetentionDays,
+		Title:            trimmedStringPointer(request.Title),
+		AdType:           trimmedStringPointer(request.AdType),
+		Summary:          trimmedStringPointer(request.Summary),
+		CoverURL:         trimmedStringPointer(request.CoverURL),
+		MediaURL:         trimmedStringPointer(request.MediaURL),
+		MediaType:        trimmedStringPointer(request.MediaType),
+		TargetURL:        trimmedStringPointer(request.TargetURL),
+		DisplayChannel:   trimmedStringPointer(request.DisplayChannel),
+		DisplayPlacement: trimmedStringPointer(request.DisplayPlacement),
+		DisplayLayout:    trimmedStringPointer(request.DisplayLayout),
+		SortOrder:        request.SortOrder,
+		RewardPoints:     request.RewardPoints,
+		WatchSeconds:     request.WatchSeconds,
+		TotalBudget:      request.TotalBudget,
+		IsActive:         request.IsActive,
+		RetentionDays:    request.RetentionDays,
 	}
 	if request.StartsAt != nil {
 		startsAt, err := parseOptionalRFC3339(*request.StartsAt)
@@ -253,7 +314,7 @@ func rewardAdUpdateParams(request staffRewardAdUpdateRequest) (service.RewardAdU
 	return params, nil
 }
 
-// 13. parseRewardAdTimeRange parses optional create time fields.
+// 16. parseRewardAdTimeRange parses optional create time fields.
 func parseRewardAdTimeRange(startsAt string, endsAt string) (*time.Time, *time.Time, error) {
 	startTime, err := parseOptionalRFC3339(startsAt)
 	if err != nil {
@@ -266,7 +327,7 @@ func parseRewardAdTimeRange(startsAt string, endsAt string) (*time.Time, *time.T
 	return startTime, endTime, nil
 }
 
-// 14. parseOptionalRFC3339 parses an RFC3339 string or returns nil for blank.
+// 17. parseOptionalRFC3339 parses an RFC3339 string or returns nil for blank.
 func parseOptionalRFC3339(value string) (*time.Time, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -279,7 +340,7 @@ func parseOptionalRFC3339(value string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-// 15. trimmedStringPointer trims optional string pointer fields.
+// 18. trimmedStringPointer trims optional string pointer fields.
 func trimmedStringPointer(value *string) *string {
 	if value == nil {
 		return nil

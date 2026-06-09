@@ -94,39 +94,83 @@ func (h *StaffListingHandler) ListPropertySales(c *gin.Context) {
 	h.listProperties(c, service.PropertyChannelSale)
 }
 
-// 9. ListServicedApartments returns staff-visible serviced apartment listings.
+// 9. GetPropertySale returns one staff-visible property sale detail.
+func (h *StaffListingHandler) GetPropertySale(c *gin.Context) {
+	h.getProperty(c, service.PropertyChannelSale)
+}
+
+// 10. UpdatePropertySale updates one property sale as staff.
+func (h *StaffListingHandler) UpdatePropertySale(c *gin.Context) {
+	params, ok := bindPropertySaleRequestFromContext(c, strings.TrimSpace(c.Param("listingId")))
+	if !ok {
+		return
+	}
+	result, err := h.propertyService.UpdatePropertySaleForStaff(c.Request.Context(), params)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 11. ListServicedApartments returns staff-visible serviced apartment listings.
 func (h *StaffListingHandler) ListServicedApartments(c *gin.Context) {
 	h.listProperties(c, service.PropertyChannelServiced)
 }
 
-// 10. PublishPropertySale publishes one property sale listing.
+// 12. GetServicedApartment returns one staff-visible serviced apartment detail.
+func (h *StaffListingHandler) GetServicedApartment(c *gin.Context) {
+	h.getProperty(c, service.PropertyChannelServiced)
+}
+
+// 13. UpdateServicedApartment updates one serviced apartment as staff.
+func (h *StaffListingHandler) UpdateServicedApartment(c *gin.Context) {
+	params, ok := bindServicedApartmentRequestFromContext(c, strings.TrimSpace(c.Param("listingId")))
+	if !ok {
+		return
+	}
+	result, err := h.propertyService.UpdateServicedApartmentForStaff(c.Request.Context(), params)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 14. PublishPropertySale publishes one property sale listing.
 func (h *StaffListingHandler) PublishPropertySale(c *gin.Context) {
 	h.publishProperty(c, service.PropertyChannelSale)
 }
 
-// 11. DeactivatePropertySale hides one property sale listing.
+// 15. DeactivatePropertySale hides one property sale listing.
 func (h *StaffListingHandler) DeactivatePropertySale(c *gin.Context) {
 	h.deactivateProperty(c, service.PropertyChannelSale)
 }
 
-// 12. RenewPropertySale renews one property sale listing.
+// 16. RenewPropertySale renews one property sale listing.
 func (h *StaffListingHandler) RenewPropertySale(c *gin.Context) {
 	h.renewProperty(c, service.PropertyChannelSale)
 }
 
-// 13. RenewServicedApartment renews one serviced apartment listing.
+// 17. RenewServicedApartment renews one serviced apartment listing.
 func (h *StaffListingHandler) RenewServicedApartment(c *gin.Context) {
 	h.renewProperty(c, service.PropertyChannelServiced)
 }
 
-// 14. listProperties returns staff-visible property listings for one channel.
+// 18. listProperties returns staff-visible property listings for one channel.
 func (h *StaffListingHandler) listProperties(c *gin.Context, channel service.PropertyChannel) {
 	page, pageSize := parsePagination(c)
 	items, pagination, err := h.propertyService.ListStaffProperties(c.Request.Context(), channel, service.PropertyListFilters{
-		Page:     page,
-		PageSize: pageSize,
-		Keyword:  strings.TrimSpace(c.Query("keyword")),
-		Status:   strings.TrimSpace(c.Query("status")),
+		Page:                  page,
+		PageSize:              pageSize,
+		Keyword:               strings.TrimSpace(c.Query("keyword")),
+		Status:                strings.TrimSpace(c.Query("status")),
+		TransactionType:       strings.TrimSpace(c.Query("transaction_type")),
+		PropertyType:          strings.TrimSpace(c.Query("property_type")),
+		RentalType:            strings.TrimSpace(c.Query("rental_type")),
+		FeatureTags:           parseCSVQuery(c.Query("feature_tags")),
+		PublisherIdentityType: strings.TrimSpace(c.Query("publisher_identity_type")),
+		IsNew:                 parseOptionalBoolQuery(c, "is_new"),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -136,7 +180,17 @@ func (h *StaffListingHandler) listProperties(c *gin.Context, channel service.Pro
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 15. publishProperty publishes one property listing.
+// 19. getProperty returns one staff-visible property detail.
+func (h *StaffListingHandler) getProperty(c *gin.Context, channel service.PropertyChannel) {
+	result, err := h.propertyService.GetPropertyDetailForStaff(c.Request.Context(), channel, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 20. publishProperty publishes one property listing.
 func (h *StaffListingHandler) publishProperty(c *gin.Context, channel service.PropertyChannel) {
 	listingID := strings.TrimSpace(c.Param("listingId"))
 	if err := h.propertyService.PublishPropertyForStaff(c.Request.Context(), channel, listingID); err != nil {
@@ -147,7 +201,7 @@ func (h *StaffListingHandler) publishProperty(c *gin.Context, channel service.Pr
 	errcode.Success(c, gin.H{"listing_id": listingID, "publication_status": "active", "business_status": "available"})
 }
 
-// 16. deactivateProperty hides one property listing.
+// 21. deactivateProperty hides one property listing.
 func (h *StaffListingHandler) deactivateProperty(c *gin.Context, channel service.PropertyChannel) {
 	listingID := strings.TrimSpace(c.Param("listingId"))
 	if err := h.propertyService.DeactivatePropertyForStaff(c.Request.Context(), channel, listingID); err != nil {
@@ -158,7 +212,7 @@ func (h *StaffListingHandler) deactivateProperty(c *gin.Context, channel service
 	errcode.Success(c, gin.H{"listing_id": listingID, "publication_status": "hidden"})
 }
 
-// 17. renewProperty renews one property listing.
+// 22. renewProperty renews one property listing.
 func (h *StaffListingHandler) renewProperty(c *gin.Context, channel service.PropertyChannel) {
 	listingID := strings.TrimSpace(c.Param("listingId"))
 	if err := h.propertyService.RenewPropertyForStaff(c.Request.Context(), channel, listingID); err != nil {
@@ -169,7 +223,7 @@ func (h *StaffListingHandler) renewProperty(c *gin.Context, channel service.Prop
 	errcode.Success(c, gin.H{"listing_id": listingID, "publication_status": "active", "business_status": "available"})
 }
 
-// 18. bindStaffRenewalDays binds optional renewal days from request body.
+// 23. bindStaffRenewalDays binds optional renewal days from request body.
 func bindStaffRenewalDays(c *gin.Context) (int, bool) {
 	var request staffRenewRequest
 	if c.Request.Body == nil || c.Request.ContentLength == 0 {

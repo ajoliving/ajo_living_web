@@ -1,0 +1,4 @@
+interface:
+  display_name: "Form-to-View Parity Audit"
+  short_description: "Audit form, payload, preview, and public detail field parity."
+  default_prompt: "Audit this feature so every form field maps correctly to payload, preview, public detail, validation, and tests. Produce a field parity matrix, gaps, fixes, and verification steps."

@@ -6,6 +6,7 @@
 package handler
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -33,23 +34,53 @@ type propertyContactRequest struct {
 // 3. propertySaleRequest defines sale listing create and update payload.
 type propertySaleRequest struct {
 	Title                 string                      `json:"title" binding:"required"`
+	TitleEn               string                      `json:"title_en"`
 	Summary               string                      `json:"summary"`
 	Description           string                      `json:"description"`
+	DescriptionEn         string                      `json:"description_en"`
 	DistrictCode          string                      `json:"district_code" binding:"required"`
 	CommunityID           string                      `json:"community_id"`
 	PublisherIdentityType string                      `json:"publisher_identity_type"`
+	PropertyNo            string                      `json:"property_no"`
+	TransactionType       string                      `json:"transaction_type"`
+	LocationScope         string                      `json:"location_scope"`
+	ListingCategory       string                      `json:"listing_category"`
+	MultiUnitProject      bool                        `json:"multi_unit_project"`
 	PropertyType          string                      `json:"property_type" binding:"required"`
+	RentalType            string                      `json:"rental_type"`
 	EstateName            string                      `json:"estate_name"`
 	AddressText           string                      `json:"address_text" binding:"required"`
-	AskingPriceHKD        float64                     `json:"asking_price_hkd" binding:"required"`
+	AddressTextEn         string                      `json:"address_text_en"`
+	BlockName             string                      `json:"block_name"`
+	UnitName              string                      `json:"unit_name"`
+	ShowUnit              *bool                       `json:"show_unit"`
+	AskingPriceHKD        float64                     `json:"asking_price_hkd"`
+	MonthlyRentHKD        float64                     `json:"monthly_rent_hkd"`
+	PriceReferenceOnly    bool                        `json:"price_reference_only"`
+	PriceNegotiable       bool                        `json:"price_negotiable"`
+	AnnualPrepayDiscount  bool                        `json:"annual_prepay_discount"`
+	AnnualPrepayOption    string                      `json:"annual_prepay_option"`
+	LeaseStartDate        string                      `json:"lease_start_date"`
+	RentIncluded          string                      `json:"rent_included"`
+	AreaMode              string                      `json:"area_mode"`
 	UsableAreaSqft        int                         `json:"usable_area_sqft" binding:"required"`
 	GrossAreaSqft         *int                        `json:"gross_area_sqft"`
 	BedroomCount          int                         `json:"bedroom_count"`
 	LivingRoomCount       int                         `json:"living_room_count"`
 	BathroomCount         int                         `json:"bathroom_count"`
 	FloorLevel            string                      `json:"floor_level"`
+	FloorRaw              string                      `json:"floor_raw"`
+	FloorZone             string                      `json:"floor_zone"`
+	TotalFloors           int                         `json:"total_floors"`
 	Direction             string                      `json:"direction"`
 	BuildingAge           string                      `json:"building_age"`
+	KitchenType           string                      `json:"kitchen_type"`
+	CookingMode           string                      `json:"cooking_mode"`
+	ManagementFeeHKD      float64                     `json:"management_fee_hkd"`
+	VideoURL              string                      `json:"video_url"`
+	VRURL                 string                      `json:"vr_url"`
+	PrivateNote           string                      `json:"private_note"`
+	AdPackageCode         string                      `json:"ad_package_code"`
 	FeatureTags           []string                    `json:"feature_tags"`
 	ContactMethod         string                      `json:"contact_method" binding:"required"`
 	BusinessStatus        string                      `json:"business_status"`
@@ -60,15 +91,35 @@ type propertySaleRequest struct {
 // 4. servicedApartmentRequest defines serviced apartment create and update payload.
 type servicedApartmentRequest struct {
 	Title                 string                                   `json:"title" binding:"required"`
+	TitleEn               string                                   `json:"title_en"`
 	Summary               string                                   `json:"summary"`
 	Description           string                                   `json:"description"`
+	DescriptionEn         string                                   `json:"description_en"`
 	DistrictCode          string                                   `json:"district_code" binding:"required"`
 	CommunityID           string                                   `json:"community_id"`
 	PublisherIdentityType string                                   `json:"publisher_identity_type"`
 	ProjectName           string                                   `json:"project_name" binding:"required"`
+	ProjectNameEn         string                                   `json:"project_name_en"`
 	AddressText           string                                   `json:"address_text" binding:"required"`
-	LowestMonthlyRentHKD  float64                                  `json:"lowest_monthly_rent_hkd" binding:"required"`
-	MinLeaseMonths        int                                      `json:"min_lease_months" binding:"required"`
+	AddressTextEn         string                                   `json:"address_text_en"`
+	WebsiteURL            string                                   `json:"website_url"`
+	WhatsApp              string                                   `json:"whatsapp"`
+	Fax                   string                                   `json:"fax"`
+	ServiceIntro          string                                   `json:"service_intro"`
+	BenefitsText          string                                   `json:"benefits_text"`
+	ExtraChargesText      string                                   `json:"extra_charges_text"`
+	LowestMonthlyRentHKD  float64                                  `json:"lowest_monthly_rent_hkd"`
+	LowestDailyRentHKD    float64                                  `json:"lowest_daily_rent_hkd"`
+	PriceReferenceOnly    bool                                     `json:"price_reference_only"`
+	PriceNegotiable       bool                                     `json:"price_negotiable"`
+	MinUsableAreaSqft     int                                      `json:"min_usable_area_sqft"`
+	MinLeaseMonths        int                                      `json:"min_lease_months"`
+	MinStayValue          int                                      `json:"min_stay_value"`
+	MinStayUnit           string                                   `json:"min_stay_unit"`
+	LocationScope         string                                   `json:"location_scope"`
+	ListingCategory       string                                   `json:"listing_category"`
+	MultiUnitProject      bool                                     `json:"multi_unit_project"`
+	AdPackageCode         string                                   `json:"ad_package_code"`
 	FacilityTags          []string                                 `json:"facility_tags"`
 	ServiceTags           []string                                 `json:"service_tags"`
 	RoomTypes             []service.ServicedApartmentRoomTypeInput `json:"room_types"`
@@ -236,22 +287,38 @@ func (h *PropertyHandler) ContactAccessPropertySale(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelSale)
 }
 
-// 21. PublishServicedApartment publishes a serviced apartment draft.
+// 21. SearchPropertyAddresses returns building address autocomplete suggestions.
+func (h *PropertyHandler) SearchPropertyAddresses(c *gin.Context) {
+	limit, _ := strconv.Atoi(strings.TrimSpace(c.Query("limit")))
+	result, err := h.propertyService.SearchPropertyAddresses(
+		c.Request.Context(),
+		strings.TrimSpace(c.Query("keyword")),
+		strings.TrimSpace(c.Query("district_code")),
+		limit,
+	)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 22. PublishServicedApartment publishes a serviced apartment draft.
 func (h *PropertyHandler) PublishServicedApartment(c *gin.Context) {
 	h.publish(c, service.PropertyChannelServiced)
 }
 
-// 22. RepublishServicedApartment republishes an expired serviced apartment listing.
+// 23. RepublishServicedApartment republishes an expired serviced apartment listing.
 func (h *PropertyHandler) RepublishServicedApartment(c *gin.Context) {
 	h.republish(c, service.PropertyChannelServiced)
 }
 
-// 23. DeactivateServicedApartment hides a serviced apartment listing.
+// 24. DeactivateServicedApartment hides a serviced apartment listing.
 func (h *PropertyHandler) DeactivateServicedApartment(c *gin.Context) {
 	h.deactivate(c, service.PropertyChannelServiced)
 }
 
-// 24. ContactAccessServicedApartment grants serviced apartment contact access.
+// 25. ContactAccessServicedApartment grants serviced apartment contact access.
 func (h *PropertyHandler) ContactAccessServicedApartment(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelServiced)
 }

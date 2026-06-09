@@ -1,12 +1,16 @@
 /*
  * Wallet and AJO Point data models.
  * 1. Store member point balances and immutable point transactions.
- * 2. Store operator-managed reward ads, engagement metrics, and member ad claim records.
+ * 2. Store operator-managed reward and display ads, engagement metrics, and member ad claim records.
  * 3. Keep all wallet audit fields explicit for production traceability.
  */
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/datatypes"
+)
 
 // 1. WalletAccount stores one AJO Point account per member.
 type WalletAccount struct {
@@ -40,16 +44,21 @@ type WalletTransaction struct {
 	CreatedAt      time.Time `gorm:"index:idx_wallet_transactions_user_created,priority:2" json:"created_at"`
 }
 
-// 3. RewardAd stores an operator-managed rewarded ad task.
+// 3. RewardAd stores an operator-managed reward or display ad task.
 type RewardAd struct {
 	ID                int64      `gorm:"primaryKey;autoIncrement" json:"id"`
 	PublicID          string     `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	AdType            string     `gorm:"type:varchar(32);not null;default:'reward';index" json:"ad_type"`
 	Title             string     `gorm:"type:varchar(160);not null" json:"title"`
 	Summary           string     `gorm:"type:varchar(500)" json:"summary"`
 	CoverURL          string     `gorm:"type:varchar(800)" json:"cover_url"`
 	MediaURL          string     `gorm:"type:varchar(800)" json:"media_url"`
 	MediaType         string     `gorm:"type:varchar(32);not null;default:'image';index" json:"media_type"`
 	TargetURL         string     `gorm:"type:varchar(800)" json:"target_url"`
+	DisplayChannel    string     `gorm:"type:varchar(64);not null;default:'';index:idx_reward_ads_display,priority:1" json:"display_channel"`
+	DisplayPlacement  string     `gorm:"type:varchar(64);not null;default:'';index:idx_reward_ads_display,priority:2" json:"display_placement"`
+	DisplayLayout     string     `gorm:"type:varchar(64);not null;default:'image_text'" json:"display_layout"`
+	SortOrder         int        `gorm:"not null;default:0;index:idx_reward_ads_display,priority:3" json:"sort_order"`
 	RewardPoints      int64      `gorm:"not null" json:"reward_points"`
 	WatchSeconds      int        `gorm:"not null;default:30" json:"watch_seconds"`
 	DailyUserLimit    int        `gorm:"not null;default:1" json:"daily_user_limit"`
@@ -84,4 +93,37 @@ type RewardAdClaim struct {
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	RewardAd            *RewardAd  `gorm:"foreignKey:RewardAdID" json:"reward_ad,omitempty"`
+}
+
+// 5. WalletRechargeOrder stores one EasyLink-backed wallet recharge order.
+type WalletRechargeOrder struct {
+	ID                    int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID              string         `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	UserID                int64          `gorm:"not null;index" json:"user_id"`
+	MchOrderNo            string         `gorm:"type:varchar(64);not null;uniqueIndex" json:"mch_order_no"`
+	PayOrderID            string         `gorm:"type:varchar(80);index" json:"pay_order_id"`
+	PayChannel            string         `gorm:"type:varchar(32);not null;index" json:"pay_channel"`
+	PayRegion             string         `gorm:"type:varchar(16);not null;default:'HK';index" json:"pay_region"`
+	PayDataType           string         `gorm:"type:varchar(32)" json:"pay_data_type"`
+	PayData               string         `gorm:"type:text" json:"pay_data"`
+	Currency              string         `gorm:"type:varchar(8);not null;default:'HKD'" json:"currency"`
+	AmountCents           int64          `gorm:"not null" json:"amount_cents"`
+	PointsAmount          int64          `gorm:"not null" json:"points_amount"`
+	State                 string         `gorm:"type:varchar(32);not null;index" json:"state"`
+	GatewayStateCode      int            `gorm:"not null;default:1" json:"gateway_state_code"`
+	GatewayMessage        string         `gorm:"type:varchar(500)" json:"gateway_message"`
+	RequestPayload        datatypes.JSON `gorm:"type:jsonb" json:"request_payload"`
+	GatewayCreateRequest  datatypes.JSON `gorm:"type:jsonb" json:"gateway_create_request"`
+	GatewayCreateResponse datatypes.JSON `gorm:"type:jsonb" json:"gateway_create_response"`
+	GatewayQueryRequest   datatypes.JSON `gorm:"type:jsonb" json:"gateway_query_request"`
+	GatewayQueryResponse  datatypes.JSON `gorm:"type:jsonb" json:"gateway_query_response"`
+	GatewayNotifyPayload  datatypes.JSON `gorm:"type:jsonb" json:"gateway_notify_payload"`
+	WalletTransactionID   *int64         `gorm:"index" json:"wallet_transaction_id"`
+	ClientIP              string         `gorm:"type:varchar(64)" json:"client_ip"`
+	UserAgent             string         `gorm:"type:varchar(500)" json:"user_agent"`
+	ExpireTime            *time.Time     `gorm:"index" json:"expire_time"`
+	PaidAt                *time.Time     `gorm:"index" json:"paid_at"`
+	CreditedAt            *time.Time     `gorm:"index" json:"credited_at"`
+	ClosedAt              *time.Time     `gorm:"index" json:"closed_at"`
+	TimestampModel
 }

@@ -7,6 +7,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -18,89 +19,214 @@ import (
 
 // 1. Config defines the runtime configuration set.
 type Config struct {
-	AppEnv                 string
-	AppPort                string
-	AppPublicBaseURL       string
-	AppAPIPublicBaseURL    string
-	CORSAllowedOrigins     string
-	DBDriver               string
-	DBDSN                  string
-	JWTSecret              string
-	EncryptionKey          string
-	BootstrapStaffPhones   string
-	OTPProvider            string
-	OTPMockCode            string
-	MailEnabled            bool
-	SMTPHost               string
-	SMTPPort               int
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPFrom               string
-	SMTPHelloName          string
-	StorageProvider        string
-	StorageBucket          string
-	StorageEndpoint        string
-	StorageRegion          string
-	StorageAccessKeyID     string
-	StorageAccessKeySecret string
-	StorageSessionToken    string
-	StorageUseCName        bool
-	StorageDisableSSL      bool
-	StoragePresignExpires  time.Duration
-	OSSCallbackEnabled     bool
-	OSSCallbackURL         string
-	OSSAllowedOrigins      string
-	MediaBaseURL           string
-	SeedCommunities        bool
-	SeedHomeContent        bool
-	WebPublicDir           string
-	SystemUserID           int64
-	EnableExpireTicker     bool
-	ExpireTickerInterval   time.Duration
+	AppEnv                      string
+	AppPort                     string
+	AppPublicBaseURL            string
+	AppAPIPublicBaseURL         string
+	CORSAllowedOrigins          string
+	DBDriver                    string
+	DBDSN                       string
+	JWTSecret                   string
+	EncryptionKey               string
+	BootstrapStaffPhones        string
+	POSLoginURL                 string
+	POSAPIBaseURL               string
+	POSAPIUsername              string
+	POSAPIPassword              string
+	POSAPILoginType             string
+	POSLoginUsernameField       string
+	POSLoginPasswordField       string
+	POSLoginTimeout             time.Duration
+	POSPaymentServiceURL        string
+	POSTerminalProxyEnabled     bool
+	POSTerminalType             string
+	POSTerminalURL              string
+	POSTerminalAllowedBuildings string
+	GoodPriceAPIBaseURL         string
+	GoodPriceRequestTimeout     time.Duration
+	GoodPriceCacheTTL           time.Duration
+	GoodPriceSummaryCacheTTL    time.Duration
+	GoodPriceSearchCacheTTL     time.Duration
+	GoodPriceDetailCacheTTL     time.Duration
+	GoodPriceAlertEnabled       bool
+	GoodPriceAlertInterval      time.Duration
+	OTPProvider                 string
+	OTPMockCode                 string
+	MailEnabled                 bool
+	SMTPHost                    string
+	SMTPPort                    int
+	SMTPUsername                string
+	SMTPPassword                string
+	SMTPFrom                    string
+	SMTPHelloName               string
+	StorageProvider             string
+	StorageBucket               string
+	StorageEndpoint             string
+	StorageRegion               string
+	StorageAccessKeyID          string
+	StorageAccessKeySecret      string
+	StorageSessionToken         string
+	StorageUseCName             bool
+	StorageDisableSSL           bool
+	StoragePresignExpires       time.Duration
+	OSSCallbackEnabled          bool
+	OSSCallbackURL              string
+	OSSAllowedOrigins           string
+	MediaBaseURL                string
+	SeedCommunities             bool
+	SeedHomeContent             bool
+	WebPublicDir                string
+	SystemUserID                int64
+	EnableExpireTicker          bool
+	ExpireTickerInterval        time.Duration
+	WalletRechargeEnabled       bool
+	PaymentGatewayEnv           string
+	PaymentGatewayBaseURL       string
+	PaymentMerchantNo           string
+	PaymentReturnBaseURL        string
+	PaymentNotifyURL            string
+	PaymentRequestTimeout       time.Duration
+	PaymentExpireSeconds        int
+	PaymentChannelConfigs       map[string]PaymentChannelConfig
 }
 
-// 2. Load reads environment variables and returns normalized config.
+// 2. PaymentChannelConfig stores EasyLink app credentials for one channel.
+type PaymentChannelConfig struct {
+	AppID        string
+	AppSecret    string
+	ChannelExtra string
+}
+
+// 3. Load reads environment variables and returns normalized config.
 func Load() *Config {
 	_ = godotenv.Load()
+	easylinkEnv := getEnv("EASYLINK_ENV", "sandbox")
+	sharedH5AppID := getEnv("EASYLINK_H5_APP_ID", "")
+	sharedH5AppSecret := getEnv("EASYLINK_H5_APP_SECRET", "")
+	posAPIBaseURL := getEnv("POS_API_BASE_URL", defaultPOSAPIBaseURL())
 
 	cfg := &Config{
-		AppEnv:                 getEnv("APP_ENV", "development"),
-		AppPort:                getEnv("APP_PORT", "8080"),
-		AppPublicBaseURL:       getEnv("APP_PUBLIC_BASE_URL", "http://localhost:5173"),
-		AppAPIPublicBaseURL:    getEnv("APP_API_PUBLIC_BASE_URL", "http://localhost:8080"),
-		CORSAllowedOrigins:     getEnv("CORS_ALLOWED_ORIGINS", ""),
-		DBDriver:               getEnv("DB_DRIVER", "postgres"),
-		DBDSN:                  getEnv("DB_DSN", "host=127.0.0.1 user=postgres password=postgres dbname=ajoliving port=5432 sslmode=disable TimeZone=Asia/Shanghai"),
-		JWTSecret:              getEnv("JWT_SECRET", "dev-secret-key"),
-		EncryptionKey:          getEnv("ENCRYPTION_KEY", "dev-encryption-key"),
-		BootstrapStaffPhones:   getEnv("BOOTSTRAP_STAFF_PHONES", ""),
-		OTPProvider:            getEnv("OTP_PROVIDER", "mock"),
-		OTPMockCode:            getEnv("OTP_MOCK_CODE", "123456"),
-		MailEnabled:            getBoolEnv("MAIL_ENABLED", false),
-		SMTPHost:               getEnv("SMTP_HOST", ""),
-		SMTPPort:               getIntEnv("SMTP_PORT", 25),
-		SMTPUsername:           strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
-		SMTPPassword:           os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:               strings.TrimSpace(os.Getenv("SMTP_FROM")),
-		SMTPHelloName:          getEnv("SMTP_HELLO_NAME", "localhost"),
-		StorageProvider:        getEnvWithLegacy("OSS_PROVIDER", "STORAGE_PROVIDER", "mock"),
-		StorageBucket:          getEnvWithLegacy("OSS_BUCKET", "STORAGE_BUCKET", "local-bucket"),
-		StorageEndpoint:        getEnvWithLegacy("OSS_ENDPOINT", "STORAGE_ENDPOINT", "http://localhost:9000"),
-		StorageRegion:          getEnvWithLegacy("OSS_REGION", "STORAGE_REGION", ""),
-		StorageAccessKeyID:     getEnvWithLegacy("OSS_ACCESS_KEY_ID", "STORAGE_ACCESS_KEY_ID", ""),
-		StorageAccessKeySecret: getEnvWithLegacy("OSS_ACCESS_KEY_SECRET", "STORAGE_ACCESS_KEY_SECRET", ""),
-		StorageSessionToken:    getEnvWithLegacy("OSS_SESSION_TOKEN", "STORAGE_SESSION_TOKEN", ""),
-		StorageUseCName:        getBoolEnvWithLegacy("OSS_USE_CNAME", "STORAGE_USE_CNAME", false),
-		StorageDisableSSL:      getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
-		StoragePresignExpires:  getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
-		OSSCallbackEnabled:     getBoolEnv("OSS_CALLBACK_ENABLED", false),
-		OSSAllowedOrigins:      getEnv("OSS_ALLOWED_ORIGINS", ""),
-		SeedCommunities:        getBoolEnv("SEED_COMMUNITIES", true),
-		SeedHomeContent:        getBoolEnv("SEED_HOME_CONTENT", true),
-		WebPublicDir:           getEnv("WEB_PUBLIC_DIR", "../web/public"),
-		SystemUserID:           getInt64Env("SYSTEM_USER_ID", 1),
-		EnableExpireTicker:     getBoolEnv("ENABLE_EXPIRE_TICKER", true),
-		ExpireTickerInterval:   getDurationEnv("EXPIRE_TICKER_INTERVAL", time.Hour),
+		AppEnv:                      getEnv("APP_ENV", "development"),
+		AppPort:                     getEnv("APP_PORT", "8081"),
+		AppPublicBaseURL:            getEnv("APP_PUBLIC_BASE_URL", "http://localhost:5173"),
+		AppAPIPublicBaseURL:         getEnv("APP_API_PUBLIC_BASE_URL", "http://localhost:8081"),
+		CORSAllowedOrigins:          getEnv("CORS_ALLOWED_ORIGINS", ""),
+		DBDriver:                    getEnv("DB_DRIVER", "postgres"),
+		DBDSN:                       getEnv("DB_DSN", "host=127.0.0.1 user=postgres password=postgres dbname=ajoliving port=5432 sslmode=disable TimeZone=Asia/Shanghai"),
+		JWTSecret:                   getEnv("JWT_SECRET", "dev-secret-key"),
+		EncryptionKey:               getEnv("ENCRYPTION_KEY", "dev-encryption-key"),
+		BootstrapStaffPhones:        getEnv("BOOTSTRAP_STAFF_PHONES", ""),
+		POSLoginURL:                 getEnv("POS_LOGIN_URL", defaultPOSLoginURL(posAPIBaseURL)),
+		POSAPIBaseURL:               posAPIBaseURL,
+		POSAPIUsername:              getEnv("POS_API_USERNAME", "testowner02"),
+		POSAPIPassword:              getEnv("POS_API_PASSWORD", "test02test02"),
+		POSAPILoginType:             getEnv("POS_API_LOGIN_TYPE", "username"),
+		POSLoginUsernameField:       getEnv("POS_LOGIN_USERNAME_FIELD", "login_name"),
+		POSLoginPasswordField:       getEnv("POS_LOGIN_PASSWORD_FIELD", "password"),
+		POSLoginTimeout:             getDurationEnv("POS_LOGIN_TIMEOUT", 10*time.Second),
+		POSPaymentServiceURL:        getEnv("POS_PAYMENT_SERVICE_URL", defaultPOSPaymentServiceURL()),
+		POSTerminalProxyEnabled:     getBoolEnv("POS_TERMINAL_PROXY_ENABLED", false),
+		GoodPriceAPIBaseURL:         getEnv("GOOD_PRICE_API_BASE_URL", "https://good.price.skylinedances.com/api"),
+		GoodPriceRequestTimeout:     getDurationEnv("GOOD_PRICE_REQUEST_TIMEOUT", 10*time.Second),
+		GoodPriceCacheTTL:           getDurationEnv("GOOD_PRICE_CACHE_TTL", 5*time.Minute),
+		GoodPriceSummaryCacheTTL:    getDurationEnv("GOOD_PRICE_SUMMARY_CACHE_TTL", 5*time.Minute),
+		GoodPriceSearchCacheTTL:     getDurationEnv("GOOD_PRICE_SEARCH_CACHE_TTL", 2*time.Minute),
+		GoodPriceDetailCacheTTL:     getDurationEnv("GOOD_PRICE_DETAIL_CACHE_TTL", 3*time.Minute),
+		GoodPriceAlertEnabled:       getBoolEnv("GOOD_PRICE_ALERT_ENABLED", true),
+		GoodPriceAlertInterval:      getDurationEnv("GOOD_PRICE_ALERT_INTERVAL", time.Hour),
+		POSTerminalType:             getEnv("POS_TERMINAL_TYPE", "allinpay"),
+		POSTerminalURL:              getEnv("POS_TERMINAL_URL", ""),
+		POSTerminalAllowedBuildings: getEnv("POS_TERMINAL_ALLOWED_BUILDINGS", ""),
+		OTPProvider:                 getEnv("OTP_PROVIDER", "mock"),
+		OTPMockCode:                 getEnv("OTP_MOCK_CODE", "123456"),
+		MailEnabled:                 getBoolEnv("MAIL_ENABLED", false),
+		SMTPHost:                    getEnv("SMTP_HOST", ""),
+		SMTPPort:                    getIntEnv("SMTP_PORT", 25),
+		SMTPUsername:                strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:                os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:                    strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		SMTPHelloName:               getEnv("SMTP_HELLO_NAME", "localhost"),
+		StorageProvider:             getEnvWithLegacy("OSS_PROVIDER", "STORAGE_PROVIDER", "mock"),
+		StorageBucket:               getEnvWithLegacy("OSS_BUCKET", "STORAGE_BUCKET", "local-bucket"),
+		StorageEndpoint:             getEnvWithLegacy("OSS_ENDPOINT", "STORAGE_ENDPOINT", "http://localhost:9000"),
+		StorageRegion:               getEnvWithLegacy("OSS_REGION", "STORAGE_REGION", ""),
+		StorageAccessKeyID:          getEnvWithLegacy("OSS_ACCESS_KEY_ID", "STORAGE_ACCESS_KEY_ID", ""),
+		StorageAccessKeySecret:      getEnvWithLegacy("OSS_ACCESS_KEY_SECRET", "STORAGE_ACCESS_KEY_SECRET", ""),
+		StorageSessionToken:         getEnvWithLegacy("OSS_SESSION_TOKEN", "STORAGE_SESSION_TOKEN", ""),
+		StorageUseCName:             getBoolEnvWithLegacy("OSS_USE_CNAME", "STORAGE_USE_CNAME", false),
+		StorageDisableSSL:           getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
+		StoragePresignExpires:       getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
+		OSSCallbackEnabled:          getBoolEnv("OSS_CALLBACK_ENABLED", false),
+		OSSAllowedOrigins:           getEnv("OSS_ALLOWED_ORIGINS", ""),
+		SeedCommunities:             getBoolEnv("SEED_COMMUNITIES", true),
+		SeedHomeContent:             getBoolEnv("SEED_HOME_CONTENT", true),
+		WebPublicDir:                getEnv("WEB_PUBLIC_DIR", "../web/public"),
+		SystemUserID:                getInt64Env("SYSTEM_USER_ID", 1),
+		EnableExpireTicker:          getBoolEnv("ENABLE_EXPIRE_TICKER", true),
+		ExpireTickerInterval:        getDurationEnv("EXPIRE_TICKER_INTERVAL", time.Hour),
+		WalletRechargeEnabled:       getBoolEnv("WALLET_RECHARGE_ENABLED", true),
+		PaymentGatewayEnv:           normalizePaymentGatewayEnv(easylinkEnv),
+		PaymentGatewayBaseURL:       getEnv("EASYLINK_BASE_URL", defaultPaymentGatewayBaseURL(easylinkEnv)),
+		PaymentMerchantNo:           getEnv("EASYLINK_MCH_NO", ""),
+		PaymentReturnBaseURL:        getEnv("WALLET_RECHARGE_RETURN_BASE_URL", getEnv("AJO_EASYLINK_RETURN_BASE_URL", getEnv("EASYLINK_RETURN_BASE_URL", defaultWalletRechargeReturnBaseURL(easylinkEnv)))),
+		PaymentNotifyURL:            getEnv("WALLET_RECHARGE_NOTIFY_URL", getEnv("AJO_EASYLINK_NOTIFY_URL", defaultWalletRechargeNotifyURL(easylinkEnv))),
+		PaymentRequestTimeout:       time.Duration(getIntEnv("EASYLINK_TIMEOUT_MS", 15000)) * time.Millisecond,
+		PaymentExpireSeconds:        getIntEnv("EASYLINK_EXPIRED_SECONDS", 180),
+		PaymentChannelConfigs: map[string]PaymentChannelConfig{
+			"WX_H5": {
+				AppID:        strings.TrimSpace(firstConfigValue(os.Getenv("EASYLINK_WX_H5_APP_ID"), sharedH5AppID)),
+				AppSecret:    strings.TrimSpace(firstConfigValue(os.Getenv("EASYLINK_WX_H5_APP_SECRET"), sharedH5AppSecret)),
+				ChannelExtra: buildPaymentChannelExtra("appid", os.Getenv("EASYLINK_WX_H5_CHANNEL_APP_ID")),
+			},
+			"ALI_H5": {
+				AppID:        strings.TrimSpace(firstConfigValue(os.Getenv("EASYLINK_ALI_H5_APP_ID"), sharedH5AppID)),
+				AppSecret:    strings.TrimSpace(firstConfigValue(os.Getenv("EASYLINK_ALI_H5_APP_SECRET"), sharedH5AppSecret)),
+				ChannelExtra: buildPaymentChannelExtra("walletType", os.Getenv("EASYLINK_ALI_H5_WALLET_TYPE")),
+			},
+			"WX_QR": {
+				AppID: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_WX_QR_APP_ID"),
+					os.Getenv("EASYLINK_WX_H5_APP_ID"),
+					sharedH5AppID,
+				)),
+				AppSecret: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_WX_QR_APP_SECRET"),
+					os.Getenv("EASYLINK_WX_H5_APP_SECRET"),
+					sharedH5AppSecret,
+				)),
+				ChannelExtra: buildPaymentChannelExtra("payDataType", firstConfigValue(os.Getenv("EASYLINK_WX_QR_PAY_DATA_TYPE"), "codeUrl")),
+			},
+			"ALI_QR": {
+				AppID: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_ALI_QR_APP_ID"),
+					os.Getenv("EASYLINK_ALI_H5_APP_ID"),
+					sharedH5AppID,
+				)),
+				AppSecret: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_ALI_QR_APP_SECRET"),
+					os.Getenv("EASYLINK_ALI_H5_APP_SECRET"),
+					sharedH5AppSecret,
+				)),
+				ChannelExtra: buildPaymentChannelExtra("payDataType", firstConfigValue(os.Getenv("EASYLINK_ALI_QR_PAY_DATA_TYPE"), "codeUrl")),
+			},
+			"YSF_QR": {
+				AppID: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_YSF_QR_APP_ID"),
+					os.Getenv("EASYLINK_UP_OP_APP_ID"),
+					os.Getenv("EASYLINK_UP_APP_ID"),
+				)),
+				AppSecret: strings.TrimSpace(firstConfigValue(
+					os.Getenv("EASYLINK_YSF_QR_APP_SECRET"),
+					os.Getenv("EASYLINK_UP_OP_APP_SECRET"),
+					os.Getenv("EASYLINK_UP_APP_SECRET"),
+				)),
+				ChannelExtra: buildPaymentChannelExtra("payDataType", firstConfigValue(
+					os.Getenv("EASYLINK_YSF_QR_PAY_DATA_TYPE"),
+					os.Getenv("EASYLINK_UP_OP_PAY_DATA_TYPE"),
+					"codeImgUrl",
+				)),
+			},
+		},
 	}
 
 	cfg.MediaBaseURL = getEnvWithLegacy("OSS_MEDIA_BASE_URL", "MEDIA_BASE_URL", defaultMediaBaseURL(cfg))
@@ -265,4 +391,87 @@ func trimEndpointScheme(endpoint string) string {
 	value = strings.TrimPrefix(value, "https://")
 	value = strings.TrimPrefix(value, "http://")
 	return strings.Trim(value, "/")
+}
+
+// 16. normalizePaymentGatewayEnv normalizes EasyLink environment selection.
+func normalizePaymentGatewayEnv(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "production") {
+		return "production"
+	}
+
+	return "sandbox"
+}
+
+// 17. defaultPaymentGatewayBaseURL returns the EasyLink gateway base URL.
+func defaultPaymentGatewayBaseURL(env string) string {
+	if normalizePaymentGatewayEnv(env) == "production" {
+		return "https://api-pay.gnete.com.hk"
+	}
+
+	return "https://ts-api-pay.gnete.com.hk"
+}
+
+// 18. defaultWalletRechargeReturnBaseURL returns the deployed member web URL.
+func defaultWalletRechargeReturnBaseURL(env string) string {
+	if normalizePaymentGatewayEnv(env) == "production" {
+		return "https://ajoliving.skylinedances.com"
+	}
+
+	return getEnv("APP_PUBLIC_BASE_URL", "http://localhost:5173")
+}
+
+// 19. defaultWalletRechargeNotifyURL returns the deployed payment callback URL.
+func defaultWalletRechargeNotifyURL(env string) string {
+	if normalizePaymentGatewayEnv(env) == "production" {
+		return "https://ajoliving.server.skylinedances.com/api/v1/payments/easylink/notify"
+	}
+
+	return strings.TrimRight(getEnv("APP_API_PUBLIC_BASE_URL", "http://localhost:8081"), "/") + "/api/v1/payments/easylink/notify"
+}
+
+// 20. firstConfigValue returns the first non-empty config value.
+func firstConfigValue(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+
+	return ""
+}
+
+// 21. buildPaymentChannelExtra serializes one optional channelExtra field.
+func buildPaymentChannelExtra(key string, value string) string {
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+	if key == "" || value == "" {
+		return ""
+	}
+
+	raw, err := json.Marshal(map[string]string{key: value})
+	if err != nil {
+		return ""
+	}
+
+	return string(raw)
+}
+
+// 22. defaultPOSAPIBaseURL returns the deployed POS relay API base URL.
+func defaultPOSAPIBaseURL() string {
+	return "https://pos.ismart.skylinedances.com/api"
+}
+
+// 23. defaultPOSLoginURL builds the POS Web login endpoint from the API base URL.
+func defaultPOSLoginURL(baseURL string) string {
+	value := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if value == "" {
+		value = defaultPOSAPIBaseURL()
+	}
+
+	return value + "/poslogin"
+}
+
+// 24. defaultPOSPaymentServiceURL returns the deployed POS H5 payment API base URL.
+func defaultPOSPaymentServiceURL() string {
+	return "https://easy.payment.skylinedances.com/api/payments"
 }

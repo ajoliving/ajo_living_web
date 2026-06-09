@@ -44,11 +44,16 @@ type emailOTPRequest struct {
 
 // 5. emailPasswordRequest defines email password auth payload.
 type emailPasswordRequest struct {
-	Email            string `json:"email" binding:"required"`
-	Password         string `json:"password" binding:"required"`
-	DisplayName      string `json:"display_name"`
-	PhoneCountryCode string `json:"phone_country_code"`
-	PhoneNumber      string `json:"phone_number"`
+	Email                string `json:"email"`
+	Password             string `json:"password" binding:"required"`
+	DisplayName          string `json:"display_name"`
+	PhoneCountryCode     string `json:"phone_country_code"`
+	PhoneNumber          string `json:"phone_number"`
+	Username             string `json:"username"`
+	PrimaryCommunityID   string `json:"primary_community_id"`
+	PrimaryCommunityName string `json:"primary_community_name"`
+	ResidenceFloor       string `json:"residence_floor"`
+	ResidenceUnit        string `json:"residence_unit"`
 }
 
 // 6. phonePasswordRequest defines phone password auth payload.
@@ -58,12 +63,20 @@ type phonePasswordRequest struct {
 	Password         string `json:"password" binding:"required"`
 }
 
-// 7. NewAuthHandler creates an auth handler instance.
+// 7. ismartLoginRequest defines POS Web auth payload.
+type ismartLoginRequest struct {
+	Account  string `json:"account" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+}
+
+// 8. NewAuthHandler creates an auth handler instance.
 func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
-// 8. RequestOTP handles OTP request calls.
+// 9. RequestOTP handles OTP request calls.
 func (h *AuthHandler) RequestOTP(c *gin.Context) {
 	var request otpRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -84,7 +97,7 @@ func (h *AuthHandler) RequestOTP(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 9. VerifyOTP handles OTP verify calls.
+// 10. VerifyOTP handles OTP verify calls.
 func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 	var request otpVerifyRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -106,7 +119,7 @@ func (h *AuthHandler) VerifyOTP(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 10. RequestEmailOTP handles email OTP request calls.
+// 11. RequestEmailOTP handles email OTP request calls.
 func (h *AuthHandler) RequestEmailOTP(c *gin.Context) {
 	var request emailOTPRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -126,7 +139,7 @@ func (h *AuthHandler) RequestEmailOTP(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 11. VerifyEmailOTP handles email OTP verify calls.
+// 12. VerifyEmailOTP handles email OTP verify calls.
 func (h *AuthHandler) VerifyEmailOTP(c *gin.Context) {
 	var request emailOTPRequest
 	if err := c.ShouldBindJSON(&request); err != nil || strings.TrimSpace(request.Code) == "" {
@@ -148,7 +161,7 @@ func (h *AuthHandler) VerifyEmailOTP(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 12. RegisterEmail handles email and phone password account creation.
+// 13. RegisterEmail handles email and phone password account creation.
 func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 	var request emailPasswordRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -157,11 +170,16 @@ func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 	}
 
 	result, err := h.authService.RegisterWithEmail(c.Request.Context(), service.EmailPasswordParams{
-		Email:            strings.TrimSpace(request.Email),
-		Password:         request.Password,
-		DisplayName:      strings.TrimSpace(request.DisplayName),
-		PhoneCountryCode: strings.TrimSpace(request.PhoneCountryCode),
-		PhoneNumber:      strings.TrimSpace(request.PhoneNumber),
+		Email:                strings.TrimSpace(request.Email),
+		Password:             request.Password,
+		DisplayName:          strings.TrimSpace(request.DisplayName),
+		PhoneCountryCode:     strings.TrimSpace(request.PhoneCountryCode),
+		PhoneNumber:          strings.TrimSpace(request.PhoneNumber),
+		Username:             strings.TrimSpace(request.Username),
+		PrimaryCommunityID:   strings.TrimSpace(request.PrimaryCommunityID),
+		PrimaryCommunityName: strings.TrimSpace(request.PrimaryCommunityName),
+		ResidenceFloor:       strings.TrimSpace(request.ResidenceFloor),
+		ResidenceUnit:        strings.TrimSpace(request.ResidenceUnit),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -171,7 +189,7 @@ func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 13. LoginEmail handles email password sign-in.
+// 14. LoginEmail handles email password sign-in.
 func (h *AuthHandler) LoginEmail(c *gin.Context) {
 	var request emailPasswordRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -191,7 +209,7 @@ func (h *AuthHandler) LoginEmail(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 14. LoginPhone handles phone password sign-in.
+// 15. LoginPhone handles phone password sign-in.
 func (h *AuthHandler) LoginPhone(c *gin.Context) {
 	var request phonePasswordRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -212,7 +230,29 @@ func (h *AuthHandler) LoginPhone(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 15. Logout handles logout calls.
+// 16. LoginIsmart handles POS Web account sign-in.
+func (h *AuthHandler) LoginIsmart(c *gin.Context) {
+	var request ismartLoginRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.authService.LoginWithIsmart(c.Request.Context(), service.IsmartLoginParams{
+		Account:  strings.TrimSpace(request.Account),
+		Password: request.Password,
+		Phone:    strings.TrimSpace(request.Phone),
+		Email:    strings.TrimSpace(request.Email),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 17. Logout handles logout calls.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

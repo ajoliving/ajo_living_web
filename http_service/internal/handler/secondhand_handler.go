@@ -27,6 +27,7 @@ type secondhandRequest struct {
 	Description           string                      `json:"description"`
 	DistrictCode          string                      `json:"district_code" binding:"required"`
 	CommunityID           string                      `json:"community_id"`
+	CommunityName         string                      `json:"community_name"`
 	PublisherIdentityType string                      `json:"publisher_identity_type"`
 	CategoryCode          string                      `json:"category_code" binding:"required"`
 	PriceMode             string                      `json:"price_mode" binding:"required"`
@@ -90,6 +91,7 @@ func (h *SecondhandHandler) ListPublic(c *gin.Context) {
 		VisibilityScope: strings.TrimSpace(c.Query("visibility_scope")),
 		MinPriceHKD:     minPrice,
 		MaxPriceHKD:     maxPrice,
+		HasMedia:        parseBoolQuery(c, "has_media"),
 		OnlyBuilding:    parseBoolQuery(c, "only_building"),
 		OnlyFree:        parseBoolQuery(c, "only_free"),
 		ExcludeFree:     parseBoolQuery(c, "exclude_free"),
@@ -483,6 +485,7 @@ func (h *SecondhandHandler) bindSecondhandRequest(c *gin.Context, listingPublicI
 		Description:           strings.TrimSpace(request.Description),
 		DistrictCode:          strings.TrimSpace(request.DistrictCode),
 		CommunityID:           strings.TrimSpace(request.CommunityID),
+		CommunityName:         strings.TrimSpace(request.CommunityName),
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
 		CategoryCode:          strings.TrimSpace(request.CategoryCode),
 		PriceMode:             strings.TrimSpace(request.PriceMode),

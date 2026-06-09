@@ -37,10 +37,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := database.SeedAccessControl(context.Background(), db); err != nil {
-		log.Fatal(err)
-	}
-
 	if err := database.SeedDefaultAdminAccount(context.Background(), db); err != nil {
 		log.Fatal(err)
 	}
@@ -78,9 +74,12 @@ func main() {
 	staffService := service.NewStaffService(runtime)
 	uploadService := service.NewUploadService(runtime)
 	homeContentService := service.NewHomeContentService(runtime)
+	posBuildingService := service.NewPOSBuildingService(runtime)
+	posPaymentService := service.NewPOSPaymentService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
 	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
+	supermarketOfferService := service.NewSupermarketOfferService(runtime)
 	chatService := service.NewChatService(runtime, secondhandService)
 	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
 	lifecycleService := service.NewLifecycleService(runtime)
@@ -97,21 +96,27 @@ func main() {
 	if cfg.EnableExpireTicker {
 		go startExpireTicker(lifecycleService, cfg.ExpireTickerInterval)
 	}
+	if cfg.GoodPriceAlertEnabled {
+		go startSupermarketAlertTicker(supermarketOfferService, cfg.GoodPriceAlertInterval)
+	}
 
 	engine := router.New(&router.Dependencies{
-		Config:              cfg,
-		Logger:              logg,
-		AuthService:         authService,
-		UserService:         userService,
-		StaffService:        staffService,
-		UploadService:       uploadService,
-		HomeContentService:  homeContentService,
-		WalletService:       walletService,
-		SecondhandService:   secondhandService,
-		PropertyService:     propertyService,
-		ChatService:         chatService,
-		OrderService:        orderService,
-		NotificationService: notificationService,
+		Config:                  cfg,
+		Logger:                  logg,
+		AuthService:             authService,
+		UserService:             userService,
+		StaffService:            staffService,
+		UploadService:           uploadService,
+		HomeContentService:      homeContentService,
+		POSBuildingService:      posBuildingService,
+		POSPaymentService:       posPaymentService,
+		WalletService:           walletService,
+		SecondhandService:       secondhandService,
+		PropertyService:         propertyService,
+		ChatService:             chatService,
+		OrderService:            orderService,
+		NotificationService:     notificationService,
+		SupermarketOfferService: supermarketOfferService,
 	})
 
 	server := &http.Server{
@@ -139,7 +144,20 @@ func startExpireTicker(lifecycleService *service.LifecycleService, interval time
 	}
 }
 
-// 3. waitForShutdown gracefully stops the HTTP server.
+// 3. startSupermarketAlertTicker periodically evaluates supermarket price alerts.
+func startSupermarketAlertTicker(supermarketOfferService *service.SupermarketOfferService, interval time.Duration) {
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		_, _ = supermarketOfferService.EvaluatePriceAlerts(context.Background())
+	}
+}
+
+// 4. waitForShutdown gracefully stops the HTTP server.
 func waitForShutdown(server *http.Server) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)

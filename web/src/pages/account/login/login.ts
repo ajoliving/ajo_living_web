@@ -1,25 +1,29 @@
 /*
  * 登入頁 - 狀態與資料流程。
  * 1. 管理登入表單狀態、模式切換與顯示文字。
- * 2. 處理郵箱密碼登入、手機密碼登入、郵箱驗證碼登入、住戶註冊與登出。
+ * 2. 處理郵箱密碼、手機密碼、郵箱驗證碼、ismart 用戶名密碼、住戶註冊與登出。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
 import axios from 'axios';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
-import { fetchLoginHero } from '@/httpapis/home-content';
-import type { RequestOtpResult } from '@/model/auth';
-import type { LoginHeroImageSetting } from '@/model/home-content';
-import { useFeedbackStore } from '@/stores/feedback';
-import { useSessionStore } from '@/stores/session';
+import { fetchLoginHero } from '@/domains/home/content-api';
+import { fetchPosBuildings, fetchPosBuildingUnits } from '@/domains/building/api';
+import type { RequestOtpResult } from '@/domains/account/model';
+import type { LoginHeroImageSetting } from '@/domains/home/content-model';
+import type { PosBuilding, PosBuildingUnit } from '@/domains/building/model';
+import { useFeedbackStore } from '@/app/stores/feedback';
+import { useSessionStore } from '@/app/stores/session';
 
-export type LoginAuthMode = 'email' | 'phone';
+export type LoginAuthMode = 'email' | 'phone' | 'username';
 
 export type LoginEmailAction = 'login' | 'register';
 
 export type LoginEmailMethod = 'password' | 'code';
+
+export type LoginAccountSource = 'local' | 'ismart';
 
 export interface LoginFormState {
   email: string;
@@ -27,12 +31,21 @@ export interface LoginFormState {
   displayName: string;
   phone: string;
   otp: string;
+  ismartAccount: string;
+  primaryCommunityID: string;
+  residenceFloor: string;
+  residenceUnit: string;
 }
 
 export interface LoginHeroImage {
   readonly src: string;
   readonly author: string;
   readonly location: string;
+}
+
+export interface LoginSelectOption {
+  label: string;
+  value: string;
 }
 
 interface ParsedPhoneInput {
@@ -63,25 +76,59 @@ const createInitialFormState = (): LoginFormState => ({
   displayName: '',
   phone: '',
   otp: '',
+  ismartAccount: '',
+  primaryCommunityID: '',
+  residenceFloor: '',
+  residenceUnit: '',
 });
 
 // 2. 解析手機輸入
 const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
   const compactValue = rawValue.replace(/[()-]/g, ' ').trim();
   const parts = compactValue.split(/\s+/).filter(Boolean);
+  const normalizedValue = compactValue.replace(/\s+/g, '');
 
-  if (parts.length >= 2) {
+  if (!normalizedValue) {
+    return {
+      phoneCountryCode: '',
+      phoneNumber: '',
+    };
+  }
+
+  if (parts.length >= 2 && /^\+?\d{1,4}$/.test(parts[0])) {
     return {
       phoneCountryCode: parts[0].startsWith('+') ? parts[0] : `+${parts[0]}`,
       phoneNumber: parts.slice(1).join('').replace(/\D/g, ''),
     };
   }
 
-  const noSpaces = compactValue.replace(/\s+/g, '');
-  if (noSpaces.startsWith('+852') && noSpaces.length > 4) {
+  if (normalizedValue.startsWith('+852') && normalizedValue.length > 4) {
     return {
       phoneCountryCode: '+852',
-      phoneNumber: noSpaces.slice(4),
+      phoneNumber: normalizedValue.slice(4).replace(/\D/g, ''),
+    };
+  }
+
+  if (normalizedValue.startsWith('+')) {
+    const matched = normalizedValue.match(/^(\+\d{1,4})(\d{4,32})$/);
+    return {
+      phoneCountryCode: matched?.[1] ?? '',
+      phoneNumber: matched?.[2] ?? '',
+    };
+  }
+
+  const digits = normalizedValue.replace(/\D/g, '');
+  if (digits.startsWith('852') && digits.length > 10) {
+    return {
+      phoneCountryCode: '+852',
+      phoneNumber: digits.slice(3),
+    };
+  }
+
+  if (digits.length >= 4) {
+    return {
+      phoneCountryCode: '+852',
+      phoneNumber: digits,
     };
   }
 
@@ -89,6 +136,19 @@ const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
     phoneCountryCode: '',
     phoneNumber: '',
   };
+};
+
+// 2.1 檢查手機格式是否符合後端註冊要求
+const isValidParsedPhone = ({ phoneCountryCode, phoneNumber }: ParsedPhoneInput): boolean => {
+  const countryCodeDigits = phoneCountryCode.replace(/^\+/, '');
+  return (
+    phoneCountryCode.startsWith('+') &&
+    phoneCountryCode.length <= 8 &&
+    phoneNumber.length >= 4 &&
+    phoneNumber.length <= 32 &&
+    /^\d+$/.test(countryCodeDigits) &&
+    /^\d+$/.test(phoneNumber)
+  );
 };
 
 // 3. 檢查郵箱格式
@@ -122,6 +182,80 @@ const buildConfiguredHeroImages = (items: LoginHeroImageSetting[]): LoginHeroIma
       location: item.location || 'Hong Kong',
     }));
 
+// 7. 讀取 POS 大廈 ID
+const getBuildingId = (item: PosBuilding): string =>
+  String(item.building_id ?? item.id ?? '').trim();
+
+// 8. 讀取 POS 大廈名稱
+const getBuildingName = (item: PosBuilding): string =>
+  String(item.buildname_chi ?? item.buildname ?? item.name ?? getBuildingId(item)).trim();
+
+// 9. 讀取 POS 單位 ID
+const getUnitId = (item: PosBuildingUnit): string =>
+  String(item.unit_id ?? item.id ?? '').trim();
+
+// 10. 讀取 POS 單位樓層
+const getRawUnitFloor = (item: PosBuildingUnit): string =>
+  String(item.floor ?? '').trim();
+
+// 11. 讀取 POS 單位名稱
+const getRawUnitName = (item: PosBuildingUnit): string =>
+  String(item.unit ?? item.unit_name ?? item.name ?? '').trim();
+
+// 12. 讀取 POS 單位顯示名稱
+const getUnitName = (item: PosBuildingUnit): string =>
+  getRawUnitName(item) || getUnitId(item);
+
+// 13. 取出數字字串
+const digitsOnly = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
+
+// 14. 排除 POS 回傳的樓宇本身佔位資料
+const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean => {
+  const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
+  const normalizedUnitID = digitsOnly(getUnitId(item));
+  const hasFloor = getRawUnitFloor(item).length > 0;
+  const hasUnit = getRawUnitName(item).length > 0;
+
+  if (
+    normalizedBuildingID &&
+    normalizedUnitID === normalizedBuildingID &&
+    !hasFloor &&
+    !hasUnit
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
+// 15. 取得樓層與單位排序分組
+const getDisplaySortBucket = (value: string): number => {
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) {
+    return 2;
+  }
+  if (/^[A-Z]/.test(normalized)) {
+    return 0;
+  }
+  if (/^\d/.test(normalized)) {
+    return 1;
+  }
+  return 2;
+};
+
+// 16. 依 POS 顯示規則排序樓層與單位
+const compareDisplayCodes = (left: string, right: string): number => {
+  const bucketDiff = getDisplaySortBucket(left) - getDisplaySortBucket(right);
+  if (bucketDiff !== 0) {
+    return bucketDiff;
+  }
+
+  return left.localeCompare(right, 'en', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+};
+
 // 7. 管理登入頁資料與動作
 export const useLoginPage = () => {
   const route = useRoute();
@@ -130,13 +264,19 @@ export const useLoginPage = () => {
   const feedbackStore = useFeedbackStore();
   const sessionStore = useSessionStore();
   const formState = reactive(createInitialFormState());
-  const authMode = ref<LoginAuthMode>('email');
+  const authMode = ref<LoginAuthMode>('phone');
   const emailAction = ref<LoginEmailAction>('login');
   const emailLoginMethod = ref<LoginEmailMethod>('password');
+  const accountSource = ref<LoginAccountSource>('local');
+  const buildings = ref<PosBuilding[]>([]);
+  const buildingUnits = ref<PosBuildingUnit[]>([]);
+  const buildingsLoading = ref(false);
+  const unitsLoading = ref(false);
   const requestingOtp = ref(false);
   const submitting = ref(false);
   const rememberMe = ref(true);
   const selectedHero = ref(getRandomHeroImage());
+  let latestUnitRequestID = 0;
 
   const isAuthenticated = computed(() => sessionStore.isAuthenticated);
 
@@ -149,6 +289,10 @@ export const useLoginPage = () => {
   });
 
   const submitLabel = computed(() => {
+    if (emailAction.value === 'login' && authMode.value === 'username') {
+      return submitting.value ? t('auth.loading') : t('auth.submit');
+    }
+
     return authMode.value === 'email' || emailAction.value === 'register'
       ? emailSubmitLabel.value
       : submitting.value ? t('auth.loading') : t('auth.submit');
@@ -166,6 +310,100 @@ export const useLoginPage = () => {
     emailAction.value === 'register' ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount'),
   );
 
+  const selectedIsmartAccount = computed(() => formState.ismartAccount.trim());
+  const selectedBuildingName = computed(() =>
+    buildingOptions.value.find((option) => option.value === formState.primaryCommunityID)?.label ?? '',
+  );
+
+  const buildingOptions = computed<LoginSelectOption[]>(() => {
+    const placeholder = buildingsLoading.value
+      ? t('auth.residenceBuildingLoading')
+      : t('auth.residenceBuildingPlaceholder');
+
+    return [
+      { label: placeholder, value: '' },
+      ...buildings.value
+        .slice()
+        .sort((left, right) => getBuildingName(left).localeCompare(getBuildingName(right), 'en', {
+          numeric: true,
+          sensitivity: 'base',
+        }))
+        .map((item) => ({
+          label: getBuildingName(item),
+          value: getBuildingId(item),
+        }))
+        .filter((option) => option.value.length > 0),
+    ];
+  });
+
+  const residenceFloorOptions = computed<LoginSelectOption[]>(() => {
+    const placeholder = unitsLoading.value
+      ? t('auth.residenceUnitLoading')
+      : t('auth.residenceFloorPlaceholder');
+    const floors = Array.from(
+      new Set(
+        buildingUnits.value
+          .map((item) => getRawUnitFloor(item) || t('auth.residenceUnassignedFloor'))
+          .filter(Boolean),
+      ),
+    ).sort(compareDisplayCodes);
+
+    return [
+      { label: placeholder, value: '' },
+      ...floors.map((floor) => ({
+        label: floor,
+        value: floor,
+      })),
+    ];
+  });
+
+  const residenceUnitOptions = computed<LoginSelectOption[]>(() => {
+    const placeholder = unitsLoading.value
+      ? t('auth.residenceUnitLoading')
+      : t('auth.residenceUnitPlaceholder');
+
+    return [
+      { label: placeholder, value: '' },
+      ...buildingUnits.value
+        .filter((item) => {
+          const floor = getRawUnitFloor(item) || t('auth.residenceUnassignedFloor');
+          return floor === formState.residenceFloor;
+        })
+        .slice()
+        .sort((left, right) => compareDisplayCodes(getUnitName(left), getUnitName(right)))
+        .map((item) => ({
+          label: getUnitName(item),
+          value: getUnitName(item),
+        }))
+        .filter((option) => option.value.length > 0),
+    ];
+  });
+
+  // 7.0 重置樓層與單位的級聯選擇
+  watch(
+    () => formState.primaryCommunityID,
+    (nextValue, previousValue) => {
+      if (nextValue !== previousValue) {
+        formState.residenceFloor = '';
+        formState.residenceUnit = '';
+        buildingUnits.value = [];
+        if (nextValue.trim()) {
+          void loadUnitsForBuilding(nextValue.trim());
+        }
+      }
+    },
+  );
+
+  // 7.0.1 重置單元選擇
+  watch(
+    () => formState.residenceFloor,
+    (nextValue, previousValue) => {
+      if (nextValue !== previousValue) {
+        formState.residenceUnit = '';
+      }
+    },
+  );
+
   // 7.1 載入後台登入背景圖
   const loadConfiguredHero = async (): Promise<void> => {
     try {
@@ -180,7 +418,44 @@ export const useLoginPage = () => {
     }
   };
 
-  // 7.2 請求驗證碼
+  // 7.2 載入註冊社區選項
+  const loadBuildings = async (): Promise<void> => {
+    buildingsLoading.value = true;
+    try {
+      buildings.value = await fetchPosBuildings();
+    } catch {
+      buildings.value = [];
+    } finally {
+      buildingsLoading.value = false;
+    }
+  };
+
+  // 7.2.1 載入指定大廈的單位清單
+  const loadUnitsForBuilding = async (buildingID: string): Promise<void> => {
+    const requestID = ++latestUnitRequestID;
+    unitsLoading.value = true;
+    try {
+      const units = await fetchPosBuildingUnits(buildingID);
+      if (requestID !== latestUnitRequestID) {
+        return;
+      }
+
+      buildingUnits.value = units.filter((item) => isSelectableUnit(buildingID, item));
+    } catch (error) {
+      if (requestID !== latestUnitRequestID) {
+        return;
+      }
+
+      buildingUnits.value = [];
+      feedbackStore.pushToast(readErrorMessage(error), 'error');
+    } finally {
+      if (requestID === latestUnitRequestID) {
+        unitsLoading.value = false;
+      }
+    }
+  };
+
+  // 7.3 請求驗證碼
   const handleRequestOtp = async (): Promise<void> => {
     let result: RequestOtpResult;
     requestingOtp.value = true;
@@ -207,25 +482,34 @@ export const useLoginPage = () => {
     }
   };
 
-  // 7.3 完成登入後跳轉
+  // 7.4 完成登入後跳轉
   const redirectAfterSignIn = async (): Promise<void> => {
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/marketplace';
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/furniture';
     await router.push(redirect);
   };
 
-  // 7.4 執行郵箱登入或註冊
+  // 7.5 執行郵箱登入或註冊
   const handleEmailSubmit = async (): Promise<void> => {
-    if (!isValidEmailInput(formState.email)) {
-      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-      return;
-    }
-
     if (emailAction.value === 'register') {
+      if (accountSource.value === 'ismart') {
+        await handleIsmartSubmit();
+        return;
+      }
+
+      const optionalEmail = formState.email.trim();
+      if (optionalEmail && !isValidEmailInput(optionalEmail)) {
+        feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+        return;
+      }
+
       const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-      if (!formState.displayName.trim() || !phoneCountryCode || !phoneNumber || formState.password.trim().length < 8) {
+      if (!formState.displayName.trim() || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
         feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
         return;
       }
+    } else if (!isValidEmailInput(formState.email)) {
+      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+      return;
     } else if (emailLoginMethod.value === 'code') {
       if (formState.otp.trim().length === 0) {
         feedbackStore.pushToast(t('auth.emailOtpRequiredFields'), 'error');
@@ -247,6 +531,11 @@ export const useLoginPage = () => {
           formState.displayName.trim(),
           phoneCountryCode,
           phoneNumber,
+          formState.displayName.trim(),
+          formState.primaryCommunityID.trim(),
+          selectedBuildingName.value.trim(),
+          formState.residenceFloor.trim(),
+          formState.residenceUnit.trim(),
         );
         feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
       } else if (emailLoginMethod.value === 'code') {
@@ -270,10 +559,10 @@ export const useLoginPage = () => {
     }
   };
 
-  // 7.5 執行手機密碼登入
+  // 7.6 執行手機密碼登入
   const handlePhoneSubmit = async (): Promise<void> => {
     const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-    if (!phoneCountryCode || !phoneNumber || formState.password.trim().length === 0) {
+    if (!isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length === 0) {
       feedbackStore.pushToast(t('auth.phonePasswordRequired'), 'error');
       return;
     }
@@ -291,8 +580,38 @@ export const useLoginPage = () => {
     }
   };
 
-  // 7.6 按目前模式提交登入表單
+  // 7.7 使用 ismart 用戶名或手機登入
+  const handleIsmartSubmit = async (): Promise<void> => {
+    if (selectedIsmartAccount.value.length === 0 || formState.password.trim().length === 0) {
+      feedbackStore.pushToast(t('auth.ismartRequiredFields'), 'error');
+      return;
+    }
+
+    submitting.value = true;
+
+    try {
+      await sessionStore.signInWithIsmart(
+        selectedIsmartAccount.value,
+        formState.password,
+        undefined,
+        formState.email.trim() || undefined,
+      );
+      feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
+      await redirectAfterSignIn();
+    } catch (error) {
+      feedbackStore.pushToast(readErrorMessage(error), 'error');
+    } finally {
+      submitting.value = false;
+    }
+  };
+
+  // 7.8 按目前模式提交登入表單
   const handleSubmit = async (): Promise<void> => {
+    if (emailAction.value === 'login' && authMode.value === 'username') {
+      await handleIsmartSubmit();
+      return;
+    }
+
     if (authMode.value === 'email' || emailAction.value === 'register') {
       await handleEmailSubmit();
       return;
@@ -301,27 +620,31 @@ export const useLoginPage = () => {
     await handlePhoneSubmit();
   };
 
-  // 7.7 執行登出
+  // 7.9 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 7.8 設定登入模式
+  // 7.10 設定登入模式
   const setAuthMode = (mode: LoginAuthMode): void => {
     authMode.value = mode;
     emailAction.value = 'login';
     formState.otp = '';
   };
 
-  // 7.9 切換郵箱登入與註冊模式
+  // 7.11 切換郵箱登入與註冊模式
   const toggleEmailAction = (): void => {
+    accountSource.value = 'local';
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
-    authMode.value = 'email';
+    authMode.value = emailAction.value === 'register' ? 'email' : 'phone';
     formState.otp = '';
+    if (emailAction.value === 'register') {
+      formState.email = '';
+    }
   };
 
-  // 7.10 切換郵箱登入方式
+  // 7.12 切換郵箱登入方式
   const setEmailLoginMethod = (method: LoginEmailMethod): void => {
     authMode.value = 'email';
     emailAction.value = 'login';
@@ -329,12 +652,27 @@ export const useLoginPage = () => {
     formState.otp = '';
   };
 
+  // 7.13 切換註冊來源
+  const setAccountSource = (source: LoginAccountSource): void => {
+    accountSource.value = source;
+    emailAction.value = 'register';
+    authMode.value = 'email';
+    formState.otp = '';
+    if (source === 'local') {
+      formState.email = '';
+    }
+  };
+
   onMounted(() => {
     void loadConfiguredHero();
+    void loadBuildings();
   });
 
   return {
+    accountSource,
     authMode,
+    buildingOptions,
+    buildingsLoading,
     emailAction,
     emailActionSwitchLabel,
     emailLoginMethod,
@@ -348,11 +686,15 @@ export const useLoginPage = () => {
     otpRequestLabel,
     rememberMe,
     requestingOtp,
+    residenceFloorOptions,
+    residenceUnitOptions,
     selectedHero,
+    setAccountSource,
     setAuthMode,
     setEmailLoginMethod,
     submitting,
     submitLabel,
     toggleEmailAction,
+    unitsLoading,
   };
 };

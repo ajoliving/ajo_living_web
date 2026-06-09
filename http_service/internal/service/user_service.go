@@ -38,9 +38,19 @@ type MeResponse struct {
 	AvatarURL         string             `json:"avatar_url"`
 	PublisherIdentity string             `json:"publisher_identity_type"`
 	DistrictCode      string             `json:"district_code"`
+	ResidenceFloor    string             `json:"residence_floor"`
+	ResidenceUnit     string             `json:"residence_unit"`
+	BoundBuildingIDs  []string           `json:"bound_building_ids"`
+	BoundFlatUnitIDs  []string           `json:"bound_flat_unit_ids"`
 	PrimaryCommunity  *CommunityResponse `json:"primary_community,omitempty"`
 	ProfileCompleted  bool               `json:"profile_completed"`
 	AJOBalance        int64              `json:"ajo_balance"`
+	IsmartLinked      bool               `json:"ismart_linked"`
+	IsmartUsername    string             `json:"ismart_username"`
+	IsmartBoundPhone  string             `json:"ismart_bound_phone"`
+	IsmartPassword    string             `json:"ismart_password"`
+	LocalPassword     string             `json:"local_password"`
+	IsmartMsg         *IsmartMessage     `json:"ismart_msg,omitempty"`
 }
 
 // 3. CommunityResponse defines a lightweight community payload.
@@ -56,15 +66,24 @@ type CommunityResponse struct {
 // 4. UpdateProfileParams defines profile update input.
 type UpdateProfileParams struct {
 	DisplayName           string
+	Email                 string
+	EmailOTPCode          string
 	PhoneCountryCode      string
 	PhoneNumber           string
+	Password              string
 	PublisherIdentityType string
 	PrimaryCommunityID    string
+	PrimaryCommunityName  string
+	BoundBuildingIDs      []string
+	BoundFlatUnitIDs      []string
+	ResidenceFloor        string
+	ResidenceUnit         string
 	DistrictCode          string
 	AvatarAssetID         string
 }
 
 const profileAvatarUpdateCost = int64(50)
+const profileEmailUpdateScene = "profile_email_update"
 
 // 5. ChannelHomeOverview defines the channel home payload.
 type ChannelHomeOverview struct {
@@ -84,17 +103,15 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		return nil, errcode.New(errcode.CodeNotFound, "user not found")
 	}
 
-	access, err := NewAccessService(s.runtime).ResolveUserAccess(ctx, &user)
-	if err != nil {
-		return nil, err
-	}
+	access := buildAccessSnapshot(user.IsStaff)
 
 	var profile model.UserProfile
-	err = s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error
+	err := s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load profile")
 	}
 
+	ismartMsg := NewAuthService(s.runtime).loadIsmartMessage(ctx, user.ID)
 	response := &MeResponse{
 		PublicID:          user.PublicID,
 		Email:             s.userEmail(ctx, user.ID),
@@ -110,7 +127,19 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		AvatarURL:         s.avatarURL(ctx, profile.AvatarAssetID),
 		PublisherIdentity: profile.PublisherIdentityType,
 		DistrictCode:      profile.DistrictCode,
-		ProfileCompleted:  profile.PrimaryCommunityID != nil,
+		ResidenceFloor:    profile.ResidenceFloor,
+		ResidenceUnit:     profile.ResidenceUnit,
+		BoundBuildingIDs:  s.profileBoundBuildings(&profile, ismartMsg),
+		BoundFlatUnitIDs:  s.profileBoundFlatUnits(&profile, ismartMsg),
+		ProfileCompleted:  isProfileCompleted(&profile),
+		IsmartLinked:      ismartMsg != nil,
+		LocalPassword:     s.userLocalPassword(ctx, user.ID),
+		IsmartMsg:         ismartMsg,
+	}
+	if ismartMsg != nil {
+		response.IsmartUsername = ismartMsg.Username
+		response.IsmartBoundPhone = ismartMsg.Phone
+		response.IsmartPassword = ismartMsg.Password
 	}
 
 	if profile.PrimaryCommunity != nil {
@@ -137,9 +166,12 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 	updates := map[string]any{
 		"display_name":            params.DisplayName,
 		"publisher_identity_type": params.PublisherIdentityType,
+		"residence_floor":         params.ResidenceFloor,
+		"residence_unit":          params.ResidenceUnit,
 		"district_code":           params.DistrictCode,
 	}
 	userUpdates := map[string]any{}
+	credentialUpdates := map[string]any{}
 	phoneCountryCode, phoneNumber, shouldUpdatePhone, err := profilePhoneUpdate(user, params)
 	if err != nil {
 		return nil, err
@@ -149,9 +181,29 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 		userUpdates["phone_number"] = phoneNumber
 		userUpdates["is_verified_phone"] = false
 	}
+	if strings.TrimSpace(params.Password) != "" {
+		if len(strings.TrimSpace(params.Password)) < 8 {
+			return nil, errcode.New(errcode.CodeValidationError, "password must be at least 8 characters")
+		}
+		passwordHash, err := utils.HashPassword(strings.TrimSpace(params.Password))
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to prepare password")
+		}
+		passwordEncrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, strings.TrimSpace(params.Password))
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to prepare password")
+		}
+		credentialUpdates["password_hash"] = passwordHash
+		credentialUpdates["password_encrypted"] = passwordEncrypted
+	}
+
+	email, shouldUpdateEmail, err := s.profileEmailUpdate(ctx, user.ID, params)
+	if err != nil {
+		return nil, err
+	}
 
 	if params.PrimaryCommunityID != "" {
-		community, err := s.findCommunityByPublicID(ctx, params.PrimaryCommunityID)
+		community, err := s.resolveProfileCommunity(ctx, params.PrimaryCommunityID, params.PrimaryCommunityName)
 		if err != nil {
 			return nil, err
 		}
@@ -170,6 +222,20 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 
 		updates["avatar_asset_id"] = asset.ID
 	}
+	if params.BoundBuildingIDs != nil {
+		boundBuildingIDs, err := marshalJSON(normalizeStringSlice(params.BoundBuildingIDs))
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to prepare building bindings")
+		}
+		updates["bound_building_ids"] = boundBuildingIDs
+	}
+	if params.BoundFlatUnitIDs != nil {
+		boundFlatUnitIDs, err := marshalJSON(normalizeStringSlice(params.BoundFlatUnitIDs))
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to prepare unit bindings")
+		}
+		updates["bound_flat_unit_ids"] = boundFlatUnitIDs
+	}
 
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var currentProfile model.UserProfile
@@ -180,6 +246,17 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 
 		if len(userUpdates) > 0 {
 			if err := s.ensurePhoneAvailable(ctx, tx, userID, phoneCountryCode, phoneNumber); err != nil {
+				return err
+			}
+		}
+
+		if shouldUpdateEmail {
+			if err := s.saveProfileEmailCredential(ctx, tx, userID, email); err != nil {
+				return err
+			}
+		}
+		if len(credentialUpdates) > 0 {
+			if err := s.updateProfilePassword(ctx, tx, userID, credentialUpdates); err != nil {
 				return err
 			}
 		}
@@ -217,10 +294,23 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 		return nil, err
 	}
 
+	if shouldUpdateEmail {
+		s.runtime.OTPStore.Delete(emailOTPKey(email, profileEmailUpdateScene))
+	}
+
 	return s.GetMe(ctx, userID)
 }
 
-// 9. ListCommunities returns the seeded communities.
+// 9. BindIsmart links the current member profile to an ismart account.
+func (s *UserService) BindIsmart(ctx context.Context, userID int64, params IsmartLoginParams) (*MeResponse, error) {
+	if _, err := NewAuthService(s.runtime).BindIsmartAccount(ctx, userID, params); err != nil {
+		return nil, err
+	}
+
+	return s.GetMe(ctx, userID)
+}
+
+// 10. ListCommunities returns the seeded communities.
 func (s *UserService) ListCommunities(ctx context.Context) ([]CommunityResponse, error) {
 	var communities []model.Community
 	if err := s.runtime.DB.WithContext(ctx).Order("district_code asc, name_zh asc").Find(&communities).Error; err != nil {
@@ -236,7 +326,7 @@ func (s *UserService) ListCommunities(ctx context.Context) ([]CommunityResponse,
 	return result, nil
 }
 
-// 10. GetChannelHomeOverview returns channel cards and featured secondhand content.
+// 11. GetChannelHomeOverview returns channel cards and featured secondhand content.
 func (s *UserService) GetChannelHomeOverview(ctx context.Context) (*ChannelHomeOverview, error) {
 	secondhandService := NewSecondhandService(s.runtime)
 	featured, _, err := secondhandService.ListPublicSecondhand(ctx, SecondhandListFilters{
@@ -257,7 +347,46 @@ func (s *UserService) GetChannelHomeOverview(ctx context.Context) (*ChannelHomeO
 	}, nil
 }
 
-// 11. findCommunityByPublicID resolves a community by public ID.
+// 12. resolveProfileCommunity loads or mirrors a POS building as local community.
+func (s *UserService) resolveProfileCommunity(ctx context.Context, publicID string, name string) (*model.Community, error) {
+	community, err := s.findCommunityByPublicID(ctx, publicID)
+	if err == nil {
+		return community, nil
+	}
+
+	var appErr *errcode.AppError
+	if !errors.As(err, &appErr) {
+		return nil, err
+	}
+	if len(publicID) == 0 || len(publicID) > 26 {
+		return nil, appErr
+	}
+
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = publicID
+	}
+
+	community = &model.Community{
+		PublicID:      publicID,
+		CommunityType: "building",
+		NameZH:        displayName,
+		NameEN:        displayName,
+		DistrictCode:  "unknown",
+		AddressText:   displayName,
+	}
+	if err := s.runtime.DB.WithContext(ctx).Create(community).Error; err != nil {
+		found, findErr := s.findCommunityByPublicID(ctx, publicID)
+		if findErr == nil {
+			return found, nil
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create profile community")
+	}
+
+	return community, nil
+}
+
+// 13. findCommunityByPublicID resolves a community by public ID.
 func (s *UserService) findCommunityByPublicID(ctx context.Context, publicID string) (*model.Community, error) {
 	var community model.Community
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", publicID).First(&community).Error; err != nil {
@@ -270,7 +399,7 @@ func (s *UserService) findCommunityByPublicID(ctx context.Context, publicID stri
 	return &community, nil
 }
 
-// 12. ensurePhoneAvailable validates a changed phone number is not used by another account.
+// 14. ensurePhoneAvailable validates a changed phone number is not used by another account.
 func (s *UserService) ensurePhoneAvailable(ctx context.Context, tx *gorm.DB, userID int64, countryCode string, phoneNumber string) error {
 	var count int64
 	if err := tx.WithContext(ctx).Model(&model.User{}).
@@ -285,7 +414,7 @@ func (s *UserService) ensurePhoneAvailable(ctx context.Context, tx *gorm.DB, use
 	return nil
 }
 
-// 13. loadOwnedAvatarAsset resolves an uploaded account avatar media asset.
+// 15. loadOwnedAvatarAsset resolves an uploaded account avatar media asset.
 func (s *UserService) loadOwnedAvatarAsset(ctx context.Context, userID int64, mediaAssetID string) (*model.MediaAsset, error) {
 	var asset model.MediaAsset
 	if err := s.runtime.DB.WithContext(ctx).
@@ -307,17 +436,117 @@ func (s *UserService) loadOwnedAvatarAsset(ctx context.Context, userID int64, me
 	return &asset, nil
 }
 
-// 14. userEmail returns the verified email credential for the current member.
+// 16. userEmail returns the verified email credential for the current member.
 func (s *UserService) userEmail(ctx context.Context, userID int64) string {
 	var credential model.UserCredential
 	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error; err != nil {
 		return ""
 	}
+	if credential.Email == nil {
+		return ""
+	}
 
-	return credential.Email
+	return *credential.Email
 }
 
-// 15. avatarURL builds the public URL for a profile avatar asset.
+// 17. userLocalPassword returns the editable local password value.
+func (s *UserService) userLocalPassword(ctx context.Context, userID int64) string {
+	var credential model.UserCredential
+	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error; err != nil {
+		return ""
+	}
+	if strings.TrimSpace(credential.PasswordEncrypted) == "" {
+		return ""
+	}
+
+	password, err := utils.DecryptString(s.runtime.Config.EncryptionKey, credential.PasswordEncrypted)
+	if err != nil {
+		return ""
+	}
+
+	return password
+}
+
+// 18. profileEmailUpdate validates email OTP when the email is changed.
+func (s *UserService) profileEmailUpdate(ctx context.Context, userID int64, params UpdateProfileParams) (string, bool, error) {
+	email := normalizeEmail(params.Email)
+	if email == "" {
+		return "", false, nil
+	}
+	if !isValidEmail(email) {
+		return "", false, errcode.New(errcode.CodeValidationError, "valid email is required")
+	}
+
+	currentEmail := normalizeEmail(s.userEmail(ctx, userID))
+	if currentEmail == email {
+		return email, false, nil
+	}
+	if strings.TrimSpace(params.EmailOTPCode) == "" {
+		return "", false, errcode.New(errcode.CodeValidationError, "email verification code is required")
+	}
+
+	key := emailOTPKey(email, profileEmailUpdateScene)
+	record, ok := s.runtime.OTPStore.Get(key)
+	if !ok || s.runtime.Now().After(record.ExpiresAt) {
+		return "", false, errcode.New(errcode.CodeValidationError, "email otp is invalid or expired")
+	}
+	if strings.TrimSpace(params.EmailOTPCode) != record.Code {
+		return "", false, errcode.New(errcode.CodeValidationError, "email otp is invalid or expired")
+	}
+
+	return email, true, nil
+}
+
+// 19. saveProfileEmailCredential updates or creates the verified email credential.
+func (s *UserService) saveProfileEmailCredential(ctx context.Context, tx *gorm.DB, userID int64, email string) error {
+	var credential model.UserCredential
+	findErr := tx.WithContext(ctx).Where("email = ?", email).First(&credential).Error
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return errcode.New(errcode.CodeInternalError, "failed to load email credential")
+	}
+	if credential.UserID > 0 && credential.UserID != userID {
+		return errcode.New(errcode.CodeValidationError, "email is already registered")
+	}
+
+	var current model.UserCredential
+	currentErr := tx.WithContext(ctx).Where("user_id = ?", userID).First(&current).Error
+	if currentErr != nil && !errors.Is(currentErr, gorm.ErrRecordNotFound) {
+		return errcode.New(errcode.CodeInternalError, "failed to load current email credential")
+	}
+	if current.UserID > 0 {
+		return tx.WithContext(ctx).Model(&current).Updates(map[string]any{
+			"email":       email,
+			"is_verified": true,
+		}).Error
+	}
+
+	return tx.WithContext(ctx).Create(&model.UserCredential{
+		UserID:     userID,
+		Email:      &email,
+		IsVerified: true,
+	}).Error
+}
+
+// 20. updateProfilePassword updates or creates the local password credential.
+func (s *UserService) updateProfilePassword(ctx context.Context, tx *gorm.DB, userID int64, updates map[string]any) error {
+	var credential model.UserCredential
+	currentErr := tx.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error
+	if currentErr != nil && !errors.Is(currentErr, gorm.ErrRecordNotFound) {
+		return errcode.New(errcode.CodeInternalError, "failed to load current credential")
+	}
+	if credential.UserID > 0 {
+		return tx.WithContext(ctx).Model(&credential).Updates(updates).Error
+	}
+
+	return tx.WithContext(ctx).Create(&model.UserCredential{
+		UserID:            userID,
+		PasswordHash:      updates["password_hash"].(string),
+		PasswordEncrypted: updates["password_encrypted"].(string),
+		IsVerified:        false,
+	}).Error
+}
+
+// 21. avatarURL builds the public URL for a profile avatar asset.
 func (s *UserService) avatarURL(ctx context.Context, avatarAssetID *int64) string {
 	if avatarAssetID == nil {
 		return ""
@@ -331,9 +560,12 @@ func (s *UserService) avatarURL(ctx context.Context, avatarAssetID *int64) strin
 	return buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
 }
 
-// 16. profilePhoneUpdate normalizes an optional profile phone update.
+// 22. profilePhoneUpdate normalizes an optional profile phone update.
 func profilePhoneUpdate(user model.User, params UpdateProfileParams) (string, string, bool, error) {
 	if strings.TrimSpace(params.PhoneCountryCode) == "" && strings.TrimSpace(params.PhoneNumber) == "" {
+		return "", "", false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(params.PhoneCountryCode), "email") || strings.EqualFold(strings.TrimSpace(params.PhoneCountryCode), "ismart") {
 		return "", "", false, nil
 	}
 
@@ -350,7 +582,38 @@ func profilePhoneUpdate(user model.User, params UpdateProfileParams) (string, st
 	return countryCode, phoneNumber, true, nil
 }
 
-// 17. shouldChargeAvatarUpdate returns whether the avatar update needs a point charge.
+// 23. profileBoundBuildings returns POS-derived building permissions or profile fallback.
+func (s *UserService) profileBoundBuildings(profile *model.UserProfile, ismartMsg *IsmartMessage) []string {
+	if values := resolveIsmartBoundBuildings(ismartMsg); len(values) > 0 {
+		return values
+	}
+	if profile != nil {
+		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)); len(values) > 0 {
+			return values
+		}
+		if profile.PrimaryCommunity != nil && strings.TrimSpace(profile.PrimaryCommunity.PublicID) != "" {
+			return []string{strings.TrimSpace(profile.PrimaryCommunity.PublicID)}
+		}
+	}
+
+	return resolveIsmartBoundBuildings(ismartMsg)
+}
+
+// 24. profileBoundFlatUnits returns POS-derived unit permissions or profile fallback.
+func (s *UserService) profileBoundFlatUnits(profile *model.UserProfile, ismartMsg *IsmartMessage) []string {
+	if values := resolveIsmartBoundUnits(ismartMsg); len(values) > 0 {
+		return values
+	}
+	if profile != nil {
+		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs)); len(values) > 0 {
+			return values
+		}
+	}
+
+	return []string{}
+}
+
+// 25. shouldChargeAvatarUpdate returns whether the avatar update needs a point charge.
 func shouldChargeAvatarUpdate(profile *model.UserProfile, nextAssetID any) bool {
 	assetID, ok := nextAssetID.(int64)
 	if !ok || assetID <= 0 {
@@ -363,7 +626,7 @@ func shouldChargeAvatarUpdate(profile *model.UserProfile, nextAssetID any) bool 
 	return *profile.AvatarAssetID != assetID
 }
 
-// 18. toCommunityResponse maps a community model to response data.
+// 26. toCommunityResponse maps a community model to response data.
 func toCommunityResponse(community *model.Community) *CommunityResponse {
 	if community == nil {
 		return nil

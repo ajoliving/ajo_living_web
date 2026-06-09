@@ -11,11 +11,9 @@ import { useI18n } from 'vue-i18n';
 
 import ToastViewport from '@/shared/components/feedback/ToastViewport.vue';
 import AppHeader from '@/shared/components/navigation/AppHeader.vue';
-import { useHeaderSubnav } from '@/shared/navigation/useHeaderSubnav';
 
 const { t } = useI18n();
 const route = useRoute();
-const { subnavItems } = useHeaderSubnav();
 
 // 1. 判斷目前路由是否使用透明覆蓋導航
 const isTransparentHeaderRoute = computed(() => route.meta.headerMode === 'transparent');
@@ -23,15 +21,11 @@ const isTransparentHeaderRoute = computed(() => route.meta.headerMode === 'trans
 // 2. 判斷目前路由是否隱藏頁腳
 const isFooterHiddenRoute = computed(() => route.name === 'Login');
 
-// 3. 判斷目前桌面版是否會顯示第二層導航
-const hasSubNavigation = computed(() => subnavItems.value.length > 0);
-
-// 4. 組合頁面主內容的導航預留空間狀態
+// 3. 組合頁面主內容的導航預留空間狀態
 const mainClasses = computed(() => ({
   'app-main--overlay': isTransparentHeaderRoute.value,
   'app-main--solid': !isTransparentHeaderRoute.value,
   'app-main--fullscreen': isFooterHiddenRoute.value,
-  'app-main--with-subnav': !isTransparentHeaderRoute.value && hasSubNavigation.value,
   'app-main--with-footer': !isFooterHiddenRoute.value,
 }));
 </script>
@@ -117,9 +111,4 @@ const mainClasses = computed(() => ({
   transform: translateY(12px);
 }
 
-@media (min-width: 1024px) {
-  .app-main--solid.app-main--with-subnav {
-    --app-header-offset: 6.375rem;
-  }
-}
 </style>

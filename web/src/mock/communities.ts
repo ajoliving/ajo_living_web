@@ -3,7 +3,7 @@
  * 1. 提供一期示範用屋苑與大廈清單。
  * 2. 供會員資料、列表與發布流程共用。
  */
-import type { Community } from '@/model/community';
+import type { Community } from '@/domains/building/model';
 
 // 1. 建立固定社區清單
 export const communities: Community[] = [

@@ -3,7 +3,7 @@
  * 1. 提供目前登入示範會員與賣家摘要。
  * 2. 用於登入、詳情、聊天與我的發布頁。
  */
-import type { UserProfile, UserSummary } from '@/model/user';
+import type { UserProfile, UserSummary } from '@/domains/account/model';
 
 import { communities } from '@/mock/communities';
 import { buildMockImage } from '@/mock/image';

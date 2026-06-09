@@ -12,9 +12,12 @@ interface SelectOption {
 interface BaseSelectProps {
   modelValue: string | number;
   options: SelectOption[];
+  disabled?: boolean;
 }
 
-const props = defineProps<BaseSelectProps>();
+const props = withDefaults(defineProps<BaseSelectProps>(), {
+  disabled: false,
+});
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string | number): void;
@@ -32,6 +35,7 @@ const handleChange = (event: Event) => {
 <template>
   <select
     :value="props.modelValue"
+    :disabled="props.disabled"
     class="app-select"
     @change="handleChange"
   >

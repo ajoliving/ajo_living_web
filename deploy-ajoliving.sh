@@ -340,11 +340,17 @@ server {
     root $WEB_DIR/current_dist;
     index index.html;
 
+    if (\$http_x_ajo_forwarded_proto != "https") {
+        return 301 https://\$host\$request_uri;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:$APP_PORT;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_set_header X-AJO-Forwarded-Proto \$http_x_ajo_forwarded_proto;
     }
 
     location / {
@@ -455,6 +461,8 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/$WEB_DOMAIN/privkey.pem;
 
     include snippets/proxy_params;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-AJO-Forwarded-Proto https;
 
     location / {
         proxy_pass http://127.0.0.1:80;
@@ -469,6 +477,8 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/$WEB_DOMAIN/privkey.pem;
 
     include snippets/proxy_params;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-AJO-Forwarded-Proto https;
 
     location / {
         proxy_pass http://127.0.0.1:80;

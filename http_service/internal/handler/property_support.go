@@ -19,17 +19,37 @@ import (
 func (h *PropertyHandler) listPublic(c *gin.Context, channel service.PropertyChannel) {
 	page, pageSize := parsePagination(c)
 	filters := service.PropertyListFilters{
-		Page:         page,
-		PageSize:     pageSize,
-		Keyword:      strings.TrimSpace(c.Query("keyword")),
-		DistrictCode: strings.TrimSpace(c.Query("district_code")),
-		SortBy:       strings.TrimSpace(c.DefaultQuery("sort_by", "latest")),
+		Page:                  page,
+		PageSize:              pageSize,
+		Keyword:               strings.TrimSpace(c.Query("keyword")),
+		DistrictCode:          strings.TrimSpace(c.Query("district_code")),
+		TransactionType:       strings.TrimSpace(c.Query("transaction_type")),
+		PropertyType:          strings.TrimSpace(c.Query("property_type")),
+		RentalType:            strings.TrimSpace(c.Query("rental_type")),
+		AreaMode:              strings.TrimSpace(c.Query("area_mode")),
+		PriceMode:             strings.TrimSpace(c.DefaultQuery("price_mode", "monthly")),
+		FeatureTags:           parseCSVQuery(c.Query("feature_tags")),
+		FacilityTags:          parseCSVQuery(c.Query("facility_tags")),
+		ServiceTags:           parseCSVQuery(c.Query("service_tags")),
+		PublisherIdentityType: strings.TrimSpace(c.Query("publisher_identity_type")),
+		HasMedia:              parseBoolQuery(c, "has_media"),
+		IsNew:                 parseOptionalBoolQuery(c, "is_new"),
+		SortBy:                strings.TrimSpace(c.DefaultQuery("sort_by", "latest")),
 	}
 	if value, err := strconv.ParseFloat(strings.TrimSpace(c.Query("min_price_hkd")), 64); err == nil {
 		filters.MinPriceHKD = &value
 	}
 	if value, err := strconv.ParseFloat(strings.TrimSpace(c.Query("max_price_hkd")), 64); err == nil {
 		filters.MaxPriceHKD = &value
+	}
+	if value, err := strconv.Atoi(strings.TrimSpace(c.Query("min_area_sqft"))); err == nil {
+		filters.MinAreaSqft = &value
+	}
+	if value, err := strconv.Atoi(strings.TrimSpace(c.Query("max_area_sqft"))); err == nil {
+		filters.MaxAreaSqft = &value
+	}
+	if value, err := strconv.Atoi(strings.TrimSpace(c.Query("bedroom_count"))); err == nil {
+		filters.BedroomCount = &value
 	}
 
 	items, pagination, err := h.propertyService.ListPublicProperties(c.Request.Context(), channel, filters)
@@ -68,7 +88,21 @@ func (h *PropertyHandler) myListings(c *gin.Context, channel service.PropertyCha
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 3. getDetail returns a property detail.
+// 3. parseCSVQuery normalizes comma-separated query values.
+func parseCSVQuery(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		normalized := strings.TrimSpace(part)
+		if normalized != "" {
+			result = append(result, normalized)
+		}
+	}
+
+	return result
+}
+
+// 4. getDetail returns a property detail.
 func (h *PropertyHandler) getDetail(c *gin.Context, channel service.PropertyChannel) {
 	current := currentUser(c)
 	var userID *int64
@@ -85,7 +119,7 @@ func (h *PropertyHandler) getDetail(c *gin.Context, channel service.PropertyChan
 	errcode.Success(c, result)
 }
 
-// 4. publish publishes a draft listing.
+// 6. publish publishes a draft listing.
 func (h *PropertyHandler) publish(c *gin.Context, channel service.PropertyChannel) {
 	user := currentUser(c)
 	if user == nil {
@@ -102,7 +136,7 @@ func (h *PropertyHandler) publish(c *gin.Context, channel service.PropertyChanne
 	errcode.Success(c, result)
 }
 
-// 5. republish republishes an expired listing.
+// 7. republish republishes an expired listing.
 func (h *PropertyHandler) republish(c *gin.Context, channel service.PropertyChannel) {
 	user := currentUser(c)
 	if user == nil {
@@ -119,7 +153,7 @@ func (h *PropertyHandler) republish(c *gin.Context, channel service.PropertyChan
 	errcode.Success(c, result)
 }
 
-// 6. deactivate hides a listing.
+// 8. deactivate hides a listing.
 func (h *PropertyHandler) deactivate(c *gin.Context, channel service.PropertyChannel) {
 	user := currentUser(c)
 	if user == nil {
@@ -135,7 +169,7 @@ func (h *PropertyHandler) deactivate(c *gin.Context, channel service.PropertyCha
 	errcode.Success(c, gin.H{"listing_id": listingID, "publication_status": "hidden"})
 }
 
-// 7. contactAccess grants contact access to logged-in users.
+// 9. contactAccess grants contact access to logged-in users.
 func (h *PropertyHandler) contactAccess(c *gin.Context, channel service.PropertyChannel) {
 	user := currentUser(c)
 	if user == nil {
@@ -159,34 +193,73 @@ func (h *PropertyHandler) contactAccess(c *gin.Context, channel service.Property
 	errcode.Success(c, result)
 }
 
-// 8. bindPropertySaleRequest maps a sale request body.
+// 10. bindPropertySaleRequest maps a sale request body.
 func (h *PropertyHandler) bindPropertySaleRequest(c *gin.Context, listingID string) (service.UpsertPropertySaleParams, bool) {
+	return bindPropertySaleRequestFromContext(c, listingID)
+}
+
+// 10.1 bindPropertySaleRequestFromContext maps a sale request body.
+func bindPropertySaleRequestFromContext(c *gin.Context, listingID string) (service.UpsertPropertySaleParams, bool) {
 	var request propertySaleRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
 		return service.UpsertPropertySaleParams{}, false
 	}
+	showUnit := true
+	if request.ShowUnit != nil {
+		showUnit = *request.ShowUnit
+	}
 
 	return service.UpsertPropertySaleParams{
 		ListingPublicID:       listingID,
+		PropertyNo:            strings.TrimSpace(request.PropertyNo),
 		Title:                 strings.TrimSpace(request.Title),
+		TitleEn:               strings.TrimSpace(request.TitleEn),
 		Summary:               strings.TrimSpace(request.Summary),
 		Description:           strings.TrimSpace(request.Description),
+		DescriptionEn:         strings.TrimSpace(request.DescriptionEn),
 		DistrictCode:          strings.TrimSpace(request.DistrictCode),
 		CommunityID:           strings.TrimSpace(request.CommunityID),
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
+		TransactionType:       strings.TrimSpace(request.TransactionType),
+		LocationScope:         strings.TrimSpace(request.LocationScope),
+		ListingCategory:       strings.TrimSpace(request.ListingCategory),
+		MultiUnitProject:      request.MultiUnitProject,
 		PropertyType:          strings.TrimSpace(request.PropertyType),
+		RentalType:            strings.TrimSpace(request.RentalType),
 		EstateName:            strings.TrimSpace(request.EstateName),
 		AddressText:           strings.TrimSpace(request.AddressText),
+		AddressTextEn:         strings.TrimSpace(request.AddressTextEn),
+		BlockName:             strings.TrimSpace(request.BlockName),
+		UnitName:              strings.TrimSpace(request.UnitName),
+		ShowUnit:              showUnit,
 		AskingPriceHKD:        request.AskingPriceHKD,
+		MonthlyRentHKD:        request.MonthlyRentHKD,
+		PriceReferenceOnly:    request.PriceReferenceOnly,
+		PriceNegotiable:       request.PriceNegotiable,
+		AnnualPrepayDiscount:  request.AnnualPrepayDiscount,
+		AnnualPrepayOption:    strings.TrimSpace(request.AnnualPrepayOption),
+		LeaseStartDate:        strings.TrimSpace(request.LeaseStartDate),
+		RentIncluded:          strings.TrimSpace(request.RentIncluded),
+		AreaMode:              strings.TrimSpace(request.AreaMode),
 		UsableAreaSqft:        request.UsableAreaSqft,
 		GrossAreaSqft:         request.GrossAreaSqft,
 		BedroomCount:          request.BedroomCount,
 		LivingRoomCount:       request.LivingRoomCount,
 		BathroomCount:         request.BathroomCount,
 		FloorLevel:            strings.TrimSpace(request.FloorLevel),
+		FloorRaw:              strings.TrimSpace(request.FloorRaw),
+		FloorZone:             strings.TrimSpace(request.FloorZone),
+		TotalFloors:           request.TotalFloors,
 		Direction:             strings.TrimSpace(request.Direction),
 		BuildingAge:           strings.TrimSpace(request.BuildingAge),
+		KitchenType:           strings.TrimSpace(request.KitchenType),
+		CookingMode:           strings.TrimSpace(request.CookingMode),
+		ManagementFeeHKD:      request.ManagementFeeHKD,
+		VideoURL:              strings.TrimSpace(request.VideoURL),
+		VRURL:                 strings.TrimSpace(request.VRURL),
+		PrivateNote:           strings.TrimSpace(request.PrivateNote),
+		AdPackageCode:         strings.TrimSpace(request.AdPackageCode),
 		FeatureTags:           request.FeatureTags,
 		ContactMethod:         strings.TrimSpace(request.ContactMethod),
 		BusinessStatus:        strings.TrimSpace(request.BusinessStatus),
@@ -195,8 +268,13 @@ func (h *PropertyHandler) bindPropertySaleRequest(c *gin.Context, listingID stri
 	}, true
 }
 
-// 9. bindServicedApartmentRequest maps a serviced apartment request body.
+// 11. bindServicedApartmentRequest maps a serviced apartment request body.
 func (h *PropertyHandler) bindServicedApartmentRequest(c *gin.Context, listingID string) (service.UpsertServicedApartmentParams, bool) {
+	return bindServicedApartmentRequestFromContext(c, listingID)
+}
+
+// 11.1 bindServicedApartmentRequestFromContext maps a serviced apartment request body.
+func bindServicedApartmentRequestFromContext(c *gin.Context, listingID string) (service.UpsertServicedApartmentParams, bool) {
 	var request servicedApartmentRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
@@ -208,13 +286,32 @@ func (h *PropertyHandler) bindServicedApartmentRequest(c *gin.Context, listingID
 		Title:                 strings.TrimSpace(request.Title),
 		Summary:               strings.TrimSpace(request.Summary),
 		Description:           strings.TrimSpace(request.Description),
+		DescriptionEn:         strings.TrimSpace(request.DescriptionEn),
 		DistrictCode:          strings.TrimSpace(request.DistrictCode),
 		CommunityID:           strings.TrimSpace(request.CommunityID),
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
 		ProjectName:           strings.TrimSpace(request.ProjectName),
+		ProjectNameEn:         strings.TrimSpace(request.ProjectNameEn),
 		AddressText:           strings.TrimSpace(request.AddressText),
+		AddressTextEn:         strings.TrimSpace(request.AddressTextEn),
+		WebsiteURL:            strings.TrimSpace(request.WebsiteURL),
+		WhatsApp:              strings.TrimSpace(request.WhatsApp),
+		Fax:                   strings.TrimSpace(request.Fax),
+		ServiceIntro:          strings.TrimSpace(request.ServiceIntro),
+		BenefitsText:          strings.TrimSpace(request.BenefitsText),
+		ExtraChargesText:      strings.TrimSpace(request.ExtraChargesText),
 		LowestMonthlyRentHKD:  request.LowestMonthlyRentHKD,
+		LowestDailyRentHKD:    request.LowestDailyRentHKD,
+		PriceReferenceOnly:    request.PriceReferenceOnly,
+		PriceNegotiable:       request.PriceNegotiable,
+		MinUsableAreaSqft:     request.MinUsableAreaSqft,
 		MinLeaseMonths:        request.MinLeaseMonths,
+		MinStayValue:          request.MinStayValue,
+		MinStayUnit:           strings.TrimSpace(request.MinStayUnit),
+		LocationScope:         strings.TrimSpace(request.LocationScope),
+		ListingCategory:       strings.TrimSpace(request.ListingCategory),
+		MultiUnitProject:      request.MultiUnitProject,
+		AdPackageCode:         strings.TrimSpace(request.AdPackageCode),
 		FacilityTags:          request.FacilityTags,
 		ServiceTags:           request.ServiceTags,
 		RoomTypes:             request.RoomTypes,
@@ -225,7 +322,7 @@ func (h *PropertyHandler) bindServicedApartmentRequest(c *gin.Context, listingID
 	}, true
 }
 
-// 10. toPropertyContactInput maps contact fields.
+// 12. toPropertyContactInput maps contact fields.
 func toPropertyContactInput(request propertyContactRequest) service.PropertyContactInput {
 	return service.PropertyContactInput{
 		Phone:           strings.TrimSpace(request.Phone),

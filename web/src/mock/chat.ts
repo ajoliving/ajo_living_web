@@ -3,7 +3,7 @@
  * 1. 提供會話列表與訊息內容。
  * 2. 支援聊天頁輸入互動與詳情頁聊天入口演示。
  */
-import type { ChatConversation, Message } from '@/model/chat';
+import type { ChatConversation, Message } from '@/domains/communications/model';
 
 import { marketplaceListings } from '@/mock/listings';
 import { sellerProfiles } from '@/mock/user';

@@ -34,8 +34,11 @@
 | `apis.hk.skylinedances.com` | 47.239.117.108 | :20036 | nginx 静态 | 独立 |
 | `svavo.smart.databoard.skylinedances.com` | 47.239.117.108 | :20038 | nginx 静态 | 独立 |
 | `svavo.smart.databoard.service.skylinedances.com` | 47.239.117.108 | :20037 | Go + Supervisor | 独立 |
+| `intercom.skylinedances.com` | 47.239.117.108 | :20040 | nginx 靜態 + `/api/` 反代 | 獨立 |
+| `intercom.api.skylinedances.com` | 47.83.21.100 | 待補齊 frpc | gateway nginx SSL 已配置 | 獨立 |
 | `ajoliving.skylinedances.com` | 47.239.117.108 | :20041 | nginx 静态 | 待申请 |
 | `ajoliving.server.skylinedances.com` | 47.239.117.108 | :20042 | Go + Supervisor | 待申请 |
+| `good.price.skylinedances.com` | 47.239.117.108 | :20045 → `/api/` :20044 | nginx 静态 + `/api/` 反代 | 独立 |
 
 
 ---
@@ -70,6 +73,7 @@
 | `/etc/nginx/sites-enabled/*` | nginx 本地站点（前端 + API 反代） |
 | `/home/admin/<project>/` | 业务服务目录 |
 | `/home/admin/svavo_smart_databoard/` | svavo 项目目录（后端、前端 dist、.env、compose） |
+| `/home/admin/good_price_databoard/` | good-price 项目目录（后端、前端 dist、.env、PostgreSQL compose） |
 
 ---
 
@@ -135,6 +139,9 @@ ssh admin@47.239.117.108 "mkdir -p /home/admin/my_project"
 scp docker-compose.yml .env admin@47.239.117.108:/home/admin/my_project/
 
 # 2. docker-compose.yml 规范（注意: 数据库端口绑 127.0.0.1）
+# 顶层必须设置唯一 name，避免多个项目目录同名 db 时互相接管容器：
+# name: my_project
+#
 # services:
 #   mysql:
 #     ports:
@@ -355,8 +362,13 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 20036 | 47.239.117.108 | hk-dashboard | 0.0.0.0 |
 | 20037 | 47.239.117.108 | svavo 后端 API | 127.0.0.1 |
 | 20038 | 47.239.117.108 | svavo 前端 nginx | 127.0.0.1 |
+| 20039 | 47.239.117.108 | intercom 後端 API | 0.0.0.0 |
+| 20040 | 47.239.117.108 | intercom 前端 nginx | 0.0.0.0 |
 | 20041 | 47.239.117.108 | ajoliving 前端 nginx | 127.0.0.1 |
 | 20042 | 47.239.117.108 | ajoliving 后端 API | 127.0.0.1 |
+| 20043 | 47.239.117.108 | hk-dashboard border API | 127.0.0.1 |
+| 20044 | 47.239.117.108 | good-price 后端 API | 127.0.0.1 |
+| 20045 | 47.239.117.108 | good-price 前端 nginx | 127.0.0.1 |
 | 9002 | 47.239.117.108 | iboard 前端 | 0.0.0.0 |
 | 10031 | 47.239.117.108 | iboard 后端 | 0.0.0.0 |
 | 32001 | 47.239.117.108 | icctv 后端 | 0.0.0.0 |
@@ -368,6 +380,7 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 3312 | 47.239.117.108 | MySQL(icctv) | 127.0.0.1 |
 | 6381 | 47.239.117.108 | Redis(iboard) | 127.0.0.1 |
 | 45432 | 47.239.117.108 | ajoliving PostgreSQL(Docker) | 127.0.0.1 |
+| 55432 | 47.239.117.108 | good-price PostgreSQL(Docker) | 127.0.0.1 |
 
 ---
 
@@ -410,7 +423,49 @@ ssh admin@47.239.117.108 "sudo docker ps --filter name=svavo-postgres"
 
 ---
 
-## 九、AJOLIVING 项目固定配置（已落地）
+## 九、INTERCOM 專案固定配置（部分已落地）
+
+### 1. 應用伺服器 47.239.117.108
+
+- 前端目錄：`/home/admin/intercom_web_admin/dist`
+- 前端 nginx 站點：`/etc/nginx/sites-available/intercom_web`
+- 前端本地地址：`127.0.0.1:20040`
+- 後端目錄：`/home/admin/intercom_http_service`
+- 後端 Supervisor：`/etc/supervisor/conf.d/intercom_http_service.conf`
+- 後端監聽地址：`:20039`
+
+### 2. frpc 代理（應用伺服器）
+
+`/home/admin/frp/frpc.toml` 已追加：
+
+- `intercom.skylinedances.com -> 127.0.0.1:20040`
+
+目前未在應用伺服器 `frpc.toml` 看到 `intercom.api.skylinedances.com` 對應代理。API 訪問目前應優先走 `https://intercom.skylinedances.com/api/`，若要啟用獨立 API 域名，需要先確認後端路由前綴與網關轉發方式，再補齊 frpc 或 nginx 配置。
+
+### 3. 網關伺服器 47.83.21.100
+
+- SSL 站點檔案：`/etc/nginx/sites-available/intercom_ssl.conf`
+- 已配置 HTTPS 域名：
+    - `intercom.skylinedances.com`
+    - `intercom.api.skylinedances.com`
+- 證書路徑：
+    - `/etc/letsencrypt/live/intercom.skylinedances.com/`
+    - `/etc/letsencrypt/live/intercom.api.skylinedances.com/`
+- 證書有效期：至 `2026-07-30`
+
+### 4. 驗收命令
+
+```bash
+curl -I https://intercom.skylinedances.com/
+curl -I https://intercom.skylinedances.com/api/
+curl -I https://intercom.api.skylinedances.com/
+ssh admin@47.239.117.108 "sudo supervisorctl status intercom_http_service frpc"
+ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"intercom_web\""
+```
+
+---
+
+## 十、AJOLIVING 项目固定配置（已落地）
 
 ### 1. 应用服务器 47.239.117.108
 
@@ -462,6 +517,7 @@ cd /Users/yangliu/Documents/Code/ajoliving_web
 - 会在后端重启前备份服务器生产库到 `/home/admin/ajoliving/db/backups/ajoliving_<release_id>.dump`。
 - 后端启动时会执行 GORM `AutoMigrate`，新增字段会自动补齐；正常情况下不会删除已有表或已有字段。
 - `.env` 默认保留服务器现有版本；只有显式设置 `SYNC_ENV=1` 才会用本地 `.env` 覆盖服务器 `.env`。
+- 每次部署的话，我想你能先ssh然后能将服务的配置搞懂后再部署，部署的话尽量奥卡姆剃刀原理，不要添加到了无关的服务或者文件啥的，要简单些尽量
 
 危险操作：
 
@@ -509,6 +565,90 @@ ssh admin@47.83.21.100 "sudo supervisorctl start frps"
 
 # 创建 nginx HTTPS 反代（参考 SVAVO 或通用场景 V-5）
 ```
+
+---
+
+## 十一、GOOD PRICE 项目固定配置（已落地）
+
+### 1. 应用服务器 47.239.117.108
+
+- 项目目录：`/home/admin/good_price_databoard`
+- 后端 Supervisor：`/etc/supervisor/conf.d/good_price_databoard.conf`
+- 后端本地地址：`127.0.0.1:20044`
+- 前端 nginx 站点：`/etc/nginx/sites-available/good_price_databoard`
+- 前端本地地址：`127.0.0.1:20045`
+- 前端静态目录：`/home/admin/good_price_databoard/frontend-dist`
+- 数据库容器：`good-price-postgres`
+- 数据库端口：`127.0.0.1:55432`
+- Docker Compose 项目名：`good_price_databoard`
+
+### 2. frpc 代理（应用服务器）
+
+`/home/admin/frp/frpc.toml` 已追加：
+
+- `good.price.skylinedances.com -> 127.0.0.1:20045`
+
+该项目使用同一域名承载前后端：前端 nginx 的 `/api/` 反代到 `127.0.0.1:20044`，不需要单独 API 子域名。
+
+### 3. 网关服务器 47.83.21.100
+
+- SSL 站点文件：`/etc/nginx/sites-available/good_price_ssl.conf`
+- 证书路径：`/etc/letsencrypt/live/good.price.skylinedances.com/`
+- 证书有效期：至 `2026-08-26`
+
+### 4. 数据更新与数据卷
+
+- 后端 `.env` 使用 `PRICEWATCH_DAILY_IMPORT_HOUR=9`，按服务器本地时间每天 09:00 自动下载当天繁体中文 CSV、导入 PostgreSQL、刷新缓存并评估邮件提醒。
+- `PRICEWATCH_HISTORY_DAYS=90`，历史价格记录保留 90 天，超过窗口的数据由导入流程清理。
+- 前端生产构建默认使用同源 API，即请求 `/api/...`；不要把生产包构建成 `VITE_API_BASE=http://localhost:8080`，否则线上浏览器会请求用户本机 8080 导致无数据。
+- PostgreSQL 数据通过 Docker volume 持久化。正常发布前后端不要删除 volume，不要执行 `docker compose down -v`。
+
+### 5. 目录结构（应用服务器）
+
+```
+/home/admin/good_price_databoard/
+├── backend/                   # Go 后端、.env、run.sh、导入 dump
+├── frontend-dist/             # React/Vite 编译产物（nginx 托管）
+├── db/                        # PostgreSQL compose
+│   └── docker-compose.yml     # 顶层 name: good_price_databoard
+└── tmp/                       # Supervisor 日志目录
+```
+
+### 6. 验收命令
+
+```bash
+# 前端可访问
+curl -I https://good.price.skylinedances.com/
+
+# 后端 API 可访问
+curl -I https://good.price.skylinedances.com/api/health
+
+# 数据确认
+curl -s https://good.price.skylinedances.com/api/summary
+
+# 服务运行状态
+ssh admin@47.239.117.108 "sudo supervisorctl status good_price_databoard frpc"
+
+# 数据库容器
+ssh admin@47.239.117.108 "sudo docker ps --filter name=good-price-postgres"
+
+# Compose 项目名隔离确认
+ssh admin@47.239.117.108 "sudo docker inspect -f '{{.Name}} {{ index .Config.Labels \"com.docker.compose.project\" }}' good-price-postgres ajoliving_postgres svavo-postgres"
+
+# 前端生产包不能包含本地 API 地址
+ssh admin@47.239.117.108 "grep -R 'localhost:8080' -n /home/admin/good_price_databoard/frontend-dist/assets || true"
+
+# frpc 代理确认
+ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"good-price\"'"
+```
+
+### 7. 部署注意事项
+
+- 改动前先读 `/etc/nginx/sites-available/good_price_databoard`、`/etc/supervisor/conf.d/good_price_databoard.conf`、`/home/admin/frp/frpc.toml` 和 `/home/admin/good_price_databoard/db/docker-compose.yml`。
+- 数据库端口必须保持 `127.0.0.1:55432`，不要绑定 `0.0.0.0`。
+- `db/docker-compose.yml` 必须保留顶层 `name: good_price_databoard`。如果缺失，`docker compose` 会用目录名作为 project，容易与其他 `/db` 目录项目冲突。
+- 静态前端更新只需同步 `frontend/dist/` 到 `/home/admin/good_price_databoard/frontend-dist/`，通常不需要重启后端或 nginx。
+- 后端更新需重新上传二进制并 `sudo supervisorctl restart good_price_databoard`。
 
 ---
 

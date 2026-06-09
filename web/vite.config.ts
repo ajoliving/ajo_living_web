@@ -11,7 +11,7 @@ import vue from '@vitejs/plugin-vue';
 // 1. 輸出前端建置設定
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8080';
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8081';
 
   return {
     plugins: [vue()],

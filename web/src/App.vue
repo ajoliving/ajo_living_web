@@ -7,9 +7,9 @@
 import { watch } from 'vue';
 
 import AppShell from '@/shared/components/layout/AppShell.vue';
-import i18n from '@/i18n';
-import { usePreferenceStore } from '@/stores/preferences';
-import { useSessionStore } from '@/stores/session';
+import i18n from '@/app/i18n';
+import { usePreferenceStore } from '@/app/stores/preferences';
+import { useSessionStore } from '@/app/stores/session';
 
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();

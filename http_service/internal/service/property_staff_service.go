@@ -41,12 +41,49 @@ func (s *PropertyService) ListStaffProperties(ctx context.Context, channel Prope
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 2. PublishPropertyForStaff publishes any property listing without owner checks.
+// 2. GetPropertyDetailForStaff returns any property detail without owner status checks.
+func (s *PropertyService) GetPropertyDetailForStaff(ctx context.Context, channel PropertyChannel, listingPublicID string) (*PropertyListingDetail, error) {
+	listing, _, err := s.loadPropertyListingByPublicID(ctx, channel, strings.TrimSpace(listingPublicID))
+	if err != nil {
+		return nil, err
+	}
+	return s.GetPropertyDetail(ctx, channel, listing.PublicID, &listing.OwnerUserID)
+}
+
+// 3. UpdatePropertySaleForStaff updates any property sale listing without owner checks.
+func (s *PropertyService) UpdatePropertySaleForStaff(ctx context.Context, params UpsertPropertySaleParams) (*PropertyListingDetail, error) {
+	listing, _, err := s.loadPropertyListingByPublicID(ctx, PropertyChannelSale, strings.TrimSpace(params.ListingPublicID))
+	if err != nil {
+		return nil, err
+	}
+	params.OwnerUserID = listing.OwnerUserID
+	listingID, err := s.upsertPropertySale(ctx, params, false)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetPropertyDetail(ctx, PropertyChannelSale, listingID, &listing.OwnerUserID)
+}
+
+// 4. UpdateServicedApartmentForStaff updates any serviced apartment listing without owner checks.
+func (s *PropertyService) UpdateServicedApartmentForStaff(ctx context.Context, params UpsertServicedApartmentParams) (*PropertyListingDetail, error) {
+	listing, _, err := s.loadPropertyListingByPublicID(ctx, PropertyChannelServiced, strings.TrimSpace(params.ListingPublicID))
+	if err != nil {
+		return nil, err
+	}
+	params.OwnerUserID = listing.OwnerUserID
+	listingID, err := s.upsertServicedApartment(ctx, params, false)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetPropertyDetail(ctx, PropertyChannelServiced, listingID, &listing.OwnerUserID)
+}
+
+// 5. PublishPropertyForStaff publishes any property listing without owner checks.
 func (s *PropertyService) PublishPropertyForStaff(ctx context.Context, channel PropertyChannel, listingPublicID string) error {
 	return s.activatePropertyForStaff(ctx, channel, listingPublicID, false)
 }
 
-// 3. DeactivatePropertyForStaff hides any property listing.
+// 6. DeactivatePropertyForStaff hides any property listing.
 func (s *PropertyService) DeactivatePropertyForStaff(ctx context.Context, channel PropertyChannel, listingPublicID string) error {
 	listing, _, err := s.loadPropertyListingByPublicID(ctx, channel, strings.TrimSpace(listingPublicID))
 	if err != nil {
@@ -60,12 +97,12 @@ func (s *PropertyService) DeactivatePropertyForStaff(ctx context.Context, channe
 	return nil
 }
 
-// 4. RenewPropertyForStaff refreshes any property listing validity.
+// 7. RenewPropertyForStaff refreshes any property listing validity.
 func (s *PropertyService) RenewPropertyForStaff(ctx context.Context, channel PropertyChannel, listingPublicID string) error {
 	return s.activatePropertyForStaff(ctx, channel, listingPublicID, true)
 }
 
-// 5. activatePropertyForStaff publishes or renews one listing.
+// 8. activatePropertyForStaff publishes or renews one listing.
 func (s *PropertyService) activatePropertyForStaff(ctx context.Context, channel PropertyChannel, listingPublicID string, forcePublishedAt bool) error {
 	listing, _, err := s.loadPropertyListingByPublicID(ctx, channel, strings.TrimSpace(listingPublicID))
 	if err != nil {
@@ -91,7 +128,7 @@ func (s *PropertyService) activatePropertyForStaff(ctx context.Context, channel 
 	return nil
 }
 
-// 6. applyStaffPropertyStatusFilter applies staff list status filters.
+// 9. applyStaffPropertyStatusFilter applies staff list status filters.
 func applyStaffPropertyStatusFilter(query *gorm.DB, status string) *gorm.DB {
 	normalizedStatus := strings.TrimSpace(status)
 	switch normalizedStatus {

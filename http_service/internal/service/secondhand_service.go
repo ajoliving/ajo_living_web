@@ -244,7 +244,7 @@ func (s *SecondhandService) upsertSecondhand(ctx context.Context, params UpsertS
 		return "", err
 	}
 
-	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.VisibilityScope)
+	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.CommunityName, params.VisibilityScope)
 	if err != nil {
 		return "", err
 	}
@@ -433,7 +433,7 @@ func (s *SecondhandService) createSecondhandWithCharge(ctx context.Context, para
 		return "", nil, err
 	}
 
-	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.VisibilityScope)
+	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.CommunityName, params.VisibilityScope)
 	if err != nil {
 		return "", nil, err
 	}
@@ -466,7 +466,7 @@ func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, para
 		return "", nil, err
 	}
 
-	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.VisibilityScope)
+	communityID, err := s.resolveCommunityID(ctx, params.OwnerUserID, params.CommunityID, params.CommunityName, params.VisibilityScope)
 	if err != nil {
 		return "", nil, err
 	}
@@ -745,6 +745,9 @@ func (s *SecondhandService) applyPublicFilters(query *gorm.DB, filters Secondhan
 	}
 	if filters.MaxPriceHKD != nil {
 		query = query.Where("secondhand_listings.price_hkd <= ?", *filters.MaxPriceHKD)
+	}
+	if filters.HasMedia {
+		query = query.Where("EXISTS (SELECT 1 FROM listing_images WHERE listing_images.listing_id = listings.id)")
 	}
 	if filters.OnlyFree {
 		query = query.Where("secondhand_listings.is_free_giveaway = ?", true)

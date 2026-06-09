@@ -26,6 +26,54 @@
 在收尾具体任务时，不要讨论无关架构、历史或未来想法。
 不要详细描述测试;只报告命令和通过/失败，除非细节必要。
 不要用实现细节替代对运行时/产品问题的回答。
+
+## 產品定位與長期邊界
+- `AJO Living` 是面向物業管理公司的主系統，不是單一二手交易、樓盤展示或服務住宅網站。
+- 系統的核心服務對象包括物業管理公司、管理員、前線職員、業主、租客，以及按業務需要開放的訪客。
+- 後續功能會逐步承接或整合舊系統能力，因此新增功能時必須先判斷其所屬主模組，不得把所有能力堆疊到同一個 page、同一組 service 或同一個 marketplace 語義下。
+- 平台核心域優先保持清晰：帳戶與身份、物業與大廈、住戶與成員、權限與可見性、通知與站內信、支付與賬務、媒體與檔案。
+- 面向業主與租客的功能必須以大廈、單位、身份、可見範圍為主要上下文；不得只按普通消費者網站或公開 marketplace 的邏輯設計。
+- 產品文案保持正式、直接、可執行，不寫舞台感、氛圍感、行銷式自我說明或給實作者看的過程文字。
+
+## 舊系統參考與整合方向
+- 以下舊系統路徑與網址是業務參考，不代表可以直接複製架構、命名、UI 或資料模型；實作前必須先查看現有 AJO 程式碼與資料結構。
+- 物業費線上繳納可參考 `/Users/yangliu/Documents/Code/pos/pos_web`，在 AJO 中應歸入支付、賬單、物業費或賬務模組。
+- 大廈通告可參考 `/Users/yangliu/Documents/Code/iboard_flutter` 與 `/Users/yangliu/Documents/Code/iboard_http_service`，在 AJO 中應歸入大廈公告、通知或內容發布模組。
+- 實時監控可參考 `/Users/yangliu/Documents/Code/icctv_web_admin`、`/Users/yangliu/Documents/Code/icctv-http-service`、`/Users/yangliu/Documents/Code/icctv_orangepi_auth_service`，在 AJO 中應歸入大廈設備、監控或安防模組。
+- 智能門鎖可參考 `/Users/yangliu/Documents/Code/ilock` 與 `/Users/yangliu/Documents/Code/ILock_http_service`，在 AJO 中應歸入門禁、智能設備或住戶權限模組。
+- 網絡對講機可參考 `/Users/yangliu/Documents/Code/intercom`、`/Users/yangliu/Documents/Code/iNtercom_flutter_callee`、`/Users/yangliu/Documents/Code/iNtercom_flutter_caller`，若未來上線 App，應作為 App 端通訊與門禁聯動能力處理。
+- 舊 `iSmart` 物業管理功能可參考 `https://ismart.legend-in.com.hk/memberreg/` 與 `https://ismart.legend-in.com.hk/blg_notice/`，後續遷移時以 AJO 的身份、物業、大廈、通知與權限模型重新收斂。
+- 舊系統只能作為業務流程、欄位與交互參考；除非明確要求，不得讓 AJO 前端直接依賴舊系統前端，不得讓新後端繞過 AJO 既有分層直接拼接舊系統資料。
+- 若舊系統仍保留獨立後台，舊後台可繼續作為該業務的主要寫入端與營運入口；AJO 優先作為統一會員入口、統一查詢入口與正式展示入口。
+- AJO 接入舊業務資料時，優先由 AJO 後端提供受控 API 給前端讀取；前端不得直接連接舊資料庫、舊服務內網地址或繞過 AJO 權限模型。
+- 共用同一資料庫可以接受，但必須明確資料表歸屬、寫入責任、讀取權限與遷移責任；不允許兩套後台在沒有契約的情況下同時修改同一核心資料。
+- 對舊系統資料的讀取優先使用唯讀資料庫帳號、資料庫 view、穩定查詢 service 或同步後的只讀快照；除非明確要求，不在 AJO 內直接改寫舊系統業務表。
+
+## 現有部署資產與整合現況
+- 目前多個舊業務部署在 `skylinedances.com` 子域名下，其中 `ajoliving.skylinedances.com` 為 AJO Web，`ajoliving.server.skylinedances.com` 為 AJO 後端。
+- POS 相關部署包括 `easy.payment.skylinedances.com`、`pos.web.skylinedances.com`、`pos.ismart.skylinedances.com`，未來接入 AJO 時應歸入支付、賬單或物業費查詢。
+- iBoard 相關部署包括 `iboard.skylinedances.com` 與 `iboard.service.skylinedances.com`，未來接入 AJO 時應歸入大廈通告或通知內容。
+- iCCTV 相關部署包括 `icctv.skylinedances.com` 與 `icctv.service.skylinedances.com`，未來接入 AJO 時應歸入設備、監控或安防查看。
+- Intercom 相關部署包括 `intercom.skylinedances.com` 與 `intercom.api.skylinedances.com`，未來接入 AJO 時應歸入門禁、對講或 App 端能力。
+- 其他已部署服務如 `pdf.maker.skylinedances.com`、`apis.hk.skylinedances.com`、`svavo.smart.databoard.skylinedances.com`、`svavo.smart.databoard.service.skylinedances.com`、`good.price.skylinedances.com`，接入前必須先確認是否屬於 AJO 主系統核心域。
+- AJO 不應一次性吞併所有舊後台；應按業務優先級逐步接入為可查看、可跳轉、可申請或可操作的模組。
+
+## 模組架構原則
+- 新增大型功能前，先判斷是否屬於既有主域；若不屬於，建立清晰的模組邊界與路由邊界，再落實頁面與 API。
+- 優先讓 `account`、`building`、`property`、`marketplace`、`notification`、`payment`、`device` 等語義保持獨立，不因短期入口方便而混用資料流。
+- 共享能力只放在真正跨模組的層級，例如身份、權限、檔案、上傳、消息、支付狀態；單一業務頁面的狀態不得提前全域化。
+- 面向未來龐大功能時，只保留必要的模組邊界與命名彈性，不新增當前用不到的抽象、表、介面或 UI 入口。
+- 涉及大廈、單位、業主、租客、職員、管理公司之間關係的功能，必須先明確資料歸屬與權限邊界，再做頁面呈現。
+- 對外公開頁、會員頁、管理端頁必須分清使用者身份與操作權限，不得共用一套模糊入口。
+
+## 站內信與聊天演進規則
+- 站內信與聊天應視為平台級通訊能力，不應長期綁死在二手 marketplace 聊天語義下。
+- 現階段若只做一對一聊天，實作仍需避免把資料模型、API 命名與 UI 文案寫死成只能支援買賣雙方；但不得提前實作未被要求的群聊功能。
+- 未來增加群聊時，優先按 `conversation`、`participant`、`message`、`conversation_type`、`source_module`、`building_id` 或相關業務上下文拆分，而不是另建一套與一對一聊天完全割裂的系統。
+- 群聊場景需先明確用途：管理公司內部群、指定大廈住戶群、業主與租客群、維修服務群、交易協商群或公告型討論；不同場景的權限、可見性、退出與封存規則不同。
+- 通告、公告與站內信需要區分：公告偏單向發布，站內信偏可追蹤消息，聊天偏會話互動，不得在 UI 和資料模型上混為一談。
+- 聊天相關通知應與全站通知中心保持一致，避免每個模組各自生成不可統一管理的未讀數與提醒邏輯。
+
 ## 專案技術基線
 - 前端統一使用 `Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS + Axios`。
 - 如需元件庫，統一使用 `Ant Design Vue 4`。
@@ -117,3 +165,5 @@ const handleSubmit = async () => { ... };
 
 ### 5，我会在其他的terminal中自己运行我的前端和后端
 - 我会在其他的terminal中自己运行我的前端和后端，不要帮我直接运行。
+- 我的一切的功能等尽量是能做减法，然后ui上也是最好是简约，不要复杂逻辑啥的
+- /Users/yangliu/Documents/Code/ajoliving_web/doc copy/server-deployment-ai-prompt.md部署的话，帮我读这个文件后部署

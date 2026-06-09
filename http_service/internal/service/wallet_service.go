@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ const (
 	WalletSourceProfileCharge = "profile_charge"
 	WalletSourceRewardAd      = "reward_ad"
 	WalletSourceOperatorGrant = "operator_grant"
+	WalletSourceRecharge      = "recharge_payment"
 
 	WalletActionSaveDraft = "save_draft"
 	WalletActionPublish   = "publish"
@@ -37,12 +39,15 @@ const (
 	WalletActionRenew     = "renew"
 	WalletActionAvatar    = "avatar_update"
 	WalletActionAdReward  = "ad_reward"
+	WalletActionContact   = "contact_access"
+	WalletActionRecharge  = "recharge"
 
 	RewardClaimStatusStarted = "started"
 	RewardClaimStatusClaimed = "claimed"
 	RewardClaimStatusFailed  = "failed"
 
 	WalletDailyAdRewardLimit = int64(1000)
+	WalletRechargePointRate  = int64(100)
 )
 
 // 1. WalletService handles AJO Point account and reward ad workflows.
@@ -79,6 +84,7 @@ type WalletOverviewResponse struct {
 	RecentTransactions []WalletTransactionResponse `json:"recent_transactions"`
 	ChargeRules        []WalletChargeRuleResponse  `json:"charge_rules"`
 	RechargeEnabled    bool                        `json:"recharge_enabled"`
+	RechargeRate       int64                       `json:"recharge_rate"`
 }
 
 // 5. WalletChargeRuleResponse defines one visible charge rule.
@@ -138,7 +144,32 @@ type RewardAdClickResponse struct {
 	LinkClickRate  float64 `json:"link_click_rate"`
 }
 
-// 10. WalletSpendParams defines a point debit request.
+// 10. PublicDisplayAdResponse defines a public listing-side display ad.
+type PublicDisplayAdResponse struct {
+	TaskID           string `json:"task_id"`
+	Title            string `json:"title"`
+	DisplayTitle     string `json:"display_title"`
+	Summary          string `json:"summary"`
+	DisplayText      string `json:"display_text"`
+	CoverURL         string `json:"cover_url"`
+	MediaURL         string `json:"media_url"`
+	MediaType        string `json:"media_type"`
+	TargetURL        string `json:"target_url"`
+	DisplayChannel   string `json:"display_channel"`
+	DisplayPlacement string `json:"display_placement"`
+	DisplayLayout    string `json:"display_layout"`
+	SortOrder        int    `json:"sort_order"`
+	SlotIndex        int    `json:"slot_index"`
+}
+
+// 11. PublicDisplayAdFilters defines display ad query conditions.
+type PublicDisplayAdFilters struct {
+	Channel   string
+	Placement string
+	Limit     int
+}
+
+// 12. WalletSpendParams defines a point debit request.
 type WalletSpendParams struct {
 	UserID         int64
 	Amount         int64
@@ -150,7 +181,7 @@ type WalletSpendParams struct {
 	Note           string
 }
 
-// 11. WalletCreditParams defines a point credit request.
+// 13. WalletCreditParams defines a point credit request.
 type WalletCreditParams struct {
 	UserID         int64
 	Amount         int64
@@ -164,12 +195,12 @@ type WalletCreditParams struct {
 	Note           string
 }
 
-// 12. NewWalletService creates a wallet service instance.
+// 14. NewWalletService creates a wallet service instance.
 func NewWalletService(runtime *Runtime) *WalletService {
 	return &WalletService{runtime: runtime}
 }
 
-// 13. ListingActionCost returns the configured cost for one module action.
+// 15. ListingActionCost returns the configured cost for one module action.
 func ListingActionCost(module string, action string) int64 {
 	switch strings.TrimSpace(module) {
 	case "secondhand":
@@ -188,7 +219,7 @@ func ListingActionCost(module string, action string) int64 {
 	}
 }
 
-// 14. shouldChargeListingEdit returns whether an edit is billable.
+// 16. shouldChargeListingEdit returns whether an edit is billable.
 func shouldChargeListingEdit(listing *model.Listing) bool {
 	if listing == nil {
 		return false
@@ -196,7 +227,7 @@ func shouldChargeListingEdit(listing *model.Listing) bool {
 	return listing.PublicationStatus != "draft" || listing.PublishedAt != nil
 }
 
-// 15. WalletChargeRules returns all member-facing listing charge rules.
+// 17. WalletChargeRules returns all member-facing listing charge rules.
 func WalletChargeRules() []WalletChargeRuleResponse {
 	return []WalletChargeRuleResponse{
 		{BizModule: "secondhand", Label: "二手交易", Publish: 100, DraftSave: 50, Edit: 100, Republish: 100, Renew: 50},
@@ -205,7 +236,7 @@ func WalletChargeRules() []WalletChargeRuleResponse {
 	}
 }
 
-// 16. GetWalletOverview returns account, recent transactions, and charge rules.
+// 18. GetWalletOverview returns account, recent transactions, and charge rules.
 func (s *WalletService) GetWalletOverview(ctx context.Context, userID int64) (*WalletOverviewResponse, error) {
 	account, err := s.ensureAccount(ctx, s.runtime.DB, userID)
 	if err != nil {
@@ -231,11 +262,12 @@ func (s *WalletService) GetWalletOverview(ctx context.Context, userID int64) (*W
 		},
 		RecentTransactions: transactions,
 		ChargeRules:        WalletChargeRules(),
-		RechargeEnabled:    false,
+		RechargeEnabled:    s.runtime.Config.WalletRechargeEnabled,
+		RechargeRate:       WalletRechargePointRate,
 	}, nil
 }
 
-// 17. ListTransactions returns paged wallet transactions.
+// 19. ListTransactions returns paged wallet transactions.
 func (s *WalletService) ListTransactions(ctx context.Context, userID int64, page int, pageSize int) ([]WalletTransactionResponse, *model.Pagination, error) {
 	page, pageSize = normalizePagination(page, pageSize)
 
@@ -258,7 +290,7 @@ func (s *WalletService) ListTransactions(ctx context.Context, userID int64, page
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 18. SpendPointsWithTx debits points inside an existing business transaction.
+// 20. SpendPointsWithTx debits points inside an existing business transaction.
 func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, params WalletSpendParams) (*PointsChargeResponse, error) {
 	if params.Amount <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "points amount must be positive")
@@ -324,7 +356,7 @@ func (s *WalletService) SpendPointsWithTx(ctx context.Context, tx *gorm.DB, para
 	}, nil
 }
 
-// 19. CreditPointsWithTx credits points inside an existing transaction.
+// 21. CreditPointsWithTx credits points inside an existing transaction.
 func (s *WalletService) CreditPointsWithTx(ctx context.Context, tx *gorm.DB, params WalletCreditParams) (*PointsChargeResponse, error) {
 	if params.Amount <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "points amount must be positive")
@@ -408,12 +440,13 @@ func (s *WalletService) GrantOperatorPoints(ctx context.Context, operatorUserID 
 	return result, err
 }
 
-// 21. ListRewardAdTasks returns active ad tasks and member claim state.
+// 22. ListRewardAdTasks returns active ad tasks and member claim state.
 func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]RewardAdTaskResponse, error) {
 	now := s.runtime.Now()
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("is_active = ?", true).
+		Where("(ad_type = ? OR ad_type = '')", rewardAdTypeReward).
 		Where("(starts_at IS NULL OR starts_at <= ?)", now).
 		Where("(ends_at IS NULL OR ends_at >= ?)", now).
 		Order("updated_at desc, id desc").
@@ -456,7 +489,125 @@ func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]
 	return items, nil
 }
 
-// 22. StartRewardAd starts a rewarded ad watch session.
+// 23. ListPublicDisplayAds returns active display ads for listing-side rails.
+func (s *WalletService) ListPublicDisplayAds(ctx context.Context, filters PublicDisplayAdFilters) ([]PublicDisplayAdResponse, error) {
+	channel := normalizedDisplayAdChannel(filters.Channel)
+	placement := normalizedDisplayAdPlacement(filters.Placement)
+	limit := filters.Limit
+	if limit <= 0 || limit > 10 {
+		limit = 10
+	}
+	if channel == "" || placement == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "display ad channel or placement is invalid")
+	}
+
+	items, err := s.listPublicConfiguredDisplayAds(ctx, channel, placement, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) > 0 {
+		return items, nil
+	}
+
+	return s.listPublicLegacyDisplayAds(ctx, channel, placement, limit)
+}
+
+// 23.1 listPublicConfiguredDisplayAds returns one random active ad per configured slot.
+func (s *WalletService) listPublicConfiguredDisplayAds(ctx context.Context, channel string, placement string, limit int) ([]PublicDisplayAdResponse, error) {
+	var assignments []model.DisplayAdSlotAssignment
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("display_channel = ? AND display_placement = ?", channel, placement).
+		Order("slot_index asc, sort_order asc, id asc").
+		Find(&assignments).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ad slots")
+	}
+	if len(assignments) == 0 {
+		return nil, nil
+	}
+
+	adIDs := make([]int64, 0, len(assignments))
+	slotMap := map[int][]model.DisplayAdSlotAssignment{}
+	for _, assignment := range assignments {
+		if assignment.SlotIndex <= 0 || assignment.SlotIndex > displayAdSlotCount {
+			continue
+		}
+		adIDs = append(adIDs, assignment.RewardAdID)
+		slotMap[assignment.SlotIndex] = append(slotMap[assignment.SlotIndex], assignment)
+	}
+	if len(adIDs) == 0 {
+		return nil, nil
+	}
+
+	now := s.runtime.Now()
+	var ads []model.RewardAd
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("id IN ?", adIDs).
+		Where("media_type = ? AND is_active = ?", rewardAdMediaTypeImage, true).
+		Where("(starts_at IS NULL OR starts_at <= ?)", now).
+		Where("(ends_at IS NULL OR ends_at >= ?)", now).
+		Find(&ads).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ads")
+	}
+
+	adMap := map[int64]model.RewardAd{}
+	for _, ad := range ads {
+		adMap[ad.ID] = ad
+	}
+
+	items := make([]PublicDisplayAdResponse, 0, limit)
+	randomSource := rand.New(rand.NewSource(now.UnixNano()))
+	for slotIndex := 1; slotIndex <= displayAdSlotCount && len(items) < limit; slotIndex++ {
+		candidates := make([]model.DisplayAdSlotAssignment, 0, len(slotMap[slotIndex]))
+		for _, assignment := range slotMap[slotIndex] {
+			if _, exists := adMap[assignment.RewardAdID]; exists {
+				candidates = append(candidates, assignment)
+			}
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		assignment := candidates[randomSource.Intn(len(candidates))]
+		item := toPublicDisplayAdResponse(adMap[assignment.RewardAdID])
+		item.SlotIndex = slotIndex
+		item.DisplayLayout = displayAdLayoutForSlot(slotIndex)
+		item.DisplayTitle = strings.TrimSpace(assignment.DisplayTitle)
+		item.DisplayText = strings.TrimSpace(assignment.DisplayText)
+		if targetURL := strings.TrimSpace(assignment.TargetURL); targetURL != "" {
+			item.TargetURL = targetURL
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+// 23.2 listPublicLegacyDisplayAds returns active display ads when no slot setting exists.
+func (s *WalletService) listPublicLegacyDisplayAds(ctx context.Context, channel string, placement string, limit int) ([]PublicDisplayAdResponse, error) {
+	now := s.runtime.Now()
+	var ads []model.RewardAd
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("ad_type = ? AND is_active = ?", rewardAdTypeDisplay, true).
+		Where("media_type = ?", rewardAdMediaTypeImage).
+		Where("display_channel = ? AND display_placement = ?", channel, placement).
+		Where("(starts_at IS NULL OR starts_at <= ?)", now).
+		Where("(ends_at IS NULL OR ends_at >= ?)", now).
+		Order("sort_order asc, updated_at desc, id desc").
+		Limit(limit).
+		Find(&ads).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ads")
+	}
+
+	items := make([]PublicDisplayAdResponse, 0, len(ads))
+	for index, ad := range ads {
+		item := toPublicDisplayAdResponse(ad)
+		item.SlotIndex = index + 1
+		item.DisplayLayout = displayAdLayoutForSlot(item.SlotIndex)
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// 24. StartRewardAd starts a rewarded ad watch session.
 func (s *WalletService) StartRewardAd(ctx context.Context, userID int64, taskPublicID string, ipAddress string, userAgent string) (*RewardAdSessionResponse, error) {
 	var result *RewardAdSessionResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -510,7 +661,7 @@ func (s *WalletService) StartRewardAd(ctx context.Context, userID int64, taskPub
 	return result, err
 }
 
-// 23. ClaimRewardAd grants points for a completed rewarded ad session.
+// 25. ClaimRewardAd grants points for a completed rewarded ad session.
 func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPublicID string, claimPublicID string, ipAddress string, userAgent string) (*PointsChargeResponse, error) {
 	var result *PointsChargeResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -586,7 +737,7 @@ func (s *WalletService) ClaimRewardAd(ctx context.Context, userID int64, taskPub
 	return result, err
 }
 
-// 24. TrackRewardAdClick records one rewarded ad target link click.
+// 26. TrackRewardAdClick records one rewarded ad target link click.
 func (s *WalletService) TrackRewardAdClick(ctx context.Context, taskPublicID string) (*RewardAdClickResponse, error) {
 	var result *RewardAdClickResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -616,7 +767,7 @@ func (s *WalletService) TrackRewardAdClick(ctx context.Context, taskPublicID str
 	return result, err
 }
 
-// 25. ensureAccount creates a wallet account when missing.
+// 27. ensureAccount creates a wallet account when missing.
 func (s *WalletService) ensureAccount(ctx context.Context, tx *gorm.DB, userID int64) (*model.WalletAccount, error) {
 	var account model.WalletAccount
 	if err := tx.WithContext(ctx).Where("user_id = ?", userID).First(&account).Error; err != nil {
@@ -631,7 +782,7 @@ func (s *WalletService) ensureAccount(ctx context.Context, tx *gorm.DB, userID i
 	return &account, nil
 }
 
-// 26. ensureAccountForUpdate creates and locks a wallet account.
+// 28. ensureAccountForUpdate creates and locks a wallet account.
 func (s *WalletService) ensureAccountForUpdate(ctx context.Context, tx *gorm.DB, userID int64) (*model.WalletAccount, error) {
 	if _, err := s.ensureAccount(ctx, tx, userID); err != nil {
 		return nil, err
@@ -643,7 +794,7 @@ func (s *WalletService) ensureAccountForUpdate(ctx context.Context, tx *gorm.DB,
 	return &account, nil
 }
 
-// 27. findTransactionByIdempotencyKey loads a previous wallet transaction.
+// 29. findTransactionByIdempotencyKey loads a previous wallet transaction.
 func (s *WalletService) findTransactionByIdempotencyKey(ctx context.Context, tx *gorm.DB, key string) (*model.WalletTransaction, bool, error) {
 	var transaction model.WalletTransaction
 	if err := tx.WithContext(ctx).Where("idempotency_key = ?", strings.TrimSpace(key)).First(&transaction).Error; err != nil {
@@ -655,7 +806,7 @@ func (s *WalletService) findTransactionByIdempotencyKey(ctx context.Context, tx 
 	return &transaction, true, nil
 }
 
-// 28. todayAdRewardPoints sums claimed ad rewards for the current wallet day.
+// 30. todayAdRewardPoints sums claimed ad rewards for the current wallet day.
 func (s *WalletService) todayAdRewardPoints(ctx context.Context, tx *gorm.DB, userID int64) (int64, error) {
 	var total int64
 	if err := tx.WithContext(ctx).Model(&model.WalletTransaction{}).
@@ -673,12 +824,13 @@ func (s *WalletService) todayAdRewardPoints(ctx context.Context, tx *gorm.DB, us
 	return total, nil
 }
 
-// 29. loadActiveRewardAd loads a currently claimable reward ad.
+// 31. loadActiveRewardAd loads a currently claimable reward ad.
 func (s *WalletService) loadActiveRewardAd(ctx context.Context, tx *gorm.DB, publicID string) (*model.RewardAd, error) {
 	now := s.runtime.Now()
 	var ad model.RewardAd
 	if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("public_id = ? AND is_active = ?", strings.TrimSpace(publicID), true).
+		Where("(ad_type = ? OR ad_type = '')", rewardAdTypeReward).
 		Where("(starts_at IS NULL OR starts_at <= ?)", now).
 		Where("(ends_at IS NULL OR ends_at >= ?)", now).
 		First(&ad).Error; err != nil {
@@ -690,7 +842,7 @@ func (s *WalletService) loadActiveRewardAd(ctx context.Context, tx *gorm.DB, pub
 	return &ad, nil
 }
 
-// 30. toWalletTransactionResponse maps a transaction model to API shape.
+// 32. toWalletTransactionResponse maps a transaction model to API shape.
 func toWalletTransactionResponse(transaction model.WalletTransaction) WalletTransactionResponse {
 	return WalletTransactionResponse{
 		TransactionID: transaction.PublicID,
@@ -706,7 +858,26 @@ func toWalletTransactionResponse(transaction model.WalletTransaction) WalletTran
 	}
 }
 
-// 31. rewardAdClickRate returns the link click rate as a percentage.
+// 33. toPublicDisplayAdResponse maps a display ad to public API shape.
+func toPublicDisplayAdResponse(ad model.RewardAd) PublicDisplayAdResponse {
+	return PublicDisplayAdResponse{
+		TaskID:           ad.PublicID,
+		Title:            ad.Title,
+		DisplayTitle:     "",
+		Summary:          ad.Summary,
+		DisplayText:      "",
+		CoverURL:         ad.CoverURL,
+		MediaURL:         ad.MediaURL,
+		MediaType:        normalizedRewardAdMediaType(ad.MediaType),
+		TargetURL:        ad.TargetURL,
+		DisplayChannel:   normalizedDisplayAdChannel(ad.DisplayChannel),
+		DisplayPlacement: normalizedDisplayAdPlacement(ad.DisplayPlacement),
+		DisplayLayout:    normalizedDisplayAdLayout(ad.DisplayLayout),
+		SortOrder:        ad.SortOrder,
+	}
+}
+
+// 34. rewardAdClickRate returns the link click rate as a percentage.
 func rewardAdClickRate(watchCount int64, linkClickCount int64) float64 {
 	if watchCount <= 0 || linkClickCount <= 0 {
 		return 0

@@ -8,6 +8,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -30,28 +31,89 @@ type PropertyService struct {
 // 2. propertyListingRow defines common list query fields.
 type propertyListingRow struct {
 	model.Listing
+	SalePropertyNo               string
+	SaleTransactionType          string
+	SaleLocationScope            string
+	SaleListingCategory          string
+	SaleMultiUnitProject         bool
 	SalePropertyType             string
+	SaleRentalType               string
 	SaleEstateName               string
 	SaleAddressText              string
+	SaleAddressTextEn            string
+	SaleBlockName                string
+	SaleUnitName                 string
+	SaleShowUnit                 bool
 	SaleAskingPriceHKD           float64
+	SaleMonthlyRentHKD           float64
+	SalePriceReferenceOnly       bool
+	SalePriceNegotiable          bool
+	SaleAnnualPrepayDiscount     bool
+	SaleAnnualPrepayOption       string
+	SaleLeaseStartDate           string
+	SaleRentIncluded             string
+	SaleAreaMode                 string
 	SaleUsableAreaSqft           int
 	SaleGrossAreaSqft            *int
 	SaleBedroomCount             int
 	SaleLivingRoomCount          int
 	SaleBathroomCount            int
 	SaleFloorLevel               string
+	SaleFloorRaw                 string
+	SaleFloorZone                string
+	SaleFloorDisplayRange        string
+	SaleTotalFloors              int
+	SalePublicLocationText       string
 	SaleDirection                string
 	SaleBuildingAge              string
+	SaleKitchenType              string
+	SaleCookingMode              string
+	SaleManagementFeeHKD         float64
+	SaleVideoURL                 string
+	SaleVRURL                    string
+	SalePrivateNote              string
+	SaleTitleEn                  string
+	SaleDescriptionEn            string
+	SaleAdPackageCode            string
+	SaleAdWeight                 int
+	SaleAdPriceHKD               float64
+	SaleAdPricePoints            int64
+	SaleAdDurationDays           int
+	SaleAdExpiresAt              *time.Time
 	SaleFeatureTags              []byte
 	SaleContactMethod            string
 	SalePublisherRoleLabel       string
 	ServicedProjectName          string
+	ServicedProjectNameEn        string
 	ServicedAddressText          string
+	ServicedAddressTextEn        string
+	ServicedWebsiteURL           string
+	ServicedWhatsApp             string
+	ServicedFax                  string
+	ServicedDescriptionEn        string
+	ServicedServiceIntro         string
+	ServicedBenefitsText         string
+	ServicedExtraChargesText     string
 	ServicedLowestMonthlyRentHKD float64
+	ServicedLowestDailyRentHKD   float64
+	ServicedPriceReferenceOnly   bool
+	ServicedPriceNegotiable      bool
+	ServicedMinUsableAreaSqft    int
 	ServicedMinLeaseMonths       int
+	ServicedMinStayValue         int
+	ServicedMinStayUnit          string
+	ServicedLocationScope        string
+	ServicedListingCategory      string
+	ServicedMultiUnitProject     bool
 	ServicedFacilityTags         []byte
 	ServicedServiceTags          []byte
 	ServicedRoomTypes            []byte
+	ServicedAdPackageCode        string
+	ServicedAdWeight             int
+	ServicedAdPriceHKD           float64
+	ServicedAdPricePoints        int64
+	ServicedAdDurationDays       int
+	ServicedAdExpiresAt          *time.Time
 	ServicedContactMethod        string
 	ServicedPublisherRoleLabel   string
 }
@@ -160,11 +222,11 @@ func (s *PropertyService) ListPublicProperties(ctx context.Context, channel Prop
 	query := baseQuery
 	switch filters.SortBy {
 	case "price_asc":
-		query = query.Order(propertyPriceColumn(channel) + " asc")
+		query = query.Order(propertyDefaultSortPrefix(channel) + propertyPriceColumn(channel, filters.PriceMode) + " asc")
 	case "price_desc":
-		query = query.Order(propertyPriceColumn(channel) + " desc")
+		query = query.Order(propertyDefaultSortPrefix(channel) + propertyPriceColumn(channel, filters.PriceMode) + " desc")
 	default:
-		query = query.Order("listings.sort_refreshed_at desc NULLS LAST, listings.created_at desc")
+		query = query.Order(propertyDefaultSortPrefix(channel) + "listings.sort_refreshed_at desc NULLS LAST, listings.created_at desc")
 	}
 
 	var rows []propertyListingRow
@@ -239,6 +301,11 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 	if err != nil {
 		return nil, err
 	}
+	if channel == PropertyChannelSale && len(summaries) > 0 && summaries[0].PropertySale != nil && viewerUserID != nil && *viewerUserID == listing.OwnerUserID {
+		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
+		summaries[0].PropertySale.FloorRaw = rows[0].SaleFloorRaw
+		summaries[0].PropertySale.PrivateNote = rows[0].SalePrivateNote
+	}
 
 	images, err := s.loadListingImages(ctx, []int64{listing.ID})
 	if err != nil {
@@ -289,6 +356,36 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 			"sort_refreshed_at":  now,
 			"expire_at":          expireAt,
 		}
+		if channel == PropertyChannelSale {
+			var sale model.PropertySaleListing
+			if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&sale).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to load property sale listing")
+			}
+			durationDays := sale.AdDurationDays
+			if durationDays <= 0 {
+				durationDays = propertyAdPackage(sale.AdPackageCode).DurationDays
+			}
+			expireAt = now.Add(time.Duration(durationDays) * 24 * time.Hour)
+			updates["expire_at"] = expireAt
+			if err := tx.Model(&model.PropertySaleListing{}).Where("listing_id = ?", listing.ID).Update("ad_expires_at", expireAt).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update property ad expiry")
+			}
+		}
+		if channel == PropertyChannelServiced {
+			var serviced model.ServicedApartmentProject
+			if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&serviced).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to load serviced apartment listing")
+			}
+			durationDays := serviced.AdDurationDays
+			if durationDays <= 0 {
+				durationDays = servicedApartmentAdPackage(serviced.AdPackageCode).DurationDays
+			}
+			expireAt = now.Add(time.Duration(durationDays) * 24 * time.Hour)
+			updates["expire_at"] = expireAt
+			if err := tx.Model(&model.ServicedApartmentProject{}).Where("listing_id = ?", listing.ID).Update("ad_expires_at", expireAt).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update serviced apartment ad expiry")
+			}
+		}
 		if action == WalletActionPublish {
 			updates["published_at"] = now
 		}
@@ -322,9 +419,24 @@ func (s *PropertyService) chargePropertyAction(ctx context.Context, tx *gorm.DB,
 		return nil, errcode.New(errcode.CodeInternalError, "wallet service is not configured")
 	}
 	module := string(channel)
+	amount := ListingActionCost(module, action)
+	if channel == PropertyChannelSale && (action == WalletActionPublish || action == WalletActionRepublish) {
+		var sale model.PropertySaleListing
+		if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&sale).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load property sale listing")
+		}
+		amount = propertyAdPackage(sale.AdPackageCode).PricePoints
+	}
+	if channel == PropertyChannelServiced && (action == WalletActionPublish || action == WalletActionRepublish) {
+		var serviced model.ServicedApartmentProject
+		if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&serviced).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load serviced apartment listing")
+		}
+		amount = servicedApartmentAdPackage(serviced.AdPackageCode).PricePoints
+	}
 	return s.runtime.WalletService.SpendPointsWithTx(ctx, tx, WalletSpendParams{
 		UserID:         listing.OwnerUserID,
-		Amount:         ListingActionCost(module, action),
+		Amount:         amount,
 		BizModule:      module,
 		ActionType:     action,
 		ListingID:      &listing.ID,
@@ -379,6 +491,9 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt whatsapp")
 		}
 		payload["whatsapp_url"] = buildPropertyWhatsAppURL(whatsApp, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL, channel)
+		channels["whatsapp"] = true
+	} else if phone := strings.TrimSpace(payload["phone"]); phone != "" {
+		payload["whatsapp_url"] = buildPropertyWhatsAppURL(phone, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL, channel)
 		channels["whatsapp"] = true
 	}
 

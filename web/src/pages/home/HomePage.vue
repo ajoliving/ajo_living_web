@@ -1,6 +1,6 @@
 <!--
  * 首頁入口頁。
- * 1. 以全螢幕 sticky stage 承接二手列表、樓盤放售與服務住宅三個模組。
+ * 1. 以全螢幕 sticky stage 承接二手列表、樓盤放售、服務住宅與支付模組。
  * 2. 移除首屏之後的模組說明卡，讓首頁內容保持聚焦。
  * 3. 以 `/channel-home/overview` 與 `/home/content` 的真實資料驅動首頁。
 -->
@@ -8,13 +8,13 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { fetchChannelHomeOverview } from '@/httpapis/home';
-import { fetchHomeContent } from '@/httpapis/home-content';
-import type { HomeChannelEntry, HomeFeaturedSecondhand } from '@/model/home';
-import type { HomeCarouselImage, HomeModuleCard } from '@/model/home-content';
+import { fetchChannelHomeOverview } from '@/domains/home/api';
+import { fetchHomeContent } from '@/domains/home/content-api';
+import type { HomeChannelEntry, HomeFeaturedSecondhand } from '@/domains/home/model';
+import type { HomeCarouselImage, HomeModuleCard } from '@/domains/home/content-model';
 import { buildHomeLandingContent } from '@/pages/home/home';
 import HomeStageShowcase from '@/pages/home/widgets/HomeStageShowcase.vue';
-import { useFeedbackStore } from '@/stores/feedback';
+import { useFeedbackStore } from '@/app/stores/feedback';
 
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
@@ -30,7 +30,7 @@ const landingContent = computed(() =>
   buildHomeLandingContent(
     t,
     featuredItems.value.length,
-    channelItems.value.length || 3,
+    channelItems.value.length || 4,
     carouselImages.value,
     moduleCards.value,
   ),

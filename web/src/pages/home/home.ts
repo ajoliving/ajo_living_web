@@ -3,16 +3,17 @@
  * 1. 根據語系輸出首頁主標與模組入口文案。
  * 2. 保持首頁內容簡潔，避免展示開發說明與原型話術。
  */
-import type { HomeCarouselImage, HomeModuleCard } from '@/model/home-content';
+import type { HomeCarouselImage, HomeModuleCard } from '@/domains/home/content-model';
+import type { HomeContentModuleCode } from '@/domains/home/content-model';
 
 // 1. 定義首頁模組代碼
-export type HomeModuleCode = 'secondhand' | 'property_sale' | 'serviced_apartment';
+export type HomeModuleCode = 'secondhand' | 'property_sale' | 'serviced_apartment' | 'payments';
 
 // 2. 定義首頁模組色調
 export type HomeModuleTone = 'copper' | 'slate' | 'sage';
 
 // 3. 定義首頁模組圖示
-export type HomeModuleIcon = 'browse' | 'location' | 'home';
+export type HomeModuleIcon = 'browse' | 'location' | 'home' | 'wallet';
 
 // 4. 定義首頁 grid 區塊尺寸
 export type HomeGridTileSize = 'hero' | 'wide' | 'tall' | 'square';
@@ -144,7 +145,7 @@ export const buildHomeLandingContent = (
     t('home.landing.heroHighlights.actions'),
   ],
   heroMetrics: [
-    { value: '03', label: t('home.landing.heroMetrics.channels') },
+    { value: '04', label: t('home.landing.heroMetrics.channels') },
     { value: formatMetricCount(channelCount), label: t('home.landing.heroMetrics.sections') },
     { value: formatMetricCount(featuredCount), label: t('home.landing.heroMetrics.featured') },
   ],
@@ -183,12 +184,12 @@ export const buildHomeLandingContent = (
       ],
       primaryAction: {
         label: t('home.landing.modules.secondhand.primaryAction'),
-        to: '/marketplace',
+        to: '/furniture',
         variant: 'primary',
       },
       secondaryAction: {
         label: t('home.landing.modules.secondhand.secondaryAction'),
-        to: '/marketplace/filter',
+        to: '/furniture',
         variant: 'secondary',
       },
       gridEyebrow: t('home.landing.modules.secondhand.gridEyebrow'),
@@ -242,7 +243,7 @@ export const buildHomeLandingContent = (
       },
       secondaryAction: {
         label: t('home.landing.modules.property_sale.secondaryAction'),
-        to: '/properties/my/new',
+        to: '/member?tab=properties&propertyEditor=new',
         variant: 'secondary',
       },
       gridEyebrow: t('home.landing.modules.property_sale.gridEyebrow'),
@@ -312,6 +313,60 @@ export const buildHomeLandingContent = (
         buildGridTile(t, 'serviced_apartment', 'tone', 'square', 'contrast'),
       ],
     },
+    {
+      code: 'payments',
+      index: '04',
+      tone: 'slate',
+      stagePattern: 'column',
+      stageImagePath: '/home-stage/carousel/building.jpeg',
+      carouselImagePath: '/home-stage/carousel/building.jpeg',
+      iconName: 'wallet',
+      kicker: t('home.landing.modules.payments.kicker'),
+      displayTitle: t('home.landing.modules.payments.displayTitle'),
+      title: t('home.landing.modules.payments.title'),
+      description: t('home.landing.modules.payments.description'),
+      availabilityLabel: t('home.landing.modules.payments.availabilityLabel'),
+      isLive: true,
+      noteLabel: t('home.landing.modules.payments.noteLabel'),
+      statusNote: t('home.landing.modules.payments.statusNote'),
+      chips: [
+        t('home.landing.modules.payments.chips.bills'),
+        t('home.landing.modules.payments.chips.orders'),
+        t('home.landing.modules.payments.chips.history'),
+      ],
+      highlights: [
+        t('home.landing.modules.payments.highlights.profile'),
+        t('home.landing.modules.payments.highlights.orders'),
+        t('home.landing.modules.payments.highlights.staff'),
+      ],
+      metrics: [
+        { label: t('home.landing.modules.payments.metrics.scope'), value: t('home.landing.modules.payments.metrics.scopeValue') },
+        { label: t('home.landing.modules.payments.metrics.access'), value: t('home.landing.modules.payments.metrics.accessValue') },
+        { label: t('home.landing.modules.payments.metrics.status'), value: t('home.landing.modules.payments.metrics.statusValue') },
+      ],
+      primaryAction: {
+        label: t('home.landing.modules.payments.primaryAction'),
+        to: '/payments',
+        variant: 'primary',
+      },
+      secondaryAction: {
+        label: t('home.landing.modules.payments.secondaryAction'),
+        to: '/payments/bills',
+        variant: 'secondary',
+      },
+      gridEyebrow: t('home.landing.modules.payments.gridEyebrow'),
+      gridDescription: t('home.landing.modules.payments.gridDescription'),
+      gridTiles: [
+        buildGridTile(t, 'payments', 'bills', 'hero', 'accent'),
+        buildGridTile(t, 'payments', 'orders', 'wide', 'soft'),
+        buildGridTile(t, 'payments', 'accounting', 'tall', 'contrast'),
+        buildGridTile(t, 'payments', 'history', 'square', 'neutral'),
+        buildGridTile(t, 'payments', 'unit', 'square', 'soft'),
+        buildGridTile(t, 'payments', 'staff', 'wide', 'accent'),
+        buildGridTile(t, 'payments', 'pos', 'square', 'neutral'),
+        buildGridTile(t, 'payments', 'status', 'square', 'contrast'),
+      ],
+    },
   ], moduleCards),
 });
 
@@ -337,7 +392,8 @@ const applyHomeModuleCards = (
   const cardMap = new Map(moduleCards.map((card) => [card.module_code, card]));
 
   return modules.map((module) => {
-    const card = cardMap.get(module.code);
+    const cardCode = isHomeContentModuleCode(module.code) ? module.code : null;
+    const card = cardCode ? cardMap.get(cardCode) : null;
     if (!card) {
       return module;
     }
@@ -353,3 +409,7 @@ const applyHomeModuleCards = (
     };
   });
 };
+
+// 4. isHomeContentModuleCode 判斷首頁後台可配置的模組
+const isHomeContentModuleCode = (code: HomeModuleCode): code is HomeContentModuleCode =>
+  code === 'secondhand' || code === 'property_sale' || code === 'serviced_apartment';

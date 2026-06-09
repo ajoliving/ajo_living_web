@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -19,6 +18,8 @@ import (
 	"ajoliving_web/http_service/internal/model"
 	"ajoliving_web/http_service/internal/utils"
 )
+
+const secondhandContactAccessCost int64 = 5
 
 // 1. secondhandListingRow defines the common secondhand list query row.
 type secondhandListingRow struct {
@@ -82,6 +83,9 @@ func (s *SecondhandService) GrantContactAccess(ctx context.Context, userID int64
 		}
 		payload["whatsapp_url"] = buildWhatsAppURL(whatsApp, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL)
 		channels["whatsapp"] = true
+	} else if phone := strings.TrimSpace(payload["phone"]); phone != "" {
+		payload["whatsapp_url"] = buildWhatsAppURL(phone, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL)
+		channels["whatsapp"] = true
 	}
 
 	if contact.ShowChat {
@@ -93,22 +97,49 @@ func (s *SecondhandService) GrantContactAccess(ctx context.Context, userID int64
 		return nil, errcode.New(errcode.CodeInternalError, "failed to encode access audit")
 	}
 
-	logRecord := &model.ContactAccessLog{
-		ListingID:       listing.ID,
-		RequestUserID:   userID,
-		GrantedChannels: grantedChannels,
-		RequestIP:       requestIP,
-		UserAgent:       userAgent,
-	}
-	if err := s.runtime.DB.WithContext(ctx).Create(logRecord).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to store contact access log")
+	hasPaidContact := hasSecondhandPaidContact(contact)
+	shouldCharge := listing.OwnerUserID != userID && hasPaidContact
+	var charge *PointsChargeResponse
+	alreadyPaid := listing.OwnerUserID == userID
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if shouldCharge {
+			chargeResult, paid, chargeErr := s.chargeContactAccessWithTx(ctx, tx, userID, listing)
+			if chargeErr != nil {
+				return chargeErr
+			}
+			charge = chargeResult
+			alreadyPaid = paid
+		}
+
+		logRecord := &model.ContactAccessLog{
+			ListingID:       listing.ID,
+			RequestUserID:   userID,
+			GrantedChannels: grantedChannels,
+			RequestIP:       requestIP,
+			UserAgent:       userAgent,
+		}
+		if err := tx.WithContext(ctx).Create(logRecord).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to store contact access log")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return &ContactAccessResult{
-		ListingID:       listing.PublicID,
-		AllowedChannels: channels,
-		ContactPayload:  payload,
-	}, nil
+	result := &ContactAccessResult{
+		ListingID:            listing.PublicID,
+		AllowedChannels:      channels,
+		ContactPayload:       payload,
+		ContactAlreadyPaid:   alreadyPaid || listing.OwnerUserID == userID,
+		ContactAccessGranted: true,
+	}
+	if hasPaidContact {
+		result.PointsCost = secondhandContactAccessCost
+	}
+	attachContactAccessCharge(result, charge)
+	return result, nil
 }
 
 // 4. loadListingByPublicID loads listing aggregate by public ID.
@@ -134,12 +165,68 @@ func (s *SecondhandService) loadListingByPublicID(ctx context.Context, listingPu
 	return &listing, &secondhand, &contact, nil
 }
 
-// 5. loadOwnedListing loads a listing aggregate owned by the current user.
+// 5. chargeContactAccessWithTx charges first-time contact reveal access.
+func (s *SecondhandService) chargeContactAccessWithTx(ctx context.Context, tx *gorm.DB, userID int64, listing *model.Listing) (*PointsChargeResponse, bool, error) {
+	if s.runtime.WalletService == nil {
+		return nil, false, errcode.New(errcode.CodeInternalError, "wallet service is not configured")
+	}
+
+	idempotencyKey := secondhandContactAccessIdempotencyKey(userID, listing.PublicID)
+	if existing, ok, err := s.runtime.WalletService.findTransactionByIdempotencyKey(ctx, tx, idempotencyKey); err != nil {
+		return nil, false, err
+	} else if ok {
+		return &PointsChargeResponse{
+			PointsCharged:       0,
+			PointsBalanceAfter:  existing.BalanceAfter,
+			PointsTransactionID: existing.PublicID,
+		}, true, nil
+	}
+
+	charge, err := s.runtime.WalletService.SpendPointsWithTx(ctx, tx, WalletSpendParams{
+		UserID:         userID,
+		Amount:         secondhandContactAccessCost,
+		BizModule:      "secondhand",
+		ActionType:     WalletActionContact,
+		ListingID:      &listing.ID,
+		IdempotencyKey: idempotencyKey,
+		Note:           "secondhand listing contact access",
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	return charge, false, nil
+}
+
+// 6. attachContactAccessCharge attaches wallet metadata to contact access result.
+func attachContactAccessCharge(result *ContactAccessResult, charge *PointsChargeResponse) {
+	if result == nil || charge == nil {
+		return
+	}
+	result.PointsCharged = charge.PointsCharged
+	result.PointsBalanceAfter = &charge.PointsBalanceAfter
+	result.PointsTransactionID = charge.PointsTransactionID
+}
+
+// 7. secondhandContactAccessIdempotencyKey returns one stable unlock key per user and listing.
+func secondhandContactAccessIdempotencyKey(userID int64, listingPublicID string) string {
+	return fmt.Sprintf("secondhand:contact:%d:%s", userID, strings.TrimSpace(listingPublicID))
+}
+
+// 8. hasSecondhandPaidContact returns whether contact reveal has chargeable direct channels.
+func hasSecondhandPaidContact(contact *model.ListingContact) bool {
+	if contact == nil {
+		return false
+	}
+	return (contact.ShowPhone && contact.PhoneEncrypted != "") || (contact.ShowWhatsApp && contact.WhatsAppEncrypted != "")
+}
+
+// 9. loadOwnedListing loads a listing aggregate owned by the current user.
 func (s *SecondhandService) loadOwnedListing(ctx context.Context, ownerUserID int64, listingPublicID string) (*model.Listing, *model.SecondhandListing, *model.ListingContact, error) {
 	return s.loadOwnedListingWithTx(ctx, s.runtime.DB, ownerUserID, listingPublicID)
 }
 
-// 6. loadOwnedListingWithTx loads a listing aggregate owned by the current user inside a transaction.
+// 10. loadOwnedListingWithTx loads a listing aggregate owned by the current user inside a transaction.
 func (s *SecondhandService) loadOwnedListingWithTx(ctx context.Context, tx *gorm.DB, ownerUserID int64, listingPublicID string) (*model.Listing, *model.SecondhandListing, *model.ListingContact, error) {
 	listing, secondhand, contact, err := s.loadListingByPublicIDWithDB(ctx, tx, listingPublicID)
 	if err != nil {
@@ -152,7 +239,7 @@ func (s *SecondhandService) loadOwnedListingWithTx(ctx context.Context, tx *gorm
 	return listing, secondhand, contact, nil
 }
 
-// 7. loadListingByPublicIDWithDB loads listing aggregate with the provided DB handle.
+// 11. loadListingByPublicIDWithDB loads listing aggregate with the provided DB handle.
 func (s *SecondhandService) loadListingByPublicIDWithDB(ctx context.Context, db *gorm.DB, listingPublicID string) (*model.Listing, *model.SecondhandListing, *model.ListingContact, error) {
 	var listing model.Listing
 	if err := db.WithContext(ctx).Where("public_id = ? AND module = ? AND is_deleted = ?", listingPublicID, "secondhand", false).First(&listing).Error; err != nil {
@@ -452,9 +539,9 @@ func (s *SecondhandService) buildListingContact(listingID int64, input ListingCo
 }
 
 // 15. resolveCommunityID resolves explicit or profile-based community selection.
-func (s *SecondhandService) resolveCommunityID(ctx context.Context, ownerUserID int64, communityPublicID string, visibilityScope string) (*int64, error) {
+func (s *SecondhandService) resolveCommunityID(ctx context.Context, ownerUserID int64, communityPublicID string, communityName string, visibilityScope string) (*int64, error) {
 	if strings.TrimSpace(communityPublicID) != "" {
-		community, err := s.findCommunityByPublicID(ctx, communityPublicID)
+		community, err := s.resolveListingCommunity(ctx, communityPublicID, communityName)
 		if err != nil {
 			return nil, err
 		}
@@ -473,7 +560,47 @@ func (s *SecondhandService) resolveCommunityID(ctx context.Context, ownerUserID 
 	return nil, nil
 }
 
-// 16. findCommunityByPublicID loads a community by public ID.
+// 16. resolveListingCommunity loads or mirrors a POS building as a local community.
+func (s *SecondhandService) resolveListingCommunity(ctx context.Context, publicID string, name string) (*model.Community, error) {
+	publicID = strings.TrimSpace(publicID)
+	community, err := s.findCommunityByPublicID(ctx, publicID)
+	if err == nil {
+		return community, nil
+	}
+
+	var appErr *errcode.AppError
+	if !errors.As(err, &appErr) || appErr.Code != errcode.CodeValidationError {
+		return nil, err
+	}
+	if len(publicID) == 0 || len(publicID) > 26 {
+		return nil, appErr
+	}
+
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = publicID
+	}
+
+	community = &model.Community{
+		PublicID:      publicID,
+		CommunityType: "building",
+		NameZH:        displayName,
+		NameEN:        displayName,
+		DistrictCode:  "unknown",
+		AddressText:   displayName,
+	}
+	if err := s.runtime.DB.WithContext(ctx).Create(community).Error; err != nil {
+		found, findErr := s.findCommunityByPublicID(ctx, publicID)
+		if findErr == nil {
+			return found, nil
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to create listing community")
+	}
+
+	return community, nil
+}
+
+// 17. findCommunityByPublicID loads a community by public ID.
 func (s *SecondhandService) findCommunityByPublicID(ctx context.Context, publicID string) (*model.Community, error) {
 	var community model.Community
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", publicID).First(&community).Error; err != nil {
@@ -486,7 +613,7 @@ func (s *SecondhandService) findCommunityByPublicID(ctx context.Context, publicI
 	return &community, nil
 }
 
-// 17. resolveListingImages validates referenced media assets and builds listing image records.
+// 18. resolveListingImages validates referenced media assets and builds listing image records.
 func (s *SecondhandService) resolveListingImages(ctx context.Context, tx *gorm.DB, listingID int64, ownerUserID int64, inputs []ListingImageInput) ([]model.ListingImage, error) {
 	if len(inputs) == 0 {
 		return []model.ListingImage{}, nil
@@ -529,12 +656,12 @@ func (s *SecondhandService) resolveListingImages(ctx context.Context, tx *gorm.D
 	return images, nil
 }
 
-// 18. validateListingReady ensures draft listing has publishable content.
+// 19. validateListingReady ensures draft listing has publishable content.
 func (s *SecondhandService) validateListingReady(ctx context.Context, ownerUserID int64, listingID int64) error {
 	return s.validateListingReadyWithTx(ctx, s.runtime.DB, ownerUserID, listingID)
 }
 
-// 19. validateListingReadyWithTx ensures listing has publishable content inside a transaction.
+// 20. validateListingReadyWithTx ensures listing has publishable content inside a transaction.
 func (s *SecondhandService) validateListingReadyWithTx(ctx context.Context, tx *gorm.DB, ownerUserID int64, listingID int64) error {
 	var imageCount int64
 	if err := tx.WithContext(ctx).Model(&model.ListingImage{}).Where("listing_id = ?", listingID).Count(&imageCount).Error; err != nil {
@@ -555,7 +682,7 @@ func (s *SecondhandService) validateListingReadyWithTx(ctx context.Context, tx *
 	return nil
 }
 
-// 20. canViewListing checks secondhand visibility rules for the current viewer.
+// 21. canViewListing checks secondhand visibility rules for the current viewer.
 func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *model.SecondhandListing, viewerCommunityID *int64) bool {
 	if secondhand.VisibilityScope == "public" {
 		return true
@@ -563,7 +690,7 @@ func (s *SecondhandService) canViewListing(listing *model.Listing, secondhand *m
 	return viewerCommunityID != nil && secondhand.VisibleCommunityID != nil && *viewerCommunityID == *secondhand.VisibleCommunityID
 }
 
-// 21. findCommunityByID loads a community by numeric ID.
+// 22. findCommunityByID loads a community by numeric ID.
 func (s *SecondhandService) findCommunityByID(ctx context.Context, communityID *int64) (*model.Community, error) {
 	if communityID == nil {
 		return nil, nil
@@ -577,14 +704,13 @@ func (s *SecondhandService) findCommunityByID(ctx context.Context, communityID *
 	return &community, nil
 }
 
-// 22. buildWhatsAppURL creates a prefilled WhatsApp deep link.
+// 23. buildWhatsAppURL creates a WhatsApp deep link from an international phone number.
 func buildWhatsAppURL(phone string, title string, listingPublicID string, baseURL string) string {
 	digits := strings.NewReplacer("+", "", " ", "", "-", "", "(", "", ")", "").Replace(phone)
-	message := fmt.Sprintf("I am interested in %s %s/secondhand/%s", title, strings.TrimRight(baseURL, "/"), listingPublicID)
-	return "https://wa.me/" + digits + "?text=" + url.QueryEscape(message)
+	return "https://wa.me/" + digits
 }
 
-// 21. normalizePrice normalizes nullable price for free listings.
+// 24. normalizePrice normalizes nullable price for free listings.
 func normalizePrice(priceMode string, price *float64) *float64 {
 	if priceMode == "free" {
 		return nil
@@ -592,7 +718,7 @@ func normalizePrice(priceMode string, price *float64) *float64 {
 	return price
 }
 
-// 22. visibleCommunityID returns the visible community when required.
+// 25. visibleCommunityID returns the visible community when required.
 func visibleCommunityID(visibilityScope string, communityID *int64) *int64 {
 	if visibilityScope != "building_only" {
 		return nil

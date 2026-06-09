@@ -11,8 +11,18 @@ import "time"
 const maxOperatorGrantPoints = int64(1000000)
 const defaultRewardAdRetentionDays = 30
 const maxRewardAdRetentionDays = 365
+const rewardAdTypeReward = "reward"
+const rewardAdTypeDisplay = "display"
 const rewardAdMediaTypeImage = "image"
 const rewardAdMediaTypeVideo = "video"
+const displayAdChannelPropertySale = "property_sale"
+const displayAdChannelServicedApartment = "serviced_apartment"
+const displayAdChannelFurniture = "furniture"
+const displayAdPlacementListingSide = "listing_side"
+const displayAdLayoutImageFull = "image_full"
+const displayAdLayoutImageText = "image_text"
+const displayAdLayoutTextCompact = "text_compact"
+const displayAdSlotCount = 10
 
 // 1. StaffWalletUserResponse defines staff-visible wallet user metadata.
 type StaffWalletUserResponse struct {
@@ -58,12 +68,20 @@ type StaffWalletGrantResponse struct {
 // 5. StaffRewardAdResponse defines an operator-visible rewarded ad task.
 type StaffRewardAdResponse struct {
 	TaskID            string  `json:"task_id"`
+	AdType            string  `json:"ad_type"`
 	Title             string  `json:"title"`
 	Summary           string  `json:"summary"`
 	CoverURL          string  `json:"cover_url"`
 	MediaURL          string  `json:"media_url"`
 	MediaType         string  `json:"media_type"`
 	TargetURL         string  `json:"target_url"`
+	DisplayChannel    string  `json:"display_channel"`
+	DisplayPlacement  string  `json:"display_placement"`
+	DisplayLayout     string  `json:"display_layout"`
+	SlotDisplayTitle  string  `json:"slot_display_title"`
+	DisplayText       string  `json:"display_text"`
+	SlotTargetURL     string  `json:"slot_target_url"`
+	SortOrder         int     `json:"sort_order"`
 	RewardPoints      int64   `json:"reward_points"`
 	WatchSeconds      int     `json:"watch_seconds"`
 	TotalBudget       int64   `json:"total_budget"`
@@ -82,44 +100,84 @@ type StaffRewardAdResponse struct {
 
 // 6. StaffRewardAdFilters defines rewarded ad search filters.
 type StaffRewardAdFilters struct {
-	Page     int
-	PageSize int
-	Keyword  string
-	IsActive *bool
+	Page           int
+	PageSize       int
+	Keyword        string
+	IsActive       *bool
+	AdType         string
+	DisplayChannel string
 }
 
-// 7. RewardAdCreateParams defines operator rewarded ad creation input.
+// 7. DisplayAdSlotAdInput defines one ad selected for one display slot.
+type DisplayAdSlotAdInput struct {
+	AdTaskID     string `json:"ad_task_id"`
+	DisplayTitle string `json:"display_title"`
+	DisplayText  string `json:"display_text"`
+	TargetURL    string `json:"target_url"`
+}
+
+// 8. DisplayAdSlotInput defines one display ad slot save item.
+type DisplayAdSlotInput struct {
+	SlotIndex int                    `json:"slot_index"`
+	AdTaskIDs []string               `json:"ad_task_ids"`
+	Ads       []DisplayAdSlotAdInput `json:"ads"`
+}
+
+// 9. DisplayAdSlotResponse defines one configured display ad slot.
+type DisplayAdSlotResponse struct {
+	SlotIndex int                     `json:"slot_index"`
+	Layout    string                  `json:"layout"`
+	Ads       []StaffRewardAdResponse `json:"ads"`
+}
+
+// 10. DisplayAdChannelSettingsResponse defines slot settings for one channel.
+type DisplayAdChannelSettingsResponse struct {
+	Channel string                  `json:"channel"`
+	Slots   []DisplayAdSlotResponse `json:"slots"`
+}
+
+// 11. RewardAdCreateParams defines operator rewarded ad creation input.
 type RewardAdCreateParams struct {
-	Title         string
-	Summary       string
-	CoverURL      string
-	MediaURL      string
-	MediaType     string
-	TargetURL     string
-	RewardPoints  int64
-	WatchSeconds  int
-	TotalBudget   int64
-	IsActive      bool
-	StartsAt      *time.Time
-	EndsAt        *time.Time
-	RetentionDays int
+	Title            string
+	AdType           string
+	Summary          string
+	CoverURL         string
+	MediaURL         string
+	MediaType        string
+	TargetURL        string
+	DisplayChannel   string
+	DisplayPlacement string
+	DisplayLayout    string
+	SortOrder        int
+	RewardPoints     int64
+	WatchSeconds     int
+	TotalBudget      int64
+	IsActive         bool
+	StartsAt         *time.Time
+	EndsAt           *time.Time
+	RetentionDays    int
 }
 
-// 8. RewardAdUpdateParams defines operator rewarded ad update input.
+// 11. RewardAdUpdateParams defines operator rewarded ad update input.
 type RewardAdUpdateParams struct {
-	Title         *string
-	Summary       *string
-	CoverURL      *string
-	MediaURL      *string
-	MediaType     *string
-	TargetURL     *string
-	RewardPoints  *int64
-	WatchSeconds  *int
-	TotalBudget   *int64
-	IsActive      *bool
-	StartsAtSet   bool
-	StartsAt      *time.Time
-	EndsAtSet     bool
-	EndsAt        *time.Time
-	RetentionDays *int
+	Title            *string
+	AdType           *string
+	Summary          *string
+	CoverURL         *string
+	MediaURL         *string
+	MediaType        *string
+	TargetURL        *string
+	DisplayChannel   *string
+	DisplayPlacement *string
+	DisplayLayout    *string
+	SortOrder        *int
+	RewardPoints     *int64
+	WatchSeconds     *int
+	TotalBudget      *int64
+	IsActive         *bool
+	StartsAtSet      bool
+	StartsAt         *time.Time
+	EndsAtSet        bool
+	EndsAt           *time.Time
+	RetentionDays    *int
 }

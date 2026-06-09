@@ -50,9 +50,10 @@ go run ./http_service/cmd/server
 | 5 | /api/v1/auth/otp/verify | POST | 驗證 OTP 並登入 | 無 |
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
-| 49 | /api/v1/auth/email/register | POST | 建立郵箱與手機密碼帳戶 | 無 |
+| 49 | /api/v1/auth/email/register | POST | 建立手機密碼帳戶，可選綁定郵箱 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
 | 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
+| 73 | /api/v1/auth/ismart/login | POST | 使用 ismart 帳戶登入並同步 POS 權限 | 無 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
 | 7 | /api/v1/me | GET | 取得目前會員資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
@@ -60,10 +61,30 @@ go run ./http_service/cmd/server
 | 66 | /api/v1/me/secondhand/favorites | GET | 取得我的二手收藏 | 會員 |
 | 52 | /api/v1/me/wallet | GET | 取得 AJO Point 錢包總覽 | 會員 |
 | 53 | /api/v1/me/wallet/transactions | GET | 查詢我的積分流水 | 會員 |
+| 74 | /api/v1/public/ads | GET | 查詢公開列表右側展示廣告 | 無 |
 | 54 | /api/v1/me/wallet/ad-tasks | GET | 查詢可領取的廣告積分任務 | 會員 |
 | 55 | /api/v1/me/wallet/ad-tasks/{taskId}/start | POST | 開始廣告觀看任務 | 會員 |
 | 56 | /api/v1/me/wallet/ad-tasks/{taskId}/claim | POST | 領取廣告積分 | 會員 |
 | 66 | /api/v1/me/wallet/ad-tasks/{taskId}/click | POST | 記錄廣告連結點擊 | 會員 |
+| 80 | /api/v1/me/payments/pos/overview | GET | 取得 POS 物業繳費概覽 | 會員 |
+| 81 | /api/v1/me/payments/pos/bills | GET | 查詢目前單位 POS 賬單 | 會員 |
+| 82 | /api/v1/me/payments/pos/fees | GET | 查詢 POS 手續費與付款方式 | 會員 |
+| 83 | /api/v1/me/payments/pos/bank-accounts | GET | 查詢 POS 銀行賬戶 | 會員 |
+| 84 | /api/v1/me/payments/pos/payments/report | POST | 上報線下 POS 繳費 | 會員 |
+| 85 | /api/v1/me/payments/pos/terminal/pay | POST | Staff POS 機收款並入賬 | Staff |
+| 86 | /api/v1/me/payments/pos/orders | GET | 查詢目前單位線上繳費訂單 | 會員 |
+| 87 | /api/v1/me/payments/pos/orders | POST | 建立 POS H5 / QR 線上繳費訂單 | 會員 |
+| 88 | /api/v1/me/payments/pos/orders/query | POST | 按商戶單號或支付單號查詢訂單 | 會員 |
+| 89 | /api/v1/me/payments/pos/orders/{mchOrderNo} | GET | 查詢單一 POS H5 / QR 線上繳費訂單 | 會員 |
+| 90 | /api/v1/me/payments/pos/orders/{mchOrderNo}/close | POST | 關閉 POS H5 / QR 訂單 | 會員 |
+| 91 | /api/v1/me/payments/pos/orders/{mchOrderNo}/cancel | POST | 取消 POS H5 / QR 訂單 | 會員 |
+| 92 | /api/v1/me/payments/pos/orders/{mchOrderNo}/simulate | POST | Staff 在非 production 模擬 H5 訂單 | Staff |
+| 93 | /api/v1/me/payments/pos/history | GET | 查詢 POS 交易歷史 | 會員 |
+| 94 | /api/v1/me/payments/pos/history/{paymentId} | GET | 查詢 POS 交易詳情 | 會員 |
+| 95 | /api/v1/me/payments/pos/accounting | GET | 查詢 Staff 可見 POS 會計資料 | Staff |
+| 96 | /api/v1/me/payments/pos/accounting/clear | POST | Staff 多選清機 | Staff |
+| 97 | /api/v1/me/payments/pos/accounting/records | GET | Staff 查詢清機歷史 | Staff |
+| 98 | /api/v1/me/payments/pos/accounting/records/{recordId} | GET | Staff 查詢清機詳情 | Staff |
 | 33 | /api/v1/me/orders | GET | 取得我的訂單列表 | 會員 |
 
 ### OSS 模組
@@ -81,7 +102,6 @@ go run ./http_service/cmd/server
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
 | 12 | /api/v1/secondhand/listings | GET | 查詢二手公開列表 | 無 / 會員 |
-| 43 | /api/v1/secondhand/discover | GET | 查詢二手發現頁廣告位 | 無 / 會員 |
 | 13 | /api/v1/secondhand/listings/{listingId} | GET | 查詢二手帖子詳情 | 無 / 會員 |
 | 14 | /api/v1/secondhand/listings | POST | 建立二手草稿帖子 | 會員 |
 | 15 | /api/v1/secondhand/listings/{listingId} | PATCH | 更新二手帖子內容 | 會員 |
@@ -94,10 +114,18 @@ go run ./http_service/cmd/server
 | 68 | /api/v1/secondhand/listings/{listingId}/favorite | DELETE | 取消收藏二手帖子 | 會員 |
 | 20 | /api/v1/listings/{listingId}/contact-access | POST | 取得可聯絡方式 | 會員 |
 | 44 | /api/v1/secondhand/settings/listings | GET | 設定頁查詢全部二手帖子 | Staff |
-| 45 | /api/v1/secondhand/settings/discover-placements | GET | 設定頁查詢發現頁廣告位 | Staff |
-| 46 | /api/v1/secondhand/settings/discover-placements | PUT | 設定頁儲存發現頁廣告位 | Staff |
 | 47 | /api/v1/secondhand/settings/listings/{listingId}/mark-sold | POST | 設定頁標記任意帖子已售 | Staff |
 | 48 | /api/v1/secondhand/settings/listings/{listingId}/deactivate | POST | 設定頁下架任意帖子 | Staff |
+
+### Property Sale 模組
+
+| 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
+| --- | --- | --- | --- | --- |
+| 75 | /api/v1/property-sales | GET | 查詢公開樓盤列表，預設按廣告權重排序 | 無 / 會員 |
+| 76 | /api/v1/property-sales/{listingId} | GET | 查詢樓盤詳情，公開回應不返回真實樓層 | 無 / 會員 |
+| 77 | /api/v1/property-sales | POST | 建立樓盤草稿 | 會員 |
+| 78 | /api/v1/property-sales/{listingId} | PATCH | 更新樓盤草稿或已發布樓盤 | 會員 |
+| 79 | /api/v1/property-addresses/search | GET | 查詢屋苑或大廈地址聯想 | 無 |
 
 ### Chat 模組
 
@@ -140,17 +168,17 @@ go run ./http_service/cmd/server
 | 42 | /api/v1/staff/roles | GET | 查詢可用角色與權限矩陣 | Staff |
 | 57 | /api/v1/staff/wallet/transactions | GET | 查詢平台積分流水 | Staff |
 | 58 | /api/v1/staff/wallet/grants | POST | 手動發放 AJO Point | Staff |
-| 59 | /api/v1/staff/wallet/reward-ads | GET | 查詢廣告積分任務 | Staff |
-| 60 | /api/v1/staff/wallet/reward-ads | POST | 建立廣告積分任務 | Staff |
-| 61 | /api/v1/staff/wallet/reward-ads/{taskId} | PATCH | 更新廣告積分任務 | Staff |
+| 59 | /api/v1/staff/wallet/reward-ads | GET | 查詢廣告任務 | Staff |
+| 60 | /api/v1/staff/wallet/reward-ads | POST | 建立廣告任務 | Staff |
+| 61 | /api/v1/staff/wallet/reward-ads/{taskId} | PATCH | 更新廣告任務 | Staff |
 | 62 | /api/v1/staff/secondhand/listings | GET | 管理頁查詢二手帖子列表 | Staff |
 | 63 | /api/v1/staff/secondhand/listings/{listingId}/publish | POST | 管理頁上架二手帖子 | Staff |
 | 64 | /api/v1/staff/secondhand/listings/{listingId}/deactivate | POST | 管理頁下架二手帖子 | Staff |
 | 65 | /api/v1/staff/secondhand/listings/{listingId}/renew | POST | 管理頁續期二手帖子 | Staff |
-| 66 | /api/v1/staff/property-sales | GET | 管理頁查詢樓盤放售列表 | Staff |
-| 67 | /api/v1/staff/property-sales/{listingId}/publish | POST | 管理頁上架樓盤放售 | Staff |
-| 68 | /api/v1/staff/property-sales/{listingId}/deactivate | POST | 管理頁下架樓盤放售 | Staff |
-| 69 | /api/v1/staff/property-sales/{listingId}/renew | POST | 管理頁續期樓盤放售 | Staff |
+| 66 | /api/v1/staff/property-sales | GET | 管理頁查詢樓盤租售列表 | Staff |
+| 67 | /api/v1/staff/property-sales/{listingId}/publish | POST | 管理頁上架樓盤租售 | Staff |
+| 68 | /api/v1/staff/property-sales/{listingId}/deactivate | POST | 管理頁下架樓盤租售 | Staff |
+| 69 | /api/v1/staff/property-sales/{listingId}/renew | POST | 管理頁續期樓盤租售 | Staff |
 | 70 | /api/v1/staff/serviced-apartments | GET | 管理頁查詢服務式住宅列表 | Staff |
 | 71 | /api/v1/staff/serviced-apartments/{listingId}/renew | POST | 管理頁續期服務式住宅 | Staff |
 
@@ -513,15 +541,19 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 ---
 
 ### 49. /api/v1/auth/email/register [POST]
-- **簡介**: 建立郵箱與手機密碼帳戶
+- **簡介**: 建立手機密碼帳戶，可選綁定郵箱
 - **請求參數**
 ```json
 {
-  "email": "member@example.com", // 必填
+  "email": "member@example.com", // 選填
   "password": "safe-password-123", // 必填，至少 8 個字元
   "display_name": "Email Member", // 必填
+  "username": "email-member", // 必填
   "phone_country_code": "+852", // 必填
-  "phone_number": "91234567" // 必填
+  "phone_number": "91234567", // 必填
+  "primary_community_id": "01KCOMMUNITY001", // 必填
+  "residence_floor": "12", // 必填
+  "residence_unit": "08" // 必填
 }
 ```
 - **回應參數**
@@ -549,7 +581,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
         "order.own.manage",
         "notification.read"
       ],
-      "profile_completed": false
+      "profile_completed": true
     }
   },
   "request_id": "01KPCXEXAMPLE",
@@ -561,22 +593,28 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "member@example.com",
     "password": "safe-password-123",
     "display_name": "Email Member",
+    "username": "email-member",
     "phone_country_code": "+852",
-    "phone_number": "91234567"
+    "phone_number": "91234567",
+    "primary_community_id": "01KCOMMUNITY001",
+    "residence_floor": "12",
+    "residence_unit": "08"
   }'
 ```
 - **Powershell測試**
 ```powershell
 $headers=@{"Content-Type"="application/json"}
 $body=@{
-  email="member@example.com"
   password="safe-password-123"
   display_name="Email Member"
+  username="email-member"
   phone_country_code="+852"
   phone_number="91234567"
+  primary_community_id="01KCOMMUNITY001"
+  residence_floor="12"
+  residence_unit="08"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/register" -Method POST -Headers $headers -Body $body
 ```
@@ -710,6 +748,89 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/phone/login" -Method P
 
 ---
 
+### 73. /api/v1/auth/ismart/login [POST]
+- **簡介**: 使用 ismart 帳戶登入並同步 POS 權限。後端預設呼叫 `https://pos.ismart.skylinedances.com/api/poslogin`，也可透過 `POS_LOGIN_URL` 覆蓋；成功後以 `ismart_msg.user_id` 綁定本地會員，若本地不存在會自動建立會員並簽發本系統 token。
+- **帳號判斷**: `account` 若符合香港手機格式，會先以 8 位本地手機號登入，失敗後再用原始輸入登入；若 `account` 是用戶名且有傳入 `phone`，會在用戶名失敗後繼續嘗試手機候選值。全部失敗後才回傳帳號或密碼錯誤。
+- **請求參數**
+```json
+{
+  "account": "testowner02", // 必填，ismart 用戶名或手機
+  "password": "test02test02", // 必填
+  "phone": "+85291234567", // 可選，當 account 是用戶名時可用於本地手機綁定；若 ismart user_id 已存在，會以本次值更新本地手機
+  "email": "linked@example.com" // 可選，綁定到本地會員郵箱
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "access_token": "jwt-access-token",
+    "refresh_token": "jwt-refresh-token",
+    "expires_in": 7200,
+    "user": {
+      "public_id": "01KUSER001",
+      "member_status": "active",
+      "member_type": "user",
+      "is_staff": false,
+      "role": "user",
+      "roles": ["member"],
+      "permissions": [
+        "account.profile.read",
+        "account.profile.write",
+        "listing.own.manage",
+        "chat.use",
+        "order.create",
+        "order.own.manage",
+        "notification.read"
+      ],
+      "profile_completed": false,
+      "ismart_msg": {
+        "user_id": 410,
+        "username": "testowner02",
+        "phone": "+85291234567",
+        "is_staff": false,
+        "building": [],
+        "staff_building_permissions": [],
+        "client_building_permissions": ["0999900"],
+        "client_building_flat_units_permissions": [
+          "09999000012",
+          "09999000111",
+          "09999000211"
+        ]
+      }
+    }
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:17:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/ismart/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account": "testowner02",
+    "password": "test02test02",
+    "phone": "+85291234567",
+    "email": "linked@example.com"
+  }'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Content-Type"="application/json"}
+$body=@{
+  account="testowner02"
+  password="test02test02"
+  phone="+85291234567"
+  email="linked@example.com"
+}|ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/ismart/login" -Method POST -Headers $headers -Body $body
+```
+
+---
+
 ### 6. /api/v1/auth/logout [POST]
 - **簡介**: 登出目前會員
 - **請求參數**
@@ -773,6 +894,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
     "district_code": "hk_east",
+    "residence_floor": "12",
+    "residence_unit": "08",
+    "bound_building_ids": ["0999900"],
+    "bound_flat_unit_ids": ["09999000012", "09999000111"],
     "primary_community": {
       "public_id": "01KCOMMUNITY001",
       "community_type": "estate",
@@ -781,7 +906,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
       "district_code": "hk_east",
       "address_text": "Quarry Bay"
     },
-    "profile_completed": true
+    "profile_completed": true,
+    "ismart_linked": true,
+    "ismart_username": "testowner02",
+    "ismart_bound_phone": "+85291234567",
+    "ismart_password": "test02test02",
+    "local_password": "new-password-123"
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:15:00Z"
@@ -806,8 +936,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
 ```json
 {
   "display_name": "Neighbour User", // 可選
+  "email": "linked@example.com", // 可選，變更時需配合 email_otp_code
+  "email_otp_code": "123456", // 可選
+  "phone_country_code": "+852", // 可選
+  "phone_number": "91234567", // 可選
+  "password": "new-password-123", // 可選，更新本系統登入密碼
   "publisher_identity_type": "owner", // 可選
   "primary_community_id": "01KCOMMUNITY001", // 可選
+  "bound_building_ids": ["0999900"], // 可選，多個綁定屋苑或大廈
+  "bound_flat_unit_ids": ["09999000012", "09999000111"], // 可選，多個綁定單位
+  "residence_floor": "12", // 可選
+  "residence_unit": "08", // 可選
   "district_code": "hk_east" // 可選
 }
 ```
@@ -834,6 +973,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
     "district_code": "hk_east",
+    "bound_building_ids": ["0999900"],
+    "bound_flat_unit_ids": ["09999000012", "09999000111"],
     "profile_completed": true
   },
   "request_id": "01KPCXEXAMPLE",
@@ -849,6 +990,8 @@ curl -X PATCH "http://127.0.0.1:8080/api/v1/me/profile" \
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
     "primary_community_id": "01KCOMMUNITY001",
+    "bound_building_ids": ["0999900"],
+    "bound_flat_unit_ids": ["09999000012"],
     "district_code": "hk_east"
   }'
 ```
@@ -859,10 +1002,27 @@ $body=@{
   display_name="Neighbour User"
   publisher_identity_type="owner"
   primary_community_id="01KCOMMUNITY001"
+  bound_building_ids=@("0999900")
+  bound_flat_unit_ids=@("09999000012")
   district_code="hk_east"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -Headers $headers -Body $body
 ```
+
+---
+
+### 8A. /api/v1/me/ismart/bind [POST]
+- **簡介**: 已登入會員關聯 ismart 帳戶，後端使用 POS login 校驗帳密並同步屋苑、單位與 Staff 權限。
+- **請求參數**
+```json
+{
+  "account": "testowner02",
+  "password": "test02test02",
+  "phone": "+85291234567",
+  "email": "linked@example.com"
+}
+```
+- **回應參數**: 同 `/api/v1/me`，包含 `ismart_linked`、`ismart_msg`、`bound_building_ids` 與 `bound_flat_unit_ids`。
 
 ---
 
@@ -1297,62 +1457,6 @@ curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/listings?page=1&page_size=2
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/listings?page=1&page_size=20&keyword=%E6%B4%97%E8%A1%A3%E6%A9%9F&sort_by=latest" -Method GET
 ```
-
----
-
-### 43. /api/v1/secondhand/discover [GET]
-- **簡介**: 查詢二手發現頁人工配置廣告位。只返回仍然公開、已審核、未售出、未下架的帖子。
-- **請求參數**
-```json
-{}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "hero": [
-      {
-        "scene": "discover_hero",
-        "category_code": "",
-        "slot_index": 1,
-        "listing": {
-          "listing_id": "01KSECONDHAND001",
-          "title": "九成新洗衣機",
-          "category_code": "home_appliance",
-          "publication_status": "active",
-          "business_status": "available"
-        }
-      }
-    ],
-    "categories": {
-      "home_appliance": [
-        {
-          "scene": "discover_category_carousel",
-          "category_code": "home_appliance",
-          "slot_index": 1,
-          "listing": {
-            "listing_id": "01KSECONDHAND001",
-            "title": "九成新洗衣機",
-            "category_code": "home_appliance"
-          }
-        }
-      ]
-    }
-  }
-}
-```
-- **Curl測試**
-```bash
-curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/discover"
-```
-- **Powershell測試**
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/secondhand/discover" -Method GET
-```
-
----
 
 ### 13. /api/v1/secondhand/listings/{listingId} [GET]
 - **簡介**: 查詢二手帖子詳情
@@ -1901,115 +2005,6 @@ curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/settings/listings?page=1&pa
   -H "Authorization: Bearer $token"
 ```
 
----
-
-### 45. /api/v1/secondhand/settings/discover-placements [GET]
-- **簡介**: 設定頁查詢完整發現頁廣告位矩陣。封面大推固定 4 個位置，每個分類固定 10 個位置。
-- **請求參數**
-```json
-{}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "hero": [
-      {
-        "scene": "discover_hero",
-        "category_code": "",
-        "slot_index": 1,
-        "listing": {
-          "listing_id": "01KSECONDHAND001",
-          "title": "九成新洗衣機"
-        }
-      }
-    ],
-    "categories": {
-      "home_appliance": [
-        {
-          "scene": "discover_category_carousel",
-          "category_code": "home_appliance",
-          "slot_index": 1
-        }
-      ]
-    }
-  }
-}
-```
-- **Curl測試**
-```bash
-curl -X GET "http://127.0.0.1:8080/api/v1/secondhand/settings/discover-placements" \
-  -H "Authorization: Bearer $token"
-```
-
----
-
-### 46. /api/v1/secondhand/settings/discover-placements [PUT]
-- **簡介**: 設定頁批量儲存發現頁廣告位。`listing_id` 留空會清空指定位置。
-- **請求參數**
-```json
-{
-  "placements": [
-    {
-      "scene": "discover_hero",
-      "category_code": "",
-      "slot_index": 1,
-      "listing_id": "01KSECONDHAND001"
-    },
-    {
-      "scene": "discover_category_carousel",
-      "category_code": "home_appliance",
-      "slot_index": 1,
-      "listing_id": "01KSECONDHAND001"
-    }
-  ]
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "hero": [
-      {
-        "scene": "discover_hero",
-        "category_code": "",
-        "slot_index": 1,
-        "listing": {
-          "listing_id": "01KSECONDHAND001",
-          "title": "九成新洗衣機"
-        }
-      }
-    ],
-    "categories": {
-      "home_appliance": [
-        {
-          "scene": "discover_category_carousel",
-          "category_code": "home_appliance",
-          "slot_index": 1,
-          "listing": {
-            "listing_id": "01KSECONDHAND001",
-            "title": "九成新洗衣機"
-          }
-        }
-      ]
-    }
-  }
-}
-```
-- **Curl測試**
-```bash
-curl -X PUT "http://127.0.0.1:8080/api/v1/secondhand/settings/discover-placements" \
-  -H "Authorization: Bearer $token" \
-  -H "Content-Type: application/json" \
-  -d '{"placements":[{"scene":"discover_hero","category_code":"","slot_index":1,"listing_id":"01KSECONDHAND001"}]}'
-```
-
----
-
 ### 47. /api/v1/secondhand/settings/listings/{listingId}/mark-sold [POST]
 - **簡介**: 設定頁標記任意二手帖子為已售。
 - **請求參數**
@@ -2278,7 +2273,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
         "content": "紅包到賬提醒\n拼手氣，瓜分 HK$35999 現金紅包",
         "message_type": "notice_card",
         "action_label": "去查看",
-        "action_url": "/marketplace/discover",
+        "action_url": "/furniture",
         "status": "sent",
         "created_at": "2026-04-17T05:28:00Z"
       }
@@ -2386,6 +2381,76 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 
 ---
 
+### 80-98. /api/v1/me/payments/pos/* [GET/POST]
+- **簡介**: AJO 會員支付中心的 POS 物業繳費接口。會員需先關聯 ismart，所有 POS 資料讀寫均由 AJO 後端代理；`accounting` 由 Staff 權限控制。
+- **查詢參數**: `overview`、`bills`、`fees`、`bank-accounts`、`orders`、`history`、`accounting` 支援 `building_id` 與 `unit_id`。`overview` 支援 `summary=false` 跳過賬單與訂單概覽統計。`history` 額外支援 `from_date`、`to_date`、`date_type`、`pay_method`、`unit_ids`。Staff 會計頁只需 `building_id`。
+- **接口**
+| 介面 | 方法 | 說明 |
+| --- | --- | --- |
+| `/api/v1/me/payments/pos/overview` | GET | 返回選中上下文、可選屋苑與單位、是否需補個人資料、是否需 ismart 登入、是否 Staff。 |
+| `/api/v1/me/payments/pos/bills` | GET | 返回選中單位的 POS 賬單。 |
+| `/api/v1/me/payments/pos/fees` | GET | 返回選中大廈的 POS 手續費與可用付款方式。 |
+| `/api/v1/me/payments/pos/bank-accounts` | GET | 返回選中大廈的 POS 銀行賬戶。 |
+| `/api/v1/me/payments/pos/payments/report` | POST | 上報現金、支票、銀行轉賬等線下繳費。 |
+| `/api/v1/me/payments/pos/terminal/pay` | POST | Staff 使用服務端配置的 POS 機地址收款，成功後代理 `/bill` 入賬；不接受前端傳入設備地址。 |
+| `/api/v1/me/payments/pos/orders` | GET | 返回選中單位的 H5 / QR 線上繳費訂單。 |
+| `/api/v1/me/payments/pos/orders` | POST | 建立選中單位賬單 H5 / QR 線上繳費訂單。 |
+| `/api/v1/me/payments/pos/orders/query` | POST | 按 `mch_order_no` 或 `pay_order_id` 查詢訂單。 |
+| `/api/v1/me/payments/pos/orders/{mchOrderNo}` | GET | 查詢單一 H5 / QR 線上繳費訂單。 |
+| `/api/v1/me/payments/pos/orders/{mchOrderNo}/close` | POST | 關閉單一 H5 / QR 線上繳費訂單。 |
+| `/api/v1/me/payments/pos/orders/{mchOrderNo}/cancel` | POST | 取消單一 H5 / QR 線上繳費訂單。 |
+| `/api/v1/me/payments/pos/orders/{mchOrderNo}/simulate` | POST | Staff 在非 production 模擬 H5 訂單狀態；正式環境關閉。 |
+| `/api/v1/me/payments/pos/history` | GET | 返回 POS 交易歷史；普通會員查目前單位，Staff 可按可見單位批量查。 |
+| `/api/v1/me/payments/pos/history/{paymentId}` | GET | 返回單一 POS 交易詳情。 |
+| `/api/v1/me/payments/pos/accounting` | GET | 返回 Staff 選中屋苑的現金、支票待清機分組與清機歷史摘要。 |
+| `/api/v1/me/payments/pos/accounting/clear` | POST | Staff 多選現金或支票交易清機。 |
+| `/api/v1/me/payments/pos/accounting/records` | GET | 返回 Staff 清機歷史。 |
+| `/api/v1/me/payments/pos/accounting/records/{recordId}` | GET | 返回 Staff 清機詳情。 |
+- **建立訂單請求**
+```json
+{
+  "scene": "cart",
+  "building_id": "0999900",
+  "unit_id": "09999000012",
+  "pay_channel": "WX_H5",
+  "final_amount": 12345,
+  "handle_fee_amount": 0,
+  "bill_objs": [],
+  "handle_fee_obj": [],
+  "return_path": "https://ajoliving.skylinedances.com/payments/orders",
+  "remark": "物業費",
+  "gateway_request_overrides": {
+    "walletType": "HK"
+  }
+}
+```
+- **H5 建單限制**: `gateway_request_overrides` 目前只接受 `ALI_H5` 的 `walletType=CN/HK`，`clientIp` 由 AJO 後端自行寫入。
+- **POS 機收款請求**
+```json
+{
+  "building_id": "0999900",
+  "unit_id": "09999000012",
+  "pay_type": "POS_CARD",
+  "final_amount": 12345,
+  "bill_objs": [],
+  "handle_fee_obj": [],
+  "remark": "物業費"
+}
+```
+- **POS 機收款配置**: 預設關閉；啟用時需配置 `POS_TERMINAL_PROXY_ENABLED=true`、`POS_TERMINAL_TYPE=allinpay`、`POS_TERMINAL_URL`，可用 `POS_TERMINAL_ALLOWED_BUILDINGS` 限定大廈。
+- **H5 模擬請求**
+```json
+{
+  "building_id": "0999900",
+  "unit_id": "09999000012",
+  "state": "SUCCESS",
+  "gateway_message": "manual test"
+}
+```
+- **H5 模擬限制**: 只允許 Staff，且 `APP_ENV=production` 時固定拒絕。
+
+---
+
 ## Staff 模組
 
 ## Wallet 模組
@@ -2421,13 +2486,78 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     ],
     "charge_rules": [
       { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "draft_save": 50, "edit": 100, "republish": 100, "renew": 50 },
-      { "biz_module": "property_sale", "label": "樓盤放售", "publish": 1000, "edit": 1000, "republish": 1000 },
+      { "biz_module": "property_sale", "label": "樓盤租售", "publish": 1000, "edit": 1000, "republish": 1000 },
       { "biz_module": "serviced_apartment", "label": "服務式住宅", "publish": 800, "edit": 800, "republish": 800 }
     ],
-    "recharge_enabled": false
+    "recharge_enabled": true,
+    "recharge_rate": 100
   }
 }
 ```
+
+---
+
+### 52.1 /api/v1/me/wallet/recharge-orders [POST]
+- **簡介**: 建立 AJO Point 線上充值支付訂單。支付成功後按 `1 HKD = 100 AJO Point` 自動入賬。
+- **請求參數**
+```json
+{
+  "amount_hkd": 0.01,
+  "pay_method": "wechat",
+  "pay_region": "HK",
+  "device_mode": "desktop",
+  "return_path": "https://ajoliving.skylinedances.com/account/profile/wallet"
+}
+```
+- **欄位說明**
+| 欄位 | 說明 |
+| --- | --- |
+| `pay_method` | `wechat`、`alipay`、`unionpay` |
+| `pay_region` | `HK`、`CN`；目前主要用於支付寶錢包區分 |
+| `device_mode` | `mobile` 生成 H5 支付，`desktop` 生成掃碼支付 |
+| `amount_hkd` | 最小 `0.01`，按分計算；`0.01 HKD = 1 AJO Point` |
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "order_id": "01KRECHARGE001",
+    "mch_order_no": "AJO_1774330341639_123456",
+    "pay_order_id": "P2036315163422986241",
+    "pay_channel": "WX_QR",
+    "pay_region": "HK",
+    "pay_data_type": "codeUrl",
+    "pay_data": "https://example.com/pay",
+    "state": "PAYING",
+    "state_label": "支付確認中",
+    "gateway_state_code": 1,
+    "gateway_message": "SUCCESS",
+    "currency": "HKD",
+    "amount_hkd": "0.01",
+    "amount_cents": 1,
+    "points_amount": 1,
+    "created_at": "2026-04-17T06:30:00Z",
+    "updated_at": "2026-04-17T06:30:00Z",
+    "expire_time": "2026-04-17T06:33:00Z",
+    "paid_at": "",
+    "credited_at": ""
+  }
+}
+```
+
+---
+
+### 52.2 /api/v1/me/wallet/recharge-orders/{orderId} [GET]
+- **簡介**: 查詢目前會員充值訂單；`orderId` 可使用 `order_id` 或支付回跳中的 `mch_order_no`。
+- **請求參數**
+```json
+{
+  "refresh": true
+}
+```
+- **說明**: `refresh=true` 時，若訂單仍在支付中，後端會向 EasyLink 主動查單並在成功後入賬。
+- **回應參數**: 同建立充值訂單回應。
 
 ---
 
@@ -2461,6 +2591,42 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
       }
     ],
     "pagination": { "page": 1, "page_size": 20, "total": 1 }
+  }
+}
+```
+
+---
+
+### 74. /api/v1/public/ads [GET]
+- **簡介**: 查詢公開列表右側展示廣告。只返回 active、display 類型、未過期且符合頻道與位置的廣告，最多 10 條。
+- **請求參數**
+```json
+{
+  "channel": "property_sale",
+  "placement": "listing_side",
+  "limit": 10
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "task_id": "01KAD001",
+        "title": "AJO Living Promotion",
+        "summary": "Featured listing-side display ad.",
+        "media_url": "https://cdn.example.com/ad.png",
+        "media_type": "image",
+        "target_url": "https://www.ajoliving.com",
+        "display_channel": "property_sale",
+        "display_placement": "listing_side",
+        "display_layout": "image_text",
+        "sort_order": 1
+      }
+    ]
   }
 }
 ```
@@ -2926,14 +3092,16 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ---
 
 ### 59. /api/v1/staff/wallet/reward-ads [GET]
-- **簡介**: Staff 查詢看廣告得積分任務。
+- **簡介**: Staff 查詢廣告任務，支援 reward 看廣告得積分與 display 列表展示廣告。
 - **請求參數**
 ```json
 {
   "page": 1,
   "page_size": 20,
   "keyword": "AJO",
-  "is_active": true
+  "is_active": true,
+  "ad_type": "display",
+  "display_channel": "property_sale"
 }
 ```
 - **回應參數**
@@ -2945,11 +3113,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
     "items": [
       {
         "task_id": "01KAD001",
+        "ad_type": "display",
         "title": "AJO Living Reward",
         "summary": "Watch official video.",
         "cover_url": "https://cdn.example.com/ad.png",
         "media_url": "https://cdn.example.com/ad.mp4",
+        "media_type": "video",
         "target_url": "https://www.ajoliving.com",
+        "display_channel": "property_sale",
+        "display_placement": "listing_side",
+        "display_layout": "image_text",
+        "sort_order": 1,
         "reward_points": 50,
         "watch_seconds": 30,
         "total_budget": 1000,
@@ -2972,15 +3146,21 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ---
 
 ### 60. /api/v1/staff/wallet/reward-ads [POST]
-- **簡介**: Staff 建立看廣告得積分任務。觀看秒數低於 30 會被後端提升為 30。
+- **簡介**: Staff 建立廣告任務。`ad_type=reward` 用於看廣告得積分，`ad_type=display` 用於列表右側展示廣告。
 - **請求參數**
 ```json
 {
+  "ad_type": "display",
   "title": "AJO Living Reward",
   "summary": "Watch official video.",
   "cover_url": "https://cdn.example.com/ad.png",
   "media_url": "https://cdn.example.com/ad.mp4",
+  "media_type": "video",
   "target_url": "https://www.ajoliving.com",
+  "display_channel": "property_sale",
+  "display_placement": "listing_side",
+  "display_layout": "image_text",
+  "sort_order": 1,
   "reward_points": 50,
   "watch_seconds": 30,
   "total_budget": 1000,
@@ -2993,11 +3173,16 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ---
 
 ### 61. /api/v1/staff/wallet/reward-ads/{taskId} [PATCH]
-- **簡介**: Staff 更新看廣告得積分任務，可用於修改素材、預算或啟停任務。
+- **簡介**: Staff 更新廣告任務，可用於修改素材、展示設定、預算或啟停任務。
 - **請求參數**
 ```json
 {
+  "ad_type": "display",
   "title": "AJO Living Reward",
+  "display_channel": "property_sale",
+  "display_placement": "listing_side",
+  "display_layout": "image_full",
+  "sort_order": 1,
   "reward_points": 80,
   "watch_seconds": 30,
   "total_budget": 2000,
@@ -3048,22 +3233,73 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ---
 
 ### 66. /api/v1/staff/property-sales [GET]
-- **簡介**: Staff 管理頁分頁查詢樓盤放售，支援 keyword 與 status 篩選。
+- **簡介**: Staff 管理頁分頁查詢樓盤租售，支援 keyword、status、租售類型、物業類型與標籤篩選。
 - **請求參數**
 ```json
 {
   "page": 1,
   "page_size": 20,
   "keyword": "Central",
-  "status": "active"
+  "status": "active",
+  "transaction_type": "rent",
+  "property_type": "residential",
+  "rental_type": "short_term",
+  "feature_tags": "brand_new,view",
+  "publisher_identity_type": "agent",
+  "is_new": true
 }
 ```
 - **回應參數**: 與 `/api/v1/property-sales` 列表項結構一致，管理頁可見全部狀態。
 
 ---
 
+### 75-79. /api/v1/property-sales 與 /api/v1/property-addresses/search
+- **簡介**: 樓盤發布支援物業編號、雙語標題與介紹、地址聯想、真實樓層保密、廣告套餐與權重排序。公開列表預設以 `ad_weight desc` 排序，再按刷新時間排序。
+- **建立 / 更新樓盤主要請求欄位**
+```json
+{
+  "property_no": "AJO-PS-0001",
+  "title": "康怡花園高層兩房",
+  "title_en": "High floor two-bedroom in Kornhill",
+  "description": "實用兩房，交通方便。",
+  "description_en": "Practical two-bedroom unit with convenient transport.",
+  "transaction_type": "sale",
+  "location_scope": "local",
+  "listing_category": "standard",
+  "multi_unit_project": false,
+  "estate_name": "康怡花園",
+  "address_text": "鰂魚涌康山道",
+  "address_text_en": "Kornhill Road, Quarry Bay",
+  "block_name": "3座",
+  "floor_raw": "25/F",
+  "floor_zone": "high",
+  "total_floors": 40,
+  "unit_name": "A",
+  "show_unit": true,
+  "asking_price_hkd": 8000000,
+  "monthly_rent_hkd": 0,
+  "price_reference_only": true,
+  "price_negotiable": false,
+  "usable_area_sqft": 620,
+  "ad_package_code": "featured"
+}
+```
+- **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低月租或日租。
+- **公開回應規則**: `floor_raw` 只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
+- **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天；`fast_sale` 權重 3 / 1200 / 15 天。
+- **地址聯想**
+```json
+{
+  "keyword": "Kornhill",
+  "district_code": "hk_east",
+  "limit": 8
+}
+```
+
+---
+
 ### 67-69. /api/v1/staff/property-sales/{listingId}/{action} [POST]
-- **簡介**: Staff 對樓盤放售執行狀態操作。`action` 支援 `publish`、`deactivate`、`renew`。
+- **簡介**: Staff 對樓盤租售執行狀態操作。`action` 支援 `publish`、`deactivate`、`renew`。
 - **請求參數**
 ```json
 {
@@ -3653,6 +3889,120 @@ curl -X POST "http://127.0.0.1:8080/api/v1/notifications/read-all" \
 ```powershell
 $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/notifications/read-all" -Method POST -Headers $headers
+```
+
+### 43. /api/v1/supermarket-offers/summary [GET]
+- **簡介**: 公開超市優惠摘要，資料來自已部署 good-price 服務
+- **請求參數**: 無
+- **回應參數**: good-price summary 原始資料，包裝於 AJO 統一回應 `data`
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/summary"
+```
+
+### 44. /api/v1/supermarket-offers/search [GET]
+- **簡介**: 公開搜尋超市商品與優惠
+- **請求參數**
+```json
+{
+  "q": "商品、品牌或分類",
+  "category": "分類",
+  "brand": "品牌",
+  "store": "商店代碼",
+  "offerOnly": true,
+  "sort": "discount",
+  "page": 1,
+  "pageSize": 20
+}
+```
+- **回應參數**: good-price search 原始資料，包裝於 AJO 統一回應 `data`
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/search?offerOnly=true&page=1&pageSize=20"
+```
+
+### 45. /api/v1/supermarket-offers/products/{code} [GET]
+- **簡介**: 公開超市商品詳情，登入時附帶 AJO 收藏與價格提示狀態
+- **請求參數**
+```json
+{
+  "code": "P000000001",
+  "days": 90
+}
+```
+- **回應參數**: good-price product detail 原始資料，並附加 `isFavorite`、`alertRule`
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/products/P000000001?days=90"
+```
+
+### 46. /api/v1/me/supermarket-offers/favorites [GET/POST]
+- **簡介**: 取得或新增目前會員的超市商品收藏
+- **POST 請求參數**
+```json
+{
+  "productCode": "P000000001"
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/me/supermarket-offers/favorites" \
+  -H "Authorization: Bearer $token"
+curl -X POST "http://127.0.0.1:8080/api/v1/me/supermarket-offers/favorites" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d '{"productCode":"P000000001"}'
+```
+
+### 47. /api/v1/me/supermarket-offers/favorites/{code} [DELETE]
+- **簡介**: 移除目前會員的超市商品收藏
+- **Curl測試**
+```bash
+curl -X DELETE "http://127.0.0.1:8080/api/v1/me/supermarket-offers/favorites/P000000001" \
+  -H "Authorization: Bearer $token"
+```
+
+### 48. /api/v1/me/supermarket-offers/price-alerts [GET/POST]
+- **簡介**: 取得或建立目前會員的超市價格提示
+- **POST 請求參數**
+```json
+{
+  "productCode": "P000000001",
+  "targetPrice": 20.5,
+  "priceMode": "effective",
+  "offerRequired": true,
+  "enabled": true
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/me/supermarket-offers/price-alerts" \
+  -H "Authorization: Bearer $token"
+curl -X POST "http://127.0.0.1:8080/api/v1/me/supermarket-offers/price-alerts" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d '{"productCode":"P000000001","targetPrice":20.5,"priceMode":"effective","offerRequired":true,"enabled":true}'
+```
+
+### 49. /api/v1/me/supermarket-offers/price-alerts/{id} [PATCH/DELETE]
+- **簡介**: 更新或刪除目前會員的超市價格提示
+- **PATCH 請求參數**
+```json
+{
+  "targetPrice": 18.8,
+  "priceMode": "effective",
+  "offerRequired": false,
+  "enabled": true
+}
+```
+- **Curl測試**
+```bash
+curl -X PATCH "http://127.0.0.1:8080/api/v1/me/supermarket-offers/price-alerts/1" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d '{"targetPrice":18.8,"priceMode":"effective","offerRequired":false,"enabled":true}'
+curl -X DELETE "http://127.0.0.1:8080/api/v1/me/supermarket-offers/price-alerts/1" \
+  -H "Authorization: Bearer $token"
 ```
 
 ---

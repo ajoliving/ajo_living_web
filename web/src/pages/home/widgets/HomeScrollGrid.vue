@@ -46,6 +46,16 @@ const tileMotionMap: Record<HomeModuleCode, Array<{ x: number; y: number; rotate
     { x: 6, y: 8, rotate: 1, scale: 0.99 },
     { x: -2, y: -8, rotate: -1, scale: 1 },
   ],
+  payments: [
+    { x: -6, y: -10, rotate: -2, scale: 1.01 },
+    { x: 14, y: -12, rotate: 2, scale: 1.02 },
+    { x: -14, y: 10, rotate: -3, scale: 1.02 },
+    { x: 10, y: 14, rotate: 3, scale: 1 },
+    { x: 18, y: -4, rotate: 1, scale: 0.99 },
+    { x: -16, y: 8, rotate: -2, scale: 1.01 },
+    { x: 8, y: 8, rotate: 1, scale: 0.99 },
+    { x: -4, y: -8, rotate: -1, scale: 1 },
+  ],
 };
 
 const activeModule = computed(
