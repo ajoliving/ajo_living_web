@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>AJO Living favicon - pin home</title>
+  <defs>
+    <linearGradient id="bg" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF2FF" />
+      <stop offset="1" stop-color="#C7DBFF" />
+    </linearGradient>
+    <linearGradient id="pin" x1="18" y1="16" x2="46" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2967E0" />
+      <stop offset="1" stop-color="#12336E" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#bg)" />
+  <path
+    d="M32 14C22.9 14 17 20.5 17 29.1C17 39.6 28.2 47 31.1 49C31.7 49.4 32.3 49.4 32.9 49C35.8 47 47 39.6 47 29.1C47 20.5 41.1 14 32 14Z"
+    fill="url(#pin)"
+  />
+  <path
+    d="M25 30L32 24.8L39 30"
+    stroke="#F8FBFF"
+    stroke-width="3.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M27.5 29.8V37H36.5V29.8"
+    stroke="#F8FBFF"
+    stroke-width="3.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M31 37V32.3H33V37"
+    stroke="#D8E7FF"
+    stroke-width="2.8"
+    stroke-linecap="round"
+  />
+</svg>

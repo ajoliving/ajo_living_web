@@ -1,0 +1,76 @@
+/*
+ * 設計 Token CSS 後備值。
+ * 1. 提供應用程式初始載入時的預設主題基線。
+ * 2. 依照色彩、圓角、陰影、間距、字體與邊框分組管理。
+ */
+:root {
+  /* Color */
+  --color-canvas: 255 255 255;
+  --color-page-tint: 244 244 244;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 248 248 248;
+  --color-surface-raised: 255 255 255;
+  --color-topbar-surface: 249 249 249;
+  --color-toolbar-surface: 248 248 248;
+  --color-field-surface: 255 255 255;
+  --color-dropdown-surface: 255 255 255;
+  --color-primary: 240 90 0;
+  --color-primary-contrast: 255 255 255;
+  --color-primary-soft: 255 240 230;
+  --color-text: 26 26 26;
+  --color-text-muted: 102 102 102;
+  --color-border: 228 228 228;
+  --color-border-strong: 192 70 0;
+  --color-success: 46 132 100;
+  --color-warning: 188 135 78;
+  --color-danger: 178 77 73;
+
+  /* Radius */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.5rem;
+  --radius-pill: 999px;
+
+  /* Shadow */
+  --shadow-soft: 0 3px 16px rgba(240, 90, 0, 0.12);
+  --shadow-raised: 0 10px 28px rgba(26, 26, 26, 0.08);
+  --shadow-floating: 0 18px 48px rgba(26, 26, 26, 0.14);
+
+  /* Spacing */
+  --space-shell: clamp(1rem, 2vw, 1.5rem);
+  --space-section: clamp(4rem, 8vw, 6rem);
+  --space-stack-sm: 0.75rem;
+  --space-stack-md: 1.25rem;
+  --space-stack-lg: 2rem;
+  --space-card: 1.5rem;
+  --layout-page-max-width: 92rem;
+  --layout-page-padding-inline: 1rem;
+
+  /* Font */
+  --font-sans: "DM Sans", "Avenir Next", "PingFang TC", "Noto Sans TC", sans-serif;
+  --font-display: "DM Serif Display", "Noto Serif TC", serif;
+  --font-size-body-sm: 0.875rem;
+  --font-size-body: 1rem;
+  --font-size-body-lg: 1.125rem;
+  --font-size-title-sm: 1.5rem;
+  --font-size-title: 2rem;
+  --font-size-hero: 3.25rem;
+
+  /* Border */
+  --border-width-thin: 1px;
+  --border-width-strong: 1.5px;
+  --border-subtle: 1px solid rgb(228 228 228 / 0.82);
+  --border-strong: 1.5px solid rgb(192 70 0 / 0.22);
+}
+
+html[data-theme='dark-neutral'] {
+  color-scheme: dark;
+}
+
+html[data-theme='default'],
+html[data-theme='html-fidelity'],
+html[data-theme='copper-sun'] {
+  color-scheme: light;
+}

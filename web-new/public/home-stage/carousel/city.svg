@@ -1,0 +1,380 @@
+<svg
+  width="1200"
+  height="400"
+  viewBox="0 0 1200 400"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!--
+    * Hong Kong harbour skyline illustration.
+    * 1. Use layered mountains, haze, and water reflection to increase depth.
+    * 2. Keep the skyline selective instead of overly fragmented.
+    * 3. Preserve a refined warm-neutral palette for banner usage.
+  -->
+  <defs>
+    <linearGradient
+      id="city-sky"
+      x1="600"
+      y1="36"
+      x2="600"
+      y2="360"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop
+        offset="0"
+        stop-color="#FFFDF8"
+      />
+      <stop
+        offset="0.52"
+        stop-color="#FBF7F0"
+      />
+      <stop
+        offset="1"
+        stop-color="#F5EEE3"
+      />
+    </linearGradient>
+    <linearGradient
+      id="city-water"
+      x1="600"
+      y1="286"
+      x2="600"
+      y2="386"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop
+        offset="0"
+        stop-color="#F7F1E7"
+        stop-opacity="0.84"
+      />
+      <stop
+        offset="1"
+        stop-color="#F1E7D9"
+        stop-opacity="0.32"
+      />
+    </linearGradient>
+    <linearGradient
+      id="city-reflection"
+      x1="600"
+      y1="304"
+      x2="600"
+      y2="386"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop
+        offset="0"
+        stop-color="#D3C0A7"
+        stop-opacity="0.34"
+      />
+      <stop
+        offset="1"
+        stop-color="#D3C0A7"
+        stop-opacity="0"
+      />
+    </linearGradient>
+    <linearGradient
+      id="city-building-fill"
+      x1="600"
+      y1="116"
+      x2="600"
+      y2="304"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop
+        offset="0"
+        stop-color="#FFFDF9"
+        stop-opacity="0.96"
+      />
+      <stop
+        offset="1"
+        stop-color="#F7F0E5"
+        stop-opacity="0.78"
+      />
+    </linearGradient>
+    <radialGradient
+      id="city-haze"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(600 178) rotate(90) scale(112 520)"
+    >
+      <stop
+        offset="0"
+        stop-color="#FFFDF8"
+        stop-opacity="0.95"
+      />
+      <stop
+        offset="1"
+        stop-color="#FFFDF8"
+        stop-opacity="0"
+      />
+    </radialGradient>
+    <filter
+      id="city-soft-blur"
+      x="-40"
+      y="-40"
+      width="1280"
+      height="480"
+      filterUnits="userSpaceOnUse"
+      color-interpolation-filters="sRGB"
+    >
+      <feGaussianBlur stdDeviation="8" />
+    </filter>
+  </defs>
+
+  <rect
+    width="1200"
+    height="400"
+    fill="url(#city-sky)"
+  />
+
+  <path
+    d="M0 164C87 135 160 120 234 124C318 128 371 152 445 149C524 146 575 118 650 114C738 109 800 139 868 139C944 140 1000 119 1070 121C1114 122 1157 130 1200 144V400H0V164Z"
+    fill="#FAF5ED"
+  />
+  <path
+    d="M0 181C84 153 163 147 229 152C299 157 356 178 423 176C510 173 568 147 643 146C721 144 775 164 848 165C924 166 987 149 1057 151C1109 153 1159 164 1200 177"
+    stroke="#E1D2BF"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+  <path
+    d="M0 148C99 118 177 101 258 105C324 109 381 131 440 131C499 131 543 113 600 104C668 93 725 99 790 116C857 134 910 142 980 136C1056 129 1121 114 1200 120"
+    stroke="#D7C4AA"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    opacity="0.9"
+  />
+
+  <ellipse
+    cx="602"
+    cy="188"
+    rx="504"
+    ry="102"
+    fill="url(#city-haze)"
+  />
+
+  <rect
+    x="0"
+    y="304"
+    width="1200"
+    height="96"
+    fill="url(#city-water)"
+  />
+  <path
+    d="M0 304H1200"
+    stroke="#D6C3AA"
+    stroke-width="2.6"
+    stroke-linecap="round"
+  />
+  <path
+    d="M0 316C119 320 180 328 266 326C352 323 439 310 529 312C620 314 681 325 761 325C846 325 912 314 989 313C1068 311 1138 318 1200 321"
+    stroke="#E0D1BE"
+    stroke-width="1.4"
+    stroke-linecap="round"
+    opacity="0.92"
+  />
+  <path
+    d="M34 352C106 346 140 350 202 353C279 357 328 365 394 363C474 361 532 347 601 347C674 348 725 358 795 360C867 362 932 350 998 348C1068 346 1123 351 1168 356"
+    stroke="#E6D9C8"
+    stroke-width="1"
+    stroke-linecap="round"
+    opacity="0.78"
+  />
+
+  <g
+    stroke="#CBB597"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <g fill="url(#city-building-fill)">
+      <path d="M72 304V258H122V304" />
+      <path d="M134 304V214H184V304" />
+      <path d="M198 304V182H252V304" />
+      <path d="M266 304V160H332V304" />
+      <path d="M352 304V218H404V304" />
+      <path d="M422 304V188H472V304" />
+      <path d="M486 304V148H544V304" />
+      <path d="M562 304V128H642V304" />
+      <path d="M658 304V142H730V304" />
+      <path d="M746 304V196H794V304" />
+      <path d="M808 304V168H860V304" />
+      <path d="M876 304V218H924V304" />
+      <path d="M938 304V182H996V304" />
+      <path d="M1014 304V202H1060V304" />
+      <path d="M1074 304V164H1134V304" />
+    </g>
+
+    <path
+      d="M225 182V164L238 150L252 164V182"
+      stroke-width="1.8"
+    />
+    <path
+      d="M299 160V134L294 126H304L299 134"
+      stroke-width="1.8"
+    />
+    <path
+      d="M514 148V118L525 106L536 118V148"
+      stroke-width="1.8"
+    />
+    <path
+      d="M602 128V92"
+      stroke-width="1.9"
+    />
+    <circle
+      cx="602"
+      cy="86"
+      r="5"
+      stroke-width="1.9"
+      fill="#FFFDF9"
+    />
+    <path
+      d="M694 142L709 106L724 142"
+      stroke-width="1.8"
+    />
+    <path
+      d="M709 106V90L706 84H712L709 90"
+      stroke-width="1.8"
+    />
+    <path
+      d="M1104 164V146L1116 134L1128 146V164"
+      stroke-width="1.8"
+    />
+
+    <path
+      d="M281 304V160"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M316 304V160"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M505 304V148"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M525 304V148"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M579 304V128"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M602 304V128"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M625 304V128"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M681 304V142"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M709 304V142"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+    <path
+      d="M1100 304V164"
+      stroke-width="1.15"
+      opacity="0.72"
+    />
+
+    <path
+      d="M695 122L724 93"
+      stroke-width="1"
+      opacity="0.64"
+    />
+    <path
+      d="M724 122L695 93"
+      stroke-width="1"
+      opacity="0.64"
+    />
+  </g>
+
+  <g
+    stroke="#D5C2A8"
+    stroke-linecap="round"
+    opacity="0.42"
+  >
+    <path d="M84 276H110" />
+    <path d="M84 288H110" />
+    <path d="M145 232H173" />
+    <path d="M145 248H173" />
+    <path d="M145 264H173" />
+    <path d="M210 206H240" />
+    <path d="M210 224H240" />
+    <path d="M496 176H534" />
+    <path d="M496 196H534" />
+    <path d="M573 152H631" />
+    <path d="M573 174H631" />
+    <path d="M573 196H631" />
+    <path d="M667 170H721" />
+    <path d="M667 192H721" />
+    <path d="M939 210H989" />
+    <path d="M939 228H989" />
+    <path d="M1084 188H1124" />
+    <path d="M1084 206H1124" />
+    <path d="M1084 224H1124" />
+  </g>
+
+  <g
+    stroke="url(#city-reflection)"
+    stroke-linecap="round"
+    filter="url(#city-soft-blur)"
+    opacity="0.82"
+  >
+    <path
+      d="M96 316V370"
+      stroke-width="10"
+    />
+    <path
+      d="M160 316V356"
+      stroke-width="12"
+    />
+    <path
+      d="M222 316V382"
+      stroke-width="12"
+    />
+    <path
+      d="M299 316V388"
+      stroke-width="15"
+    />
+    <path
+      d="M515 316V382"
+      stroke-width="14"
+    />
+    <path
+      d="M602 316V396"
+      stroke-width="18"
+    />
+    <path
+      d="M709 316V386"
+      stroke-width="16"
+    />
+    <path
+      d="M836 316V370"
+      stroke-width="12"
+    />
+    <path
+      d="M967 316V372"
+      stroke-width="14"
+    />
+    <path
+      d="M1104 316V392"
+      stroke-width="16"
+    />
+  </g>
+</svg>

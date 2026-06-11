@@ -1,0 +1,264 @@
+/*
+ * 全域樣式入口。
+ * 1. 載入 Tailwind 基礎能力與設計 token。
+ * 2. 定義 AJO Living 新前台共用版型與表面樣式。
+ */
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: rgb(var(--color-canvas));
+    color: rgb(var(--color-text));
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: rgb(var(--color-canvas));
+    color: rgb(var(--color-text));
+    transition:
+      background 0.32s ease,
+      color 0.24s ease;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  body :where(*, *::before, *::after) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  img,
+  canvas,
+  video {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  svg[aria-hidden='true'],
+  .app-icon {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background-color: rgb(0 95 213 / 0.82);
+    color: #ffffff;
+  }
+
+  ::-moz-selection {
+    background-color: rgb(0 95 213 / 0.82);
+    color: #ffffff;
+  }
+
+  html[data-theme='dark-neutral'] body {
+    background: rgb(var(--color-canvas));
+  }
+
+  html[data-theme='default'] body {
+    background: rgb(var(--color-canvas));
+  }
+}
+
+@layer components {
+  .panel-surface {
+    @apply rounded-field border shadow-soft;
+    border-color: rgb(var(--color-border) / 0.74);
+    background: rgb(var(--color-surface));
+  }
+
+  .app-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-field border px-4 py-2.5 text-sm font-semibold transition duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .app-button-primary {
+    @apply border-primary bg-primary text-primary-contrast hover:bg-primary/90;
+  }
+
+  .app-button-secondary {
+    @apply border-border bg-field-surface text-text hover:bg-surface;
+  }
+
+  .app-button-ghost {
+    @apply border-transparent bg-transparent text-text-muted hover:bg-toolbar-surface hover:text-text;
+  }
+
+  .app-button-danger {
+    @apply border-danger/20 bg-danger/10 text-danger hover:bg-danger/15;
+  }
+
+  .app-field-label {
+    @apply mb-2 block text-sm font-semibold text-text;
+  }
+
+  .app-input,
+  .app-select,
+  .app-textarea {
+    @apply w-full rounded-field border border-border bg-field-surface px-4 py-3 text-sm text-text outline-none transition placeholder:text-text-muted/80 focus:border-primary focus:ring-2 focus:ring-primary/20;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 12px 26px rgb(var(--color-border-strong) / 0.06);
+  }
+
+  .app-select {
+    @apply appearance-none bg-[linear-gradient(45deg,transparent_50%,rgb(var(--color-text-muted))_50%),linear-gradient(135deg,rgb(var(--color-text-muted))_50%,transparent_50%)] bg-[position:calc(100%-18px)_calc(50%-2px),calc(100%-12px)_calc(50%-2px)] bg-[size:6px_6px,6px_6px] bg-no-repeat pr-10;
+  }
+
+  .app-textarea {
+    @apply min-h-[120px] resize-y;
+  }
+
+  .app-input-shell {
+    @apply flex items-center gap-3 rounded-field border border-border bg-field-surface px-4 py-3 transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 12px 26px rgb(var(--color-border-strong) / 0.06);
+  }
+
+  .app-input-shell .app-input {
+    @apply border-none bg-transparent p-0 ring-0 focus:border-none focus:ring-0;
+  }
+
+  .app-segmented {
+    @apply inline-flex flex-wrap gap-2 rounded-field border border-border bg-toolbar-surface p-2;
+  }
+
+  .app-segmented-item {
+    @apply rounded-field px-4 py-2 text-sm font-semibold text-text-muted transition;
+  }
+
+  .app-segmented-item-active {
+    @apply bg-surface text-text shadow-soft;
+  }
+
+  .app-avatar {
+    @apply overflow-hidden rounded-full border border-border/70 bg-surface-raised;
+  }
+
+  .app-avatar-fallback {
+    @apply flex h-full w-full items-center justify-center bg-primary/10 font-semibold text-primary;
+  }
+
+  .app-toast {
+    @apply panel-surface flex items-start gap-3 px-4 py-3;
+  }
+
+  .section-shell {
+    width: 100%;
+    max-width: var(--layout-page-max-width);
+    margin-right: auto;
+    margin-left: auto;
+    padding-right: var(--layout-page-padding-inline);
+    padding-left: var(--layout-page-padding-inline);
+  }
+
+  .text-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.24em] text-text-muted;
+  }
+
+  .display-title {
+    font-family: var(--font-display);
+    font-size: var(--font-size-title);
+    line-height: 1.1;
+  }
+
+  .soft-grid {
+    background-image:
+      linear-gradient(rgba(var(--color-border), 0.18) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(var(--color-border), 0.18) 1px, transparent 1px);
+    background-position: center;
+    background-size: 42px 42px;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded-pill border px-3 py-1 text-xs font-semibold;
+  }
+
+  .subroute-transition-shell {
+    min-width: 0;
+  }
+
+  .subroute-slide-enter-active,
+  .subroute-slide-leave-active {
+    transition:
+      opacity 0.22s ease,
+      transform 0.22s ease;
+  }
+
+  .subroute-slide-enter-from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  .subroute-slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .subroute-slide-enter-active,
+    .subroute-slide-leave-active {
+      transition: opacity 0.12s ease;
+    }
+
+    .subroute-slide-enter-from,
+    .subroute-slide-leave-to {
+      transform: none;
+    }
+  }
+}
+
+@media (min-width: 640px) {
+  :root {
+    --layout-page-padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --layout-page-padding-inline: 2rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  :root {
+    --layout-page-padding-inline: 2.5rem;
+  }
+}
+
+/*
+ * 文字選取策略。
+ * 1. 全站文字預設允許複製，包含按鈕、連結與資料表內容。
+ * 2. 圖片與媒體保持不可拖選，避免影響圖片預覽與點擊操作。
+ */
+#app :where(*, *::before, *::after) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#app :where(button, a, [role='button'], label) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#app :where(img, canvas, video, svg[aria-hidden='true'], .app-icon, .home-carousel, .home-carousel *) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
