@@ -9,6 +9,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,6 +25,7 @@ import (
 const (
 	posPaymentDefaultCurrency      = "HKD"
 	posPaymentDefaultExpireSeconds = 180
+	posPaymentRewardPointRate      = int64(1)
 )
 
 // 1. POSPaymentService handles POS property payment data.
@@ -320,6 +322,9 @@ func (s *POSPaymentService) GetH5Order(ctx context.Context, userID int64, mchOrd
 		if err := s.ensureH5OrderVisibleByDetail(ctx, mchOrderNo, contextValue, refresh); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.creditPOSPaymentReward(ctx, userID, result); err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -670,4 +675,72 @@ func sanitizePOSGatewayRequestOverrides(payChannel string, overrides map[string]
 		result["walletType"] = walletType
 	}
 	return result
+}
+
+// 27. creditPOSPaymentReward credits AJO Points once when an H5 order is paid.
+func (s *POSPaymentService) creditPOSPaymentReward(ctx context.Context, userID int64, order map[string]any) error {
+	if s.runtime.WalletService == nil || !posH5OrderPaid(order) {
+		return nil
+	}
+	orderNo := posH5OrderNo(order)
+	if orderNo == "" {
+		return nil
+	}
+	points := posPaymentRewardPoints(order)
+	if points <= 0 {
+		return nil
+	}
+
+	return s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_, err := s.runtime.WalletService.CreditPointsWithTx(ctx, tx, WalletCreditParams{
+			UserID:         userID,
+			Amount:         points,
+			SourceType:     WalletSourcePOSPayment,
+			BizModule:      "payment",
+			ActionType:     WalletActionPOSReward,
+			IdempotencyKey: "pos_payment_reward:" + orderNo,
+			Note:           fmt.Sprintf("POS payment reward %s", orderNo),
+		})
+		return err
+	})
+}
+
+// 28. posH5OrderPaid checks whether a POS H5 order has reached paid state.
+func posH5OrderPaid(order map[string]any) bool {
+	state := strings.ToLower(paymentFirstNonEmpty(
+		paymentStringValue(order["state"]),
+		paymentStringValue(order["status"]),
+		paymentStringValue(order["business_state"]),
+		paymentStringValue(order["gateway_state"]),
+		paymentStringValue(order["gateway_state_code"]),
+	))
+	return state == "success" || state == "succeeded" || state == "paid" || state == "2"
+}
+
+// 29. posH5OrderNo reads the merchant order number.
+func posH5OrderNo(order map[string]any) string {
+	return paymentFirstNonEmpty(
+		paymentStringValue(order["mch_order_no"]),
+		paymentStringValue(order["mchOrderNo"]),
+		paymentStringValue(order["order_no"]),
+		paymentStringValue(order["pay_order_id"]),
+		paymentStringValue(order["payOrderId"]),
+	)
+}
+
+// 30. posPaymentRewardPoints converts paid HKD amount into reward points.
+func posPaymentRewardPoints(order map[string]any) int64 {
+	for _, key := range []string{"amount_hkd", "paid_amount_hkd"} {
+		value, err := strconv.ParseFloat(strings.TrimSpace(paymentStringValue(order[key])), 64)
+		if err == nil && value > 0 {
+			return int64(value) * posPaymentRewardPointRate
+		}
+	}
+	for _, key := range []string{"final_amount", "amount", "paid_amount", "total_amount"} {
+		value, err := strconv.ParseInt(strings.TrimSpace(paymentStringValue(order[key])), 10, 64)
+		if err == nil && value > 0 {
+			return (value / 100) * posPaymentRewardPointRate
+		}
+	}
+	return 0
 }

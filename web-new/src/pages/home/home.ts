@@ -242,7 +242,7 @@ export const buildHomeLandingContent = (
       },
       secondaryAction: {
         label: t('home.landing.modules.property_sale.secondaryAction'),
-        to: '/properties/my/new',
+        to: '/account/properties/sale/new',
         variant: 'secondary',
       },
       gridEyebrow: t('home.landing.modules.property_sale.gridEyebrow'),
@@ -296,7 +296,7 @@ export const buildHomeLandingContent = (
       },
       secondaryAction: {
         label: t('home.landing.modules.serviced_apartment.secondaryAction'),
-        to: '/serviced-residences/my/new',
+        to: '/account/properties/serviced-residences/new',
         variant: 'secondary',
       },
       gridEyebrow: t('home.landing.modules.serviced_apartment.gridEyebrow'),

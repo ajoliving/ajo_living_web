@@ -55,7 +55,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
       {
         path: 'publish',
         redirect: (to) => ({
-          path: '/account/marketplace/my/new',
+          path: '/account/listings/new',
           query: to.query,
           hash: to.hash,
         }),
@@ -63,7 +63,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
       {
         path: 'my-listings',
         redirect: (to) => ({
-          path: '/account/marketplace/my/listings',
+          path: '/account/listings',
           query: to.query,
           hash: to.hash,
         }),
@@ -72,8 +72,8 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
         path: 'my-listings/editor/:listingId?',
         redirect: (to) => ({
           path: to.params.listingId
-            ? `/account/marketplace/my/editor/${String(to.params.listingId)}`
-            : '/account/marketplace/my/new',
+            ? `/account/listings/editor/${String(to.params.listingId)}`
+            : '/account/listings/new',
           query: to.query,
           hash: to.hash,
         }),
@@ -81,7 +81,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
       {
         path: 'my-listings/preview/:listingId',
         redirect: (to) => ({
-          path: `/account/marketplace/my/listing/${String(to.params.listingId)}`,
+          path: `/account/listings/item/${String(to.params.listingId)}`,
           query: to.query,
           hash: to.hash,
         }),
@@ -90,8 +90,8 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
         path: 'chat/:conversationId?',
         redirect: (to) => ({
           path: to.params.conversationId
-            ? `/account/marketplace/my/chat/${String(to.params.conversationId)}`
-            : '/account/marketplace/my/chat',
+            ? `/account/chat/${String(to.params.conversationId)}`
+            : '/account/chat',
           query: to.query,
           hash: to.hash,
         }),

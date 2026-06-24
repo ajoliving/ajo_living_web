@@ -121,30 +121,28 @@ const isNavActive = (item: MyNavItem): boolean =>
 .marketplace-my-hub {
   display: grid;
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  gap: 1.25rem;
+  max-width: 1180px;
+  gap: 1rem;
   margin: 0 auto;
-  padding: 1rem var(--layout-page-padding-inline) 5rem;
+  padding: 0.75rem var(--layout-page-padding-inline) 4rem;
   color: rgb(var(--color-text));
 }
 
 .marketplace-my-hub__sidebar {
   --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
-  --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
-  --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
   display: grid;
   align-content: start;
-  gap: 1.5rem;
+  gap: 1.25rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 1rem;
+  padding: 0.95rem;
 }
 
 .marketplace-my-hub__kicker {
   margin: 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   line-height: 1;
@@ -155,36 +153,36 @@ const isNavActive = (item: MyNavItem): boolean =>
   margin: 0.75rem 0 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.55rem;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.22;
 }
 
 .marketplace-my-hub__description {
-  margin: 0.65rem 0 0;
+  margin: 0.55rem 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
-  line-height: 1.7;
+  font-size: 0.8125rem;
+  line-height: 1.65;
 }
 
 .marketplace-my-hub__nav {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .marketplace-my-hub__nav-item {
   position: relative;
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 2.45rem;
   width: 100%;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
-  padding: 0.65rem 0.85rem;
+  padding: 0.55rem 0.72rem;
   color: rgb(var(--color-text) / 0.78);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1;
   transition:
@@ -203,32 +201,6 @@ const isNavActive = (item: MyNavItem): boolean =>
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary-soft));
   color: var(--subroute-nav-active-color);
-  box-shadow:
-    0 14px 32px rgb(var(--color-primary) / 0.1),
-    inset 0 1px 0 rgb(255 255 255 / 0.1);
-  text-shadow: var(--subroute-nav-active-shadow);
-}
-
-.marketplace-my-hub__nav-item::after {
-  position: absolute;
-  left: 0.85rem;
-  right: 0.85rem;
-  bottom: 0.42rem;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--subroute-nav-underline);
-  transform: scaleX(0);
-  transform-origin: left center;
-  opacity: 0;
-  transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
-  content: '';
-}
-
-.marketplace-my-hub__nav-item--active::after {
-  transform: scaleX(1);
-  opacity: 1;
 }
 
 .marketplace-my-hub__content {
@@ -237,13 +209,13 @@ const isNavActive = (item: MyNavItem): boolean =>
 
 @media (min-width: 1024px) {
   .marketplace-my-hub {
-    grid-template-columns: 15.75rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     align-items: start;
   }
 
   .marketplace-my-hub__sidebar {
     position: sticky;
-    top: calc(var(--app-header-offset, 0rem) + 2rem);
+    top: calc(var(--app-header-offset, 0rem) + 1rem);
   }
 }
 

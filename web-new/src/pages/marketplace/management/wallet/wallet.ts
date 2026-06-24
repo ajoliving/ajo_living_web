@@ -31,7 +31,11 @@ import { buildUploadHeaders } from '@/utils/upload';
 import { formatAjoPoints } from '@/utils/wallet';
 
 type WalletDirectionFilter = '' | 'credit' | 'debit';
+export type RewardAdType = 'reward' | 'display';
 export type RewardAdMediaType = 'image' | 'video';
+export type RewardAdDisplayChannel = 'property_sale' | 'serviced_apartment' | 'furniture' | '';
+export type RewardAdDisplayPlacement = 'listing_side' | '';
+export type RewardAdDisplayLayout = 'image_full' | 'image_text' | 'text_compact';
 
 export interface GrantForm {
   userId: string;
@@ -48,6 +52,7 @@ export interface StaffWalletGrantRow {
 
 export interface RewardAdForm {
   taskId: string;
+  adType: RewardAdType;
   title: string;
   summary: string;
   mediaURL: string;
@@ -55,6 +60,10 @@ export interface RewardAdForm {
   mediaFile?: File;
   mediaPreviewURL: string;
   targetURL: string;
+  displayChannel: RewardAdDisplayChannel;
+  displayPlacement: RewardAdDisplayPlacement;
+  displayLayout: RewardAdDisplayLayout;
+  sortOrder: number;
   rewardPoints: number;
   watchSeconds: number;
   retentionDays: number;
@@ -67,6 +76,7 @@ const advertisementVideoObjectPrefix = 'ajo_living/advertisements/video/';
 // 1. 建立空廣告表單
 export const emptyRewardAdForm = (): RewardAdForm => ({
   taskId: '',
+  adType: 'reward',
   title: '',
   summary: '',
   mediaURL: '',
@@ -74,6 +84,10 @@ export const emptyRewardAdForm = (): RewardAdForm => ({
   mediaFile: undefined,
   mediaPreviewURL: '',
   targetURL: '',
+  displayChannel: '',
+  displayPlacement: '',
+  displayLayout: 'image_text',
+  sortOrder: 1,
   rewardPoints: 50,
   watchSeconds: 30,
   retentionDays: 30,
@@ -220,7 +234,7 @@ export const useRewardAdEditorPage = () => {
   };
 
   const stageRewardAdMedia = (file: File): void => {
-    const expectedType = adForm.mediaType;
+    const expectedType = adForm.adType === 'display' ? 'image' : adForm.mediaType;
     if (expectedType === 'image' && !file.type.startsWith('image/')) {
       feedbackStore.pushToast(t('marketplace.management.walletAdImageRequired'), 'error');
       return;
@@ -277,11 +291,34 @@ export const useRewardAdEditorPage = () => {
       if (loadingAd.value) {
         return;
       }
+      if (adForm.adType === 'display') {
+        adForm.mediaType = 'image';
+        return;
+      }
       revokeRewardAdPreview(adForm);
       adForm.mediaFile = undefined;
       adForm.mediaURL = '';
     },
     { flush: 'sync' },
+  );
+
+  watch(
+    () => adForm.adType,
+    () => {
+      if (loadingAd.value) {
+        return;
+      }
+      if (adForm.adType === 'display') {
+        adForm.mediaType = 'image';
+        adForm.displayPlacement = 'listing_side';
+        if (!adForm.displayChannel) {
+          adForm.displayChannel = 'property_sale';
+        }
+      } else {
+        adForm.displayChannel = '';
+        adForm.displayPlacement = '';
+      }
+    },
   );
 
   onMounted(() => {
@@ -413,6 +450,7 @@ export const useWalletTransactionPage = () => {
 const applyRewardAdToForm = (ad: StaffRewardAdResponse, form: RewardAdForm): void => {
   revokeRewardAdPreview(form);
   form.taskId = ad.task_id;
+  form.adType = ad.ad_type;
   form.title = ad.title;
   form.summary = ad.summary;
   form.mediaURL = ad.media_url;
@@ -420,6 +458,10 @@ const applyRewardAdToForm = (ad: StaffRewardAdResponse, form: RewardAdForm): voi
   form.mediaFile = undefined;
   form.mediaPreviewURL = '';
   form.targetURL = ad.target_url;
+  form.displayChannel = ad.display_channel || '';
+  form.displayPlacement = ad.display_placement || '';
+  form.displayLayout = ad.display_layout || 'image_text';
+  form.sortOrder = ad.sort_order;
   form.rewardPoints = ad.reward_points;
   form.watchSeconds = ad.watch_seconds;
   form.retentionDays = resolveRetentionDays(ad.ends_at);
@@ -428,14 +470,19 @@ const applyRewardAdToForm = (ad: StaffRewardAdResponse, form: RewardAdForm): voi
 
 // 7. 建立廣告保存 payload
 const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffRewardAdPayload => ({
+  ad_type: form.adType,
   title: form.title.trim(),
   summary: form.summary.trim(),
   cover_url: '',
   media_url: mediaURL.trim(),
-  media_type: form.mediaType,
+  media_type: form.adType === 'display' ? 'image' : form.mediaType,
   target_url: form.targetURL.trim(),
-  reward_points: Number(form.rewardPoints),
-  watch_seconds: Number(form.watchSeconds),
+  display_channel: form.adType === 'display' ? form.displayChannel : '',
+  display_placement: form.adType === 'display' ? 'listing_side' : '',
+  display_layout: form.adType === 'display' ? form.displayLayout : 'image_text',
+  sort_order: Number(form.sortOrder),
+  reward_points: form.adType === 'display' ? 0 : Number(form.rewardPoints),
+  watch_seconds: form.adType === 'display' ? 0 : Number(form.watchSeconds),
   total_budget: 0,
   retention_days: Number(form.retentionDays),
   is_active: form.isActive,
@@ -444,11 +491,10 @@ const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffReward
 // 8. 判斷廣告表單是否可提交
 const isRewardAdFormValid = (form: RewardAdForm, isEditingAd: boolean): boolean =>
   form.title.trim().length > 0 &&
-  form.summary.trim().length > 0 &&
-  Number.isFinite(Number(form.rewardPoints)) &&
-  Number(form.rewardPoints) > 0 &&
-  Number.isFinite(Number(form.watchSeconds)) &&
-  Number(form.watchSeconds) > 0 &&
+  (form.adType === 'display' || form.summary.trim().length > 0) &&
+  (form.adType === 'display' || (Number.isFinite(Number(form.rewardPoints)) && Number(form.rewardPoints) > 0)) &&
+  (form.adType === 'display' || (Number.isFinite(Number(form.watchSeconds)) && Number(form.watchSeconds) > 0)) &&
+  (form.adType === 'reward' || (form.displayChannel.length > 0 && form.displayPlacement.length > 0 && form.displayLayout.length > 0)) &&
   Number.isFinite(Number(form.retentionDays)) &&
   Number(form.retentionDays) > 0 &&
   (Boolean(form.mediaFile) || (isEditingAd && form.mediaURL.trim().length > 0));

@@ -1,559 +1,582 @@
 <!--
  * 首頁入口頁。
- * 1. 依照桌面 HTML 參考還原首頁 Hero、探索服務與精選樓盤區塊。
- * 2. 將原型 onclick 對應為 Vue Router 路由跳轉。
- * 3. 保留首頁摘要 API 讀取作為資料連接狀態。
+ * 1. HERO 區：暗色漸層背景 + SVG 城市剪影 + 標題與雙按鈕。
+ * 2. 探索服務區：4 個分類卡片（樓盤租售、服務式住宅、家具市集、綜合優惠）。
+ * 3. 精選樓盤區：3 個樓盤卡片（圖片 + 標籤 + 標題 + 價格 + 面積）。
+ * 4. 全部使用靜態 mock 資料，不呼叫 API。
 -->
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
-import { RouterLink } from 'vue-router';
-import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 
-import { fetchChannelHomeOverview } from '@/httpapis/home';
-import { useFeedbackStore } from '@/stores/feedback';
+type HomeTarget = 'listing' | 'service' | 'market' | 'offers' | 'detail';
 
-interface HomeServiceLink {
-  key: string;
-  iconText: string;
-  title: string;
-  description: string;
-  to: string;
+interface CategoryCard {
+  key: HomeTarget;
+  name: string;
+  desc: string;
 }
 
-interface HomeFeaturedProperty {
+interface FeaturedTag {
+  label: string;
+  dark: boolean;
+}
+
+interface FeaturedCard {
   key: string;
+  tags: FeaturedTag[];
   title: string;
   price: string;
-  suffix: string;
-  tags: string[];
-  isHot: boolean;
-  imageTone: 'neutral' | 'slate' | 'warm';
-  imageSize: 'tall' | 'short';
-  to: string;
+  unit: string;
+  area: string;
+  imgClass: 'tall' | 'short';
+  bg: string;
 }
 
-const { t } = useI18n();
-const feedbackStore = useFeedbackStore();
-
-// 1. 組合首頁服務入口
-const serviceLinks = computed<HomeServiceLink[]>(() => [
-  {
-    key: 'propertySale',
-    iconText: '🏢',
-    title: t('home.newShell.services.propertySale.title'),
-    description: t('home.newShell.services.propertySale.description'),
-    to: '/properties',
-  },
-  {
-    key: 'servicedResidence',
-    iconText: '🏨',
-    title: t('home.newShell.services.servicedResidence.title'),
-    description: t('home.newShell.services.servicedResidence.description'),
-    to: '/serviced-residences',
-  },
-  {
-    key: 'furniture',
-    iconText: '🛋️',
-    title: t('home.newShell.services.furniture.title'),
-    description: t('home.newShell.services.furniture.description'),
-    to: '/furniture',
-  },
-  {
-    key: 'offers',
-    iconText: '🎁',
-    title: t('home.newShell.services.offers.title'),
-    description: t('home.newShell.services.offers.description'),
-    to: '/supermarket-offers',
-  },
-]);
-
-// 2. 組合精選樓盤卡片
-const featuredProperties = computed<HomeFeaturedProperty[]>(() => [
-  {
-    key: 'jordan',
-    title: t('home.newShell.featured.jordan.title'),
-    price: t('home.newShell.featured.jordan.price'),
-    suffix: t('home.newShell.featured.priceSuffix'),
-    tags: [
-      t('home.newShell.featured.tags.hot'),
-      t('home.newShell.featured.tags.kowloon'),
-    ],
-    isHot: true,
-    imageTone: 'neutral',
-    imageSize: 'tall',
-    to: '/properties',
-  },
-  {
-    key: 'central',
-    title: t('home.newShell.featured.central.title'),
-    price: t('home.newShell.featured.central.price'),
-    suffix: t('home.newShell.featured.priceSuffix'),
-    tags: [
-      t('home.newShell.featured.tags.hongKongIsland'),
-      t('home.newShell.featured.tags.office'),
-    ],
-    isHot: false,
-    imageTone: 'slate',
-    imageSize: 'short',
-    to: '/properties',
-  },
-  {
-    key: 'shatin',
-    title: t('home.newShell.featured.shatin.title'),
-    price: t('home.newShell.featured.shatin.price'),
-    suffix: t('home.newShell.featured.priceSuffix'),
-    tags: [
-      t('home.newShell.featured.tags.owner'),
-      t('home.newShell.featured.tags.newTerritories'),
-    ],
-    isHot: true,
-    imageTone: 'warm',
-    imageSize: 'tall',
-    to: '/properties',
-  },
-]);
-
-// 3. 讀取首頁摘要資料
-const loadHomeOverview = async (): Promise<void> => {
-  try {
-    await fetchChannelHomeOverview();
-  } catch {
-    feedbackStore.pushToast(t('home.loadError'), 'error');
-  }
+// 1. 路由跳轉
+const router = useRouter();
+const go = (target: HomeTarget): void => {
+  const routeMap: Record<HomeTarget, string> = {
+    listing: '/properties',
+    service: '/serviced-residences',
+    market: '/furniture',
+    offers: '/supermarket-offers',
+    detail: '/properties/1',
+  };
+  void router.push(routeMap[target]);
 };
 
-// 4. 初始化首頁資料
-onMounted(() => {
-  void loadHomeOverview();
-});
+// 2. 探索服務分類靜態資料
+const categories: CategoryCard[] = [
+  { key: 'listing', name: '樓盤租售', desc: '住宅、商廈、車位一應俱全' },
+  { key: 'service', name: '服務式住宅', desc: '短期靈活入住，設施齊備' },
+  { key: 'market', name: '家具市集', desc: '社區二手好物交易平台' },
+  { key: 'offers', name: '綜合優惠', desc: '住戶專屬折扣與生活禮遇' },
+];
+
+// 3. 精選樓盤靜態資料
+const featured: FeaturedCard[] = [
+  {
+    key: 'feat-1',
+    tags: [
+      { label: '熱門', dark: true },
+      { label: '九龍', dark: false },
+    ],
+    title: '佐敦 高級住宅',
+    price: 'HK$36,000',
+    unit: '/ 月',
+    area: '實用面積 200呎',
+    imgClass: 'tall',
+    bg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
+  },
+  {
+    key: 'feat-2',
+    tags: [
+      { label: '香港島', dark: false },
+      { label: '商廈', dark: false },
+    ],
+    title: '中環甲級寫字樓',
+    price: 'HK$120,000',
+    unit: '/ 月',
+    area: '實用面積 2,400呎',
+    imgClass: 'short',
+    bg: 'linear-gradient(160deg,#e0e0e8,#c8c8d8)',
+  },
+  {
+    key: 'feat-3',
+    tags: [
+      { label: '業主盤', dark: true },
+      { label: '新界', dark: false },
+    ],
+    title: '沙田第一城 3房',
+    price: 'HK$18,500',
+    unit: '/ 月',
+    area: '實用面積 650呎',
+    imgClass: 'tall',
+    bg: 'linear-gradient(160deg,#e4dcd8,#ccc0bc)',
+  },
+];
 </script>
 
 <template>
-  <main class="home-page">
-    <section class="home-hero">
-      <div class="home-hero__bg home-pattern">
+  <main class="page-home">
+    <!-- 1. HERO -->
+    <section class="hero">
+      <div class="hero-bg pat">
         <svg
-          class="home-hero__skyline"
+          class="hero-skyline"
           viewBox="0 0 800 420"
           preserveAspectRatio="xMidYMid slice"
           aria-hidden="true"
         >
-          <rect x="0" y="280" width="60" height="140" />
-          <rect x="70" y="200" width="80" height="220" />
-          <rect x="160" y="240" width="55" height="180" />
-          <rect x="225" y="160" width="100" height="260" />
-          <rect x="335" y="210" width="70" height="210" />
-          <rect x="415" y="140" width="110" height="280" />
-          <rect x="535" y="190" width="75" height="230" />
-          <rect x="620" y="220" width="55" height="200" />
-          <rect x="685" y="170" width="90" height="250" />
-          <rect x="785" y="200" width="15" height="220" />
+          <rect x="0" y="280" width="60" height="140" fill="white" />
+          <rect x="70" y="200" width="80" height="220" fill="white" />
+          <rect x="160" y="240" width="55" height="180" fill="white" />
+          <rect x="225" y="160" width="100" height="260" fill="white" />
+          <rect x="335" y="210" width="70" height="210" fill="white" />
+          <rect x="415" y="140" width="110" height="280" fill="white" />
+          <rect x="535" y="190" width="75" height="230" fill="white" />
+          <rect x="620" y="220" width="55" height="200" fill="white" />
+          <rect x="685" y="170" width="90" height="250" fill="white" />
+          <rect x="785" y="200" width="15" height="220" fill="white" />
         </svg>
-
-        <div class="home-hero__content">
-          <p class="home-hero__eyebrow">
-            {{ t('home.newShell.eyebrow') }}
+        <div class="hero-content">
+          <div class="hero-eyebrow">AJO LIVING</div>
+          <h1 class="hero-title">理想生活<br />由此出發</h1>
+          <p class="hero-desc">
+            全港最大社區生活平台，搜尋住宅、服務式公寓、家具及生活優惠，一站式滿足您的所有需要。
           </p>
-          <h1>
-            {{ t('home.newShell.titleLineOne') }}<br />
-            {{ t('home.newShell.titleLineTwo') }}
-          </h1>
-          <p class="home-hero__desc">
-            {{ t('home.newShell.subtitle') }}
-          </p>
-          <div class="home-hero__actions">
-            <RouterLink
-              to="/properties"
-              class="home-button home-button--primary"
-            >
-              {{ t('home.newShell.primaryAction') }}
-            </RouterLink>
-            <RouterLink
-              to="/serviced-residences"
-              class="home-button home-button--ghost"
-            >
-              {{ t('home.newShell.secondaryAction') }}
-            </RouterLink>
+          <div class="hero-btns">
+            <button class="hbtn-primary" type="button" @click="go('listing')">
+              搜尋樓盤
+            </button>
+            <button class="hbtn-ghost" type="button" @click="go('service')">
+              了解服務
+            </button>
           </div>
         </div>
       </div>
     </section>
 
+    <!-- 2. 探索服務 -->
     <section class="home-section">
-      <h2 class="home-section__title">
-        {{ t('home.newShell.serviceTitle') }}
-      </h2>
-      <div class="home-category-grid">
-        <RouterLink
-          v-for="service in serviceLinks"
-          :key="service.key"
-          :to="service.to"
-          class="home-category-card"
+      <div class="home-sec-title">探索服務</div>
+      <div class="cat-grid">
+        <div
+          v-for="cat in categories"
+          :key="cat.key"
+          class="cat-card"
+          role="button"
+          tabindex="0"
+          @click="go(cat.key)"
+          @keyup.enter="go(cat.key)"
         >
-          <span class="home-category-card__icon">
-            {{ service.iconText }}
-          </span>
-          <strong>{{ service.title }}</strong>
-          <small>{{ service.description }}</small>
-        </RouterLink>
+          <div class="cat-icon">
+            <svg
+              viewBox="0 0 32 32"
+              width="28"
+              height="28"
+              aria-hidden="true"
+            >
+              <rect
+                x="4"
+                y="10"
+                width="24"
+                height="18"
+                rx="1"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <path
+                d="M8 10V6h16v4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <line
+                x1="12"
+                y1="16"
+                x2="20"
+                y2="16"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <line
+                x1="12"
+                y1="20"
+                x2="20"
+                y2="20"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+          </div>
+          <div class="cat-name">{{ cat.name }}</div>
+          <div class="cat-desc">{{ cat.desc }}</div>
+        </div>
       </div>
     </section>
 
-    <section class="home-section home-section--featured">
-      <h2 class="home-section__title">
-        {{ t('home.newShell.featuredTitle') }}
-      </h2>
-      <div class="home-featured-grid">
-        <RouterLink
-          v-for="item in featuredProperties"
-          :key="item.key"
-          :to="item.to"
-          class="home-featured-card"
+    <!-- 3. 精選樓盤 -->
+    <section class="home-section home-section--tint">
+      <div class="home-sec-title">精選樓盤</div>
+      <div class="feat-grid">
+        <div
+          v-for="feat in featured"
+          :key="feat.key"
+          class="feat-card"
+          role="button"
+          tabindex="0"
+          @click="go('detail')"
+          @keyup.enter="go('detail')"
         >
           <div
-            class="home-featured-card__image home-pattern"
-            :class="[
-              `home-featured-card__image--${item.imageTone}`,
-              `home-featured-card__image--${item.imageSize}`,
-            ]"
-          />
-          <div class="home-featured-card__body">
-            <div class="home-tag-row">
+            class="feat-img pat"
+            :class="feat.imgClass"
+            :style="{ background: feat.bg }"
+          ></div>
+          <div class="feat-body">
+            <div class="gtags">
               <span
-                v-for="tag in item.tags"
-                :key="tag"
-                class="home-tag"
-                :class="{ 'home-tag--dark': item.isHot && tag === item.tags[0] }"
-              >
-                {{ tag }}
-              </span>
+                v-for="(tag, idx) in feat.tags"
+                :key="idx"
+                class="gtag"
+                :class="{ dark: tag.dark }"
+              >{{ tag.label }}</span>
             </div>
-            <strong>{{ item.title }}</strong>
-            <p>
-              {{ item.price }}
-              <span>{{ item.suffix }}</span>
-            </p>
+            <div class="gtitle">{{ feat.title }}</div>
+            <div class="gprice">
+              {{ feat.price }} <span>{{ feat.unit }}</span>
+            </div>
+            <div class="feat-area">{{ feat.area }}</div>
           </div>
-        </RouterLink>
+        </div>
       </div>
     </section>
   </main>
 </template>
 
 <style scoped>
-.home-page {
+.page-home {
   background: rgb(var(--color-canvas));
   color: rgb(var(--color-text));
 }
 
-.home-pattern {
+/* HERO */
+.hero {
   position: relative;
-  overflow: hidden;
 }
 
-.home-pattern::after {
+.hero-bg {
+  position: relative;
+  min-height: 340px;
+  display: flex;
+  align-items: center;
+  padding: 60px 48px;
+  overflow: hidden;
+  background: linear-gradient(150deg, rgb(var(--color-text)) 0%, #2d2d2d 100%);
+  filter: brightness(0.85);
+}
+
+.hero-skyline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+}
+
+.hero-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: rgb(var(--color-ink-4));
+  margin-bottom: 14px;
+  animation: fadeUp 0.5s ease 0.1s both;
+}
+
+.hero-title {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: #ffffff;
+  animation: fadeUp 0.5s ease 0.25s both;
+}
+
+.hero-desc {
+  margin: 0 0 24px;
+  max-width: 380px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: rgb(var(--color-ink-4));
+  animation: fadeUp 0.5s ease 0.4s both;
+}
+
+.hero-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  animation: fadeUp 0.5s ease 0.55s both;
+}
+
+.hbtn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  background: rgb(var(--color-primary));
+  border: 1px solid rgb(var(--color-primary));
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.hbtn-primary:hover {
+  background: rgb(var(--color-brand-dark));
+  border-color: rgb(var(--color-brand-dark));
+}
+
+.hbtn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.hbtn-ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: #ffffff;
+}
+
+/* HOME SECTION */
+.home-section {
+  padding: 32px 40px;
+}
+
+.home-section--tint {
+  padding-top: 32px;
+  padding-bottom: 32px;
+  background: rgb(var(--color-surface-2));
+}
+
+.home-sec-title {
+  margin-bottom: 16px;
+  padding-left: 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: rgb(var(--color-text));
+  border-left: 3px solid rgb(var(--color-primary));
+}
+
+/* CATEGORIES */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.cat-card {
+  padding: 20px 16px;
+  background: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 12px;
+  cursor: pointer;
+  outline: none;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.cat-card:hover,
+.cat-card:focus-visible {
+  border-color: rgb(var(--color-brand-mid));
+  box-shadow: var(--shadow-raised);
+}
+
+.cat-icon {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  color: rgb(var(--color-primary));
+}
+
+.cat-name {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--color-text));
+}
+
+.cat-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgb(var(--color-ink-3));
+}
+
+/* FEATURED */
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.feat-card {
+  overflow: hidden;
+  background: rgb(var(--color-surface));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 12px;
+  cursor: pointer;
+  outline: none;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.feat-card:hover,
+.feat-card:focus-visible {
+  border-color: rgb(var(--color-brand-mid));
+  box-shadow: var(--shadow-raised);
+}
+
+.feat-img {
+  width: 100%;
+}
+
+.feat-img.tall {
+  height: 140px;
+}
+
+.feat-img.short {
+  height: 100px;
+}
+
+.feat-body {
+  padding: 12px;
+}
+
+.gtags {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.gtag {
+  padding: 1px 5px;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: rgb(var(--color-ink-3));
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 1px;
+}
+
+.gtag.dark {
+  font-weight: 500;
+  color: #ffffff;
+  background: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary));
+}
+
+.gtitle {
+  margin-bottom: 3px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgb(var(--color-text));
+}
+
+.gprice {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: -0.3px;
+  color: rgb(var(--color-text));
+}
+
+.gprice span {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgb(var(--color-ink-3));
+}
+
+.feat-area {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgb(var(--color-ink-3));
+}
+
+/* PATTERN OVERLAY */
+.pat {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pat::after {
+  content: '';
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
     45deg,
     transparent,
     transparent 5px,
-    rgb(0 0 0 / 0.025) 5px,
-    rgb(0 0 0 / 0.025) 10px
+    rgba(0, 0, 0, 0.025) 5px,
+    rgba(0, 0, 0, 0.025) 10px
   );
-  content: '';
   pointer-events: none;
 }
 
-.home-hero {
-  position: relative;
-}
-
-.home-hero__bg {
-  display: flex;
-  position: relative;
-  min-height: 340px;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, #1a1a1a 0%, #2e2e2e 100%);
-  padding: 60px 48px;
-}
-
-.home-hero__skyline {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  fill: #ffffff;
-  opacity: 0.08;
-}
-
-.home-hero__content {
-  display: grid;
-  position: relative;
-  z-index: 1;
-  max-width: 500px;
-  justify-items: center;
-  text-align: center;
-}
-
-.home-hero__eyebrow {
-  margin: 0 0 14px;
-  animation: home-hero-enter 0.65s ease both;
-  color: #aaaaaa;
-  font-size: 10px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-}
-
-.home-hero h1 {
-  margin: 0 0 14px;
-  animation: home-hero-enter 0.65s ease 0.08s both;
-  color: #ffffff;
-  font-family: var(--font-display);
-  font-size: 44px;
-  font-weight: 400;
-  line-height: 1.15;
-}
-
-.home-hero__desc {
-  max-width: 380px;
-  margin: 0 0 24px;
-  animation: home-hero-enter 0.65s ease 0.16s both;
-  color: #aaaaaa;
-  font-size: 13px;
-  line-height: 1.8;
-}
-
-.home-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  animation: home-hero-enter 0.65s ease 0.24s both;
-}
-
-.home-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  padding: 10px 22px;
-}
-
-.home-button--primary {
-  border: 1px solid rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: #ffffff;
-}
-
-.home-button--ghost {
-  border: 1px solid rgb(255 255 255 / 0.5);
-  background: transparent;
-  color: #ffffff;
-}
-
-.home-button--ghost:hover {
-  border-color: rgb(255 255 255 / 0.7);
-}
-
-.home-section {
-  padding: 32px 40px;
-}
-
-.home-section--featured {
-  background: #f4f4f4;
-  padding-top: 32px;
-  padding-bottom: 32px;
-}
-
-.home-section__title {
-  border-left: 3px solid rgb(var(--color-primary));
-  margin: 0 0 16px;
-  padding-left: 10px;
-  color: rgb(var(--color-text));
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-
-.home-category-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.home-category-card {
-  display: grid;
-  align-content: start;
-  min-height: 132px;
-  border: 1px solid #e4e4e4;
-  border-radius: 3px;
-  background: #ffffff;
-  padding: 20px 16px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.home-category-card:hover {
-  border-color: rgb(var(--color-primary));
-  box-shadow: 0 3px 14px rgb(240 90 0 / 0.15);
-}
-
-.home-category-card__icon {
-  display: inline-flex;
-  margin-bottom: 8px;
-  color: rgb(var(--color-primary));
-  font-size: 24px;
-  line-height: 1;
-}
-
-@keyframes home-hero-enter {
+/* ANIMATION */
+@keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(10px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.home-category-card strong {
-  margin-bottom: 4px;
-  color: #1a1a1a;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.home-category-card small {
-  color: #777777;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.home-featured-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.home-featured-card {
-  overflow: hidden;
-  border: 1px solid #e4e4e4;
-  border-radius: 3px;
-  background: #ffffff;
-  cursor: pointer;
-}
-
-.home-featured-card:hover {
-  box-shadow: 0 3px 14px rgb(240 90 0 / 0.15);
-}
-
-.home-featured-card__image {
-  width: 100%;
-}
-
-.home-featured-card__image--tall {
-  height: 140px;
-}
-
-.home-featured-card__image--short {
-  height: 100px;
-}
-
-.home-featured-card__image--neutral {
-  background: linear-gradient(160deg, #e8e8e8, #d0d0d0);
-}
-
-.home-featured-card__image--slate {
-  background: linear-gradient(160deg, #e0e0e8, #c8c8d8);
-}
-
-.home-featured-card__image--warm {
-  background: linear-gradient(160deg, #e4dcd8, #ccc0bc);
-}
-
-.home-featured-card__body {
-  padding: 12px;
-}
-
-.home-featured-card__body strong {
-  display: block;
-  margin-top: 5px;
-  color: #1a1a1a;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.home-featured-card__body p {
-  margin: 7px 0 0;
-  color: #1a1a1a;
-  font-size: 17px;
-  font-weight: 300;
-  letter-spacing: -0.3px;
-}
-
-.home-featured-card__body p span {
-  color: #777777;
-  font-size: 11px;
-  font-weight: 400;
-}
-
-.home-tag-row {
-  display: flex;
-  gap: 3px;
-}
-
-.home-tag {
-  border: 1px solid #e4e4e4;
-  border-radius: 1px;
-  color: #777777;
-  font-size: 9px;
-  letter-spacing: 0.8px;
-  padding: 1px 5px;
-}
-
-.home-tag--dark {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: #ffffff;
-  font-weight: 500;
-}
-
-@media (max-width: 1023px) {
-  .home-hero__bg {
-    padding: 48px 24px;
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .cat-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .home-category-grid,
-  .home-featured-grid {
+  .feat-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 640px) {
-  .home-hero__bg {
-    min-height: 330px;
-    padding: 42px 20px;
+  .hero-bg {
+    min-height: 280px;
+    padding: 40px 24px;
   }
 
-  .home-hero h1 {
-    font-size: 38px;
+  .hero-title {
+    font-size: 32px;
   }
 
   .home-section {
-    padding: 28px 18px;
+    padding: 24px 20px;
   }
 
-  .home-category-grid,
-  .home-featured-grid {
+  .cat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feat-grid {
     grid-template-columns: 1fr;
   }
 }

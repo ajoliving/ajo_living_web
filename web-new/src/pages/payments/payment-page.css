@@ -36,7 +36,7 @@
   margin: 0.75rem 0 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: clamp(1.9rem, 4vw, 2.85rem);
+  font-size: 24px;
   font-weight: 500;
   line-height: 1.14;
 }
@@ -183,6 +183,10 @@
 
 .pos-table--history {
   min-width: 64rem;
+}
+
+.pos-table--overview {
+  min-width: 40rem;
 }
 
 .pos-table th,
@@ -1428,5 +1432,289 @@
 
   .pos-table__expanded-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * 支付中心高保真統一覆蓋。
+ * 1. 對齊會員工作台的細邊框卡片與緊湊字級。
+ * 2. 統一支付子頁的表格、彈窗、表單與摘要卡密度。
+ */
+.pos-page {
+  max-width: none;
+  gap: 14px;
+  margin: 0;
+  padding: 0 0 64px;
+}
+
+.pos-page__header {
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.pos-page__header h1 {
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.pos-page__header span {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.pos-page__header--compact h1 {
+  font-size: 18px;
+}
+
+.pos-page__notice,
+.pos-page__empty,
+.pos-page__toolbar,
+.pos-page__panel,
+.pos-page__selector,
+.pos-row,
+.pos-order-card,
+.pos-qr-panel,
+.pos-order-card__system,
+.pos-order-card__qr,
+.pos-voucher-panel,
+.pos-detail-modal,
+.pos-detail-list div,
+.pos-mini-row,
+.pos-check-row,
+.pos-inline-status,
+.pos-summary div,
+.pos-checkout-modal__panel,
+.pos-date-popover,
+.pos-checkout-review article,
+.pos-checkout-steps button,
+.pos-checkout-method,
+.pos-unit-chip {
+  border-radius: 2px;
+}
+
+.pos-page__notice,
+.pos-page__empty,
+.pos-page__toolbar,
+.pos-page__panel,
+.pos-page__selector,
+.pos-row,
+.pos-order-card,
+.pos-qr-panel,
+.pos-order-card__system,
+.pos-order-card__qr,
+.pos-voucher-panel,
+.pos-detail-modal,
+.pos-detail-list div,
+.pos-mini-row,
+.pos-check-row,
+.pos-inline-status,
+.pos-summary div,
+.pos-date-popover,
+.pos-checkout-review article {
+  padding: 14px;
+}
+
+.pos-page__notice,
+.pos-page__empty {
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.pos-page__toolbar,
+.pos-page__panel,
+.pos-accounting-grid,
+.pos-order-list,
+.pos-detail-section,
+.pos-checkout-methods,
+.pos-checkout-review,
+.pos-checkout-final,
+.pos-unit-picker,
+.pos-voucher-grid,
+.pos-checkout-grid,
+.pos-summary,
+.pos-checkout-steps {
+  gap: 10px;
+}
+
+.pos-page__toolbar strong,
+.pos-section-head strong,
+.pos-row__main strong,
+.pos-order-card__top strong,
+.pos-summary strong,
+.pos-inline-status strong,
+.pos-check-row strong {
+  font-size: 13px;
+}
+
+.pos-page__toolbar span,
+.pos-section-head span,
+.pos-row__main span,
+.pos-order-card__meta time,
+.pos-order-card__qr p,
+.pos-order-card__system strong,
+.pos-voucher-card span,
+.pos-check-row small {
+  font-size: 12px;
+}
+
+.pos-page__selector {
+  gap: 12px;
+}
+
+.pos-page__selector span,
+.pos-checkout-grid span,
+.pos-checkout-remark span,
+.pos-detail-list dt,
+.pos-mini-row dt,
+.pos-table th,
+.pos-summary span,
+.pos-order-card__amount span,
+.pos-order-card__system span,
+.pos-inline-status span {
+  font-size: 10px;
+}
+
+.pos-table-wrap {
+  border-radius: 2px;
+}
+
+.pos-table th,
+.pos-table td {
+  padding: 10px 12px;
+}
+
+.pos-table td,
+.pos-detail-list dd,
+.pos-mini-row dd,
+.pos-table__expanded-grid dd,
+.pos-row dd,
+.pos-input,
+.pos-textarea,
+.pos-date-trigger,
+.pos-order-card__qr a,
+.pos-checkout-method span,
+.pos-checkout-review span {
+  font-size: 12px;
+}
+
+.pos-table strong,
+.pos-checkout-method strong,
+.pos-checkout-review strong,
+.pos-checkout-review b,
+.pos-order-card__amount b,
+.pos-order-card__qr > strong,
+.pos-mini-row > strong {
+  font-size: 13px;
+}
+
+.pos-table small {
+  font-size: 10px;
+}
+
+.pos-table__status,
+.pos-order-card__pill {
+  border: 1px solid rgb(var(--color-border));
+  font-size: 10px;
+  min-height: 24px;
+  padding: 0 8px;
+}
+
+.pos-table__expanded-panel {
+  gap: 12px;
+  padding: 16px;
+}
+
+.pos-table__expanded-grid,
+.pos-row dl,
+.pos-mini-row dl,
+.pos-detail-list {
+  gap: 12px;
+}
+
+.pos-table__expanded-grid div,
+.pos-voucher-card {
+  padding: 10px 12px;
+}
+
+.pos-voucher-card {
+  gap: 8px;
+}
+
+.pos-voucher-card img,
+.pos-order-card__qr img,
+.pos-qr-panel img {
+  border-radius: 2px;
+}
+
+.pos-checkout-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pos-input,
+.pos-textarea,
+.pos-date-trigger {
+  min-height: 38px;
+  border-radius: 2px;
+  padding: 10px 12px;
+}
+
+.pos-input--inline {
+  padding: 8px 10px;
+}
+
+.pos-date-popover__header strong,
+.pos-checkout-modal__header h2 {
+  font-size: 16px;
+}
+
+.pos-date-popover__day {
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.pos-date-popover__footer button,
+.pos-date-popover__nav {
+  border-radius: 2px;
+}
+
+.pos-unit-chip {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.pos-checkout-modal__panel {
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+}
+
+.pos-checkout-modal__header,
+.pos-checkout-modal__footer {
+  gap: 12px;
+  padding: 16px;
+}
+
+.pos-checkout-modal__close {
+  border-radius: 2px;
+}
+
+.pos-checkout-steps {
+  padding: 12px 16px;
+}
+
+.pos-checkout-steps button {
+  padding: 10px 12px;
+}
+
+.pos-checkout-method {
+  gap: 6px;
+  padding: 12px;
+}
+
+@media (max-width: 767px) {
+  .pos-page {
+    padding: 18px var(--layout-page-padding-inline) 96px;
   }
 }

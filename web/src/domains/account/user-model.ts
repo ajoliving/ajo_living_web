@@ -28,7 +28,31 @@ export interface UserProfile extends UserSummary {
 // 3. 定義當前會員社區資料
 export interface CurrentMemberCommunity extends MetaCommunity {}
 
-// 4. 定義當前會員資料
+// 4. 定義 iSmart 相關物業資料
+export interface IsmartRelatedProperty {
+  property_name: string;
+  status: string;
+}
+
+// 5. 定義 iSmart 舊系統帳號資料
+export interface IsmartAccountProfile {
+  account_code: string;
+  account_phone: string;
+  account_email: string;
+  owner_name_en: string;
+  owner_name_zh: string;
+  identity_number: string;
+  legal_entity: string;
+  gender: string;
+  birth_date: string;
+  contact_name: string;
+  contact_phone: string;
+  billing_email: string;
+  billing_address: string;
+  properties: IsmartRelatedProperty[];
+}
+
+// 6. 定義當前會員資料
 export interface CurrentMemberProfile {
   public_id: string;
   email: string;
@@ -57,9 +81,10 @@ export interface CurrentMemberProfile {
   ismart_password: string;
   local_password: string;
   ismart_msg?: IsmartMessage;
+  ismart_account_profile?: IsmartAccountProfile;
 }
 
-// 5. 定義 Staff 會員列表資料
+// 7. 定義 Staff 會員列表資料
 export interface StaffUserSummary {
   public_id: string;
   email: string;
@@ -82,7 +107,7 @@ export interface StaffUserSummary {
   updated_at: string;
 }
 
-// 6. 定義 Staff 新建會員帳戶請求
+// 8. 定義 Staff 新建會員帳戶請求
 export interface StaffUserCreatePayload {
   email: string;
   password: string;
@@ -98,7 +123,7 @@ export interface StaffUserCreatePayload {
   is_staff?: boolean;
 }
 
-// 7. 定義前端導覽用會員資料
+// 9. 定義前端導覽用會員資料
 export interface SessionUserView {
   public_id: string;
   display_name: string;

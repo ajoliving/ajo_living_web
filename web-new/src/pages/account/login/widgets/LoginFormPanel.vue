@@ -621,15 +621,16 @@ const toggleEmailLoginMethod = (): void => {
 
 <style scoped>
 .login-form-panel {
+  border-left: 1px solid rgb(var(--color-border) / 0.7);
   padding:
-    clamp(2.75rem, 6svh, 4rem)
-    clamp(1.5rem, 3vw, 2.25rem)
+    clamp(2.6rem, 5svh, 3.25rem)
+    clamp(1.8rem, 3vw, 2.5rem)
     clamp(1rem, 3svh, 1.5rem);
   box-shadow: none;
 }
 
 .login-form-brand {
-  gap: clamp(0.45rem, 1svh, 0.75rem);
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
@@ -640,18 +641,19 @@ const toggleEmailLoginMethod = (): void => {
 }
 
 .login-form-heading {
-  margin-bottom: clamp(0.8rem, 1.8svh, 1.25rem);
+  margin-bottom: clamp(0.9rem, 1.8svh, 1.25rem);
 }
 
 .login-form-heading h2 {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 400;
+  line-height: 1.2;
 }
 
 .login-form-heading p {
   color: rgb(var(--color-text-muted));
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.7;
 }
 
@@ -665,21 +667,21 @@ const toggleEmailLoginMethod = (): void => {
 }
 
 .login-form-input {
-  height: 38px;
+  height: 42px;
   border: 1px solid rgb(var(--color-border)) !important;
   border-radius: 2px !important;
   background: rgb(var(--color-surface)) !important;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  font-size: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 13px;
 }
 
 .login-submit-button {
-  min-height: 38px;
+  min-height: 42px;
   border-radius: 2px !important;
   box-shadow: none !important;
   padding-block: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .login-form-footer {
@@ -704,7 +706,7 @@ const toggleEmailLoginMethod = (): void => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
-  gap: 1.25rem;
+  gap: 1rem;
   border-bottom: 1px solid rgb(var(--color-border) / 0.75);
   padding-bottom: 0;
 }
@@ -715,12 +717,12 @@ const toggleEmailLoginMethod = (): void => {
 
 .login-mode-tab {
   position: relative;
-  padding: 0 0 0.7rem;
+  padding: 0 0 0.75rem;
   border: none;
   background: transparent;
   color: rgb(var(--color-text-muted));
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
   text-align: center;
   transition: color 160ms ease;
@@ -754,7 +756,7 @@ const toggleEmailLoginMethod = (): void => {
 :deep(label > span) {
   color: rgb(var(--color-text-muted)) !important;
   font-size: 10px !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
   letter-spacing: 0.14em !important;
 }
 
@@ -764,7 +766,7 @@ const toggleEmailLoginMethod = (): void => {
 
 @media (max-height: 760px) {
   .login-form-panel {
-    padding-top: clamp(3.75rem, 7svh, 4.6rem);
+    padding-top: clamp(3.25rem, 6svh, 4.1rem);
   }
 
   .login-form-heading h2 {
@@ -783,6 +785,7 @@ const toggleEmailLoginMethod = (): void => {
 
 @media (max-width: 1023px) {
   .login-form-panel {
+    border-left: 0;
     padding-inline: clamp(2rem, 8vw, 3rem);
   }
 }

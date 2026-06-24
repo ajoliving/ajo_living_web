@@ -161,8 +161,8 @@ const footerSocials = computed(() => [
 }
 
 .app-main {
-  min-height: calc(100vh - 48px);
-  padding-top: 48px;
+  min-height: calc(100vh - var(--nav-h));
+  padding-top: var(--nav-h);
 }
 
 .app-footer {

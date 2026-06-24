@@ -22,6 +22,7 @@ func (h *PropertyHandler) listPublic(c *gin.Context, channel service.PropertyCha
 		Page:                  page,
 		PageSize:              pageSize,
 		Keyword:               strings.TrimSpace(c.Query("keyword")),
+		RegionCode:            strings.TrimSpace(c.Query("region_code")),
 		DistrictCode:          strings.TrimSpace(c.Query("district_code")),
 		TransactionType:       strings.TrimSpace(c.Query("transaction_type")),
 		PropertyType:          strings.TrimSpace(c.Query("property_type")),

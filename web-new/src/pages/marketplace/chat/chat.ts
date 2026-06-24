@@ -139,7 +139,7 @@ export const useMarketplaceChatPage = () => {
         selectedChatId.value = deepLinkedChatId;
       } else if (targetConversation) {
         selectedChatId.value = targetConversation.id;
-        await router.replace(`/account/marketplace/my/chat/${targetConversation.id}`);
+        await router.replace(`/account/chat/${targetConversation.id}`);
       } else if (!selectedChatId.value && conversations.value[0]) {
         selectedChatId.value = conversations.value[0].id;
       }
@@ -198,7 +198,7 @@ export const useMarketplaceChatPage = () => {
   // 1.5 切換會話
   const handleSelectChat = async (chatId: string): Promise<void> => {
     selectedChatId.value = chatId;
-    await router.replace(`/account/marketplace/my/chat/${chatId}`);
+    await router.replace(`/account/chat/${chatId}`);
   };
 
   // 1.6 送出訊息

@@ -1,10 +1,11 @@
 /*
  * 設計 Token CSS 後備值。
  * 1. 提供應用程式初始載入時的預設主題基線。
- * 2. 依照色彩、圓角、陰影、間距、字體與邊框分組管理。
+ * 2. 對齊 HTML 設計稿 token：--nav-h、--brand-mid、--ink-2/3/4、--sur-2/3、--bdr-2、狀態色與 bg 變體。
+ * 3. 依照色彩、圓角、陰影、間距、字體與邊框分組管理。
  */
 :root {
-  /* Color */
+  /* Color - primary surface */
   --color-canvas: 255 255 255;
   --color-page-tint: 244 244 244;
   --color-surface: 255 255 255;
@@ -25,6 +26,22 @@
   --color-warning: 188 135 78;
   --color-danger: 178 77 73;
 
+  /* Color - HTML 設計稿對齊 token */
+  --color-ink-2: 68 68 68;
+  --color-ink-3: 119 119 119;
+  --color-ink-4: 170 170 170;
+  --color-surface-2: 246 246 246;
+  --color-surface-3: 239 239 239;
+  --color-border-2: 204 204 204;
+  --color-brand-mid: 253 169 106;
+  --color-brand-dark: 192 70 0;
+  --color-success-bg: 230 244 236;
+  --color-warning-bg: 255 243 220;
+  --color-danger-bg: 253 236 234;
+
+  /* Layout */
+  --nav-h: 52px;
+
   /* Radius */
   --radius-sm: 0.125rem;
   --radius-md: 0.25rem;
@@ -33,10 +50,11 @@
   --radius-2xl: 0.5rem;
   --radius-pill: 999px;
 
-  /* Shadow */
-  --shadow-soft: 0 3px 16px rgba(240, 90, 0, 0.12);
-  --shadow-raised: 0 10px 28px rgba(26, 26, 26, 0.08);
-  --shadow-floating: 0 18px 48px rgba(26, 26, 26, 0.14);
+  /* Shadow - HTML 設計稿對齊 */
+  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-raised: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-brand: 0 4px 16px rgba(240, 90, 0, 0.25);
 
   /* Spacing */
   --space-shell: clamp(1rem, 2vw, 1.5rem);
@@ -45,7 +63,7 @@
   --space-stack-md: 1.25rem;
   --space-stack-lg: 2rem;
   --space-card: 1.5rem;
-  --layout-page-max-width: 92rem;
+  --layout-page-max-width: 100%;
   --layout-page-padding-inline: 1rem;
 
   /* Font */
@@ -67,6 +85,30 @@
 
 html[data-theme='dark-neutral'] {
   color-scheme: dark;
+  /* 深色模式 token 覆蓋，對齊 HTML body.dark */
+  --color-text: 244 246 251;
+  --color-ink-2: 203 213 225;
+  --color-ink-3: 148 163 184;
+  --color-ink-4: 100 116 139;
+  --color-text-muted: 148 163 184;
+  --color-surface: 17 24 39;
+  --color-surface-2: 11 17 32;
+  --color-surface-3: 31 41 55;
+  --color-surface-muted: 17 24 39;
+  --color-surface-raised: 28 28 28;
+  --color-canvas: 11 17 32;
+  --color-page-tint: 11 17 32;
+  --color-topbar-surface: 17 24 39;
+  --color-toolbar-surface: 17 24 39;
+  --color-field-surface: 17 24 39;
+  --color-dropdown-surface: 17 24 39;
+  --color-border: 38 50 68;
+  --color-border-2: 51 65 85;
+  --color-primary-soft: 240 90 0;
+  --color-brand-mid: 255 178 122;
+  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.28);
+  --shadow-raised: 0 6px 18px rgba(0, 0, 0, 0.34);
+  --shadow-floating: 0 14px 40px rgba(0, 0, 0, 0.42);
 }
 
 html[data-theme='default'],

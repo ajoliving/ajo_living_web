@@ -19,7 +19,12 @@ export const useAccountNavigation = () => {
       { key: 'profile', label: t('account.sections.profile'), to: '/account/profile/info' },
       { key: 'wallet', label: t('account.sections.wallet'), to: '/account/profile/wallet' },
       { key: 'chat', label: t('nav.chat'), to: '/account/chat' },
-      { key: 'properties', label: t('nav.propertiesHome'), to: '/account/properties' },
+      { key: 'property-sales', label: t('property.sale.myTitle'), to: '/account/properties/sale' },
+      {
+        key: 'serviced-residences',
+        label: t('property.serviced.myTitle'),
+        to: '/account/properties/serviced-residences',
+      },
       { key: 'listings', label: t('nav.secondhandFurniture'), to: '/account/listings' },
       { key: 'favorites', label: t('nav.productFavorites'), to: '/account/favorites' },
     ];

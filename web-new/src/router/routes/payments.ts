@@ -10,6 +10,7 @@ import PaymentAccountingPage from '@/pages/payments/accounting/Page.vue';
 import PaymentBillsPage from '@/pages/payments/bills/Page.vue';
 import PaymentCartPage from '@/pages/payments/cart/Page.vue';
 import PaymentHistoryPage from '@/pages/payments/history/Page.vue';
+import PaymentOverviewPage from '@/pages/payments/overview/Page.vue';
 import PaymentOrdersPage from '@/pages/payments/orders/Page.vue';
 import PaymentUnitsPage from '@/pages/payments/units/Page.vue';
 
@@ -51,7 +52,9 @@ export const paymentRoutes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/payments/units',
+        name: 'PaymentsOverview',
+        component: PaymentOverviewPage,
+        meta: { titleKey: 'nav.payments', requiresAuth: true },
       },
       {
         path: 'units',

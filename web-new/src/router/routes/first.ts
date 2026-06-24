@@ -5,16 +5,15 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import PropertyDetailPage from '@/pages/property/detail/PropertyDetailPage.vue';
-import PropertyListPage from '@/pages/property/list/PropertyListPage.vue';
+import ServicedResidenceDetailPage from '@/pages/serviced-residence/detail/ServicedResidenceDetailPage.vue';
+import ServicedResidenceListPage from '@/pages/serviced-residence/list/ServicedResidenceListPage.vue';
 
 // 1. 輸出服務住宅路由
 export const firstRoutes: RouteRecordRaw[] = [
   {
     path: '/serviced-residences',
     name: 'ServicedResidences',
-    component: PropertyListPage,
-    props: { channel: 'serviced' },
+    component: ServicedResidenceListPage,
     meta: { titleKey: 'nav.servicedResidences' },
   },
   {
@@ -38,8 +37,7 @@ export const firstRoutes: RouteRecordRaw[] = [
   {
     path: '/serviced-residences/:listingId',
     name: 'ServicedResidenceDetail',
-    component: PropertyDetailPage,
-    props: { channel: 'serviced' },
+    component: ServicedResidenceDetailPage,
     meta: { titleKey: 'property.serviced.detailTitle' },
   },
 ];

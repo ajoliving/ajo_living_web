@@ -6,7 +6,24 @@
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { RewardAdForm } from '../wallet';
+import type { RewardAdDisplayChannel, RewardAdDisplayLayout, RewardAdForm, RewardAdType } from '../wallet';
+
+const adTypeOptions: Array<{ labelKey: string; value: RewardAdType }> = [
+  { labelKey: 'marketplace.management.walletAdTypeReward', value: 'reward' },
+  { labelKey: 'marketplace.management.walletAdTypeDisplay', value: 'display' },
+];
+
+const displayChannelOptions: Array<{ labelKey: string; value: Exclude<RewardAdDisplayChannel, ''> }> = [
+  { labelKey: 'marketplace.settings.displayAdChannelPropertySale', value: 'property_sale' },
+  { labelKey: 'marketplace.settings.displayAdChannelFurniture', value: 'furniture' },
+  { labelKey: 'marketplace.settings.displayAdChannelServicedApartment', value: 'serviced_apartment' },
+];
+
+const displayLayoutOptions: Array<{ labelKey: string; value: RewardAdDisplayLayout }> = [
+  { labelKey: 'marketplace.management.walletAdDisplayLayoutImageFull', value: 'image_full' },
+  { labelKey: 'marketplace.management.walletAdDisplayLayoutImageText', value: 'image_text' },
+  { labelKey: 'marketplace.management.walletAdDisplayLayoutTextCompact', value: 'text_compact' },
+];
 
 defineProps<{
   adForm: RewardAdForm;
@@ -44,6 +61,19 @@ const handleMediaFileChange = (event: Event): void => {
     <div class="wallet-settings-form">
       <div class="wallet-settings-two-column">
         <label class="wallet-settings-field">
+          <span>{{ t('marketplace.management.walletAdTypeField') }}</span>
+          <select v-model="adForm.adType">
+            <option
+              v-for="option in adTypeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ t(option.labelKey) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdTitleField') }}</span>
           <input
             v-model="adForm.title"
@@ -65,7 +95,7 @@ const handleMediaFileChange = (event: Event): void => {
       </div>
 
       <label class="wallet-settings-field">
-        <span>{{ t('marketplace.management.walletAdSummaryField') }}</span>
+        <span>{{ adForm.adType === 'display' ? t('marketplace.settings.displayAdTextField') : t('marketplace.management.walletAdSummaryField') }}</span>
         <textarea
           v-model="adForm.summary"
           rows="3"
@@ -77,7 +107,10 @@ const handleMediaFileChange = (event: Event): void => {
       <div class="wallet-settings-two-column">
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdMediaTypeField') }}</span>
-          <select v-model="adForm.mediaType">
+          <select
+            v-model="adForm.mediaType"
+            :disabled="adForm.adType === 'display'"
+          >
             <option value="image">
               {{ t('marketplace.management.walletAdMediaTypeImage') }}
             </option>
@@ -93,6 +126,47 @@ const handleMediaFileChange = (event: Event): void => {
             type="file"
             :accept="adForm.mediaType === 'video' ? 'video/*' : 'image/*'"
             @change="handleMediaFileChange"
+          />
+        </label>
+      </div>
+
+      <div
+        v-if="adForm.adType === 'display'"
+        class="wallet-settings-three-column"
+      >
+        <label class="wallet-settings-field">
+          <span>{{ t('marketplace.management.walletAdDisplayChannelField') }}</span>
+          <select v-model="adForm.displayChannel">
+            <option
+              v-for="option in displayChannelOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ t(option.labelKey) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="wallet-settings-field">
+          <span>{{ t('marketplace.management.walletAdDisplayLayoutField') }}</span>
+          <select v-model="adForm.displayLayout">
+            <option
+              v-for="option in displayLayoutOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ t(option.labelKey) }}
+            </option>
+          </select>
+        </label>
+
+        <label class="wallet-settings-field">
+          <span>{{ t('marketplace.management.walletAdSortOrderField') }}</span>
+          <input
+            v-model.number="adForm.sortOrder"
+            type="number"
+            min="1"
+            step="1"
           />
         </label>
       </div>
@@ -114,7 +188,10 @@ const handleMediaFileChange = (event: Event): void => {
         />
       </div>
 
-      <div class="wallet-settings-three-column wallet-settings-ad-controls">
+      <div
+        v-if="adForm.adType === 'reward'"
+        class="wallet-settings-three-column wallet-settings-ad-controls"
+      >
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdWatchSecondsField') }}</span>
           <input
@@ -125,6 +202,32 @@ const handleMediaFileChange = (event: Event): void => {
           />
         </label>
 
+        <label class="wallet-settings-field">
+          <span>{{ isEditingAd ? t('marketplace.management.walletAdRenewDaysField') : t('marketplace.management.walletAdRetentionDaysField') }}</span>
+          <input
+            v-model.number="adForm.retentionDays"
+            type="number"
+            min="1"
+            max="365"
+            step="1"
+          />
+        </label>
+
+        <label class="wallet-settings-field wallet-settings-switch-field">
+          <span>{{ t('marketplace.management.walletAdActiveField') }}</span>
+          <span class="wallet-settings-check">
+            <input
+              v-model="adForm.isActive"
+              type="checkbox"
+            />
+          </span>
+        </label>
+      </div>
+
+      <div
+        v-else
+        class="wallet-settings-two-column wallet-settings-ad-controls"
+      >
         <label class="wallet-settings-field">
           <span>{{ isEditingAd ? t('marketplace.management.walletAdRenewDaysField') : t('marketplace.management.walletAdRetentionDaysField') }}</span>
           <input

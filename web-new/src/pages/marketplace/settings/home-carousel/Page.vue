@@ -349,4 +349,65 @@ const {
     grid-template-columns: 1fr;
   }
 }
+
+.home-setting-page {
+  gap: 0.9rem;
+}
+
+.home-setting-header h2 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.home-setting-header p:not(.home-setting-kicker),
+.home-upload-panel small,
+.home-setting-empty {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.home-setting-kicker {
+  font-size: 0.7rem;
+}
+
+.home-setting-button,
+.home-setting-mini-button,
+.home-upload-panel,
+.home-setting-empty,
+.home-carousel-card {
+  border-radius: 2px;
+}
+
+.home-setting-button {
+  min-height: 2.45rem;
+  font-size: 0.8125rem;
+}
+
+.home-setting-mini-button {
+  min-height: 1.9rem;
+  font-size: 0.72rem;
+}
+
+.home-upload-panel {
+  padding: 1rem;
+}
+
+.home-upload-panel span,
+.home-carousel-card__body p {
+  font-size: 0.875rem;
+}
+
+.home-carousel-card__body {
+  padding: 0.75rem;
+}
+
+.home-carousel-card__body small,
+.home-carousel-card__body code {
+  font-size: 0.72rem;
+}
+
+.home-carousel-card__actions {
+  padding: 0 0.75rem 0.75rem;
+}
 </style>

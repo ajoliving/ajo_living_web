@@ -199,7 +199,7 @@ onMounted(() => {
     <section class="property-my-heading">
       <div>
         <p class="property-kicker">
-          AJO Living
+          Properties
         </p>
         <h1>{{ pageTitle }}</h1>
       </div>
@@ -257,100 +257,112 @@ onMounted(() => {
 
     <section
       v-else
-      class="property-my-stack"
+      class="property-panel"
     >
-      <article
-        v-for="listing in filteredItems"
-        :key="listing.listing_id"
-        class="property-my-card"
-      >
-        <div class="property-my-card__media">
-          <img
-            v-if="resolvePropertyCoverImage(listing)"
-            :src="resolvePropertyCoverImage(listing)?.url"
-            :alt="resolvePropertyTitle(listing)"
-          />
-          <div
-            v-else
-            class="property-my-card__placeholder"
-          >
-            <AppIcon
-              name="picture"
-              :size="38"
-            />
-          </div>
-        </div>
+      <div class="property-panel__title">
+        <h2>{{ pageTitle }}</h2>
+      </div>
 
-        <div class="property-my-card__body">
-          <div class="property-my-card__top">
-            <span class="property-status-pill">{{ resolveStatusLabel(listing) }}</span>
-            <strong>{{ formatPrice(resolvePropertyPrice(listing), preferenceStore.locale) }}</strong>
-          </div>
-          <h2>{{ resolvePropertyTitle(listing) }}</h2>
-          <p>{{ resolvePropertySummary(listing) }}</p>
-          <span class="property-my-card__community">{{ resolvePropertyCommunityName(listing) }}</span>
-          <span class="property-my-card__date">
-            {{ formatDate(listing.published_at || listing.updated_at, preferenceStore.locale) }}
-          </span>
-        </div>
+      <div class="property-table-wrap">
+        <table class="property-table">
+          <thead>
+            <tr>
+              <th>樓盤</th>
+              <th>屋苑 / 地區</th>
+              <th>價格</th>
+              <th>狀態</th>
+              <th>更新時間</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="listing in filteredItems"
+              :key="listing.listing_id"
+            >
+              <td>
+                <div class="property-item">
+                  <div class="property-item__media">
+                    <img
+                      v-if="resolvePropertyCoverImage(listing)"
+                      :src="resolvePropertyCoverImage(listing)?.url"
+                      :alt="resolvePropertyTitle(listing)"
+                    />
+                    <div
+                      v-else
+                      class="property-item__placeholder"
+                    >
+                      <AppIcon
+                        name="picture"
+                        :size="20"
+                      />
+                    </div>
+                  </div>
 
-        <div class="property-my-actions">
-          <RouterLink
-            :to="`${editorBasePath}/${listing.listing_id}`"
-            class="property-button property-button--secondary"
-          >
-            <AppIcon
-              name="palette"
-              :size="16"
-            />
-            {{ t('property.mine.edit') }}
-          </RouterLink>
-          <RouterLink
-            :to="resolvePropertyDetailPath(listing)"
-            class="property-button property-button--secondary"
-          >
-            <AppIcon
-              name="view"
-              :size="16"
-            />
-            {{ t('property.mine.publicDetail') }}
-          </RouterLink>
-          <button
-            v-if="listing.publication_status === 'draft'"
-            type="button"
-            class="property-button property-button--primary"
-            @click="runAction('publish', listing.listing_id)"
-          >
-            {{ t('property.mine.publish') }}
-            · {{ formatPoints(chargeCost) }}
-          </button>
-          <button
-            v-if="listing.publication_status === 'expired'"
-            type="button"
-            class="property-button property-button--primary"
-            @click="runAction('republish', listing.listing_id)"
-          >
-            {{ t('property.mine.republish') }}
-            · {{ formatPoints(chargeCost) }}
-          </button>
-          <button
-            v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
-            type="button"
-            class="property-button property-button--secondary"
-            @click="runAction('mark-sold', listing.listing_id)"
-          >
-            {{ t('property.sale.soldAction') }}
-          </button>
-          <button
-            v-if="listing.publication_status === 'active'"
-            type="button"
-            class="property-button property-button--secondary"
-            @click="runAction('deactivate', listing.listing_id)"
-          >
-            {{ t('property.mine.deactivate') }}
-          </button>
-        </div>
-      </article>
+                  <div class="property-item__content">
+                    <strong>{{ resolvePropertyTitle(listing) }}</strong>
+                    <p>{{ resolvePropertySummary(listing) }}</p>
+                  </div>
+                </div>
+              </td>
+              <td>{{ resolvePropertyCommunityName(listing) }}</td>
+              <td>{{ formatPrice(resolvePropertyPrice(listing), preferenceStore.locale) }}</td>
+              <td>
+                <span class="property-status-pill">{{ resolveStatusLabel(listing) }}</span>
+              </td>
+              <td>{{ formatDate(listing.published_at || listing.updated_at, preferenceStore.locale) }}</td>
+              <td>
+                <div class="property-table-actions">
+                  <RouterLink
+                    :to="`${editorBasePath}/${listing.listing_id}`"
+                    class="property-button property-button--secondary"
+                  >
+                    {{ t('property.mine.edit') }}
+                  </RouterLink>
+                  <RouterLink
+                    :to="resolvePropertyDetailPath(listing)"
+                    class="property-button property-button--secondary"
+                  >
+                    {{ t('property.mine.publicDetail') }}
+                  </RouterLink>
+                  <button
+                    v-if="listing.publication_status === 'draft'"
+                    type="button"
+                    class="property-button property-button--primary"
+                    @click="runAction('publish', listing.listing_id)"
+                  >
+                    {{ t('property.mine.publish') }}
+                  </button>
+                  <button
+                    v-if="listing.publication_status === 'expired'"
+                    type="button"
+                    class="property-button property-button--primary"
+                    @click="runAction('republish', listing.listing_id)"
+                  >
+                    {{ t('property.mine.republish') }}
+                  </button>
+                  <button
+                    v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
+                    type="button"
+                    class="property-button property-button--secondary"
+                    @click="runAction('mark-sold', listing.listing_id)"
+                  >
+                    {{ t('property.sale.soldAction') }}
+                  </button>
+                  <button
+                    v-if="listing.publication_status === 'active'"
+                    type="button"
+                    class="property-button property-button--secondary"
+                    @click="runAction('deactivate', listing.listing_id)"
+                  >
+                    {{ t('property.mine.deactivate') }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
 </template>
@@ -365,8 +377,7 @@ onMounted(() => {
 }
 
 .property-my-heading,
-.property-my-toolbar,
-.property-my-card {
+.property-my-toolbar {
   display: grid;
   gap: 1rem;
 }
@@ -468,47 +479,6 @@ onMounted(() => {
   margin-top: 1rem;
 }
 
-.property-my-card {
-  overflow: hidden;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
-  background: rgb(var(--color-surface));
-  box-shadow: 0 10px 34px rgb(15 23 42 / 0.07);
-}
-
-.property-my-card__media {
-  aspect-ratio: 4 / 3;
-  background: rgb(var(--color-surface-raised));
-}
-
-.property-my-card__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.property-my-card__placeholder {
-  display: grid;
-  height: 100%;
-  place-items: center;
-  color: rgb(var(--color-text-muted));
-}
-
-.property-my-card__body,
-.property-my-actions {
-  display: grid;
-  min-width: 0;
-  gap: 0.75rem;
-  padding: 1rem;
-}
-
-.property-my-card__top {
-  display: flex;
-  min-width: 0;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 .property-status-pill {
   border-radius: 999px;
   background: rgb(var(--color-primary-soft));
@@ -518,44 +488,112 @@ onMounted(() => {
   font-weight: 900;
 }
 
-.property-my-card h2,
-.property-my-card p {
-  margin: 0;
+.property-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 3px;
+  background: rgb(var(--color-surface));
+  padding: 12px;
 }
 
-.property-my-card h2 {
+.property-panel__title {
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-bottom: 14px;
+}
+
+.property-panel__title h2 {
+  margin: 0;
+  color: rgb(var(--color-primary));
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.property-table-wrap {
+  overflow-x: auto;
+}
+
+.property-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.property-table th,
+.property-table td {
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.property-table thead th {
+  border-top: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.property-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.property-item__media {
   overflow: hidden;
-  font-size: 1.1rem;
-  font-weight: 900;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface-muted));
+  aspect-ratio: 1;
+}
+
+.property-item__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.property-item__placeholder {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: rgb(var(--color-text-muted));
+}
+
+.property-item__content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.property-item__content strong {
+  overflow: hidden;
+  color: rgb(var(--color-text));
+  font-size: 14px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.property-my-card p,
-.property-my-card__community,
-.property-my-card__date {
-  color: rgb(var(--color-text-muted));
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.property-my-card p {
+.property-item__content p {
   display: -webkit-box;
   overflow: hidden;
+  margin: 0;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.property-my-card__community,
-.property-my-card__date,
-.property-my-card__top strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.property-my-actions {
-  align-content: start;
+.property-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .property-empty {
@@ -607,7 +645,6 @@ onMounted(() => {
 }
 
 .property-my-toolbar,
-.property-my-card,
 .property-empty {
   border-radius: 3px;
   box-shadow: none;
@@ -638,40 +675,9 @@ onMounted(() => {
   color: rgb(var(--color-primary-contrast));
 }
 
-.property-my-stack {
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.property-my-card__media {
-  background: rgb(var(--color-surface-muted));
-}
-
-.property-my-card__body,
-.property-my-actions {
-  gap: 8px;
-  padding: 12px;
-}
-
 .property-status-pill {
   border-radius: 2px;
   font-size: 10px;
-  font-weight: 600;
-}
-
-.property-my-card h2 {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.property-my-card p,
-.property-my-card__community,
-.property-my-card__date {
-  font-size: 12px;
-}
-
-.property-my-card__top strong {
-  font-size: 13px;
   font-weight: 600;
 }
 

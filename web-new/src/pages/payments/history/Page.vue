@@ -318,7 +318,7 @@ watch([activeBuildingID, activeUnitID, isStaff], () => {
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="isLoading || localLoading"
         @click="queryHistory"
       >
@@ -334,7 +334,7 @@ watch([activeBuildingID, activeUnitID, isStaff], () => {
       <BaseButton
         v-if="profileRequired"
         variant="primary"
-        size="md"
+        size="sm"
         @click="goPaymentUnit"
       >
         選擇單元
@@ -489,7 +489,7 @@ watch([activeBuildingID, activeUnitID, isStaff], () => {
         </section>
         <BaseButton
           variant="primary"
-          size="md"
+          size="sm"
           :disabled="localLoading"
           @click="queryHistory"
         >

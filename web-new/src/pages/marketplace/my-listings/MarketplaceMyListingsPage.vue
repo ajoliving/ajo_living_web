@@ -43,11 +43,27 @@ const {
 
 <template>
   <main class="marketplace-my-page">
-    <aside class="marketplace-my-sidebar">
-      <section class="space-y-4">
-        <h2 class="my-section-title">
-          {{ t('marketplace.mine.search') }}
-        </h2>
+    <section class="marketplace-my-results min-w-0">
+      <header class="my-page-heading">
+        <div>
+          <p class="my-page-kicker">Furniture</p>
+          <h1>{{ t('marketplace.mine.title') }}</h1>
+          <p>{{ t('marketplace.mine.subtitle') }}</p>
+        </div>
+        <button
+          type="button"
+          class="my-create-button"
+          @click="openCreate"
+        >
+          <AppIcon
+            name="plus-square"
+            :size="17"
+          />
+          <span>{{ t('marketplace.editor.createTitle') }}</span>
+        </button>
+      </header>
+
+      <section class="my-toolbar">
         <label class="my-search-field">
           <AppIcon
             name="search"
@@ -61,13 +77,7 @@ const {
             :placeholder="t('marketplace.mine.searchPlaceholder')"
           />
         </label>
-      </section>
-
-      <section class="space-y-4 border-t border-border pt-5">
-        <h2 class="my-section-title">
-          {{ t('marketplace.mine.statusFilter') }}
-        </h2>
-        <div class="flex flex-wrap gap-2">
+        <div class="my-filter-row">
           <button
             v-for="option in tabOptions"
             :key="option.value"
@@ -80,25 +90,6 @@ const {
           </button>
         </div>
       </section>
-    </aside>
-
-    <section class="marketplace-my-results min-w-0 flex-1">
-      <div class="mb-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <p class="min-w-0 text-[18px] leading-[1.6] text-text-muted">
-          {{ t('marketplace.filter.resultsFound', { count: filteredItems.length }) }}
-        </p>
-        <button
-          type="button"
-          class="my-create-button"
-          @click="openCreate"
-        >
-          <AppIcon
-            name="plus-square"
-            :size="17"
-          />
-          <span>{{ t('marketplace.editor.createTitle') }}</span>
-        </button>
-      </div>
 
       <div
         v-if="loading"
@@ -109,191 +100,141 @@ const {
 
       <div
         v-else-if="filteredItems.length > 0"
-        class="my-listing-stack"
+        class="my-listing-panel"
       >
-        <article
-          v-for="listing in filteredItems"
-          :key="listing.listing_id"
-          class="my-listing-card my-listing-card--with-actions group"
-        >
-          <div class="my-listing-card__media">
-            <img
-              v-if="resolveListingCoverImage(listing)"
-              :src="resolveListingCoverImage(listing)?.url"
-              :alt="resolveListingTitle(listing)"
-              class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-            <div
-              v-else
-              class="flex h-full w-full flex-col items-center justify-center gap-3 bg-border text-sm text-text-muted"
-            >
-              <AppIcon
-                name="picture"
-                :size="44"
-              />
-              {{ t('marketplace.mine.noCover') }}
-            </div>
-          </div>
+        <div class="my-listing-panel__title">
+          <h2>{{ t('marketplace.mine.overviewTitle') }}</h2>
+        </div>
 
-          <div class="my-listing-card__body">
-            <div class="my-listing-card__topline">
-              <ListingStatusBadge
-                :status="resolveListingStatus(listing)"
-                :visibility="resolveListingVisibility(listing)"
-              />
-              <p class="my-listing-card__price">
-                {{ formatPrice(resolveListingPrice(listing), preferenceStore.locale) }}
-              </p>
-            </div>
+        <div class="my-table-wrap">
+          <table class="my-table">
+            <thead>
+              <tr>
+                <th>商品</th>
+                <th>分類</th>
+                <th>價格</th>
+                <th>狀態</th>
+                <th>屋苑</th>
+                <th>發布時間</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="listing in filteredItems"
+                :key="listing.listing_id"
+              >
+                <td>
+                  <div class="my-item">
+                    <div class="my-item__media">
+                      <img
+                        v-if="resolveListingCoverImage(listing)"
+                        :src="resolveListingCoverImage(listing)?.url"
+                        :alt="resolveListingTitle(listing)"
+                      />
+                      <div
+                        v-else
+                        class="my-item__placeholder"
+                      >
+                        <AppIcon
+                          name="picture"
+                          :size="20"
+                        />
+                      </div>
+                    </div>
 
-            <div>
-              <div class="mb-1.5 flex items-start justify-between gap-3">
-                <h2 class="my-listing-card__title">
-                  {{ resolveListingTitle(listing) }}
-                </h2>
-              </div>
-              <p class="my-listing-card__summary">
-                {{ resolveListingSummary(listing) }}
-              </p>
-            </div>
+                    <div class="my-item__content">
+                      <strong>{{ resolveListingTitle(listing) }}</strong>
+                      <p>{{ resolveListingSummary(listing) }}</p>
+                    </div>
+                  </div>
+                </td>
+                <td>{{ resolveListingCategoryLabel(listing, preferenceStore.locale) }}</td>
+                <td>{{ formatPrice(resolveListingPrice(listing), preferenceStore.locale) }}</td>
+                <td>
+                  <ListingStatusBadge
+                    :status="resolveListingStatus(listing)"
+                    :visibility="resolveListingVisibility(listing)"
+                  />
+                </td>
+                <td>{{ resolveListingCommunityName(listing) }}</td>
+                <td>{{ formatDate(resolveListingPublishedAt(listing), preferenceStore.locale) }}</td>
+                <td>
+                  <div class="my-table-actions">
+                    <button
+                      type="button"
+                      class="my-action-button my-action-button-primary"
+                      @click="openEditor(listing.listing_id)"
+                    >
+                      {{ t('marketplace.editor.editTitle') }}
+                    </button>
 
-            <div class="my-listing-meta-grid">
-              <div>
-                <p class="my-meta-label">{{ t('marketplace.mine.category') }}</p>
-                <p class="my-meta-value">
-                  {{ resolveListingCategoryLabel(listing, preferenceStore.locale) }}
-                </p>
-              </div>
-              <div>
-                <p class="my-meta-label">{{ t('marketplace.mine.published') }}</p>
-                <p class="my-meta-value">
-                  {{ formatDate(resolveListingPublishedAt(listing), preferenceStore.locale) }}
-                </p>
-              </div>
-              <div>
-                <p class="my-meta-label">{{ t('marketplace.mine.community') }}</p>
-                <p class="my-meta-value">
-                  {{ resolveListingCommunityName(listing) }}
-                </p>
-              </div>
-            </div>
-          </div>
+                    <button
+                      type="button"
+                      class="my-action-button my-action-button-secondary"
+                      @click="openManagedDetail(listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.manageDetailAction') }}
+                    </button>
 
-          <div
-            class="my-listing-actions"
-          >
-            <button
-              type="button"
-              class="my-action-button my-action-button-primary"
-              @click="openEditor(listing.listing_id)"
-            >
-              <AppIcon
-                name="palette"
-                :size="16"
-              />
-              <span>{{ t('marketplace.editor.editTitle') }}</span>
-            </button>
+                    <button
+                      type="button"
+                      class="my-action-button my-action-button-secondary"
+                      @click="openPublicDetail(listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.publicDetailAction') }}
+                    </button>
 
-            <button
-              type="button"
-              class="my-action-button my-action-button-secondary"
-              @click="openManagedDetail(listing.listing_id)"
-            >
-              <AppIcon
-                name="view"
-                :size="16"
-              />
-              <span>{{ t('marketplace.mine.manageDetailAction') }}</span>
-            </button>
+                    <button
+                      v-if="listing.publication_status === 'draft'"
+                      type="button"
+                      class="my-action-button my-action-button-primary"
+                      @click="runAction('publish', listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.publishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
+                    </button>
 
-            <button
-              type="button"
-              class="my-action-button my-action-button-secondary"
-              @click="openPublicDetail(listing.listing_id)"
-            >
-              <AppIcon
-                name="picture"
-                :size="16"
-              />
-              <span>{{ t('marketplace.mine.publicDetailAction') }}</span>
-            </button>
+                    <button
+                      v-if="listing.publication_status === 'expired'"
+                      type="button"
+                      class="my-action-button my-action-button-primary"
+                      @click="runAction('republish', listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.republishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
+                    </button>
 
-            <button
-              v-if="listing.publication_status === 'draft'"
-              type="button"
-              class="my-action-button my-action-button-primary"
-              @click="runAction('publish', listing.listing_id)"
-            >
-              <AppIcon
-                name="plus-square"
-                :size="16"
-              />
-              <span>
-                {{ t('marketplace.mine.publishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
-              </span>
-            </button>
+                    <button
+                      v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
+                      type="button"
+                      class="my-action-button my-action-button-primary"
+                      @click="runAction('renew', listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.renewAction') }} · {{ formatAjoPoints(secondhandRenewChargeCost) }}
+                    </button>
 
-            <button
-              v-if="listing.publication_status === 'expired'"
-              type="button"
-              class="my-action-button my-action-button-primary"
-              @click="runAction('republish', listing.listing_id)"
-            >
-              <AppIcon
-                name="reload"
-                :size="16"
-              />
-              <span>
-                {{ t('marketplace.mine.republishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
-              </span>
-            </button>
+                    <button
+                      v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
+                      type="button"
+                      class="my-action-button my-action-button-secondary"
+                      @click="runAction('mark-sold', listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.markSoldAction') }}
+                    </button>
 
-            <button
-              v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
-              type="button"
-              class="my-action-button my-action-button-primary"
-              @click="runAction('renew', listing.listing_id)"
-            >
-              <AppIcon
-                name="clock"
-                :size="16"
-              />
-              <span>
-                {{ t('marketplace.mine.renewAction') }} · {{ formatAjoPoints(secondhandRenewChargeCost) }}
-              </span>
-            </button>
-
-            <button
-              v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
-              type="button"
-              class="my-action-button my-action-button-secondary"
-              @click="runAction('mark-sold', listing.listing_id)"
-            >
-              <AppIcon
-                name="check-circle"
-                :size="16"
-              />
-              <span>
-                {{ t('marketplace.mine.markSoldAction') }}
-              </span>
-            </button>
-
-            <button
-              v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
-              type="button"
-              class="my-action-button my-action-button-secondary"
-              @click="runAction('deactivate', listing.listing_id)"
-            >
-              <AppIcon
-                name="close"
-                :size="16"
-              />
-              <span>
-                {{ t('marketplace.mine.deactivateAction') }}
-              </span>
-            </button>
-          </div>
-        </article>
+                    <button
+                      v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
+                      type="button"
+                      class="my-action-button my-action-button-secondary"
+                      @click="runAction('deactivate', listing.listing_id)"
+                    >
+                      {{ t('marketplace.mine.deactivateAction') }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <BaseEmpty
@@ -321,30 +262,66 @@ const {
 .marketplace-my-page {
   display: grid;
   width: 100%;
-  gap: 1.5rem;
+  gap: 16px;
   margin: 0;
   padding: 0;
   color: rgb(var(--color-text));
   overflow: visible;
 }
 
-.marketplace-my-sidebar {
-  display: grid;
-  width: 100%;
-  height: auto;
-  gap: 1.25rem;
-  overflow: visible;
-  padding: 0;
-}
-
-.marketplace-my-sidebar::-webkit-scrollbar {
-  display: none;
-}
-
 .marketplace-my-results {
   height: auto;
   overflow: visible;
   padding-right: 0;
+}
+
+.my-page-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-bottom: 16px;
+}
+
+.my-page-kicker {
+  margin: 0;
+  color: rgb(var(--color-primary));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.my-page-heading h1 {
+  margin: 6px 0 0;
+  color: rgb(var(--color-text));
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.my-page-heading p:not(.my-page-kicker) {
+  margin: 8px 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.my-toolbar {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 3px;
+  background: rgb(var(--color-surface));
+  padding: 12px;
+}
+
+.my-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .my-section-title {
@@ -372,15 +349,15 @@ const {
 }
 
 .my-text-input {
-  height: 3rem;
+  height: 34px;
   width: 100%;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   color: rgb(var(--color-text));
-  font-size: 0.9375rem;
+  font-size: 12px;
   line-height: 1.6;
   outline: none;
   transition:
@@ -394,12 +371,12 @@ const {
 }
 
 .my-filter-chip {
-  border-radius: 9999px;
+  border-radius: 2px;
   border-width: 1px;
-  min-height: 2.5rem;
-  padding: 0.55rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 700;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
   transition:
@@ -410,14 +387,14 @@ const {
 
 .my-filter-chip-active {
   border-color: rgb(var(--color-primary));
-  background: rgb(0 39 39 / 0.05);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .my-filter-chip-active:hover {
   border-color: rgb(var(--color-primary));
-  background: rgb(0 39 39 / 0.05);
-  color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
 
 .my-filter-chip-idle {
@@ -432,33 +409,48 @@ const {
 
 .my-loading-card {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 3px;
   background: rgb(var(--color-surface));
-  padding: 1.5rem;
+  padding: 20px 16px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
+  font-size: 13px;
 }
 
-.my-listing-stack {
+.my-listing-panel {
   display: grid;
-  gap: 1.25rem;
+  gap: 14px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 3px;
+  background: rgb(var(--color-surface));
+  padding: 12px;
+}
+
+.my-listing-panel__title {
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-bottom: 14px;
+}
+
+.my-listing-panel__title h2 {
+  margin: 0;
+  color: rgb(var(--color-primary));
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .my-create-button {
   display: inline-flex;
-  min-height: 3.25rem;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   justify-self: start;
   border: 1px solid rgb(var(--color-primary));
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(var(--color-primary));
-  padding: 0.65rem 1.1rem;
+  padding: 0 12px;
   color: rgb(var(--color-primary-contrast));
-  font-size: 0.875rem;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.1;
   transition:
@@ -471,124 +463,103 @@ const {
   background: rgb(var(--color-text));
 }
 
-.my-listing-card {
+.my-table-wrap {
+  overflow-x: auto;
+}
+
+.my-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.my-table th,
+.my-table td {
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.my-table thead th {
+  border-top: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.my-item {
   display: grid;
-  min-height: 13rem;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.my-item__media {
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
-  background: rgb(var(--color-surface));
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
-  transition: box-shadow 0.3s ease;
-}
-
-.my-listing-card:hover {
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.06);
-}
-
-.my-listing-card__media {
-  height: 10.875rem;
-  overflow: hidden;
+  border-radius: 2px;
   background: rgb(var(--color-surface-muted));
+  aspect-ratio: 1;
 }
 
-.my-listing-card__body {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.65rem;
-  overflow: hidden;
-  padding: 0.875rem 1rem;
+.my-item__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.my-listing-card__topline {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.my-listing-card__price {
-  flex-shrink: 0;
-  color: rgb(var(--color-primary));
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.my-listing-card__title {
-  min-width: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  color: rgb(var(--color-text));
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 500;
-  line-height: 1.28;
-}
-
-.my-listing-card__summary {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
-  line-height: 1.45;
-}
-
-.my-listing-meta-grid {
+.my-item__placeholder {
   display: grid;
-  gap: 0.65rem;
-  border-top: 1px solid rgb(var(--color-border));
-  padding-top: 0.65rem;
-}
-
-.my-meta-label {
+  height: 100%;
+  place-items: center;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  text-transform: uppercase;
 }
 
-.my-meta-value {
-  margin-top: 0.35rem;
-  color: rgb(var(--color-text));
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.25;
+.my-item__content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.my-item__content strong {
   overflow: hidden;
+  color: rgb(var(--color-text));
+  font-size: 14px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.my-listing-actions {
-  display: grid;
-  align-content: center;
-  gap: 0.35rem;
+.my-item__content p {
+  display: -webkit-box;
   overflow: hidden;
-  border-top: 1px solid rgb(var(--color-border));
-  padding: 0.75rem 1rem;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.my-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .my-action-button {
   display: inline-flex;
-  min-height: 1.85rem;
+  min-height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 6px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 9999px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 800;
+  border-radius: 2px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.1;
   transition:
@@ -620,39 +591,7 @@ const {
 
 @media (max-width: 767px) {
   .marketplace-my-page {
-    gap: 2rem;
-  }
-}
-
-@media (min-width: 640px) {
-  .my-listing-meta-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .my-create-button {
-    justify-self: end;
-  }
-}
-
-@media (min-width: 1024px) {
-  .my-listing-card {
-    height: 10.875rem;
-    min-height: 0;
-    grid-template-columns: 13.5rem minmax(0, 1fr);
-  }
-
-  .my-listing-card--with-actions {
-    grid-template-columns: 13.5rem minmax(0, 1fr) 13rem;
-  }
-
-  .my-listing-card__media {
-    height: 100%;
-  }
-
-  .my-listing-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-top: 0;
-    border-left: 1px solid rgb(var(--color-border));
+    gap: 16px;
   }
 }
 </style>

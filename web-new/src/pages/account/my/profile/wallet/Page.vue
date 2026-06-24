@@ -277,13 +277,6 @@ onBeforeUnmount(() => {
         <h1>{{ t('account.wallet.title') }}</h1>
         <p>{{ t('account.wallet.description') }}</p>
       </div>
-      <div class="wallet-heading-meter">
-        <span>{{ t('account.wallet.todayAd') }}</span>
-        <strong class="wallet-point-value wallet-point-value-compact">
-          <span>{{ formatPointNumber(account?.today_ad_reward_points ?? 0) }}</span>
-          <small>{{ t('common.brand.pointsName') }}</small>
-        </strong>
-      </div>
     </section>
 
     <section
@@ -295,27 +288,12 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <section class="wallet-summary-grid">
-        <article class="wallet-balance-card">
-          <div class="wallet-card-label">
-            <span>{{ t('account.wallet.balance') }}</span>
-            <em>{{ t('common.brand.pointsName') }}</em>
-          </div>
+        <article class="wallet-balance-card wallet-balance-card--primary">
           <strong class="wallet-point-value wallet-point-value-main">
             <span>{{ formatPointNumber(account?.balance ?? 0) }}</span>
             <small>{{ t('common.brand.pointsName') }}</small>
           </strong>
-          <div class="wallet-card-progress">
-            <div>
-              <span>{{ t('account.wallet.todayAd') }}</span>
-              <span>
-                {{ formatPoints(account?.today_ad_reward_points ?? 0) }}
-                / {{ formatPoints(account?.daily_ad_reward_limit ?? 0) }}
-              </span>
-            </div>
-            <div class="wallet-progress">
-              <span :style="{ width: `${dailyProgress}%` }" />
-            </div>
-          </div>
+          <span class="wallet-balance-label">{{ t('account.wallet.balance') }}</span>
         </article>
         <article class="wallet-stat-card">
           <span>{{ t('account.wallet.earned') }}</span>
@@ -328,6 +306,13 @@ onBeforeUnmount(() => {
           <span>{{ t('account.wallet.spent') }}</span>
           <strong class="wallet-point-value">
             <span>{{ formatPointNumber(account?.total_spent ?? 0) }}</span>
+            <small>{{ t('common.brand.pointsName') }}</small>
+          </strong>
+        </article>
+        <article class="wallet-stat-card">
+          <span>{{ t('account.wallet.todayAd') }}</span>
+          <strong class="wallet-point-value">
+            <span>{{ formatPointNumber(account?.today_ad_reward_points ?? 0) }}</span>
             <small>{{ t('common.brand.pointsName') }}</small>
           </strong>
         </article>
@@ -344,6 +329,12 @@ onBeforeUnmount(() => {
                 / {{ t('account.wallet.dailyLimit') }}
                 {{ formatPoints(account?.daily_ad_reward_limit ?? 0) }}
               </p>
+            </div>
+            <div class="wallet-panel-meter">
+              <strong>{{ dailyProgress }}%</strong>
+              <div class="wallet-progress">
+                <span :style="{ width: `${dailyProgress}%` }" />
+              </div>
             </div>
           </div>
 
@@ -417,22 +408,29 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-else
-          class="wallet-transaction-list"
+          class="wallet-transaction-table-wrap"
         >
-          <div
-            v-for="transaction in transactions"
-            :key="transaction.transaction_id"
-            class="wallet-transaction-row"
-          >
-            <div>
-              <strong>
-                {{ transaction.direction === 'credit' ? t('account.wallet.credit') : t('account.wallet.debit') }}
-                {{ formatPoints(transaction.amount) }}
-              </strong>
-              <span>{{ transaction.biz_module }} · {{ transaction.action_type }}</span>
-            </div>
-            <time>{{ formatDate(transaction.created_at) }}</time>
-          </div>
+          <table class="wallet-transaction-table">
+            <thead>
+              <tr>
+                <th>{{ t('account.wallet.type') }}</th>
+                <th>{{ t('account.wallet.source') }}</th>
+                <th>{{ t('account.wallet.amount') }}</th>
+                <th>{{ t('account.wallet.date') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="transaction in transactions"
+                :key="transaction.transaction_id"
+              >
+                <td>{{ transaction.direction === 'credit' ? t('account.wallet.credit') : t('account.wallet.debit') }}</td>
+                <td>{{ transaction.biz_module }} · {{ transaction.action_type }}</td>
+                <td>{{ formatPoints(transaction.amount) }}</td>
+                <td>{{ formatDate(transaction.created_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </template>
@@ -1237,5 +1235,214 @@ onBeforeUnmount(() => {
 
 .wallet-ad-dialog__media {
   background: rgb(var(--color-surface-muted));
+}
+
+.wallet-page {
+  gap: 16px;
+}
+
+.wallet-heading,
+.wallet-balance-card,
+.wallet-stat-card,
+.wallet-panel,
+.wallet-ad-card,
+.wallet-ad-dialog__panel,
+.wallet-ad-exit-confirm__panel {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.wallet-heading,
+.wallet-balance-card,
+.wallet-stat-card,
+.wallet-panel {
+  background: rgb(var(--color-surface));
+  border-color: rgb(var(--color-border));
+  padding: 16px;
+}
+
+.wallet-heading {
+  display: grid;
+  gap: 8px;
+  border-radius: 0;
+  border-width: 0 0 1px;
+  padding: 0 0 16px;
+}
+
+.wallet-heading h1 {
+  font-size: 32px;
+}
+
+.wallet-kicker,
+.wallet-balance-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.wallet-heading p,
+.wallet-muted,
+.wallet-panel-title p,
+.wallet-ad-body p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wallet-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wallet-grid,
+.wallet-ad-list,
+.wallet-side-stack {
+  gap: 12px;
+}
+
+.wallet-balance-card,
+.wallet-stat-card {
+  min-height: 132px;
+  align-content: space-between;
+}
+
+.wallet-balance-card--primary .wallet-point-value span,
+.wallet-balance-card--primary .wallet-point-value small,
+.wallet-balance-card--primary .wallet-balance-label {
+  color: rgb(var(--color-primary));
+}
+
+.wallet-point-value {
+  color: rgb(var(--color-text));
+}
+
+.wallet-point-value span,
+.wallet-point-value-main span {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+}
+
+.wallet-point-value small {
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wallet-panel-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-bottom: 14px;
+}
+
+.wallet-panel-title h2,
+.wallet-panel > h2,
+.wallet-ad-card h3 {
+  color: rgb(var(--color-primary));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.wallet-panel-meter {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.wallet-panel-meter strong {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wallet-progress {
+  height: 6px;
+  background: rgb(var(--color-primary) / 0.12);
+}
+
+.wallet-progress span {
+  background: rgb(var(--color-primary));
+}
+
+.wallet-ad-card {
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  gap: 14px;
+  border-color: rgb(var(--color-border));
+  background: rgb(var(--color-surface));
+  padding: 12px;
+}
+
+.wallet-ad-cover {
+  border-radius: 6px;
+}
+
+.wallet-ad-body h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wallet-ad-body span {
+  color: rgb(var(--color-primary));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wallet-action-button,
+.wallet-ad-countdown,
+.wallet-ad-dialog__close {
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wallet-transaction-table-wrap {
+  overflow-x: auto;
+}
+
+.wallet-transaction-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wallet-transaction-table th,
+.wallet-transaction-table td {
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.wallet-transaction-table thead th {
+  border-top: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wallet-transaction-table tbody td {
+  color: rgb(var(--color-text));
+}
+
+@media (max-width: 980px) {
+  .wallet-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .wallet-summary-grid,
+  .wallet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-panel-meter {
+    min-width: 0;
+    width: 100%;
+  }
 }
 </style>

@@ -391,7 +391,7 @@ watch([routeMchOrderNo, routePayOrderId, activeBuildingID, activeUnitID], () => 
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="isLoading"
         @click="reload"
       >
@@ -407,7 +407,7 @@ watch([routeMchOrderNo, routePayOrderId, activeBuildingID, activeUnitID], () => 
       <BaseButton
         v-if="profileRequired"
         variant="primary"
-        size="md"
+        size="sm"
         @click="goPaymentUnit"
       >
         選擇單元

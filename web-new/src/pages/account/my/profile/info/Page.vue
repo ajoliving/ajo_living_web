@@ -56,46 +56,48 @@ const {
 
 <template>
   <div class="account-profile-page">
-    <div class="account-profile-header">
-      <div class="account-profile-header__identity">
-        <BaseAvatar
-          :src="sessionStore.currentUser.avatar_url"
-          :name="sessionStore.currentUser.display_name"
-          :size="56"
-        />
-        <div class="account-profile-header__text">
-          <p>{{ sessionStore.currentUser.display_name }}</p>
-          <span>{{ t('account.profile.title') }}</span>
+    <section class="account-profile-hero">
+      <div class="account-profile-header">
+        <div class="account-profile-header__identity">
+          <BaseAvatar
+            :src="sessionStore.currentUser.avatar_url"
+            :name="sessionStore.currentUser.display_name"
+            :size="56"
+          />
+          <div class="account-profile-header__text">
+            <p>{{ sessionStore.currentUser.display_name }}</p>
+            <span>{{ t('account.profile.title') }}</span>
+          </div>
+        </div>
+
+        <div class="account-profile-header__actions">
+          <BaseButton
+            variant="secondary"
+            size="md"
+            :disabled="isSigningOut"
+            @click="handleSignOut"
+          >
+            {{ isSigningOut ? t('common.status.loading') : t('account.actions.signOut') }}
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            size="md"
+            :disabled="isLoading"
+            @click="openEditModal"
+          >
+            {{ t('marketplace.myProfile.editAction') }}
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="md"
+            :disabled="isLoading || isBindingIsmart"
+            @click="openIsmartModal"
+          >
+            {{ sessionStore.me?.ismart_linked ? t('account.profile.updateIsmart') : t('account.profile.bindIsmart') }}
+          </BaseButton>
         </div>
       </div>
-
-      <div class="account-profile-header__actions">
-        <BaseButton
-          variant="secondary"
-          size="md"
-          :disabled="isSigningOut"
-          @click="handleSignOut"
-        >
-          {{ isSigningOut ? t('common.status.loading') : t('account.actions.signOut') }}
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          size="md"
-          :disabled="isLoading"
-          @click="openEditModal"
-        >
-          {{ t('marketplace.myProfile.editAction') }}
-        </BaseButton>
-        <BaseButton
-          variant="secondary"
-          size="md"
-          :disabled="isLoading || isBindingIsmart"
-          @click="openIsmartModal"
-        >
-          {{ sessionStore.me?.ismart_linked ? t('account.profile.updateIsmart') : t('account.profile.bindIsmart') }}
-        </BaseButton>
-      </div>
-    </div>
+    </section>
 
     <div
       v-if="isLoading"
@@ -104,10 +106,12 @@ const {
       {{ t('common.status.loading') }}
     </div>
 
-    <article class="account-profile-panel">
-      <div class="account-profile-grid">
+    <section class="account-profile-summary-grid">
+      <article class="account-profile-summary-card">
+        <div class="account-profile-summary-card__title">
+          帳戶資料
+        </div>
         <section class="account-profile-section">
-          <h2>{{ t('marketplace.myProfile.accountInfo') }}</h2>
           <dl class="account-profile-list">
             <div
               v-for="row in profileRows"
@@ -119,9 +123,13 @@ const {
             </div>
           </dl>
         </section>
+      </article>
 
+      <article class="account-profile-summary-card">
+        <div class="account-profile-summary-card__title">
+          身份狀態
+        </div>
         <section class="account-profile-section">
-          <h2>{{ t('marketplace.myProfile.identityInfo') }}</h2>
           <dl class="account-profile-list">
             <div
               v-for="row in accountRows"
@@ -132,28 +140,30 @@ const {
               <dd>{{ row.value }}</dd>
             </div>
           </dl>
-        </section>
-      </div>
 
+          <div class="account-profile-role-strip">
+            <span
+              v-for="role in roleChips"
+              :key="role"
+              class="account-profile-chip account-profile-chip--role"
+            >
+              {{ role }}
+            </span>
+            <span class="account-profile-role-note">
+              {{ permissionChips.length > 0 ? permissionChips[0] : '尚未分配權限' }}
+            </span>
+          </div>
+        </section>
+      </article>
+    </section>
+
+    <article class="account-profile-panel">
       <section class="account-profile-permissions">
-        <div class="account-profile-permissions__title">
-          <span>
-            <AppIcon
-              name="shield"
-              :size="18"
-            />
-          </span>
-          <h2>{{ t('marketplace.myProfile.permissions') }}</h2>
+        <div class="account-profile-summary-card__title">
+          相關權限
         </div>
 
         <div class="account-profile-chip-group">
-          <span
-            v-for="role in roleChips"
-            :key="role"
-            class="account-profile-chip account-profile-chip--role"
-          >
-            {{ role }}
-          </span>
           <span
             v-for="permission in permissionChips"
             :key="permission"
@@ -165,11 +175,11 @@ const {
       </section>
 
       <section class="account-profile-unit">
+        <div class="account-profile-summary-card__title">
+          綁定單位
+        </div>
         <div class="account-profile-unit__header">
-          <div>
-            <h2>綁定單位</h2>
-            <p>{{ selectedUnitDisplay }}</p>
-          </div>
+          <p>{{ selectedUnitDisplay }}</p>
           <BaseButton
             variant="primary"
             size="md"
@@ -438,8 +448,15 @@ const {
 .account-profile-page {
   display: grid;
   min-height: 100%;
-  gap: 1.25rem;
+  gap: 1rem;
   color: rgb(var(--color-text));
+}
+
+.account-profile-hero {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  padding: 1rem 1.1rem;
 }
 
 .account-profile-header {
@@ -447,8 +464,6 @@ const {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  border-bottom: 1px solid rgb(var(--color-border));
-  padding-bottom: 1rem;
 }
 
 .account-profile-header__identity {
@@ -465,11 +480,11 @@ const {
 
 .account-profile-header__text p {
   margin: 0;
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: 1.15;
   overflow-wrap: anywhere;
 }
 
@@ -491,7 +506,7 @@ const {
 
 .account-profile-loading {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
   padding: 0.9rem 1rem;
   color: rgb(var(--color-text-muted));
@@ -499,67 +514,69 @@ const {
   font-weight: 700;
 }
 
-.account-profile-panel {
+.account-profile-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
+  overflow: hidden;
 }
 
-.account-profile-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.account-profile-summary-card {
+  background: rgb(var(--color-surface));
+}
+
+.account-profile-summary-card:first-child {
+  border-right: 1px solid rgb(var(--color-border));
+}
+
+.account-profile-summary-card__title {
+  padding: 0.9rem 1rem 0.75rem;
+  color: rgb(var(--color-primary));
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.account-profile-panel {
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  box-shadow: none;
 }
 
 .account-profile-section {
   min-width: 0;
-  padding: 1.25rem;
-}
-
-.account-profile-section + .account-profile-section {
-  border-left: 1px solid rgb(var(--color-border));
-}
-
-.account-profile-section h2,
-.account-profile-permissions h2,
-.account-profile-unit h2 {
-  margin: 0;
-  color: rgb(var(--color-primary));
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  text-transform: uppercase;
+  padding: 0;
 }
 
 .account-profile-list {
   display: grid;
-  margin: 0.9rem 0 0;
+  margin: 0;
 }
 
 .account-profile-row {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 0.42fr) minmax(0, 1fr);
-  gap: 0.9rem;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
-  border-top: 1px solid rgb(var(--color-border) / 0.72);
-  padding: 0.72rem 0;
+  border-top: 1px solid rgb(var(--color-border));
+  padding: 0.65rem 1rem;
 }
 
 .account-profile-row dt {
   color: rgb(var(--color-text-muted));
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  line-height: 1.35;
-  text-transform: uppercase;
+  line-height: 1.5;
 }
 
 .account-profile-row dd {
   min-width: 0;
   margin: 0;
   color: rgb(var(--color-text));
-  font-size: 0.875rem;
+  font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -567,26 +584,8 @@ const {
 
 .account-profile-permissions {
   display: grid;
-  gap: 0.9rem;
-  border-top: 1px solid rgb(var(--color-border));
-  padding: 1.25rem;
-}
-
-.account-profile-permissions__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.account-profile-permissions__title span {
-  display: inline-flex;
-  height: 2rem;
-  width: 2rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: rgb(0 39 39 / 0.07);
-  color: rgb(var(--color-primary));
+  gap: 0.8rem;
+  padding: 1rem;
 }
 
 .account-profile-chip-group {
@@ -619,7 +618,7 @@ const {
   display: grid;
   gap: 0.9rem;
   border-top: 1px solid rgb(var(--color-border));
-  padding: 1.25rem;
+  padding: 1rem;
 }
 
 .account-profile-unit__header {
@@ -630,12 +629,28 @@ const {
 }
 
 .account-profile-unit p {
-  margin: 0.45rem 0 0;
+  margin: 0;
   color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.account-profile-role-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1rem;
+  border-top: 1px solid rgb(var(--color-border));
+}
+
+.account-profile-role-note {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .account-profile-unit__fields {
@@ -861,7 +876,6 @@ const {
   }
 
   .account-profile-header__identity,
-  .account-profile-grid,
   .account-profile-row,
   .account-profile-unit__fields,
   .account-avatar-editor,
@@ -883,6 +897,15 @@ const {
 
   .account-avatar-upload-button {
     width: 100%;
+  }
+
+  .account-profile-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-profile-summary-card:first-child {
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--color-border));
   }
 }
 
@@ -916,7 +939,9 @@ const {
 
 .account-profile-loading,
 .account-profile-panel,
-.account-profile-dialog {
+.account-profile-dialog,
+.account-profile-hero,
+.account-profile-summary-grid {
   border-radius: 3px;
   box-shadow: none;
 }
@@ -937,9 +962,6 @@ const {
   padding: 14px;
 }
 
-.account-profile-section h2,
-.account-profile-permissions h2,
-.account-profile-unit h2,
 .account-profile-kicker,
 .account-profile-field span,
 .account-profile-dialog__readonly span,

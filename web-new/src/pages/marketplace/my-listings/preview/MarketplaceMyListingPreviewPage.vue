@@ -46,14 +46,16 @@ const {
       v-if="listing"
       class="my-preview-summary"
     >
-      <p class="preview-kicker">
-        {{ t('marketplace.mine.detailKicker') }}
-      </p>
-      <p class="preview-reference">
-        {{ t('marketplace.detail.referenceId', { id: listingId }) }}
-      </p>
-      <h1>{{ listing.title }}</h1>
-      <p>{{ listing.summary }}</p>
+      <div>
+        <p class="preview-kicker">
+          {{ t('marketplace.mine.detailKicker') }}
+        </p>
+        <p class="preview-reference">
+          {{ t('marketplace.detail.referenceId', { id: listingId }) }}
+        </p>
+        <h1>{{ listing.title }}</h1>
+        <p>{{ listing.summary }}</p>
+      </div>
       <div class="preview-actions">
         <button
           type="button"
@@ -169,15 +171,14 @@ const {
       </div>
 
       <article class="preview-detail">
-        <div class="preview-price">{{ listingPrice }}</div>
+        <div class="preview-price-row">
+          <div class="preview-price">{{ listingPrice }}</div>
+          <span class="preview-status-pill">{{ statusLabel }}</span>
+        </div>
         <dl class="preview-specs">
           <div>
             <dt>{{ t('marketplace.mine.category') }}</dt>
             <dd>{{ categoryLabel }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('common.label.status') }}</dt>
-            <dd>{{ statusLabel }}</dd>
           </div>
           <div>
             <dt>{{ t('marketplace.mine.published') }}</dt>
@@ -206,10 +207,10 @@ const {
 .my-preview-page {
   display: grid;
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  gap: 1.5rem;
+  max-width: min(1240px, calc(100vw - 32px));
+  gap: 16px;
   margin: 0 auto;
-  padding: 1rem var(--layout-page-padding-inline) 5rem;
+  padding: 10px 0 72px;
   color: rgb(var(--color-text));
 }
 
@@ -218,70 +219,74 @@ const {
 .preview-detail,
 .preview-timeline {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
 .my-preview-summary,
 .preview-detail,
 .preview-timeline {
-  padding: 2rem;
+  padding: 16px;
+}
+
+.my-preview-summary {
+  display: grid;
+  gap: 16px;
 }
 
 .preview-kicker {
   margin: 0;
-  color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  color: rgb(var(--color-primary));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .preview-reference {
-  margin: 0.75rem 0 0;
+  margin: 8px 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.5;
 }
 
 .my-preview-summary h1 {
-  margin: 0.9rem 0 0;
-  color: rgb(var(--color-primary));
+  margin: 8px 0 0;
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 500;
-  line-height: 1.2;
+  font-size: clamp(1.9rem, 3.2vw, 2.5rem);
+  font-weight: 400;
+  line-height: 1.15;
 }
 
 .my-preview-summary p:not(.preview-kicker) {
-  margin-top: 1rem;
-  max-width: 44rem;
+  margin-top: 8px;
+  max-width: 48rem;
   color: rgb(var(--color-text-muted));
-  line-height: 1.75;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .preview-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: 8px;
 }
 
 .preview-action {
   display: inline-flex;
-  min-height: 3.25rem;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 6px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 999px;
-  padding: 0.8rem 1.25rem;
+  border-radius: 6px;
+  padding: 0 12px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
   transition:
     border-color 0.2s ease,
@@ -314,7 +319,7 @@ const {
 
 .my-preview-layout {
   display: grid;
-  gap: 1.5rem;
+  gap: 16px;
 }
 
 .preview-media {
@@ -328,39 +333,60 @@ const {
   object-fit: cover;
 }
 
+.preview-price-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .preview-price {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  font-weight: 600;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-weight: 400;
   color: rgb(var(--color-primary));
+}
+
+.preview-status-pill {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-primary) / 0.15);
+  border-radius: 999px;
+  background: rgb(var(--color-primary) / 0.08);
+  padding: 0 12px;
+  color: rgb(var(--color-primary));
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .preview-specs {
   display: grid;
-  gap: 1rem;
-  margin-top: 1.5rem;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .preview-specs dt {
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .preview-specs dd {
-  margin: 0.45rem 0 0;
+  margin: 4px 0 0;
   color: rgb(var(--color-text));
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .preview-timeline ol {
   display: grid;
-  gap: 1rem;
-  margin: 1rem 0 0;
+  gap: 12px;
+  margin: 12px 0 0;
   padding-left: 1.25rem;
   color: rgb(var(--color-text-muted));
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -382,13 +408,8 @@ const {
 
 @media (max-width: 767px) {
   .my-preview-page {
-    padding: 1rem var(--layout-page-padding-inline) 4rem;
-  }
-
-  .my-preview-summary,
-  .preview-detail,
-  .preview-timeline {
-    padding: 1.5rem;
+    max-width: 100%;
+    padding-bottom: 96px;
   }
 }
 </style>

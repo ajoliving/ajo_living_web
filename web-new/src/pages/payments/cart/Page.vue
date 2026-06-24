@@ -715,7 +715,7 @@ watch(singleCheckoutKey, () => {
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="currentCartCount === 0"
         @click="cartStore.clearContext(cartContext)"
       >
@@ -731,7 +731,7 @@ watch(singleCheckoutKey, () => {
       <BaseButton
         v-if="profileRequired"
         variant="primary"
-        size="md"
+        size="sm"
         @click="goPaymentUnit"
       >
         選擇單元
@@ -754,7 +754,7 @@ watch(singleCheckoutKey, () => {
         <div class="pos-page__toolbar-actions">
           <BaseButton
             variant="secondary"
-            size="md"
+            size="sm"
             :disabled="checkoutCount === currentCartCount"
             @click="selectAllBills"
           >
@@ -762,7 +762,7 @@ watch(singleCheckoutKey, () => {
           </BaseButton>
           <BaseButton
             variant="ghost"
-            size="md"
+            size="sm"
             :disabled="checkoutCount === 0"
             @click="clearSelectedBills"
           >
@@ -770,7 +770,7 @@ watch(singleCheckoutKey, () => {
           </BaseButton>
           <BaseButton
             variant="primary"
-            size="md"
+            size="sm"
             :disabled="checkoutCount === 0"
             @click="openCheckoutDialog"
           >
@@ -1076,7 +1076,7 @@ watch(singleCheckoutKey, () => {
           <footer class="pos-checkout-modal__footer">
             <BaseButton
               variant="secondary"
-              size="md"
+              size="sm"
               :disabled="checkoutStepIndex === 0 || isSubmitting"
               @click="goPreviousCheckoutStep"
             >
@@ -1085,7 +1085,7 @@ watch(singleCheckoutKey, () => {
             <BaseButton
               v-if="checkoutStepIndex < checkoutSteps.length - 1"
               variant="primary"
-              size="md"
+              size="sm"
               :disabled="selectedMethod === null || checkoutCount === 0"
               @click="goNextCheckoutStep"
             >
@@ -1094,7 +1094,7 @@ watch(singleCheckoutKey, () => {
             <BaseButton
               v-else
               variant="primary"
-              size="md"
+              size="sm"
               :disabled="!canSubmit"
               @click="submitCheckout"
             >

@@ -901,6 +901,79 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 }
 /* 樓盤租售卡片呎價與廣告位樣式 */
 #page-listing .garea-price{margin-top:3px;font-size:11px;color:var(--accent);font-weight:600;line-height:1.4;}
+#page-listing .g-location{margin:2px 0 5px;color:var(--ink-2);font-size:12px;font-weight:700;line-height:1.4;}
+#page-listing .lp{grid-template-columns:minmax(0,900px) 340px;max-width:1380px;}
+#page-listing .lf{display:none;}
+#page-listing .lr{padding:18px 18px 36px;min-width:0;}
+#page-listing .list-view,#page-listing .listing-pagination,#page-listing .listing-results-head,#page-listing .listing-search-panel{max-width:none;margin-left:0;margin-right:0;}
+#page-listing .listing-search-panel{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:14px 16px;margin-bottom:22px;}
+#page-listing .listing-filter-row{display:grid;grid-template-columns:auto 150px 150px 170px minmax(240px,1fr) auto;gap:10px;align-items:center;}
+#page-listing .listing-filter-label{color:var(--brand);font-size:13px;font-weight:800;white-space:nowrap;}
+#page-listing .listing-filter-dd{position:relative;z-index:12;}
+#page-listing .listing-filter-dd summary{display:flex;height:44px;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--sur-2);color:var(--ink);cursor:pointer;font-size:13px;font-weight:800;list-style:none;padding:0 14px;}
+#page-listing .listing-filter-dd summary::-webkit-details-marker{display:none;}
+#page-listing .listing-filter-dd summary::after{content:'';width:8px;height:8px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg) translateY(-2px);flex:0 0 auto;}
+#page-listing .listing-filter-dd[open] summary{border-color:var(--brand-mid);background:#fff;}
+#page-listing .listing-filter-dd[open] summary::after{transform:rotate(225deg) translate(-2px,-1px);}
+#page-listing .listing-filter-menu{position:absolute;top:calc(100% + 8px);left:0;z-index:24;min-width:280px;border:1px solid var(--bdr);border-radius:10px;background:#fff;box-shadow:var(--shadow-md);padding:12px;}
+#page-listing .listing-filter-menu.wide{min-width:390px;}
+#page-listing .listing-filter-group+.listing-filter-group{margin-top:12px;border-top:1px solid var(--sur-3);padding-top:12px;}
+#page-listing .listing-filter-group-title{color:var(--ink-3);font-size:10px;font-weight:800;letter-spacing:.8px;margin-bottom:8px;text-transform:uppercase;}
+#page-listing .listing-filter-menu .ftags{gap:6px;}
+#page-listing .listing-filter-menu .ft{font-size:11px;padding:5px 10px;}
+#page-listing .listing-search-wrap{display:flex;min-width:0;}
+#page-listing .listing-search-wrap .autocomplete-wrap{flex:1;min-width:0;}
+#page-listing .listing-search-wrap .sinput{width:100%;height:44px;border-radius:8px 0 0 8px;background:var(--sur-2);border-color:var(--bdr);font-size:13px;padding:0 14px;}
+#page-listing .listing-search-submit{display:inline-flex;width:52px;height:44px;align-items:center;justify-content:center;border:0;border-radius:0 8px 8px 0;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;}
+#page-listing .listing-filter-reset{height:44px;border:0;background:transparent;color:var(--ink-3);cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:0 8px;}
+#page-listing .listing-results-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px;}
+#page-listing .listing-results-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#page-listing .listing-view-toggle{display:inline-flex;align-items:center;border:1px solid var(--bdr);border-radius:8px;background:#fff;overflow:hidden;}
+#page-listing .listing-view-btn{display:inline-flex;height:34px;min-width:52px;align-items:center;justify-content:center;border:0;border-right:1px solid var(--bdr);background:#fff;color:var(--ink-3);cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:0 12px;}
+#page-listing .listing-view-btn:last-child{border-right:0;}
+#page-listing .listing-view-btn.on{background:var(--brand);color:#fff;}
+#page-listing .listing-results-title{color:var(--ink);font-size:24px;font-weight:800;line-height:1.2;margin:0 0 6px;}
+#page-listing .listing-results-count{color:var(--ink-3);font-size:13px;font-weight:800;}
+#page-listing .listing-results-count strong{color:var(--brand);font-size:18px;}
+#page-listing .g-location{display:flex;align-items:center;gap:5px;}
+#page-listing .g-location svg{width:15px;height:15px;flex:0 0 auto;stroke:currentColor;}
+#page-listing .listing-grid-type{display:none;}
+#page-listing .grid-mode>.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;columns:auto;}
+#page-listing .grid-mode .gc{display:flex;flex-direction:column;min-height:0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 8px 24px rgba(20,24,50,.08);}
+#page-listing .grid-mode .gc .gi{width:100%;height:auto !important;aspect-ratio:16/10;min-height:0;border-radius:0;}
+#page-listing .grid-mode .gc .gb{display:flex;flex:1;flex-direction:column;justify-content:flex-start;min-height:230px;padding:16px 18px 18px;}
+#page-listing .grid-mode .gc .gtags{display:none;}
+#page-listing .grid-mode .gc .g-location{order:1;margin:0 0 12px;color:#8A8EA3;font-size:13px;font-weight:700;line-height:1.4;}
+#page-listing .grid-mode .gc .g-location svg{width:17px;height:17px;stroke-width:1.9;}
+#page-listing .grid-mode .gc .gtitle{order:2;color:#050638;font-size:18px;font-weight:800;line-height:1.45;margin:0 0 12px;}
+#page-listing .grid-mode .listing-grid-type{display:inline-flex;align-items:center;border-radius:999px;background:#D7F5FF;color:#050638;font-size:13px;font-weight:700;line-height:1;padding:8px 10px;margin-right:8px;vertical-align:2px;white-space:nowrap;}
+#page-listing .grid-mode .gc .gsub{order:3;color:#8A8EA3;font-size:14px;font-weight:700;line-height:1.45;margin:0 0 8px;}
+#page-listing .grid-mode .gc .garea{order:4;color:#8A8EA3;font-size:13px;line-height:1.5;margin-bottom:18px;}
+#page-listing .grid-mode .gc .gprice{order:6;margin-top:auto;color:#05045C;font-size:21px;font-weight:800;line-height:1.2;}
+#page-listing .gdeal{display:none;}
+#page-listing .grid-mode .gc .gdeal{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:8px;background:var(--brand);color:#fff;font-size:13px;font-weight:800;margin-right:8px;vertical-align:middle;}
+#page-listing .grid-mode .gc .garea-price{order:5;display:block;color:#8A8EA3;font-size:13px;font-weight:700;line-height:1.4;margin:0 0 12px;}
+#page-listing .grid-mode .gc .garea-price::before{content:'';}
+#page-listing .grid-mode .gc .gpills{display:none;}
+#page-listing .grid-mode .gc .gc-actions{display:none;}
+#page-listing .grid-mode .listing-card-type-stack{display:none;}
+@media (min-width:1440px){
+  #page-listing .lp{grid-template-columns:minmax(0,980px) 360px;max-width:1480px;}
+}
+@media (max-width:900px){
+  #page-listing .lp{grid-template-columns:1fr;max-width:none;}
+  #page-listing .listing-filter-row{grid-template-columns:1fr 1fr;}
+  #page-listing .listing-filter-label,#page-listing .listing-search-wrap,#page-listing .listing-filter-reset{grid-column:1/-1;}
+  #page-listing .listing-filter-dd{position:static;}
+  #page-listing .listing-filter-menu,#page-listing .listing-filter-menu.wide{position:static;min-width:0;margin-top:8px;box-shadow:none;}
+  #page-listing .listing-results-head{align-items:flex-start;flex-direction:column;}
+  #page-listing .grid-mode>.grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:560px){
+  #page-listing .listing-filter-row{grid-template-columns:1fr;}
+  #page-listing .listing-filter-label,#page-listing .listing-search-wrap,#page-listing .listing-filter-reset{grid-column:auto;}
+  #page-listing .grid-mode>.grid{grid-template-columns:1fr;}
+}
 #page-listing .listing-ad-aside .listing-ad .ad-location{margin-top:4px;color:var(--ink-2);font-size:12px;font-weight:700;line-height:1.4;}
 #page-listing .listing-ad-aside .listing-ad .ad-price{margin-top:5px;color:var(--brand);font-size:13px;font-weight:700;line-height:1.4;}
 #page-listing .listing-ad-aside .listing-ad .ad-agent{margin-top:5px;color:var(--ink-3);font-size:10px;font-weight:500;line-height:1.4;}
@@ -1004,46 +1077,96 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 <!-- 樓盤租售 -->
 <div class="page on" id="page-listing">
   <div class="lp">
-    <aside class="lf">
-      <div class="sbar"><div class="autocomplete-wrap" style="flex:1;">
-        <input class="sinput" id="listing-search" placeholder="搜尋樓盤…" autocomplete="off" oninput="showAC(this,'listing-ac')" onblur="setTimeout(function(){hideAC('listing-ac')},200)">
-        <div class="autocomplete-drop" id="listing-ac">
-          <div class="ac-item" onclick="selectAC('佐敦','listing-search','listing-ac')"><span class="ac-icon">🏢</span><span><span class="ac-highlight">佐</span>敦 高級住宅</span></div>
-          <div class="ac-item" onclick="selectAC('中環','listing-search','listing-ac')"><span class="ac-icon">🏢</span><span><span class="ac-highlight">中</span>環甲級寫字樓</span></div>
-          <div class="ac-item" onclick="selectAC('沙田','listing-search','listing-ac')"><span class="ac-icon">🏠</span><span><span class="ac-highlight">沙</span>田第一城</span></div>
-          <div class="ac-item" onclick="selectAC('九龍','listing-search','listing-ac')"><span class="ac-icon">📍</span><span><span class="ac-highlight">九</span>龍區物件</span></div>
-        </div>
-      </div><button class="sbtn">搜</button></div>
-      <div class="fs"><div class="ft-title">地區</div><div class="ftags"><span class="ft on">全港</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div></div>
-      <div class="fs"><div class="ft-title">性質</div><div class="ftags"><span class="ft on">全部</span><span class="ft">出售</span><span class="ft">出租</span></div></div>
-      <div class="fs"><div class="ft-title">售價範圍</div><div class="ftags"><span class="ft on">不限</span><span class="ft">400萬以下</span><span class="ft">400–800萬</span><span class="ft">800–1200萬</span><span class="ft">2000萬+</span></div></div>
-      <div class="fs"><div class="ft-title">實用面積</div><div class="ftags"><span class="ft on">不限</span><span class="ft">300呎以下</span><span class="ft">300–500呎</span><span class="ft">500–1000呎</span><span class="ft">1000呎+</span></div></div>
-      <div class="fs"><div class="ft-title">房間</div><div class="ftags"><span class="ft on">全部</span><span class="ft">開放式</span><span class="ft">1房</span><span class="ft">2房</span><span class="ft">3房</span><span class="ft">4房+</span></div></div>
-      <div class="fs"><div class="ft-title">裝修</div><div class="ftags"><span class="ft on">全部</span><span class="ft">全新</span><span class="ft">有裝修</span><span class="ft">簡潔</span><span class="ft">特色</span></div></div>
-    </aside>
     <main class="lr">
-      <div class="sort-row listing-sort-row">
-        <div class="listing-result-tools">
-          <div class="listing-top-filters" aria-label="樓盤快速篩選">
-            <span class="ft">住宅</span><span class="ft">車位</span><span class="ft">工業</span><span class="ft">商廈</span>
-            <span class="listing-filter-divider" aria-hidden="true">｜</span>
-            <span class="ft">業主</span><span class="ft">代理</span>
+      <section class="listing-search-panel" aria-label="樓盤篩選">
+        <div class="listing-filter-row">
+          <div class="listing-filter-label">篩選</div>
+          <details class="listing-filter-dd">
+            <summary>地區</summary>
+            <div class="listing-filter-menu">
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">地區</div>
+                <div class="ftags"><span class="ft on">全港</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div>
+              </div>
+            </div>
+          </details>
+          <details class="listing-filter-dd">
+            <summary>類型</summary>
+            <div class="listing-filter-menu">
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">性質</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">出售</span><span class="ft">出租</span></div>
+              </div>
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">物業類型</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">住宅</span><span class="ft">車位</span><span class="ft">工業</span><span class="ft">商廈</span></div>
+              </div>
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">發布來源</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">業主盤</span><span class="ft">代理盤</span></div>
+              </div>
+            </div>
+          </details>
+          <details class="listing-filter-dd">
+            <summary>更多</summary>
+            <div class="listing-filter-menu wide">
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">售價範圍</div>
+                <div class="ftags"><span class="ft on">不限</span><span class="ft">400萬以下</span><span class="ft">400–800萬</span><span class="ft">800–1200萬</span><span class="ft">2000萬+</span></div>
+              </div>
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">實用面積</div>
+                <div class="ftags"><span class="ft on">不限</span><span class="ft">300呎以下</span><span class="ft">300–500呎</span><span class="ft">500–1000呎</span><span class="ft">1000呎+</span></div>
+              </div>
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">房間</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">開放式</span><span class="ft">1房</span><span class="ft">2房</span><span class="ft">3房</span><span class="ft">4房+</span></div>
+              </div>
+              <div class="listing-filter-group">
+                <div class="listing-filter-group-title">裝修</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">全新</span><span class="ft">有裝修</span><span class="ft">簡潔</span><span class="ft">特色</span></div>
+              </div>
+            </div>
+          </details>
+          <div class="listing-search-wrap">
+            <div class="autocomplete-wrap">
+              <input class="sinput" id="listing-search" placeholder="搜尋樓盤、大廈或地區" autocomplete="off" oninput="showAC(this,'listing-ac')" onblur="setTimeout(function(){hideAC('listing-ac')},200)">
+              <div class="autocomplete-drop" id="listing-ac">
+                <div class="ac-item" onclick="selectAC('佐敦','listing-search','listing-ac')"><span class="ac-icon">樓</span><span><span class="ac-highlight">佐</span>敦 高級住宅</span></div>
+                <div class="ac-item" onclick="selectAC('中環','listing-search','listing-ac')"><span class="ac-icon">商</span><span><span class="ac-highlight">中</span>環甲級寫字樓</span></div>
+                <div class="ac-item" onclick="selectAC('沙田','listing-search','listing-ac')"><span class="ac-icon">宅</span><span><span class="ac-highlight">沙</span>田第一城</span></div>
+                <div class="ac-item" onclick="selectAC('九龍','listing-search','listing-ac')"><span class="ac-icon">區</span><span><span class="ac-highlight">九</span>龍區物件</span></div>
+              </div>
+            </div>
+            <button class="listing-search-submit" type="button">搜</button>
           </div>
-          <span class="rn">4 個結果</span>
+          <button class="listing-filter-reset" type="button">重設</button>
         </div>
-        <select class="ssel"><option>最新發現</option><option>價格低至高</option><option>面積大至小</option></select>
+      </section>
+      <div class="listing-results-head">
+        <div>
+          <h2 class="listing-results-title">樓盤租售</h2>
+          <div class="listing-results-count">搜尋結果共 <strong>24</strong> 筆</div>
+        </div>
+        <div class="listing-results-actions">
+          <select class="ssel"><option>最新發現</option><option>價格低至高</option><option>面積大至小</option></select>
+          <div class="listing-view-toggle" aria-label="樓盤顯示方式">
+            <button class="listing-view-btn on" type="button" data-listing-view="list" onclick="setListingView('list')">列表</button>
+            <button class="listing-view-btn" type="button" data-listing-view="grid" onclick="setListingView('grid')">網格</button>
+          </div>
+        </div>
       </div>
-      <div class="list-view"><div class="grid">
+      <div class="list-view" id="listing-results-view"><div class="grid">
         <div class="gc" onclick="go('detail')">
-          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'佐敦 高級住宅','HK$36,000')">
+          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'山景兩房','HK$6,500,000')">
           <div class="listing-card-type-stack"><span>住宅</span><span>代理盤</span></div>
           <div class="gi tall pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);">
             <svg width="80" height="60" viewBox="0 0 80 60" opacity=".2"><rect x="5" y="15" width="70" height="40" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="31" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="52" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="28" y="37" width="24" height="18" rx="1" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle">佐敦 高級住宅</div><div class="gsub">佐敦站步行3分鐘 · 全新裝修 · 海景</div><div class="gprice">HK$36,000 <span>/ 月</span></div><div class="garea">實用面積 200呎</div><div class="garea-price">@HK$180/呎</div><div class="gpills"><span class="gpill">全新</span><span class="gpill">基本裝修</span><span class="gpill">廚房</span></div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">新界</span><span class="gtag">住宅</span></div><div class="gtitle">山景兩房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>荃灣 · 翠豐臺</div><div class="gsub">3座中層B室 · 2房 · 向西北</div><div class="gprice"><span class="gdeal">售</span>HK$6,500,000</div><div class="garea">實用面積 424呎</div><div class="garea-price">@HK$15,330/呎</div><div class="gpills"><span class="gpill">2房</span><span class="gpill">山景</span><span class="gpill">代理盤</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
-            <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('佐敦 高級住宅');showToast('已加入比較')">比較</button>
+            <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('山景兩房');showToast('已加入比較')">比較</button>
             <button class="gc-action-btn primary" onclick="event.stopPropagation();go('detail')">查看</button>
           </div>
         </div>
@@ -1053,7 +1176,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi short pat" style="background:linear-gradient(160deg,#d8e0e0,#c0cccc);">
             <svg width="60" height="40" viewBox="0 0 60 40" opacity=".2"><rect x="3" y="5" width="54" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="8" y="10" width="44" height="15" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle">佐敦婚 38 窗 套房</div><div class="gsub">1–3房可選 · 地端式佣</div><div class="gprice">HK$6,500 <span>/ 月</span></div><div class="garea">實用面積 100呎</div><div class="garea-price">@HK$65/呎</div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle">佐敦婚 38 窗 套房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>九龍 · 佐敦</div><div class="gsub">1–3房可選 · 地端式佣</div><div class="gprice"><span class="gdeal">租</span>HK$6,500 <span>/ 月</span></div><div class="garea">實用面積 100呎</div><div class="garea-price">@HK$65/呎</div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('佐敦婚 38窗 套房');showToast('已加入比較')">比較</button>
@@ -1066,7 +1189,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi tall pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);">
             <svg width="70" height="55" viewBox="0 0 70 55" opacity=".2"><rect x="5" y="5" width="60" height="45" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><line x1="5" y1="20" x2="65" y2="20" stroke="#000" stroke-width=".8"/><line x1="35" y1="5" x2="35" y2="50" stroke="#000" stroke-width=".8"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">香港島</span><span class="gtag dark">商廈</span></div><div class="gtitle">中環甲級寫字樓</div><div class="gsub">海景全層 · IFC 對面 · 即租</div><div class="gprice">HK$120,000 <span>/ 月</span></div><div class="garea">實用面積 2,400呎</div><div class="garea-price">@HK$50/呎</div><div class="gpills"><span class="gpill">海景</span><span class="gpill">全新裝修</span><span class="gpill">有冷氣</span></div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">香港島</span><span class="gtag dark">商廈</span></div><div class="gtitle">中環甲級寫字樓</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>中環 · IFC</div><div class="gsub">海景全層 · IFC 對面 · 即租</div><div class="gprice"><span class="gdeal">租</span>HK$120,000 <span>/ 月</span></div><div class="garea">實用面積 2,400呎</div><div class="garea-price">@HK$50/呎</div><div class="gpills"><span class="gpill">海景</span><span class="gpill">全新裝修</span><span class="gpill">有冷氣</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('中環甲級寫字樓');showToast('已加入比較')">比較</button>
@@ -1079,7 +1202,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi short pat" style="background:linear-gradient(160deg,#e4dcd8,#ccc0bc);">
             <svg width="55" height="40" viewBox="0 0 55 40" opacity=".2"><rect x="5" y="5" width="45" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="10" width="15" height="10" stroke="#000" fill="none"/><rect x="30" y="10" width="15" height="10" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">新界</span></div><div class="gtitle">沙田第一城 3房</div><div class="gsub">低層 · 靚裝 · 近港鐵</div><div class="gprice">HK$18,500 <span>/ 月</span></div><div class="garea">實用面積 650呎</div><div class="garea-price">@HK$28/呎</div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">新界</span></div><div class="gtitle">沙田第一城 3房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>沙田 · 第一城</div><div class="gsub">低層 · 靚裝 · 近港鐵</div><div class="gprice"><span class="gdeal">租</span>HK$18,500 <span>/ 月</span></div><div class="garea">實用面積 650呎</div><div class="garea-price">@HK$28/呎</div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('沙田第一城 3房');showToast('已加入比較')">比較</button>
@@ -1092,8 +1215,8 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <div class="map-canvas">
           <div class="map-grid-bg"></div>
           <!-- pins -->
-          <div class="map-pin" style="left:28%;top:45%;" onclick="showMapPopup(this,'佐敦 高級住宅','HK$36,000/月','九龍')">
-            <div class="map-pin-bubble accent">$36,000</div>
+          <div class="map-pin" style="left:28%;top:45%;" onclick="showMapPopup(this,'山景兩房','HK$6,500,000','荃灣 · 翠豐臺')">
+            <div class="map-pin-bubble accent">$6.5M</div>
             <div class="map-pin-arrow accent"></div>
           </div>
           <div class="map-pin" style="left:48%;top:30%;" onclick="showMapPopup(this,'中環甲級寫字樓','HK$120,000/月','香港島')">
@@ -1134,34 +1257,25 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <article class="ad-card banner listing-ad">
           <div class="ad-visual office"></div>
           <div class="ad-copy">
-            <span class="ad-label">代理盤</span>
-            <div class="ad-title">山景兩房 快PM我拎資料</div>
-            <div class="ad-location">荃灣 · 翠豐臺</div>
-            <div class="ad-desc">3座中層B室 · 2房 · 向西北</div>
-            <div class="ad-price">實用 424呎 @HK$15,330</div>
-            <div class="ad-agent">中原地產代理有限公司</div>
+            <span class="ad-label">16:9</span>
+            <div class="ad-title">新盤代理服務</div>
+            <div class="ad-desc">樓盤發布、預約睇樓與租售查詢。</div>
           </div>
         </article>
         <article class="ad-card banner listing-ad">
           <div class="ad-visual home"></div>
           <div class="ad-copy">
-            <span class="ad-label">業主盤</span>
-            <div class="ad-title">海景開放式 即租即住</div>
-            <div class="ad-location">旺角 · 銀座廣場</div>
-            <div class="ad-desc">5座高層A室 · 開放式 · 向東南</div>
-            <div class="ad-price">實用 320呎 @HK$18,750</div>
-            <div class="ad-agent">業主自讓</div>
+            <span class="ad-label">16:9</span>
+            <div class="ad-title">住宅按揭諮詢</div>
+            <div class="ad-desc">按揭預批、估價與成交支援。</div>
           </div>
         </article>
         <article class="ad-card banner listing-ad">
           <div class="ad-visual service"></div>
           <div class="ad-copy">
-            <span class="ad-label">代理盤</span>
-            <div class="ad-title">3房套連平台 近港鐵</div>
-            <div class="ad-location">沙田 · 第一城</div>
-            <div class="ad-desc">7座低層C室 · 3房 · 向南</div>
-            <div class="ad-price">實用 650呎 @HK$28</div>
-            <div class="ad-agent">美聯物業代理有限公司</div>
+            <span class="ad-label">16:9</span>
+            <div class="ad-title">搬遷及驗樓服務</div>
+            <div class="ad-desc">入住前檢查、清潔及交收安排。</div>
           </div>
         </article>
         <div class="ad-vertical-grid">
@@ -2670,6 +2784,8 @@ function setPaySSO(loggedIn, userName) {
 function updateServiceContactVisibility() {
   var servicePhone = document.getElementById('service-detail-phone-text');
   if(servicePhone) servicePhone.textContent = '致電查詢';
+  var listingPhone = document.getElementById('listing-detail-phone-text');
+  if(listingPhone) listingPhone.textContent = '致電查詢';
 }
 
 function revealServicePhone() {
@@ -2677,6 +2793,15 @@ function revealServicePhone() {
   if(!servicePhone) return;
   if(ajoLivingLoggedIn) {
     servicePhone.textContent = '+852 3988 8800';
+    return;
+  }
+  showToast('請先登入會員查看電話號碼','error');
+}
+function revealListingPhone() {
+  var listingPhone = document.getElementById('listing-detail-phone-text');
+  if(!listingPhone) return;
+  if(ajoLivingLoggedIn) {
+    listingPhone.textContent = '+852 6123 4567';
     return;
   }
   showToast('請先登入會員查看電話號碼','error');
@@ -3048,22 +3173,22 @@ if(alertModalEl){alertModalEl.addEventListener('click', function(e){ if(e.target
               <div class="detail-agent-note">可另約平日晚上或週末睇樓</div>
             </div>
             <div class="detail-agent-actions">
-              <div class="detail-agent-contact" aria-label="代理電話">
+              <button class="detail-agent-contact" type="button" aria-label="代理電話" onclick="revealListingPhone()">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 19 19.5 19.5 0 0 1 5 12.81 19.8 19.8 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.92.33 1.82.62 2.68a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6.27 6.27l1.22-1.23a2 2 0 0 1 2.11-.45c.86.29 1.76.5 2.68.62A2 2 0 0 1 22 16.92Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                +852 6123 4567
-              </div>
+                <span id="listing-detail-phone-text">致電查詢</span>
+              </button>
               <a class="detail-agent-contact primary" href="https://wa.me/85261234567" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.2 20.2 3 21l.9-4A9 9 0 1 1 7.2 20.2Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 8.7c.2-.4.4-.5.7-.5h.5c.2 0 .4.1.5.4l.6 1.4c.1.3.1.5-.1.7l-.4.5c.7 1.2 1.6 2.1 2.8 2.8l.5-.4c.2-.2.4-.2.7-.1l1.4.6c.3.1.4.3.4.5v.5c0 .3-.1.5-.5.7-.6.3-1.4.3-2.4-.1-2.4-.8-4.3-2.7-5.1-5.1-.4-1-.4-1.8-.1-2.4Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 WhatsApp
               </a>
               <button class="detail-agent-contact" type="button" onclick="go('chat')">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.8-.9L3 20l1.1-4.6a8.4 8.4 0 1 1 16.9-3.9Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11h8M8 14h5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                站內聊天
+                留言查詢
               </button>
             </div>
           </div>
           <div class="similar-section">
-            <div class="label-text" style="margin-bottom:12px;">相似物件推薦</div>
+            <div class="label-text" style="margin-bottom:12px;">其他樓盤</div>
             <div class="similar-scroll">
               <div class="sim-card" onclick="showToast('正在載入物件…')">
                 <div class="sim-img pat" style="background:linear-gradient(135deg,#e4dcd8,#ccc0bc);"></div>
@@ -3328,6 +3453,15 @@ function setPropertyBindingPlatform(platform){
   });
   document.querySelectorAll('[data-binding-review]').forEach(function(item){
     item.hidden=item.getAttribute('data-binding-review')!==platform;
+  });
+}
+function setListingView(view){
+  var target=document.getElementById('listing-results-view');
+  if(!target)return;
+  target.classList.add('list-view');
+  target.classList.toggle('grid-mode',view==='grid');
+  document.querySelectorAll('[data-listing-view]').forEach(function(btn){
+    btn.classList.toggle('on',btn.getAttribute('data-listing-view')===view);
   });
 }
 document.querySelectorAll('.ftags').forEach(function(g){g.querySelectorAll('.ft').forEach(function(t){t.addEventListener('click',function(){g.querySelectorAll('.ft').forEach(function(x){x.classList.remove('on');});this.classList.add('on');});});});

@@ -31,6 +31,7 @@ const (
 	WalletSourceRewardAd      = "reward_ad"
 	WalletSourceOperatorGrant = "operator_grant"
 	WalletSourceRecharge      = "recharge_payment"
+	WalletSourcePOSPayment    = "pos_payment"
 
 	WalletActionSaveDraft = "save_draft"
 	WalletActionPublish   = "publish"
@@ -41,6 +42,7 @@ const (
 	WalletActionAdReward  = "ad_reward"
 	WalletActionContact   = "contact_access"
 	WalletActionRecharge  = "recharge"
+	WalletActionPOSReward = "pos_payment_reward"
 
 	RewardClaimStatusStarted = "started"
 	RewardClaimStatusClaimed = "claimed"

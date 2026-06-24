@@ -8,10 +8,20 @@ import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
-import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useSessionStore } from '@/stores/session';
 
 import { useAccountNavigation } from '../my';
+
+type AccountSidebarIconName =
+  | 'building'
+  | 'home'
+  | 'layout-list'
+  | 'message'
+  | 'palette'
+  | 'star'
+  | 'user'
+  | 'wallet';
 
 const route = useRoute();
 const { t } = useI18n();
@@ -26,46 +36,50 @@ const isActive = (to: string, exact = false) =>
 const accountRoleLabel = computed(() =>
   sessionStore.currentUser.member_type || t('account.overview.memberLabel'),
 );
+
+// 3. 取得導覽項目圖示
+const resolveNavigationIcon = (key: string): AccountSidebarIconName => {
+  const iconMap: Record<string, AccountSidebarIconName> = {
+    profile: 'user',
+    wallet: 'wallet',
+    chat: 'message',
+    'property-sales': 'home',
+    'serviced-residences': 'building',
+    listings: 'layout-list',
+    favorites: 'star',
+    'marketplace-settings': 'palette',
+    'marketplace-management': 'building',
+  };
+
+  return iconMap[key] ?? 'layout-list';
+};
 </script>
 
 <template>
   <aside class="account-sidebar">
-    <div class="border-b border-border pb-5">
-      <div class="flex items-center gap-4">
-        <BaseAvatar
-          :src="sessionStore.currentUser.avatar_url"
-          :name="sessionStore.currentUser.display_name"
-          :size="56"
-        />
-        <div class="min-w-0">
-          <p class="truncate font-display text-[24px] font-medium leading-[1.4] text-text">
-            {{ sessionStore.currentUser.display_name }}
-          </p>
-          <p class="truncate text-[14px] leading-[1.6] text-text-muted">
-            {{ t('nav.memberCenter') }}
-          </p>
-        </div>
-      </div>
+    <div class="account-sidebar__header">
+      <h1>{{ t('account.title') }}</h1>
+      <p>{{ sessionStore.currentUser.display_name }}</p>
 
-      <div class="mt-5 border-l-2 border-primary bg-surface-muted px-4 py-3">
-        <p class="text-[12px] font-semibold uppercase leading-none tracking-[0.1em] text-text-muted">
-          {{ t('account.overview.memberLabel') }}
-        </p>
-        <p class="mt-2 text-[15px] font-semibold leading-[1.5] text-text">
-          {{ accountRoleLabel }}
-        </p>
+      <div class="account-sidebar__meta">
+        <span>{{ t('account.overview.memberLabel') }}</span>
+        <strong>{{ accountRoleLabel }}</strong>
       </div>
     </div>
 
-    <nav class="space-y-3">
+    <nav class="account-sidebar__nav">
       <RouterLink
         v-for="item in navigationItems"
         :key="item.key"
         :to="item.to"
-        class="account-sidebar-link"
-        :class="isActive(item.to, item.exact) ? 'account-sidebar-link-active' : 'account-sidebar-link-idle'"
+        class="account-sidebar__nav-item"
+        :class="{ 'account-sidebar__nav-item--active': isActive(item.to, item.exact) }"
       >
-        {{ item.label }}
+        <AppIcon
+          :name="resolveNavigationIcon(item.key)"
+          :size="17"
+        />
+        <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
   </aside>
@@ -73,84 +87,124 @@ const accountRoleLabel = computed(() =>
 
 <style scoped>
 .account-sidebar {
-  --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
-  --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
-  --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
-  display: flex;
-  width: 16rem;
-  flex-shrink: 0;
-  flex-direction: column;
-  gap: 2rem;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-height: calc(100vh - var(--app-header-offset, 48px));
+  border-right: 1px solid rgb(var(--color-border));
   background: rgb(var(--color-surface));
-  padding: 1rem;
-  overflow: visible;
+  padding: 1.5rem 1rem 1rem 0;
 }
 
-.account-sidebar-link {
-  position: relative;
-  display: flex;
+.account-sidebar__header h1 {
+  margin: 0;
+  color: rgb(var(--color-text));
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.account-sidebar__header p {
+  margin: 0.55rem 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.account-sidebar__meta {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  border-left: 3px solid rgb(var(--color-primary));
+  background: rgb(var(--color-surface-muted));
+  padding: 0.8rem 0.85rem;
+}
+
+.account-sidebar__meta span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.account-sidebar__meta strong {
+  color: rgb(var(--color-text));
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.account-sidebar__nav {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.account-sidebar__nav-item {
+  display: inline-flex;
+  min-height: 2.6rem;
+  width: 100%;
   align-items: center;
-  justify-content: space-between;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
-  background: rgb(var(--color-surface-raised));
-  padding: 0.9rem 0.85rem;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.6;
+  gap: 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  padding: 0.62rem 0.8rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
     color 0.2s ease,
-    padding-left 0.2s ease;
+    transform 0.18s ease;
 }
 
-.account-sidebar-link-active {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary-soft));
-  color: var(--subroute-nav-active-color);
-  text-shadow: var(--subroute-nav-active-shadow);
+.account-sidebar__nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.account-sidebar-link-idle {
-  color: rgb(var(--color-text) / 0.78);
-}
-
-.account-sidebar-link-idle:hover {
-  border-color: rgb(var(--color-border) / 0.38);
+.account-sidebar__nav-item:hover {
+  border-color: rgb(var(--color-border));
   color: rgb(var(--color-text));
-  padding-left: 1rem;
+  transform: translateX(2px);
 }
 
-.account-sidebar-link::after {
-  position: absolute;
-  left: 0.85rem;
-  right: 0.85rem;
-  bottom: 0.58rem;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--subroute-nav-underline);
-  transform: scaleX(0);
-  transform-origin: left center;
-  opacity: 0;
-  transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
-  content: '';
+.account-sidebar__nav-item--active,
+.account-sidebar__nav-item--active:hover {
+  border-color: rgb(var(--color-text));
+  background: rgb(var(--color-text));
+  color: #ffffff;
+  transform: none;
 }
 
-.account-sidebar-link-active::after {
-  transform: scaleX(1);
-  opacity: 1;
+@media (min-width: 1024px) {
+  .account-sidebar {
+    position: sticky;
+    top: var(--app-header-offset, 48px);
+  }
 }
 
 @media (max-width: 767px) {
   .account-sidebar {
-    width: 100%;
-    overflow: visible;
-    padding-right: 0;
+    min-height: auto;
+    gap: 1rem;
+    padding: 1rem 0 0;
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--color-border));
+  }
+
+  .account-sidebar__nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-sidebar__nav-item {
+    min-height: 2.5rem;
   }
 }
 </style>

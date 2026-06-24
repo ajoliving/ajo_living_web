@@ -512,36 +512,36 @@ onBeforeUnmount(() => {
 <style scoped>
 .editor-form-panel {
   display: grid;
-  gap: 2rem;
+  gap: 1rem;
   min-width: 0;
 }
 
 .editor-section {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 2rem;
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
+  padding: 1rem;
+  box-shadow: none;
 }
 
 .editor-section-heading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
 }
 
 .editor-step-number {
   display: inline-flex;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -549,30 +549,30 @@ onBeforeUnmount(() => {
 .editor-kicker,
 .editor-field span {
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .editor-section-heading h2 {
-  margin: 0.35rem 0 0;
+  margin: 0.25rem 0 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.125rem;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 .editor-field-grid {
   display: grid;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .editor-field {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.45rem;
   min-width: 0;
 }
 
@@ -587,11 +587,11 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 0.35rem 0.6rem;
+  padding: 0.25rem 0.45rem;
   color: rgb(var(--color-primary));
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -600,14 +600,14 @@ onBeforeUnmount(() => {
 
 .editor-donation-field {
   display: flex;
-  min-height: 3rem;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.65rem;
   align-self: end;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.8rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
   font-weight: 700;
@@ -628,7 +628,7 @@ onBeforeUnmount(() => {
 
 .editor-measurement-grid {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
 .editor-field input,
@@ -636,7 +636,7 @@ onBeforeUnmount(() => {
 .editor-field textarea {
   width: 100%;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
@@ -650,13 +650,13 @@ onBeforeUnmount(() => {
 
 .editor-field input,
 .editor-field select {
-  height: 3rem;
-  padding: 0 1rem;
+  height: 2.75rem;
+  padding: 0 0.85rem;
 }
 
 .editor-field textarea {
-  min-height: 10rem;
-  padding: 0.85rem 1rem;
+  min-height: 8.5rem;
+  padding: 0.75rem 0.85rem;
   resize: vertical;
 }
 
@@ -695,9 +695,9 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.75rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 0 1rem;
+  padding: 0 0.85rem;
   color: rgb(var(--color-text));
   font-size: 0.9375rem;
   line-height: 1.4;
@@ -739,12 +739,12 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 0.25rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0 0 3px 3px;
+  border-radius: 0 0 2px 2px;
   background: rgb(var(--color-dropdown-surface));
   max-height: 14rem;
   overflow-y: auto;
   padding: 0.5rem;
-  box-shadow: 0 10px 24px rgb(15 23 42 / 0.1);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.08);
   scrollbar-color: rgb(var(--color-border)) transparent;
   scrollbar-width: thin;
 }
@@ -765,7 +765,7 @@ onBeforeUnmount(() => {
   gap: 0.65rem;
   width: 100%;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: transparent;
   padding: 0.65rem 0.7rem;
   color: rgb(var(--color-text));
@@ -797,16 +797,16 @@ onBeforeUnmount(() => {
 
 .editor-dropzone {
   display: flex;
-  min-height: 13rem;
+  min-height: 9.5rem;
   cursor: pointer;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
   border: 2px dashed rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 3rem 2rem;
+  padding: 1.5rem;
   text-align: center;
   transition:
     border-color 0.2s ease,
@@ -844,15 +844,15 @@ onBeforeUnmount(() => {
 
 .editor-upload-grid {
   display: grid;
-  gap: 1rem;
-  margin-top: 1.25rem;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .editor-upload-slot {
   position: relative;
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
 }
 
@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
 
 .editor-upload-slot__media,
 .editor-upload-slot img {
-  height: 10rem;
+  height: 8.5rem;
   width: 100%;
 }
 
@@ -889,9 +889,9 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 0.75rem;
   top: 0.75rem;
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(var(--color-primary));
-  padding: 0.45rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   color: rgb(var(--color-primary-contrast));
   font-size: 0.75rem;
   font-weight: 700;
@@ -908,14 +908,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(255 255 255 / 0.92);
   color: rgb(var(--color-danger));
   cursor: pointer;
   font-size: 1.125rem;
   font-weight: 800;
   line-height: 1;
-  box-shadow: 0 8px 18px rgb(0 0 0 / 0.12);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 0.1);
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -942,7 +942,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 9999px;
+  border-radius: 2px;
   padding: 0.4rem 0.7rem;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text-muted));
@@ -983,9 +983,9 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 1rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 1rem;
+  padding: 0.85rem;
 }
 
 .editor-visibility-card p {
@@ -1008,12 +1008,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 1rem 0 1.5rem;
+  margin: 0.85rem 0 1rem;
 }
 
 .editor-visibility-option {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 9999px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   padding: 0.55rem 0.95rem;
   color: rgb(var(--color-text-muted));
@@ -1067,15 +1067,15 @@ onBeforeUnmount(() => {
 
 .editor-chat-toggle {
   display: flex;
-  height: 3rem;
-  min-height: 3rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 0 1rem;
+  padding: 0 0.85rem;
   color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
   font-weight: 700;

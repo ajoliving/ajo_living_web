@@ -7,6 +7,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -24,33 +25,34 @@ type UserService struct {
 
 // 2. MeResponse defines the current user response shape.
 type MeResponse struct {
-	PublicID          string             `json:"public_id"`
-	Email             string             `json:"email"`
-	PhoneCountryCode  string             `json:"phone_country_code"`
-	PhoneNumber       string             `json:"phone_number"`
-	MemberStatus      string             `json:"member_status"`
-	MemberType        string             `json:"member_type"`
-	IsStaff           bool               `json:"is_staff"`
-	Role              string             `json:"role"`
-	Roles             []string           `json:"roles"`
-	Permissions       []string           `json:"permissions"`
-	DisplayName       string             `json:"display_name"`
-	AvatarURL         string             `json:"avatar_url"`
-	PublisherIdentity string             `json:"publisher_identity_type"`
-	DistrictCode      string             `json:"district_code"`
-	ResidenceFloor    string             `json:"residence_floor"`
-	ResidenceUnit     string             `json:"residence_unit"`
-	BoundBuildingIDs  []string           `json:"bound_building_ids"`
-	BoundFlatUnitIDs  []string           `json:"bound_flat_unit_ids"`
-	PrimaryCommunity  *CommunityResponse `json:"primary_community,omitempty"`
-	ProfileCompleted  bool               `json:"profile_completed"`
-	AJOBalance        int64              `json:"ajo_balance"`
-	IsmartLinked      bool               `json:"ismart_linked"`
-	IsmartUsername    string             `json:"ismart_username"`
-	IsmartBoundPhone  string             `json:"ismart_bound_phone"`
-	IsmartPassword    string             `json:"ismart_password"`
-	LocalPassword     string             `json:"local_password"`
-	IsmartMsg         *IsmartMessage     `json:"ismart_msg,omitempty"`
+	PublicID          string                        `json:"public_id"`
+	Email             string                        `json:"email"`
+	PhoneCountryCode  string                        `json:"phone_country_code"`
+	PhoneNumber       string                        `json:"phone_number"`
+	MemberStatus      string                        `json:"member_status"`
+	MemberType        string                        `json:"member_type"`
+	IsStaff           bool                          `json:"is_staff"`
+	Role              string                        `json:"role"`
+	Roles             []string                      `json:"roles"`
+	Permissions       []string                      `json:"permissions"`
+	DisplayName       string                        `json:"display_name"`
+	AvatarURL         string                        `json:"avatar_url"`
+	PublisherIdentity string                        `json:"publisher_identity_type"`
+	DistrictCode      string                        `json:"district_code"`
+	ResidenceFloor    string                        `json:"residence_floor"`
+	ResidenceUnit     string                        `json:"residence_unit"`
+	BoundBuildingIDs  []string                      `json:"bound_building_ids"`
+	BoundFlatUnitIDs  []string                      `json:"bound_flat_unit_ids"`
+	PrimaryCommunity  *CommunityResponse            `json:"primary_community,omitempty"`
+	ProfileCompleted  bool                          `json:"profile_completed"`
+	AJOBalance        int64                         `json:"ajo_balance"`
+	IsmartLinked      bool                          `json:"ismart_linked"`
+	IsmartUsername    string                        `json:"ismart_username"`
+	IsmartBoundPhone  string                        `json:"ismart_bound_phone"`
+	IsmartPassword    string                        `json:"ismart_password"`
+	LocalPassword     string                        `json:"local_password"`
+	IsmartMsg         *IsmartMessage                `json:"ismart_msg,omitempty"`
+	IsmartAccount     *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
 }
 
 // 3. CommunityResponse defines a lightweight community payload.
@@ -61,6 +63,30 @@ type CommunityResponse struct {
 	NameEN        string `json:"name_en"`
 	DistrictCode  string `json:"district_code"`
 	AddressText   string `json:"address_text"`
+}
+
+// 4. IsmartRelatedPropertyResponse defines a read-only legacy property row.
+type IsmartRelatedPropertyResponse struct {
+	PropertyName string `json:"property_name"`
+	Status       string `json:"status"`
+}
+
+// 5. IsmartAccountProfileResponse defines read-only legacy iSmart account data.
+type IsmartAccountProfileResponse struct {
+	AccountCode    string                          `json:"account_code"`
+	AccountPhone   string                          `json:"account_phone"`
+	AccountEmail   string                          `json:"account_email"`
+	OwnerNameEN    string                          `json:"owner_name_en"`
+	OwnerNameZH    string                          `json:"owner_name_zh"`
+	IdentityNumber string                          `json:"identity_number"`
+	LegalEntity    string                          `json:"legal_entity"`
+	Gender         string                          `json:"gender"`
+	BirthDate      string                          `json:"birth_date"`
+	ContactName    string                          `json:"contact_name"`
+	ContactPhone   string                          `json:"contact_phone"`
+	BillingEmail   string                          `json:"billing_email"`
+	BillingAddress string                          `json:"billing_address"`
+	Properties     []IsmartRelatedPropertyResponse `json:"properties"`
 }
 
 // 4. UpdateProfileParams defines profile update input.
@@ -135,6 +161,7 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		IsmartLinked:      ismartMsg != nil,
 		LocalPassword:     s.userLocalPassword(ctx, user.ID),
 		IsmartMsg:         ismartMsg,
+		IsmartAccount:     s.loadIsmartAccountProfile(ctx, user.ID),
 	}
 	if ismartMsg != nil {
 		response.IsmartUsername = ismartMsg.Username
@@ -626,7 +653,57 @@ func shouldChargeAvatarUpdate(profile *model.UserProfile, nextAssetID any) bool 
 	return *profile.AvatarAssetID != assetID
 }
 
-// 26. toCommunityResponse maps a community model to response data.
+// 26. loadIsmartAccountProfile returns the read-only legacy account snapshot.
+func (s *UserService) loadIsmartAccountProfile(ctx context.Context, userID int64) *IsmartAccountProfileResponse {
+	var account model.UserIsmartAccount
+	result := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).Limit(1).Find(&account)
+	if result.Error != nil || result.RowsAffected == 0 {
+		return nil
+	}
+
+	raw := map[string]any{}
+	_ = json.Unmarshal(account.RawMessage, &raw)
+	properties := make([]IsmartRelatedPropertyResponse, 0)
+	for _, propertyName := range normalizeStringSlice(append(
+		unmarshalStringSlice(account.ClientBuildingPermissions),
+		unmarshalStringSlice(account.StaffBuildingPermissions)...,
+	)) {
+		properties = append(properties, IsmartRelatedPropertyResponse{
+			PropertyName: propertyName,
+			Status:       "",
+		})
+	}
+
+	return &IsmartAccountProfileResponse{
+		AccountCode:    firstLegacyText(raw, account.Username, "account_code", "account_no", "account_number", "username", "memberno"),
+		AccountPhone:   firstLegacyText(raw, account.Phone, "account_phone", "memberphone", "phone", "tel"),
+		AccountEmail:   firstLegacyText(raw, "", "account_email", "memberemail", "email", "billing_email"),
+		OwnerNameEN:    firstLegacyText(raw, "", "owner_name_en", "memberengname", "eng_name", "english_name"),
+		OwnerNameZH:    firstLegacyText(raw, "", "owner_name_zh", "memberchiname", "chi_name", "chinese_name"),
+		IdentityNumber: firstLegacyText(raw, "", "identity_number", "memberid", "id_number", "hkid"),
+		LegalEntity:    firstLegacyText(raw, "", "legal_entity", "member_legalentity", "legalentity"),
+		Gender:         firstLegacyText(raw, "", "gender", "membergender"),
+		BirthDate:      firstLegacyText(raw, "", "birth_date", "birthday", "date_of_birth", "dob"),
+		ContactName:    firstLegacyText(raw, "", "contact_name", "contact_person", "contactperson"),
+		ContactPhone:   firstLegacyText(raw, account.Phone, "contact_phone", "contact_tel", "contactphone"),
+		BillingEmail:   firstLegacyText(raw, "", "billing_email", "bill_email", "memberemail"),
+		BillingAddress: firstLegacyText(raw, "", "billing_address", "bill_address", "address"),
+		Properties:     properties,
+	}
+}
+
+// 27. firstLegacyText reads a stable text value from possible legacy keys.
+func firstLegacyText(raw map[string]any, fallback string, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(paymentStringValue(raw[key])); value != "" {
+			return value
+		}
+	}
+
+	return strings.TrimSpace(fallback)
+}
+
+// 28. toCommunityResponse maps a community model to response data.
 func toCommunityResponse(community *model.Community) *CommunityResponse {
 	if community == nil {
 		return nil

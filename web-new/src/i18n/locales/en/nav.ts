@@ -48,4 +48,7 @@ export default {
   orders: 'Orders',
   notifications: 'Inbox',
   login: 'Login',
+  building: 'My Building',
+  trend: 'Trends',
+  ajoPay: 'AJO Pay',
 };

@@ -145,19 +145,19 @@ const runPrimaryAction = (): void => {
 <style scoped>
 .editor-preview-panel {
   position: sticky;
-  top: calc(var(--app-header-offset, 0rem) + 2rem);
+  top: calc(var(--app-header-offset, 0rem) + 1rem);
   display: grid;
   align-content: start;
-  gap: 1rem;
+  gap: 0.75rem;
   min-width: 0;
 }
 
 .editor-preview-kicker {
   margin: 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -166,9 +166,9 @@ const runPrimaryAction = (): void => {
 .editor-checklist {
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
+  box-shadow: none;
 }
 
 .editor-preview-card__media {
@@ -193,9 +193,9 @@ const runPrimaryAction = (): void => {
 
 .editor-preview-card__body {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.5rem;
   min-width: 0;
-  padding: 1.125rem;
+  padding: 0.9rem;
 }
 
 .editor-preview-card__body h2 {
@@ -204,7 +204,7 @@ const runPrimaryAction = (): void => {
   overflow: hidden;
   color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 500;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -214,7 +214,7 @@ const runPrimaryAction = (): void => {
 .editor-preview-card__body strong {
   display: block;
   color: rgb(var(--color-primary));
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -231,13 +231,13 @@ const runPrimaryAction = (): void => {
 }
 
 .editor-checklist {
-  padding: 1.25rem;
+  padding: 0.9rem;
 }
 
 .editor-checklist__items {
   display: grid;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
 }
 
 .editor-checklist__item {
@@ -255,8 +255,8 @@ const runPrimaryAction = (): void => {
 
 .editor-actions {
   display: grid;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
 }
 
 .editor-charge-hint {
@@ -269,13 +269,13 @@ const runPrimaryAction = (): void => {
 
 .editor-action {
   display: inline-flex;
-  min-height: 3.25rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   border: 1px solid rgb(var(--color-primary));
-  border-radius: 9999px;
-  padding: 0.8rem 1.25rem;
+  border-radius: 2px;
+  padding: 0.7rem 1rem;
   font-size: 0.875rem;
   font-weight: 800;
   letter-spacing: 0.02em;

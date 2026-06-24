@@ -61,12 +61,12 @@ const emit = defineEmits<{
 
 .chat-emoji-toggle {
   display: inline-flex;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.45rem;
+  height: 2.45rem;
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(var(--color-border) / 0.8);
-  border-radius: 999px;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
   color: rgb(var(--color-text));
   transition:
@@ -89,9 +89,9 @@ const emit = defineEmits<{
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.35rem;
   border: 1px solid rgb(var(--color-border) / 0.9);
-  border-radius: 1rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 18px 48px rgb(15 23 42 / 0.16);
+  box-shadow: 0 18px 44px rgb(15 23 42 / 0.12);
   padding: 0.65rem;
 }
 
@@ -101,7 +101,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: transparent;
   font-size: 1.25rem;
   line-height: 1;

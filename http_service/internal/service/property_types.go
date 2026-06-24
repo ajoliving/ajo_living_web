@@ -20,6 +20,7 @@ type PropertyListFilters struct {
 	Page                  int
 	PageSize              int
 	Keyword               string
+	RegionCode            string
 	DistrictCode          string
 	Status                string
 	TransactionType       string

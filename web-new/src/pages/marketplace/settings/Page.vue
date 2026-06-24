@@ -44,6 +44,11 @@ const settingsRoutes = computed<SettingsRouteItem[]>(() => [
     icon: 'login',
   },
   {
+    label: t('marketplace.settings.displayAdSection'),
+    to: '/account/marketplace/settings/display-ads',
+    icon: 'picture',
+  },
+  {
     label: t('marketplace.settings.noticeSection'),
     to: '/account/marketplace/settings/notice',
     icon: 'send',
@@ -100,10 +105,10 @@ const isActiveRoute = (path: string): boolean =>
 .settings-shell {
   display: grid;
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  gap: 1.25rem;
+  max-width: 1180px;
+  gap: 1rem;
   margin: 0 auto;
-  padding: 1rem var(--layout-page-padding-inline) 5rem;
+  padding: 0.75rem var(--layout-page-padding-inline) 4rem;
   color: rgb(var(--color-text));
 }
 
@@ -112,45 +117,45 @@ const isActiveRoute = (path: string): boolean =>
   align-content: start;
   gap: 1.5rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 1rem;
+  padding: 0.95rem;
 }
 
 .settings-shell__sidebar h1 {
   margin: 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.55rem;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.22;
 }
 
 .settings-shell__sidebar p {
-  margin: 0.65rem 0 0;
+  margin: 0.55rem 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
-  line-height: 1.7;
+  font-size: 0.8125rem;
+  line-height: 1.65;
 }
 
 .settings-shell__nav {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .settings-shell__nav-item {
   position: relative;
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 2.45rem;
   width: 100%;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
-  padding: 0.65rem 0.85rem;
+  padding: 0.55rem 0.72rem;
   color: rgb(var(--color-text) / 0.78);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1;
   text-decoration: none;
@@ -178,13 +183,13 @@ const isActiveRoute = (path: string): boolean =>
 
 @media (min-width: 1024px) {
   .settings-shell {
-    grid-template-columns: 15.75rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     align-items: start;
   }
 
   .settings-shell__sidebar {
     position: sticky;
-    top: calc(var(--app-header-offset, 0rem) + 2rem);
+    top: calc(var(--app-header-offset, 0rem) + 1rem);
   }
 }
 

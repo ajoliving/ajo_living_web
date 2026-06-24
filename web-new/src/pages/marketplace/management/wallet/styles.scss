@@ -547,3 +547,104 @@
     grid-template-columns: 1fr;
   }
 }
+
+.wallet-settings-page {
+  gap: 0.9rem;
+}
+
+.wallet-settings-kicker {
+  font-size: 0.7rem;
+}
+
+.wallet-settings-header h1 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.wallet-settings-header p:not(.wallet-settings-kicker),
+.wallet-settings-panel-header p,
+.wallet-settings-ad-body p,
+.wallet-settings-transaction-row span,
+.wallet-settings-transaction-row small {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.wallet-settings-panel,
+.wallet-settings-field input,
+.wallet-settings-field textarea,
+.wallet-settings-field select,
+.wallet-settings-search,
+.wallet-settings-select,
+.wallet-settings-check,
+.wallet-settings-primary-button,
+.wallet-settings-secondary-button,
+.wallet-settings-icon-button,
+.wallet-settings-mini-button,
+.wallet-settings-grant-row,
+.wallet-settings-ad-card,
+.wallet-settings-ad-cover,
+.wallet-settings-media-preview {
+  border-radius: 2px;
+}
+
+.wallet-settings-panel-header,
+.wallet-settings-form,
+.wallet-settings-toolbar,
+.wallet-settings-list,
+.wallet-settings-transaction-list,
+.wallet-settings-grant-list {
+  padding: 0.9rem;
+}
+
+.wallet-settings-panel-header h2,
+.wallet-settings-card-title h3 {
+  font-size: 0.92rem;
+}
+
+.wallet-settings-field span,
+.wallet-settings-check span,
+.wallet-settings-member-cell small,
+.wallet-settings-meta,
+.wallet-settings-transaction-row time,
+.wallet-settings-mini-button {
+  font-size: 0.72rem;
+}
+
+.wallet-settings-field input,
+.wallet-settings-field textarea,
+.wallet-settings-field select,
+.wallet-settings-select,
+.wallet-settings-search,
+.wallet-settings-primary-button,
+.wallet-settings-secondary-button,
+.wallet-settings-icon-button {
+  min-height: 2.45rem;
+}
+
+.wallet-settings-field input,
+.wallet-settings-field textarea,
+.wallet-settings-field select,
+.wallet-settings-select {
+  padding: 0.65rem;
+}
+
+.wallet-settings-primary-button,
+.wallet-settings-secondary-button {
+  font-size: 0.8125rem;
+}
+
+.wallet-settings-grant-row,
+.wallet-settings-ad-card {
+  padding: 0.7rem;
+}
+
+.wallet-settings-member-cell strong,
+.wallet-settings-transaction-row strong {
+  font-size: 0.875rem;
+}
+
+.wallet-settings-empty {
+  font-size: 0.8125rem;
+}

@@ -342,4 +342,63 @@ const {
     width: 100%;
   }
 }
+
+.home-hero-page,
+.home-hero-card-grid {
+  gap: 0.9rem;
+}
+
+.home-hero-header h2 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.home-hero-header p:not(.home-hero-kicker),
+.home-hero-card__spec,
+.home-hero-empty {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.home-hero-kicker {
+  font-size: 0.7rem;
+}
+
+.home-hero-button,
+.home-hero-upload,
+.home-hero-card,
+.home-hero-field input,
+.home-hero-field textarea,
+.home-hero-empty {
+  border-radius: 2px;
+}
+
+.home-hero-button {
+  min-height: 2.45rem;
+  font-size: 0.8125rem;
+}
+
+.home-hero-card__body {
+  padding: 0.9rem;
+}
+
+.home-hero-card__module {
+  font-size: 0.875rem;
+}
+
+.home-hero-upload {
+  min-height: 2.25rem;
+  font-size: 0.78rem;
+}
+
+.home-hero-field span {
+  font-size: 0.72rem;
+}
+
+.home-hero-field input,
+.home-hero-field textarea {
+  padding: 0.65rem;
+  font-size: 0.875rem;
+}
 </style>

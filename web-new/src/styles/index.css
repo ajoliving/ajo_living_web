@@ -74,6 +74,34 @@
   html[data-theme='default'] body {
     background: rgb(var(--color-canvas));
   }
+
+  /* 深色模式全局覆蓋，對齊 HTML body.dark */
+  html[data-theme='dark-neutral'] .ajo-nav,
+  html[data-theme='dark-neutral'] .ajo-mobile-menu {
+    background: rgb(var(--color-surface));
+    border-color: rgb(var(--color-border));
+  }
+
+  html[data-theme='dark-neutral'] .app-footer {
+    background: #080E1A;
+    border-top: 1px solid #1F2937;
+  }
+
+  html[data-theme='dark-neutral'] .app-footer__brand,
+  html[data-theme='dark-neutral'] .app-footer__column h2 {
+    color: #F8FAFC;
+  }
+
+  html[data-theme='dark-neutral'] .app-footer__link,
+  html[data-theme='dark-neutral'] .app-footer__tagline,
+  html[data-theme='dark-neutral'] .app-footer__bottom {
+    color: rgb(148 163 184 / 0.62);
+  }
+
+  html[data-theme='dark-neutral'] .app-footer__social {
+    background: rgb(17 24 39);
+    border-color: rgb(38 50 68);
+  }
 }
 
 @layer components {

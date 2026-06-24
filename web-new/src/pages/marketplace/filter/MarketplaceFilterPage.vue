@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
+import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
 import { useMarketplaceFilterPage } from './filter';
@@ -383,6 +384,8 @@ const viewMode = ref<ResultViewMode>('grid');
         </button>
       </div>
     </section>
+
+    <ListingSideAds channel="furniture" />
   </main>
 </template>
 
@@ -392,25 +395,27 @@ const viewMode = ref<ResultViewMode>('grid');
   width: 100%;
   max-width: var(--layout-page-max-width);
   min-height: calc(100vh - var(--app-header-offset, 0rem));
-  gap: 20px;
+  gap: 16px;
   margin: 0 auto;
-  padding: 18px var(--layout-page-padding-inline) 72px;
+  padding: 24px var(--layout-page-padding-inline) 72px;
   color: rgb(var(--color-text));
   overflow: visible;
 }
 
 .marketplace-filter-sidebar {
   display: flex;
-  width: 210px;
+  width: 220px;
   flex-shrink: 0;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   border-right: 1px solid rgb(var(--color-border));
-  padding-right: 14px;
+  padding-right: 16px;
   overflow: visible;
 }
 
 .marketplace-filter-results {
+  min-width: 0;
+  flex: 1;
   overflow: visible;
 }
 
@@ -424,8 +429,8 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .view-mode-button {
   display: inline-flex;
-  height: 32px;
-  width: 32px;
+  height: 34px;
+  width: 34px;
   align-items: center;
   justify-content: center;
   transition:
@@ -454,7 +459,7 @@ const viewMode = ref<ResultViewMode>('grid');
 .marketplace-results-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .filter-section-title {
@@ -522,11 +527,11 @@ const viewMode = ref<ResultViewMode>('grid');
 }
 
 .filter-text-input {
-  height: 34px;
+  height: 36px;
   width: 100%;
   border: 1px solid rgb(var(--color-border));
   border-radius: 2px;
-  background: rgb(var(--color-surface));
+  background: rgb(var(--color-surface-muted));
   padding-top: 6px;
   padding-bottom: 6px;
   color: rgb(var(--color-text));
@@ -542,7 +547,7 @@ const viewMode = ref<ResultViewMode>('grid');
 .filter-chip {
   border-radius: 2px;
   border-width: 1px;
-  padding: 6px 9px;
+  padding: 7px 10px;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0;
@@ -575,12 +580,12 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .filter-loading {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text-muted));
   font-size: 12px;
-  margin: 18px 0;
-  padding: 24px;
+  margin: 16px 0;
+  padding: 16px;
 }
 
 .marketplace-result-card {
@@ -589,7 +594,7 @@ const viewMode = ref<ResultViewMode>('grid');
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   color: inherit;
   text-decoration: none;
@@ -606,7 +611,7 @@ const viewMode = ref<ResultViewMode>('grid');
 
 .marketplace-result-card__media {
   position: relative;
-  height: 132px;
+  height: 140px;
   flex-shrink: 0;
 }
 
@@ -646,7 +651,7 @@ const viewMode = ref<ResultViewMode>('grid');
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px;
+  padding: 14px;
 }
 
 .marketplace-result-card__heading {
@@ -666,7 +671,7 @@ const viewMode = ref<ResultViewMode>('grid');
   -webkit-line-clamp: 1;
   color: rgb(var(--color-text));
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.45;
 }
@@ -676,7 +681,7 @@ const viewMode = ref<ResultViewMode>('grid');
   margin: 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -689,7 +694,7 @@ const viewMode = ref<ResultViewMode>('grid');
   -webkit-line-clamp: 2;
   color: rgb(var(--color-text-muted));
   flex: 1;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -699,7 +704,7 @@ const viewMode = ref<ResultViewMode>('grid');
   justify-content: space-between;
   gap: 8px;
   border-top: 1px solid rgb(var(--color-border));
-  padding-top: 8px;
+  padding-top: 10px;
   color: rgb(var(--color-text-muted));
 }
 

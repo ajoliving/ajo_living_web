@@ -64,6 +64,8 @@ export interface PropertySalePayload {
   address_text: string;
   address_text_en?: string;
   block_name?: string;
+  unit_name?: string;
+  show_unit?: boolean;
   public_location_text?: string;
   asking_price_hkd: number;
   monthly_rent_hkd?: number;
@@ -80,6 +82,7 @@ export interface PropertySalePayload {
   living_room_count: number;
   bathroom_count: number;
   floor_level: string;
+  floor_raw?: string;
   floor_zone?: string;
   floor_display_range?: string;
   total_floors?: number;
@@ -92,14 +95,35 @@ export interface PropertySalePayload {
   vr_url?: string;
   title_en?: string;
   description_en?: string;
+  private_note?: string;
   ad_package_code?: string;
+  ad_weight?: number;
+  ad_price_hkd?: number;
+  ad_price_points?: number;
+  ad_duration_days?: number;
   ad_expires_at?: string | null;
   feature_tags: string[];
   contact_method: string;
   publisher_role_label: string;
 }
 
-// 4. 定義服務式住宅房型
+// 4. 定義樓盤地址聯想結果
+export interface PropertyAddressSuggestion {
+  address_id: string;
+  estate_name: string;
+  estate_name_en: string;
+  display_name: string;
+  address_text: string;
+  address_text_en: string;
+  district_code: string;
+  district_label: string;
+  region_code: string;
+  block_names: string[];
+  completion_year: number;
+  remark: string;
+}
+
+// 5. 定義服務式住宅房型
 export interface ServicedApartmentRoomType {
   name: string;
   room_category?: string;
@@ -118,7 +142,7 @@ export interface ServicedApartmentRoomType {
   image_media_asset_id?: string;
 }
 
-// 5. 定義服務式住宅欄位
+// 6. 定義服務式住宅欄位
 export interface ServicedApartmentPayload {
   project_name: string;
   project_name_en?: string;
@@ -143,6 +167,10 @@ export interface ServicedApartmentPayload {
   listing_category?: string;
   multi_unit_project?: boolean;
   ad_package_code?: string;
+  ad_weight?: number;
+  ad_price_hkd?: number;
+  ad_price_points?: number;
+  ad_duration_days?: number;
   ad_expires_at?: string | null;
   facility_tags: string[];
   service_tags: string[];
@@ -151,7 +179,7 @@ export interface ServicedApartmentPayload {
   publisher_role_label: string;
 }
 
-// 6. 定義物業列表項
+// 7. 定義物業列表項
 export interface PropertyListingSummaryResponse {
   listing_id: string;
   module: 'property_sale' | 'serviced_apartment';
@@ -171,7 +199,7 @@ export interface PropertyListingSummaryResponse {
   serviced_apartment?: ServicedApartmentPayload | null;
 }
 
-// 7. 定義物業詳情
+// 8. 定義物業詳情
 export interface PropertyListingDetailResponse extends PropertyListingSummaryResponse {
   description: string;
   images: ListingImageResponse[];
@@ -181,7 +209,7 @@ export interface PropertyListingDetailResponse extends PropertyListingSummaryRes
   points_transaction_id?: string;
 }
 
-// 8. 定義共用聯絡輸入
+// 9. 定義共用聯絡輸入
 export interface PropertyContactPayload {
   phone: string;
   whatsapp: string;
@@ -192,33 +220,62 @@ export interface PropertyContactPayload {
   show_inquiry_form: boolean;
 }
 
-// 9. 定義共用圖片輸入
+// 10. 定義共用圖片輸入
 export interface PropertyImagePayload {
   media_asset_id: string;
   sort_order: number;
   is_cover: boolean;
 }
 
-// 10. 定義樓盤放售儲存請求
+// 11. 定義樓盤放售儲存請求
 export interface UpsertPropertySalePayload {
   title: string;
+  title_en?: string;
   summary: string;
   description: string;
+  description_en?: string;
   district_code: string;
   community_id: string;
   publisher_identity_type: string;
+  property_no?: string;
+  transaction_type?: PropertyTransactionType;
+  location_scope?: string;
+  listing_category?: string;
+  multi_unit_project?: boolean;
   property_type: string;
+  rental_type?: string;
   estate_name: string;
   address_text: string;
+  address_text_en?: string;
+  block_name?: string;
+  unit_name?: string;
+  show_unit?: boolean;
   asking_price_hkd: number;
+  monthly_rent_hkd?: number;
+  price_reference_only?: boolean;
+  price_negotiable?: boolean;
+  annual_prepay_discount?: boolean;
+  annual_prepay_option?: string;
+  lease_start_date?: string;
+  rent_included?: string;
+  area_mode?: PropertyAreaMode;
   usable_area_sqft: number;
   gross_area_sqft?: number;
   bedroom_count: number;
   living_room_count: number;
   bathroom_count: number;
   floor_level: string;
+  floor_raw?: string;
+  floor_zone?: string;
+  total_floors?: number;
   direction: string;
   building_age: string;
+  kitchen_type?: string;
+  cooking_mode?: string;
+  management_fee_hkd?: number;
+  video_url?: string;
+  vr_url?: string;
+  ad_package_code?: string;
   feature_tags: string[];
   contact_method: string;
   business_status?: 'available' | 'sold';
@@ -226,18 +283,38 @@ export interface UpsertPropertySalePayload {
   contact: PropertyContactPayload;
 }
 
-// 11. 定義服務式住宅儲存請求
+// 12. 定義服務式住宅儲存請求
 export interface UpsertServicedApartmentPayload {
   title: string;
+  title_en?: string;
   summary: string;
   description: string;
+  description_en?: string;
   district_code: string;
   community_id: string;
   publisher_identity_type: string;
   project_name: string;
+  project_name_en?: string;
   address_text: string;
+  address_text_en?: string;
+  website_url?: string;
+  whatsapp?: string;
+  fax?: string;
+  service_intro?: string;
+  benefits_text?: string;
+  extra_charges_text?: string;
   lowest_monthly_rent_hkd: number;
+  lowest_daily_rent_hkd?: number;
+  price_reference_only?: boolean;
+  price_negotiable?: boolean;
+  min_usable_area_sqft?: number;
   min_lease_months: number;
+  min_stay_value?: number;
+  min_stay_unit?: string;
+  location_scope?: string;
+  listing_category?: string;
+  multi_unit_project?: boolean;
+  ad_package_code?: string;
   facility_tags: string[];
   service_tags: string[];
   room_types: ServicedApartmentRoomType[];

@@ -44,8 +44,8 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
     path.startsWith('/marketplace/chat') ||
     path.startsWith('/account/marketplace/my')
   ) {
-    const myItems = [...items, { label: t('nav.my'), to: '/account/marketplace/my' }];
-    const myListingItems = [...myItems, { label: t('nav.myListings'), to: '/account/marketplace/my/listings' }];
+    const myItems = [...items, { label: t('nav.my'), to: '/account/listings' }];
+    const myListingItems = [...myItems, { label: t('nav.myListings'), to: '/account/listings' }];
 
     if (path.includes('/new') || path.startsWith('/marketplace/publish')) {
       return [...myItems, { label: t('marketplace.editor.createTitle') }];

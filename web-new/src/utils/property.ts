@@ -67,7 +67,7 @@ export const resolvePropertyTypeLabel = (
   locale: AppLocale,
 ) => listing.property_sale
   ? getPropertyTypeLabel(listing.property_sale.property_type, locale)
-  : 'Serviced residence';
+  : locale === 'zh-HK' ? '服務式住宅' : 'Serviced residence';
 
 // 10. 取得物業封面
 export const resolvePropertyCoverImage = (listing: PropertyListingSummaryResponse) => {
@@ -136,4 +136,16 @@ export const resolvePropertyStatus = (listing: PropertyListingSummaryResponse) =
 export const resolvePropertyPublisherRole = (listing: PropertyListingSummaryResponse) =>
   listing.property_sale?.publisher_role_label ||
   listing.serviced_apartment?.publisher_role_label ||
-  humanizeCodeLabel(listing.publisher_identity_type);
+  resolvePublisherRoleLabel(listing.publisher_identity_type);
+
+// 15. 取得發布身份標籤
+const resolvePublisherRoleLabel = (identityType: string) => {
+  const labels: Record<string, string> = {
+    agent: '代理人',
+    owner: '業主',
+    professional_seller: '代理人',
+    property_manager: '物業管理公司',
+  };
+
+  return labels[identityType] ?? humanizeCodeLabel(identityType);
+};

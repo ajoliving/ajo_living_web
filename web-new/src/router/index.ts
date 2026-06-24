@@ -15,6 +15,7 @@ import { marketplaceRoutes } from '@/router/routes/marketplace';
 import { notificationRoutes } from '@/router/routes/notifications';
 import { paymentRoutes } from '@/router/routes/payments';
 import { systemRoutes } from '@/router/routes/system';
+import { trendRoutes } from '@/router/routes/trend';
 import { pinia } from '@/pinia';
 import { useSessionStore } from '@/stores/session';
 
@@ -26,6 +27,7 @@ const router = createRouter({
     ...buildingRoutes,
     ...firstRoutes,
     ...channelRoutes,
+    ...trendRoutes,
     ...notificationRoutes,
     ...paymentRoutes,
     ...marketplaceRoutes,

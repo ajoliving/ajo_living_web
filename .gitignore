@@ -36,3 +36,5 @@ coverage
 # Local scratch directories
 tmp/
 asserts/
+pns_images/
+.claude/

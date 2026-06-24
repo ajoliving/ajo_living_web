@@ -1,284 +1,292 @@
 <!--
- * 支付中心頁。
- * 1. 提供與會員中心一致的左側支付導航。
- * 2. 在右側承載單元、賬單、購物車、訂單、會計與歷史子頁。
+ * AJO Pay 支付中心入口頁。
+ * 1. 頂部水平子導航：概覽、賬單、歷史、購物車、訂單、會計、單位。
+ * 2. 內容區承載子路由概覽卡片與各支付子頁。
+ * 3. 對齊 HTML 設計稿 pay-subnav 樣式，並映射至專案 token 體系。
+ * 4. 響應式：桌面水平 Tab、行動裝置橫向滾動。
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { RouterView, useRoute, useRouter } from 'vue-router';
 
-import { useSessionStore } from '@/stores/session';
-import AppIcon from '@/shared/components/base/AppIcon.vue';
-
-interface PaymentNavItem {
+interface PayNavItem {
   key: string;
   label: string;
   to: string;
-  icon: 'wallet' | 'inbox' | 'building' | 'clock' | 'home';
-  staffOnly?: boolean;
 }
 
+// 1. 子導航項目（靜態 mock）
+const navItems: PayNavItem[] = [
+  { key: 'overview', label: '概覽', to: '/payments' },
+  { key: 'bills', label: '賬單', to: '/payments/bills' },
+  { key: 'history', label: '歷史', to: '/payments/history' },
+  { key: 'cart', label: '購物車', to: '/payments/cart' },
+  { key: 'orders', label: '訂單', to: '/payments/orders' },
+  { key: 'accounting', label: '會計', to: '/payments/accounting' },
+  { key: 'units', label: '單位', to: '/payments/units' },
+];
+
 const route = useRoute();
-const sessionStore = useSessionStore();
+const router = useRouter();
 
-const canViewAccounting = computed(() =>
-  Boolean(sessionStore.currentUser.is_staff || sessionStore.me?.ismart_msg?.is_staff),
-);
-
-const navItems = computed<PaymentNavItem[]>(() => [
-  {
-    key: 'units',
-    label: '單元',
-    to: '/payments/units',
-    icon: 'home',
-  },
-  {
-    key: 'bills',
-    label: '賬單',
-    to: '/payments/bills',
-    icon: 'wallet',
-  },
-  {
-    key: 'cart',
-    label: '購物車',
-    to: '/payments/cart',
-    icon: 'inbox',
-  },
-  {
-    key: 'orders',
-    label: '訂單',
-    to: '/payments/orders',
-    icon: 'inbox',
-  },
-  ...(canViewAccounting.value
-    ? [{
-        key: 'accounting',
-        label: '會計',
-        to: '/payments/accounting',
-        icon: 'building' as const,
-        staffOnly: true,
-      }]
-    : []),
-  {
-    key: 'history',
-    label: '歷史',
-    to: '/payments/history',
-    icon: 'clock',
-  },
-]);
-
-// 1. 判斷支付導航是否啟用
-const isNavActive = (item: PaymentNavItem): boolean =>
+// 2. 判斷當前 Tab 是否啟用
+const isNavActive = (item: PayNavItem): boolean =>
   route.path === item.to || route.path.startsWith(`${item.to}/`);
+
+// 3. 點擊 Tab 跳轉
+const handleNavClick = (item: PayNavItem): void => {
+  router.push(item.to);
+};
+
+// 4. 當前啟用的 Tab 標籤（用於行動裝置輔助提示）
+const activeLabel = computed(() => {
+  const active = navItems.find(isNavActive);
+  return active?.label ?? '概覽';
+});
 </script>
 
 <template>
-  <main class="payments-hub">
-    <aside class="payments-hub__sidebar">
-      <div>
-        <p class="payments-hub__kicker">
-          AJO Pay
-        </p>
-        <h1>AJO Pay</h1>
+  <main class="ajo-pay">
+    <!-- 1. 頂部子導航 -->
+    <nav
+      class="ajo-pay__subnav"
+      aria-label="AJO Pay 子導航"
+    >
+      <div class="ajo-pay__brand">
+        <span class="ajo-pay__brand-ajo">AJO</span>
+        <span class="ajo-pay__brand-pay">PAY</span>
       </div>
-
-      <nav class="payments-hub__nav">
-        <RouterLink
+      <span
+        class="ajo-pay__divider"
+        aria-hidden="true"
+      ></span>
+      <div
+        class="ajo-pay__tabs"
+        role="tablist"
+      >
+        <button
           v-for="item in navItems"
           :key="item.key"
-          :to="item.to"
-          class="payments-hub__nav-item"
-          :class="isNavActive(item) ? 'payments-hub__nav-item--active' : ''"
+          type="button"
+          role="tab"
+          class="ajo-pay__tab"
+          :class="isNavActive(item) ? 'ajo-pay__tab--active' : ''"
+          :aria-selected="isNavActive(item) ? 'true' : 'false'"
+          @click="handleNavClick(item)"
         >
-          <AppIcon
-            :name="item.icon"
-            :size="17"
-          />
-          <span>
-            <strong>{{ item.label }}</strong>
-          </span>
-        </RouterLink>
-      </nav>
-    </aside>
+          {{ item.label }}
+        </button>
+      </div>
+    </nav>
 
-    <section class="payments-hub__content">
+    <!-- 2. 內容區：承載子路由 -->
+    <section class="ajo-pay__content">
       <RouterView v-slot="{ Component, route: activeRoute }">
         <Transition
-          name="subroute-slide"
+          name="ajo-pay-fade"
           mode="out-in"
         >
           <component
             :is="Component"
             :key="activeRoute.fullPath"
-            class="subroute-transition-shell"
           />
         </Transition>
       </RouterView>
     </section>
+
+    <!-- 3. 行動裝置當前 Tab 提示 -->
+    <p class="ajo-pay__mobile-hint">
+      當前：<strong>{{ activeLabel }}</strong>
+    </p>
   </main>
 </template>
 
 <style scoped>
-.payments-hub {
-  display: grid;
+/* 1. 主容器 */
+.ajo-pay {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  gap: 1.25rem;
+  max-width: 1320px;
+  min-height: calc(100vh - var(--nav-h, 52px));
   margin: 0 auto;
-  padding: 1rem var(--layout-page-padding-inline) 5rem;
+  background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
 }
 
-.payments-hub__sidebar {
-  --subroute-nav-active-color: color-mix(in srgb, rgb(var(--color-primary)) 78%, rgb(var(--color-text)) 22%);
-  --subroute-nav-active-shadow: 0 0 10px rgb(var(--color-primary) / 0.16);
-  --subroute-nav-underline: color-mix(in srgb, rgb(var(--color-primary)) 88%, rgb(var(--color-text)) 12%);
-  display: grid;
-  align-content: start;
-  gap: 1.5rem;
-  border: 1px solid rgb(var(--color-border) / 0.3);
-  border-radius: 8px;
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.76),
-      rgb(var(--color-toolbar-surface) / 0.64)
-    );
-  box-shadow:
-    0 16px 40px rgb(15 23 42 / 0.1),
-    inset 0 -1px 0 rgb(255 255 255 / 0.06);
-  padding: 1rem;
-  backdrop-filter: blur(28px) saturate(184%);
-  -webkit-backdrop-filter: blur(28px) saturate(184%);
+/* 2. 頂部子導航 */
+.ajo-pay__subnav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgb(var(--color-surface));
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding: 0 1.5rem;
+  height: 48px;
+  position: sticky;
+  top: var(--nav-h, 52px);
+  z-index: 20;
 }
 
-.payments-hub__kicker {
+/* 3. 品牌標識 */
+.ajo-pay__brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 1.5rem;
+  flex-shrink: 0;
+}
+
+.ajo-pay__brand-ajo {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+}
+
+.ajo-pay__brand-pay {
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 2px;
+  color: rgb(var(--color-primary));
+  font-family: var(--font-sans);
+}
+
+/* 4. 分隔線 */
+.ajo-pay__divider {
+  width: 1px;
+  height: 20px;
+  background: rgb(var(--color-border));
+  margin-right: 1.5rem;
+  flex-shrink: 0;
+}
+
+/* 5. Tab 列表 */
+.ajo-pay__tabs {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ajo-pay__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* 6. 單個 Tab */
+.ajo-pay__tab {
+  font-size: 13px;
+  color: rgb(var(--color-ink-3));
+  padding: 0 1rem;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  font-family: inherit;
+  background: none;
+  font-weight: 500;
+}
+
+.ajo-pay__tab:hover {
+  color: rgb(var(--color-ink-2));
+}
+
+.ajo-pay__tab--active,
+.ajo-pay__tab--active:hover {
+  color: rgb(var(--color-primary));
+  border-bottom-color: rgb(var(--color-primary));
+  font-weight: 600;
+}
+
+/* 7. 內容區 */
+.ajo-pay__content {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+/* 8. 行動裝置提示（預設隱藏） */
+.ajo-pay__mobile-hint {
+  display: none;
   margin: 0;
+  padding: 0.5rem 1rem 1rem;
   color: rgb(var(--color-text-muted));
   font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  text-transform: uppercase;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
-.payments-hub__sidebar h1 {
-  margin: 0.75rem 0 0;
+.ajo-pay__mobile-hint strong {
   color: rgb(var(--color-primary));
-  font-family: var(--font-display);
-  font-size: 1.75rem;
-  font-weight: 500;
-  line-height: 1.3;
+  font-weight: 700;
 }
 
-.payments-hub__nav {
-  display: grid;
-  gap: 0.5rem;
+/* 9. 路由切換過渡 */
+.ajo-pay-fade-enter-active,
+.ajo-pay-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.payments-hub__nav-item {
-  position: relative;
-  display: flex;
-  min-height: 2.75rem;
-  align-items: center;
-  gap: 0.65rem;
-  border: 1px solid rgb(var(--color-border) / 0.24);
-  border-radius: 8px;
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.62),
-      rgb(var(--color-toolbar-surface) / 0.48)
-    );
-  padding: 0.7rem 0.85rem;
-  color: rgb(var(--color-text) / 0.78);
-  text-decoration: none;
-  box-shadow:
-    0 12px 28px rgb(15 23 42 / 0.07),
-    inset 0 1px 0 rgb(255 255 255 / 0.08);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    padding-left 0.2s ease;
-}
-
-.payments-hub__nav-item:hover {
-  border-color: rgb(var(--color-border) / 0.38);
-  color: rgb(var(--color-text));
-  padding-left: 1rem;
-}
-
-.payments-hub__nav-item--active,
-.payments-hub__nav-item--active:hover {
-  border-color: rgb(var(--color-primary) / 0.28);
-  background:
-    linear-gradient(
-      180deg,
-      rgb(var(--color-topbar-surface) / 0.86),
-      rgb(var(--color-primary-soft) / 0.24)
-    );
-  color: var(--subroute-nav-active-color);
-  box-shadow:
-    0 14px 32px rgb(var(--color-primary) / 0.1),
-    inset 0 1px 0 rgb(255 255 255 / 0.1);
-  text-shadow: var(--subroute-nav-active-shadow);
-}
-
-.payments-hub__nav-item::after {
-  position: absolute;
-  left: 0.85rem;
-  right: 0.85rem;
-  bottom: 0.42rem;
-  height: 1.5px;
-  border-radius: 999px;
-  background: var(--subroute-nav-underline);
-  transform: scaleX(0);
-  transform-origin: left center;
+.ajo-pay-fade-enter-from {
   opacity: 0;
-  transition:
-    transform 0.22s ease,
-    opacity 0.22s ease;
-  content: '';
+  transform: translateY(4px);
 }
 
-.payments-hub__nav-item--active::after {
-  transform: scaleX(1);
-  opacity: 1;
+.ajo-pay-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
-.payments-hub__nav-item span {
-  display: grid;
-  min-width: 0;
-}
-
-.payments-hub__nav-item strong {
-  font-size: 0.95rem;
-  font-weight: 750;
-  line-height: 1.2;
-}
-
-.payments-hub__content {
-  min-width: 0;
-}
-
-@media (min-width: 1024px) {
-  .payments-hub {
-    grid-template-columns: 15.75rem minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .payments-hub__sidebar {
-    position: sticky;
-    top: calc(var(--app-header-offset, 0rem) + 2rem);
-  }
-}
-
+/* 10. 響應式：行動裝置 */
 @media (max-width: 767px) {
-  .payments-hub {
-    padding: 1rem var(--layout-page-padding-inline) 4rem;
+  .ajo-pay__subnav {
+    position: static;
+    padding: 0 1rem;
+    height: 44px;
+  }
+
+  .ajo-pay__brand {
+    margin-right: 0.75rem;
+  }
+
+  .ajo-pay__brand-ajo,
+  .ajo-pay__brand-pay {
+    font-size: 13px;
+  }
+
+  .ajo-pay__divider {
+    margin-right: 0.75rem;
+  }
+
+  .ajo-pay__tab {
+    padding: 0 0.75rem;
+    font-size: 12px;
+    height: 44px;
+  }
+
+  .ajo-pay__content {
+    padding: 1rem;
+  }
+
+  .ajo-pay__mobile-hint {
+    display: block;
+  }
+}
+
+/* 11. 響應式：平板 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ajo-pay__subnav {
+    padding: 0 1.25rem;
+  }
+
+  .ajo-pay__content {
+    padding: 1.25rem;
   }
 }
 </style>

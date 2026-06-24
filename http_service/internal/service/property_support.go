@@ -56,7 +56,7 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 
 		sale := model.PropertySaleListing{
 			ListingID:            listing.ID,
-			PropertyNo:           strings.TrimSpace(params.PropertyNo),
+			PropertyNo:           strings.TrimSpace(firstNonBlank(params.PropertyNo, listing.PublicID)),
 			TransactionType:      normalizePropertyTransactionType(params.TransactionType),
 			LocationScope:        normalizePropertyLocationScope(params.LocationScope),
 			ListingCategory:      normalizePropertyListingCategory(params.ListingCategory),
@@ -65,7 +65,7 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			RentalType:           strings.TrimSpace(params.RentalType),
 			EstateName:           strings.TrimSpace(params.EstateName),
 			AddressText:          strings.TrimSpace(params.AddressText),
-			AddressTextEn:        strings.TrimSpace(params.AddressTextEn),
+			AddressTextEn:        strings.TrimSpace(firstNonBlank(params.AddressTextEn, params.AddressText)),
 			BlockName:            strings.TrimSpace(params.BlockName),
 			UnitName:             strings.TrimSpace(params.UnitName),
 			ShowUnit:             params.ShowUnit,
@@ -97,8 +97,8 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			VideoURL:             strings.TrimSpace(params.VideoURL),
 			VRURL:                strings.TrimSpace(params.VRURL),
 			PrivateNote:          strings.TrimSpace(params.PrivateNote),
-			TitleEn:              strings.TrimSpace(params.TitleEn),
-			DescriptionEn:        strings.TrimSpace(params.DescriptionEn),
+			TitleEn:              strings.TrimSpace(firstNonBlank(params.TitleEn, params.Title)),
+			DescriptionEn:        strings.TrimSpace(firstNonBlank(params.DescriptionEn, params.Description)),
 			AdPackageCode:        propertyAdPackage(params.AdPackageCode).Code,
 			AdWeight:             propertyAdPackage(params.AdPackageCode).Weight,
 			AdPriceHKD:           propertyAdPackage(params.AdPackageCode).PriceHKD,
@@ -183,7 +183,7 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 
 		sale := model.PropertySaleListing{
 			ListingID:            listing.ID,
-			PropertyNo:           strings.TrimSpace(params.PropertyNo),
+			PropertyNo:           strings.TrimSpace(firstNonBlank(params.PropertyNo, listing.PublicID)),
 			TransactionType:      normalizePropertyTransactionType(params.TransactionType),
 			LocationScope:        normalizePropertyLocationScope(params.LocationScope),
 			ListingCategory:      normalizePropertyListingCategory(params.ListingCategory),
@@ -192,7 +192,7 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 			RentalType:           strings.TrimSpace(params.RentalType),
 			EstateName:           strings.TrimSpace(params.EstateName),
 			AddressText:          strings.TrimSpace(params.AddressText),
-			AddressTextEn:        strings.TrimSpace(params.AddressTextEn),
+			AddressTextEn:        strings.TrimSpace(firstNonBlank(params.AddressTextEn, params.AddressText)),
 			BlockName:            strings.TrimSpace(params.BlockName),
 			UnitName:             strings.TrimSpace(params.UnitName),
 			ShowUnit:             params.ShowUnit,
@@ -224,8 +224,8 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 			VideoURL:             strings.TrimSpace(params.VideoURL),
 			VRURL:                strings.TrimSpace(params.VRURL),
 			PrivateNote:          strings.TrimSpace(params.PrivateNote),
-			TitleEn:              strings.TrimSpace(params.TitleEn),
-			DescriptionEn:        strings.TrimSpace(params.DescriptionEn),
+			TitleEn:              strings.TrimSpace(firstNonBlank(params.TitleEn, params.Title)),
+			DescriptionEn:        strings.TrimSpace(firstNonBlank(params.DescriptionEn, params.Description)),
 			AdPackageCode:        propertyAdPackage(params.AdPackageCode).Code,
 			AdWeight:             propertyAdPackage(params.AdPackageCode).Weight,
 			AdPriceHKD:           propertyAdPackage(params.AdPackageCode).PriceHKD,
@@ -542,7 +542,7 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 
 // 9. validateSaleParams validates sale listing payloads.
 func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) error {
-	if strings.TrimSpace(params.PropertyNo) == "" || strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.TitleEn) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DescriptionEn) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.EstateName) == "" || strings.TrimSpace(params.AddressText) == "" || strings.TrimSpace(params.AddressTextEn) == "" {
+	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.EstateName) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required property fields")
 	}
 	rawTransactionType := strings.TrimSpace(params.TransactionType)
@@ -746,9 +746,21 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 
 // 10. applyPropertyFilters applies shared public filters.
 func (s *PropertyService) applyPropertyFilters(query *gorm.DB, channel PropertyChannel, filters PropertyListFilters) *gorm.DB {
-	if filters.Keyword != "" && channel == PropertyChannelSale {
+	if filters.Keyword != "" {
 		likeKeyword := "%" + strings.TrimSpace(filters.Keyword) + "%"
-		query = query.Where("(listings.title LIKE ? OR listings.summary LIKE ? OR listings.description LIKE ?)", likeKeyword, likeKeyword, likeKeyword)
+		condition, argCount := propertyKeywordSearchCondition(channel)
+		args := make([]any, argCount)
+		for index := range args {
+			args[index] = likeKeyword
+		}
+		query = query.Where(condition, args...)
+	}
+	if filters.RegionCode != "" {
+		districts, ok := propertyDistrictsForRegion(filters.RegionCode)
+		if !ok {
+			return query.Where("1 = 0")
+		}
+		query = query.Where("listings.district_code IN ?", districts)
 	}
 	if filters.DistrictCode != "" {
 		query = query.Where("listings.district_code = ?", filters.DistrictCode)
@@ -761,16 +773,21 @@ func (s *PropertyService) applyPropertyFilters(query *gorm.DB, channel PropertyC
 			query = query.Where("property_sale_listings.transaction_type = ?", filters.TransactionType)
 		}
 		if filters.PropertyType != "" {
-			query = query.Where("property_sale_listings.property_type = ?", filters.PropertyType)
+			if filters.PropertyType == "residential" {
+				query = query.Where("property_sale_listings.property_type IN ?", []string{"residential", "private_flat", "estate", "house"})
+			} else {
+				query = query.Where("property_sale_listings.property_type = ?", filters.PropertyType)
+			}
 		}
 		if filters.RentalType != "" {
 			query = query.Where("property_sale_listings.rental_type = ?", filters.RentalType)
 		}
-		if filters.AreaMode != "" {
-			query = query.Where("property_sale_listings.area_mode = ?", filters.AreaMode)
-		}
 		if filters.BedroomCount != nil {
-			query = query.Where("property_sale_listings.bedroom_count >= ?", *filters.BedroomCount)
+			if *filters.BedroomCount >= 4 {
+				query = query.Where("property_sale_listings.bedroom_count >= ?", *filters.BedroomCount)
+			} else {
+				query = query.Where("property_sale_listings.bedroom_count = ?", *filters.BedroomCount)
+			}
 		}
 		if filters.MinAreaSqft != nil {
 			query = query.Where(propertyAreaColumn(filters.AreaMode)+" >= ?", *filters.MinAreaSqft)
@@ -789,10 +806,6 @@ func (s *PropertyService) applyPropertyFilters(query *gorm.DB, channel PropertyC
 			query = query.Where("property_sale_listings.feature_tags @> ?", fmt.Sprintf(`["%s"]`, strings.ReplaceAll(tag, `"`, `\"`)))
 		}
 	} else {
-		if filters.Keyword != "" {
-			likeKeyword := "%" + strings.TrimSpace(filters.Keyword) + "%"
-			query = query.Where("(listings.title LIKE ? OR listings.summary LIKE ? OR listings.description LIKE ? OR serviced_apartment_projects.project_name LIKE ? OR serviced_apartment_projects.project_name_en LIKE ? OR serviced_apartment_projects.address_text LIKE ? OR serviced_apartment_projects.address_text_en LIKE ?)", likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
-		}
 		if filters.MinAreaSqft != nil {
 			query = query.Where("serviced_apartment_projects.min_usable_area_sqft >= ?", *filters.MinAreaSqft)
 		}
@@ -817,6 +830,34 @@ func (s *PropertyService) applyPropertyFilters(query *gorm.DB, channel PropertyC
 	}
 
 	return query
+}
+
+// 10.1 propertyKeywordSearchCondition returns channel keyword search SQL.
+func propertyKeywordSearchCondition(channel PropertyChannel) (string, int) {
+	if channel == PropertyChannelServiced {
+		return `(
+			listings.title ILIKE ?
+			OR listings.summary ILIKE ?
+			OR listings.description ILIKE ?
+			OR serviced_apartment_projects.project_name ILIKE ?
+			OR serviced_apartment_projects.project_name_en ILIKE ?
+			OR serviced_apartment_projects.address_text ILIKE ?
+			OR serviced_apartment_projects.address_text_en ILIKE ?
+		)`, 7
+	}
+
+	return `(
+		listings.title ILIKE ?
+		OR listings.summary ILIKE ?
+		OR listings.description ILIKE ?
+		OR property_sale_listings.property_no ILIKE ?
+		OR property_sale_listings.estate_name ILIKE ?
+		OR property_sale_listings.address_text ILIKE ?
+		OR property_sale_listings.address_text_en ILIKE ?
+		OR property_sale_listings.block_name ILIKE ?
+		OR property_sale_listings.unit_name ILIKE ?
+		OR property_sale_listings.public_location_text ILIKE ?
+	)`, 10
 }
 
 // 11. loadPropertyRowsByIDs loads channel rows by listing IDs.
@@ -1440,7 +1481,23 @@ func propertyAreaColumn(areaMode string) string {
 	return "property_sale_listings.usable_area_sqft"
 }
 
-// 32. normalizePropertyTransactionType defaults legacy listings to sale.
+// 39. propertyDistrictsForRegion returns accepted district codes for property regions.
+func propertyDistrictsForRegion(value string) ([]string, bool) {
+	switch strings.TrimSpace(value) {
+	case "hong_kong_island":
+		return []string{"hong_kong_island", "central_western", "wan_chai", "eastern", "southern"}, true
+	case "kowloon":
+		return []string{"kowloon", "yau_tsim_mong", "sham_shui_po", "kowloon_city", "wong_tai_sin", "kwun_tong"}, true
+	case "new_territories":
+		return []string{"new_territories", "kwai_tsing", "tsuen_wan", "tuen_mun", "yuen_long", "north", "tai_po", "sha_tin", "sai_kung"}, true
+	case "outlying_islands":
+		return []string{"outlying_islands", "islands"}, true
+	default:
+		return nil, false
+	}
+}
+
+// 40. normalizePropertyTransactionType defaults legacy listings to sale.
 func normalizePropertyTransactionType(value string) string {
 	if strings.TrimSpace(value) == "rent" {
 		return "rent"

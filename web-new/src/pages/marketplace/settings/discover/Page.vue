@@ -854,4 +854,109 @@ const {
     height: 12rem;
   }
 }
+
+.settings-page {
+  gap: 0.9rem;
+}
+
+.settings-kicker {
+  font-size: 0.7rem;
+}
+
+.settings-local-header h1,
+.settings-section-header h2 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.settings-description,
+.settings-panel-header p,
+.settings-listing-summary,
+.settings-slot-body p,
+.settings-empty {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.settings-side-nav-item,
+.settings-panel,
+.settings-field input,
+.settings-field textarea,
+.settings-search,
+.settings-primary-button,
+.settings-secondary-button,
+.settings-icon-button,
+.settings-mini-button,
+.settings-listing-card,
+.settings-listing-media,
+.settings-slot-media,
+.settings-slot-section,
+.settings-slot-card {
+  border-radius: 2px;
+}
+
+.settings-side-nav-item {
+  min-height: 2.45rem;
+  padding: 0.55rem 0.72rem;
+  font-size: 0.875rem;
+}
+
+.settings-side-nav-item-active,
+.settings-side-nav-item-active:hover,
+.settings-listing-card-active {
+  box-shadow: none;
+}
+
+.settings-side-nav-item::after {
+  display: none;
+}
+
+.settings-panel-header,
+.settings-slot-section-header,
+.settings-filters,
+.settings-empty,
+.settings-listings,
+.settings-slot-stack,
+.settings-slot-grid {
+  padding: 0.9rem;
+}
+
+.settings-panel-header h2,
+.settings-slot-section-header h3 {
+  font-size: 0.92rem;
+}
+
+.settings-field span,
+.settings-listing-meta,
+.settings-slot-label,
+.settings-mini-button {
+  font-size: 0.72rem;
+}
+
+.settings-search,
+.settings-primary-button,
+.settings-secondary-button {
+  min-height: 2.45rem;
+}
+
+.settings-primary-button,
+.settings-secondary-button {
+  font-size: 0.8125rem;
+}
+
+.settings-listing-card,
+.settings-slot-card {
+  padding: 0.7rem;
+}
+
+.settings-listing-price,
+.settings-listing-title,
+.settings-slot-body h4 {
+  font-size: 0.875rem;
+}
+
+.settings-slot-media {
+  font-size: 1.35rem;
+}
 </style>

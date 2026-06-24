@@ -48,4 +48,7 @@ export default {
   orders: '訂單中心',
   notifications: '通知中心',
   login: '登入',
+  building: '我的大廈',
+  trend: '走勢',
+  ajoPay: 'AJO Pay',
 };

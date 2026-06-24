@@ -68,6 +68,8 @@ const { t } = useI18n();
 <style scoped>
 .login-hero {
   position: relative;
+  min-height: 640px;
+  background: linear-gradient(160deg, #26313a 0%, #536570 52%, #1f2529 100%);
 }
 
 .login-hero__image,
@@ -85,14 +87,34 @@ const { t } = useI18n();
 }
 
 .login-hero__shade {
-  background: linear-gradient(90deg, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.18));
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.18));
 }
 
 .login-hero__content {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 72px 48px 40px;
+  padding: 58px;
+}
+
+.login-hero::after {
+  content: '';
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  bottom: -2%;
+  height: 58%;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.08)),
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0.18) 0 42px,
+      rgb(255 255 255 / 0.06) 42px 46px,
+      transparent 46px 78px
+    );
+  clip-path: polygon(0 22%, 6% 16%, 6% 100%, 12% 100%, 12% 10%, 20% 18%, 20% 100%, 27% 100%, 27% 28%, 34% 24%, 34% 100%, 42% 100%, 42% 4%, 50% 14%, 50% 100%, 57% 100%, 57% 24%, 65% 18%, 65% 100%, 74% 100%, 74% 12%, 82% 22%, 82% 100%, 90% 100%, 90% 30%, 100% 18%, 100% 100%, 0 100%);
+  opacity: 0.58;
+  z-index: 0;
 }
 
 .login-hero__eyebrow,
@@ -107,12 +129,12 @@ const { t } = useI18n();
 
 .login-hero h1 {
   max-width: 560px;
-  margin-top: 18px;
+  margin-top: 16px;
   color: #ffffff;
   font-family: var(--font-display);
-  font-size: 46px;
+  font-size: 50px;
   font-weight: 400;
-  line-height: 1.14;
+  line-height: 1.08;
 }
 
 .login-hero__description {
@@ -156,5 +178,19 @@ const { t } = useI18n();
   border: 1px solid rgb(255 255 255 / 0.28);
   border-radius: 2px;
   padding: 7px 10px;
+}
+
+@media (max-width: 1023px) {
+  .login-hero {
+    min-height: 320px;
+  }
+
+  .login-hero__content {
+    padding: 34px 26px;
+  }
+
+  .login-hero h1 {
+    font-size: 38px;
+  }
 }
 </style>

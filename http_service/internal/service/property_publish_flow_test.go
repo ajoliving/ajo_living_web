@@ -84,12 +84,9 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 
 	detail, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
 		OwnerUserID:           owner.ID,
-		PropertyNo:            "TEST-PROP-001",
 		Title:                 "仁英大廈高層放售",
-		TitleEn:               "Yen Ying Building high floor for sale",
 		Summary:               "灣仔核心地段實用兩房",
 		Description:           "實用間隔，交通方便，適合自住或投資。",
-		DescriptionEn:         "Practical layout in Wan Chai with convenient transport.",
 		DistrictCode:          "hong_kong_island",
 		PublisherIdentityType: "owner",
 		TransactionType:       "sale",
@@ -98,7 +95,6 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		PropertyType:          "private_residential",
 		EstateName:            "仁英大廈",
 		AddressText:           "謝斐道221號",
-		AddressTextEn:         "No.221 Jaffe Road",
 		BlockName:             "仁英大廈",
 		UnitName:              "A",
 		ShowUnit:              false,
@@ -139,6 +135,9 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	}
 	if detail.PropertySale == nil || detail.PropertySale.UnitName != "A" || detail.PropertySale.PrivateNote == "" {
 		t.Fatalf("owner draft detail did not retain private fields: %#v", detail.PropertySale)
+	}
+	if detail.PropertySale.PropertyNo != detail.ListingID || detail.PropertySale.TitleEn != detail.Title || detail.PropertySale.AddressTextEn != detail.PropertySale.AddressText {
+		t.Fatalf("draft detail did not derive compatibility fields: %#v", detail.PropertySale)
 	}
 	if !detail.PropertySale.PriceReferenceOnly || detail.PropertySale.PriceNegotiable {
 		t.Fatalf("unexpected draft price flags: %#v", detail.PropertySale)

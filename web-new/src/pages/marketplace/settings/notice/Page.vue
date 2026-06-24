@@ -221,4 +221,49 @@ const {
     width: 100%;
   }
 }
+
+.notice-page {
+  gap: 0.9rem;
+}
+
+.notice-kicker {
+  font-size: 0.7rem;
+}
+
+.notice-header h2 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.notice-header p:not(.notice-kicker) {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.notice-panel,
+.notice-field input,
+.notice-field textarea,
+.notice-button {
+  border-radius: 2px;
+}
+
+.notice-form {
+  padding: 0.9rem;
+}
+
+.notice-field span {
+  font-size: 0.72rem;
+}
+
+.notice-field input,
+.notice-field textarea {
+  padding: 0.65rem;
+  font-size: 0.875rem;
+}
+
+.notice-button {
+  min-height: 2.45rem;
+  font-size: 0.8125rem;
+}
 </style>

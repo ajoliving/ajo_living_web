@@ -244,7 +244,7 @@ watch([canViewAccounting, activeBuildingID], () => {
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="isLoading || localLoading || !canViewAccounting"
         @click="loadAccounting"
       >

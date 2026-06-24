@@ -387,7 +387,7 @@ watch(selectedFloor, (nextValue, previousValue) => {
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="isLoading || isUnitsLoading"
         @click="loadBuildings"
       >
@@ -426,7 +426,7 @@ watch(selectedFloor, (nextValue, previousValue) => {
       <p>{{ currentLabel }}</p>
       <BaseButton
         variant="primary"
-        size="md"
+        size="sm"
         :disabled="!canSave || isSaving"
         @click="handleSaveUnit"
       >

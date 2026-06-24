@@ -32,6 +32,18 @@ interface ThemeColorTokens {
   success: string;
   warning: string;
   danger: string;
+  /* HTML 設計稿對齊 token */
+  ink2: string;
+  ink3: string;
+  ink4: string;
+  surface2: string;
+  surface3: string;
+  border2: string;
+  brandMid: string;
+  brandDark: string;
+  successBg: string;
+  warningBg: string;
+  dangerBg: string;
 }
 
 interface ThemeShadowTokens {
@@ -68,6 +80,18 @@ interface ThemePaletteSeed {
   success: string;
   warning: string;
   danger: string;
+  /* HTML 設計稿對齊 seed */
+  ink2: string;
+  ink3: string;
+  ink4: string;
+  surface2: string;
+  surface3: string;
+  border2: string;
+  brandMid: string;
+  brandDark: string;
+  successBg: string;
+  warningBg: string;
+  dangerBg: string;
 }
 
 const SANS_FONT_STACK = '"DM Sans", "Avenir Next", "PingFang TC", "Noto Sans TC", sans-serif';
@@ -177,11 +201,22 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       success: '46 132 100',
       warning: '188 135 78',
       danger: '178 77 73',
+      ink2: '68 68 68',
+      ink3: '119 119 119',
+      ink4: '170 170 170',
+      surface2: '246 246 246',
+      surface3: '239 239 239',
+      border2: '204 204 204',
+      brandMid: '253 169 106',
+      brandDark: '192 70 0',
+      successBg: '230 244 236',
+      warningBg: '255 243 220',
+      dangerBg: '253 236 234',
     }),
     shadow: {
-      soft: '0 3px 16px rgba(240, 90, 0, 0.12)',
-      raised: '0 10px 28px rgba(26, 26, 26, 0.08)',
-      floating: '0 18px 48px rgba(26, 26, 26, 0.14)',
+      soft: '0 1px 4px rgba(0, 0, 0, 0.06)',
+      raised: '0 4px 16px rgba(0, 0, 0, 0.08)',
+      floating: '0 8px 32px rgba(0, 0, 0, 0.12)',
     },
     font: {
       sans: SANS_FONT_STACK,
@@ -203,14 +238,25 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       textMuted: '119 119 119',
       border: '228 228 228',
       borderStrong: '192 70 0',
-      success: '46 132 100',
-      warning: '188 135 78',
-      danger: '178 77 73',
+      success: '26 122 58',
+      warning: '224 123 0',
+      danger: '192 57 43',
+      ink2: '68 68 68',
+      ink3: '119 119 119',
+      ink4: '170 170 170',
+      surface2: '246 246 246',
+      surface3: '239 239 239',
+      border2: '204 204 204',
+      brandMid: '253 169 106',
+      brandDark: '192 70 0',
+      successBg: '230 244 236',
+      warningBg: '255 243 220',
+      dangerBg: '253 236 234',
     }),
     shadow: {
-      soft: '0 3px 14px rgba(240, 90, 0, 0.15)',
-      raised: '0 3px 16px rgba(240, 90, 0, 0.15)',
-      floating: '0 4px 18px rgba(240, 90, 0, 0.20)',
+      soft: '0 1px 4px rgba(0, 0, 0, 0.06)',
+      raised: '0 4px 16px rgba(0, 0, 0, 0.08)',
+      floating: '0 8px 32px rgba(0, 0, 0, 0.12)',
     },
     font: {
       sans: SANS_FONT_STACK,
@@ -235,6 +281,17 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
       success: '46 132 100',
       warning: '188 135 78',
       danger: '178 77 73',
+      ink2: '90 70 55',
+      ink3: '120 92 75',
+      ink4: '170 145 125',
+      surface2: '250 244 238',
+      surface3: '243 232 220',
+      border2: '210 185 165',
+      brandMid: '230 140 90',
+      brandDark: '160 55 0',
+      successBg: '230 244 236',
+      warningBg: '255 243 220',
+      dangerBg: '253 236 234',
     }),
     shadow: {
       soft: '0 3px 16px rgba(204, 76, 0, 0.12)',
@@ -249,26 +306,37 @@ export const THEME_PRESETS: Record<AppThemeName, ThemePreset> = {
   'dark-neutral': {
     labelKey: 'common.theme.darkNeutral',
     color: buildDerivedColorTokens({
-      canvas: '0 0 0',
-      pageTint: '18 18 18',
-      surface: '10 10 10',
-      surfaceMuted: '18 18 18',
+      canvas: '11 17 32',
+      pageTint: '11 17 32',
+      surface: '17 24 39',
+      surfaceMuted: '17 24 39',
       surfaceRaised: '28 28 28',
-      primary: '214 172 103',
-      primaryContrast: '10 10 10',
-      primarySoft: '78 63 35',
-      text: '242 245 248',
-      textMuted: '154 154 154',
-      border: '52 52 52',
-      borderStrong: '208 165 96',
+      primary: '240 90 0',
+      primaryContrast: '255 255 255',
+      primarySoft: '240 90 0',
+      text: '244 246 251',
+      textMuted: '148 163 184',
+      border: '38 50 68',
+      borderStrong: '240 90 0',
       success: '73 190 145',
       warning: '221 176 100',
       danger: '235 113 121',
+      ink2: '203 213 225',
+      ink3: '148 163 184',
+      ink4: '100 116 139',
+      surface2: '11 17 32',
+      surface3: '31 41 55',
+      border2: '51 65 85',
+      brandMid: '255 178 122',
+      brandDark: '192 70 0',
+      successBg: '31 41 55',
+      warningBg: '31 41 55',
+      dangerBg: '31 41 55',
     }, 'dark'),
     shadow: {
-      soft: '0 18px 40px rgba(0, 0, 0, 0.24)',
-      raised: '0 24px 64px rgba(0, 0, 0, 0.30)',
-      floating: '0 32px 84px rgba(0, 0, 0, 0.40)',
+      soft: '0 1px 4px rgba(0, 0, 0, 0.28)',
+      raised: '0 6px 18px rgba(0, 0, 0, 0.34)',
+      floating: '0 14px 40px rgba(0, 0, 0, 0.42)',
     },
     font: {
       sans: SANS_FONT_STACK,
@@ -297,6 +365,18 @@ const buildThemeCssVariables = (preset: ThemePreset): Record<string, string> => 
   '--color-success': preset.color.success,
   '--color-warning': preset.color.warning,
   '--color-danger': preset.color.danger,
+  '--color-ink-2': preset.color.ink2,
+  '--color-ink-3': preset.color.ink3,
+  '--color-ink-4': preset.color.ink4,
+  '--color-surface-2': preset.color.surface2,
+  '--color-surface-3': preset.color.surface3,
+  '--color-border-2': preset.color.border2,
+  '--color-brand-mid': preset.color.brandMid,
+  '--color-brand-dark': preset.color.brandDark,
+  '--color-success-bg': preset.color.successBg,
+  '--color-warning-bg': preset.color.warningBg,
+  '--color-danger-bg': preset.color.dangerBg,
+  '--nav-h': '52px',
   '--radius-sm': SHARED_RADIUS_TOKENS.sm,
   '--radius-md': SHARED_RADIUS_TOKENS.md,
   '--radius-lg': SHARED_RADIUS_TOKENS.lg,
@@ -306,6 +386,7 @@ const buildThemeCssVariables = (preset: ThemePreset): Record<string, string> => 
   '--shadow-soft': preset.shadow.soft,
   '--shadow-raised': preset.shadow.raised,
   '--shadow-floating': preset.shadow.floating,
+  '--shadow-brand': `0 4px 16px rgba(${preset.color.primary} / 0.25)`,
   '--space-shell': SHARED_SPACING_TOKENS.shell,
   '--space-section': SHARED_SPACING_TOKENS.section,
   '--space-stack-sm': SHARED_SPACING_TOKENS.stackSm,

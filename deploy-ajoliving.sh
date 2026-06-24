@@ -42,7 +42,7 @@ RELEASE_ID="${RELEASE_ID:-$(date -u +%Y%m%d%H%M%S)-$$}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$SCRIPT_DIR")"
 BACKEND_DIR="$ROOT_DIR/http_service"
-FRONTEND_DIR="$ROOT_DIR/web"
+FRONTEND_DIR="${FRONTEND_DIR:-$ROOT_DIR/web-new}"
 
 ENV_FILE="${ENV_FILE:-$BACKEND_DIR/.env}"
 DUMP_FILE="$ROOT_DIR/ajoliving_backup.sql"

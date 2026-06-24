@@ -247,6 +247,21 @@ onMounted(() => {
         </span>
       </header>
 
+      <section class="marketplace-profile-metrics">
+        <article class="marketplace-profile-metric">
+          <strong>{{ roleChips.length }}</strong>
+          <span>{{ t('marketplace.myProfile.permissions') }}</span>
+        </article>
+        <article class="marketplace-profile-metric">
+          <strong>{{ permissionChips.length }}</strong>
+          <span>Access</span>
+        </article>
+        <article class="marketplace-profile-metric">
+          <strong>{{ sessionStore.me?.profile_completed ? '100%' : '60%' }}</strong>
+          <span>{{ t('marketplace.myProfile.profileCompleted') }}</span>
+        </article>
+      </section>
+
       <div class="marketplace-profile-grid">
         <section class="marketplace-profile-section">
           <h3>{{ t('marketplace.myProfile.accountInfo') }}</h3>
@@ -405,25 +420,25 @@ onMounted(() => {
 <style scoped>
 .marketplace-profile-page {
   display: grid;
-  gap: 1.25rem;
+  gap: 16px;
   color: rgb(var(--color-text));
 }
 
 .marketplace-profile-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding-bottom: 1rem;
+  padding-bottom: 16px;
 }
 
 .marketplace-profile-kicker {
-  margin: 0 0 0.45rem;
-  color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
+  margin: 0;
+  color: rgb(var(--color-primary));
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -431,43 +446,43 @@ onMounted(() => {
 .marketplace-profile-heading h2,
 .marketplace-profile-dialog__header h3 {
   margin: 0;
-  color: rgb(var(--color-primary));
+  color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.25;
 }
 
 .marketplace-profile-heading h2 {
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  margin-top: 6px;
+  font-size: clamp(1.8rem, 3vw, 2.35rem);
 }
 
 .marketplace-profile-dialog__header h3 {
-  font-size: 1.35rem;
+  font-size: 24px;
 }
 
 .marketplace-profile-loading {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  padding: 0.9rem 1rem;
+  padding: 14px 16px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .marketplace-profile-panel {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 10px 30px -5px rgb(0 39 39 / 0.05);
 }
 
 .marketplace-profile-summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 1rem;
+  gap: 14px;
   align-items: center;
-  padding: 1.25rem;
+  padding: 16px;
   border-bottom: 1px solid rgb(var(--color-border));
 }
 
@@ -477,19 +492,18 @@ onMounted(() => {
 
 .marketplace-profile-summary__text p {
   margin: 0;
-  color: rgb(var(--color-primary));
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 500;
+  color: rgb(var(--color-text));
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
 .marketplace-profile-summary__text span {
   display: block;
-  margin-top: 0.25rem;
+  margin-top: 4px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -497,22 +511,54 @@ onMounted(() => {
 
 .marketplace-profile-status {
   display: inline-flex;
-  min-height: 2rem;
+  min-height: 30px;
   align-items: center;
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   background: rgb(var(--color-surface-muted));
-  padding: 0.45rem 0.8rem;
+  padding: 0 12px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1;
 }
 
 .marketplace-profile-status--ready {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
+  border-color: rgb(var(--color-success) / 0.2);
+  background: rgb(var(--color-success) / 0.12);
+  color: rgb(var(--color-success));
+}
+
+.marketplace-profile-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
+}
+
+.marketplace-profile-metric {
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  padding: 16px;
+}
+
+.marketplace-profile-metric strong {
+  color: rgb(var(--color-primary));
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.marketplace-profile-metric span {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .marketplace-profile-grid {
@@ -523,7 +569,7 @@ onMounted(() => {
 
 .marketplace-profile-section {
   min-width: 0;
-  padding: 1.25rem;
+  padding: 16px;
 }
 
 .marketplace-profile-section + .marketplace-profile-section {
@@ -534,42 +580,39 @@ onMounted(() => {
 .marketplace-profile-permissions h3 {
   margin: 0;
   color: rgb(var(--color-primary));
-  font-size: 0.8125rem;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0.1em;
   line-height: 1;
-  text-transform: uppercase;
 }
 
 .marketplace-profile-list {
   display: grid;
   gap: 0;
-  margin: 0.9rem 0 0;
+  margin: 14px 0 0;
 }
 
 .marketplace-profile-row {
   display: grid;
   grid-template-columns: minmax(7.5rem, 0.42fr) minmax(0, 1fr);
-  gap: 0.9rem;
+  gap: 12px;
   align-items: start;
-  padding: 0.72rem 0;
+  padding: 12px 0;
   border-top: 1px solid rgb(var(--color-border) / 0.72);
 }
 
 .marketplace-profile-row dt {
   color: rgb(var(--color-text-muted));
-  font-size: 0.6875rem;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.1em;
   line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .marketplace-profile-row dd {
   min-width: 0;
   margin: 0;
   color: rgb(var(--color-text));
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -577,52 +620,52 @@ onMounted(() => {
 
 .marketplace-profile-permissions {
   display: grid;
-  gap: 0.9rem;
+  gap: 14px;
   border-top: 1px solid rgb(var(--color-border));
-  padding: 1.25rem;
+  padding: 16px;
 }
 
 .marketplace-profile-permissions__title {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 8px;
 }
 
 .marketplace-profile-permissions__title span {
   display: inline-flex;
-  height: 2rem;
-  width: 2rem;
+  height: 32px;
+  width: 32px;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
-  background: rgb(0 39 39 / 0.07);
+  border-radius: 999px;
+  background: rgb(var(--color-primary) / 0.1);
   color: rgb(var(--color-primary));
 }
 
 .marketplace-profile-chip-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .marketplace-profile-chip {
   display: inline-flex;
-  min-height: 2rem;
+  min-height: 32px;
   align-items: center;
   border: 1px solid rgb(var(--color-border));
   border-radius: 9999px;
   background: rgb(var(--color-surface));
-  padding: 0.45rem 0.8rem;
+  padding: 0 12px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1;
 }
 
 .marketplace-profile-chip--role {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
+  border-color: rgb(var(--color-primary) / 0.2);
+  background: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
 }
 
 .marketplace-profile-modal {
@@ -638,7 +681,7 @@ onMounted(() => {
 .marketplace-profile-dialog {
   width: min(100%, 34rem);
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
   box-shadow: 0 24px 70px rgb(0 0 0 / 0.2);
 }
@@ -647,9 +690,9 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding: 1.25rem;
+  padding: 16px;
 }
 
 .marketplace-profile-dialog__close {
@@ -674,8 +717,8 @@ onMounted(() => {
 
 .marketplace-profile-dialog__fields {
   display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
+  gap: 16px;
+  padding: 16px;
 }
 
 .marketplace-profile-field {
@@ -704,9 +747,9 @@ onMounted(() => {
 
 .marketplace-profile-dialog__readonly div {
   display: grid;
-  gap: 0.45rem;
+  gap: 6px;
   min-width: 0;
-  padding: 1rem 1.25rem;
+  padding: 14px 16px;
 }
 
 .marketplace-profile-dialog__readonly div + div {
@@ -716,7 +759,7 @@ onMounted(() => {
 .marketplace-profile-dialog__readonly strong {
   min-width: 0;
   color: rgb(var(--color-text));
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -725,8 +768,8 @@ onMounted(() => {
 .marketplace-profile-dialog__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.25rem;
+  gap: 10px;
+  padding: 16px;
 }
 
 @media (max-width: 767px) {
@@ -737,6 +780,7 @@ onMounted(() => {
   }
 
   .marketplace-profile-summary,
+  .marketplace-profile-metrics,
   .marketplace-profile-grid,
   .marketplace-profile-row,
   .marketplace-profile-dialog__readonly {

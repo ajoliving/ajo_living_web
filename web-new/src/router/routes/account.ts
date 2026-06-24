@@ -8,7 +8,6 @@ import type { RouteRecordRaw } from 'vue-router';
 import LoginPage from '@/pages/account/login/LoginPage.vue';
 import AccountMyPage from '@/pages/account/my/AccountMyPage.vue';
 import AccountNotificationsPage from '@/pages/account/my/notifications/AccountNotificationsPage.vue';
-import AccountPropertiesPage from '@/pages/account/my/properties/Page.vue';
 import AccountProfilePage from '@/pages/account/my/profile/info/Page.vue';
 import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
 import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
@@ -23,6 +22,7 @@ import MarketplaceListingEditorPage from '@/pages/marketplace/my-listings/editor
 import MarketplaceMyListingPreviewPage from '@/pages/marketplace/my-listings/preview/MarketplaceMyListingPreviewPage.vue';
 import MarketplaceSettingsPage from '@/pages/marketplace/settings/Page.vue';
 import MarketplaceSettingsDiscoverPage from '@/pages/marketplace/settings/discover/Page.vue';
+import MarketplaceSettingsDisplayAdsPage from '@/pages/marketplace/settings/display-ads/Page.vue';
 import MarketplaceSettingsHomeCarouselPage from '@/pages/marketplace/settings/home-carousel/Page.vue';
 import MarketplaceSettingsHomeHeroCardsPage from '@/pages/marketplace/settings/home-hero-cards/Page.vue';
 import MarketplaceSettingsLoginHeroPage from '@/pages/marketplace/settings/login-hero/Page.vue';
@@ -87,9 +87,7 @@ export const accountRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'properties',
-        name: 'AccountProperties',
-        component: AccountPropertiesPage,
-        meta: { titleKey: 'nav.propertiesHome', requiresAuth: true },
+        redirect: '/account/properties/sale',
       },
       {
         path: 'properties/sale',
@@ -305,6 +303,12 @@ export const accountRoutes: RouteRecordRaw[] = [
             name: 'MarketplaceSettingsLoginHero',
             component: MarketplaceSettingsLoginHeroPage,
             meta: { titleKey: 'marketplace.settings.loginHeroSection', requiresAuth: true, requiresStaff: true },
+          },
+          {
+            path: 'display-ads',
+            name: 'MarketplaceSettingsDisplayAds',
+            component: MarketplaceSettingsDisplayAdsPage,
+            meta: { titleKey: 'marketplace.settings.displayAdSection', requiresAuth: true, requiresStaff: true },
           },
         ],
       },

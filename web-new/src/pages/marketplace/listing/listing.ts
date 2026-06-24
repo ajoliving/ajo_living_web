@@ -45,10 +45,11 @@ export const useMarketplaceListingPage = () => {
   const loadingContact = ref(false);
   const openingChat = ref(false);
   const updatingFavorite = ref(false);
+  const selectedImageIndex = ref(0);
 
   const listingId = computed(() => String(route.params.listingId ?? ''));
   const galleryImages = computed(() => listing.value ? resolveListingImages(listing.value) : []);
-  const coverImage = computed(() => galleryImages.value[0]);
+  const coverImage = computed(() => galleryImages.value[selectedImageIndex.value] ?? galleryImages.value[0]);
   const listingPrice = computed(() => {
     if (!listing.value) {
       return '';
@@ -90,6 +91,7 @@ export const useMarketplaceListingPage = () => {
     try {
       const { data } = await fetchSecondhandListingDetail(listingId.value);
       listing.value = data.data;
+      selectedImageIndex.value = 0;
     } catch (error) {
       feedbackStore.pushToast(
         axios.isAxiosError(error)
@@ -176,7 +178,7 @@ export const useMarketplaceListingPage = () => {
 
     try {
       const { data } = await createOrReuseChat(listing.value.listing_id);
-      await router.push(`/account/marketplace/my/chat/${data.data.chat_id}`);
+      await router.push(`/account/chat/${data.data.chat_id}`);
     } catch (error) {
       feedbackStore.pushToast(
         axios.isAxiosError(error)
@@ -212,6 +214,7 @@ export const useMarketplaceListingPage = () => {
     ownerName,
     publishedAt,
     revealContact,
+    selectedImageIndex,
     isFavorited,
     t,
     toggleFavorite,

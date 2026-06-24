@@ -11,23 +11,164 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <section class="section-shell py-16 lg:py-20">
-    <div class="app-card mx-auto max-w-3xl p-8 text-center md:p-10">
-      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-        {{ t('nav.channelPreparing') }}
-      </p>
-      <h1 class="mt-4 font-display text-4xl font-semibold text-text md:text-5xl">
-        {{ t('nav.servicedResidences') }}
-      </h1>
-      <p class="mx-auto mt-4 max-w-2xl text-base leading-7 text-text-muted">
-        {{ t('nav.servicedResidencesDescription') }}
-      </p>
+  <main class="channel-page">
+    <section class="channel-page__hero">
+      <div>
+        <p class="channel-page__kicker">
+          {{ t('nav.channelPreparing') }}
+        </p>
+        <h1>{{ t('nav.servicedResidences') }}</h1>
+        <p>{{ t('nav.servicedResidencesDescription') }}</p>
+      </div>
       <RouterLink
-        to="/marketplace"
-        class="mt-8 inline-flex rounded-pill bg-primary px-5 py-3 text-sm font-semibold text-primary-contrast shadow-soft transition hover:-translate-y-0.5"
+        to="/serviced-residences"
+        class="channel-page__link channel-page__link--primary"
       >
-        {{ t('nav.goMarketplace') }}
+        進入列表
       </RouterLink>
-    </div>
-  </section>
+    </section>
+
+    <section class="channel-page__grid">
+      <article class="channel-page__card">
+        <span>Public</span>
+        <strong>短租與月租列表</strong>
+        <p>查看公開服務式住宅房型、租金與基礎配套資料。</p>
+      </article>
+      <article class="channel-page__card">
+        <span>Operation</span>
+        <strong>房型與入住資訊</strong>
+        <p>逐步整合房型、最短入住期、服務與補充資訊的正式展示入口。</p>
+      </article>
+      <article class="channel-page__card">
+        <span>Next</span>
+        <strong>頻道入口統一中</strong>
+        <p>此頁將保留作為服務住宅入口，並持續收斂到與樓盤頻道一致的正式列表體驗。</p>
+      </article>
+    </section>
+  </main>
 </template>
+
+<style scoped>
+.channel-page {
+  display: grid;
+  width: 100%;
+  max-width: var(--layout-page-max-width);
+  gap: 16px;
+  margin: 0 auto;
+  padding: 24px var(--layout-page-padding-inline) 72px;
+  color: rgb(var(--color-text));
+}
+
+.channel-page__hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-bottom: 18px;
+}
+
+.channel-page__kicker {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.channel-page__hero h1 {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.14;
+}
+
+.channel-page__hero p:last-child {
+  max-width: 560px;
+  margin: 10px 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.channel-page__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.channel-page__link--primary {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.channel-page__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.channel-page__card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  padding: 16px;
+}
+
+.channel-page__card span {
+  color: rgb(var(--color-text-muted));
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.channel-page__card strong {
+  color: rgb(var(--color-text));
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.channel-page__card p {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 767px) {
+  .channel-page {
+    padding: 18px var(--layout-page-padding-inline) 96px;
+  }
+
+  .channel-page__hero,
+  .channel-page__grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .channel-page__hero h1 {
+    font-size: 28px;
+  }
+
+  .channel-page__grid {
+    display: grid;
+  }
+}
+</style>

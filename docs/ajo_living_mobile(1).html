@@ -1,0 +1,2757 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AJO Living</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --black:#1a1a1a;
+  --white:#ffffff;
+  --g1:#f4f4f4;
+  --g2:#e4e4e4;
+  --g3:#aaaaaa;
+  --g4:#777777;
+  --g5:#333333;
+  --accent:#f05a00;
+  --accent-light:#fff0e6;
+  --accent-dark:#c04600;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--white);color:var(--black);}
+
+/* NAV — 白底，黑字，高對比 */
+.nav{height:48px;background:var(--white);border-bottom:1px solid var(--g2);display:flex;align-items:center;justify-content:space-between;padding:0 16px;position:sticky;top:0;z-index:30;gap:8px;}
+.nav-logo{font-family:'DM Serif Display',serif;font-size:13px;letter-spacing:2px;color:var(--black);white-space:nowrap;flex-shrink:0;}
+.nav-links{display:flex;flex:1;justify-content:center;overflow:hidden;}
+.nl{font-size:11px;color:#666;padding:0 8px;height:48px;display:flex;align-items:center;cursor:pointer;border:none;background:none;font-family:inherit;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0;}
+.nl:hover{color:var(--accent-dark);}
+.nl.on{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:500;}
+.nav-r{display:flex;align-items:center;gap:8px;font-size:11px;color:#666;flex-shrink:0;}
+.nav-r span{cursor:pointer;white-space:nowrap;}
+.nav-r span:hover{color:var(--black);}
+.nav-login{background:var(--accent);color:var(--white);border:none;padding:5px 11px;font-size:11px;cursor:pointer;font-family:inherit;border-radius:2px;white-space:nowrap;}
+
+.page{display:none;opacity:0;transform:translateY(8px);transition:opacity .25s ease,transform .25s ease;}
+.page.on{opacity:1;transform:translateY(0);}
+.page.on{display:block;}
+
+/* LISTING */
+.lp{display:grid;grid-template-columns:210px 1fr;min-height:calc(100vh - 52px);}
+.lf{border-right:1px solid var(--g2);padding:18px 14px;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;}
+.fs{margin-bottom:16px;}
+.ft-title{font-size:9px;letter-spacing:2px;color:var(--g4);text-transform:uppercase;margin-bottom:6px;}
+.ftags{display:flex;flex-wrap:wrap;gap:3px;}
+.ft{font-size:11px;padding:3px 9px;border:1px solid var(--g2);color:var(--g4);cursor:pointer;background:var(--white);border-radius:2px;font-family:inherit;}
+.ft:hover{border-color:var(--accent);color:var(--accent-dark);}
+.ft.on{background:var(--accent);color:var(--white);border-color:var(--accent);}
+.sbar{display:flex;gap:5px;margin-bottom:14px;}
+.sinput{flex:1;border:1px solid var(--g2);padding:7px 9px;font-size:11px;font-family:inherit;outline:none;border-radius:2px;}
+.sinput:focus{border-color:var(--accent);}
+.sbtn{background:var(--accent);color:var(--white);border:none;padding:7px 12px;font-size:11px;cursor:pointer;border-radius:2px;font-family:inherit;}
+.lr{padding:18px 20px 40px;}
+.sort-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.rn{font-size:11px;color:var(--g4);}
+.ssel{border:1px solid var(--g2);padding:5px 8px;font-size:11px;font-family:inherit;outline:none;border-radius:2px;}
+.grid{columns:2;gap:10px;}
+.gc{break-inside:avoid;margin-bottom:10px;border:1px solid var(--g2);border-radius:3px;overflow:hidden;cursor:pointer;background:var(--white);}
+.gc:hover{box-shadow:0 3px 16px rgba(240,90,0,.15);border-color:var(--accent);}
+.gi{width:100%;display:block;}
+.gi.tall{height:150px;}
+.gi.short{height:90px;}
+.gb{padding:11px 13px;}
+.gtags{display:flex;gap:3px;margin-bottom:5px;}
+.gtag{font-size:9px;letter-spacing:.8px;color:var(--g4);border:1px solid var(--g2);padding:1px 5px;border-radius:1px;}
+.gtag.dark{background:var(--accent);color:var(--white);border-color:var(--accent);font-weight:500;}
+.gtitle{font-size:13px;font-weight:500;margin-bottom:3px;}
+.gsub{font-size:11px;color:var(--g4);margin-bottom:7px;}
+.gprice{font-size:17px;font-weight:300;letter-spacing:-.3px;}
+.gprice span{font-size:11px;color:var(--g4);font-weight:400;}
+.gpills{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;}
+.gpill{font-size:9px;padding:2px 6px;background:var(--g1);color:var(--g5);border-radius:2px;}
+.gfoot{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;border-top:1px solid var(--g1);font-size:10px;}
+.grooms{color:var(--g4);}
+.gview{color:var(--accent);cursor:pointer;font-weight:500;}
+.pat{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.pat::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,.025) 5px,rgba(0,0,0,.025) 10px);}
+
+/* MARKET */
+.mp{display:grid;grid-template-columns:210px 1fr;min-height:calc(100vh - 52px);}
+.mf{border-right:1px solid var(--g2);padding:18px 14px;position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;}
+.mr{padding:18px 20px 40px;}
+.mgrid{columns:3;gap:10px;}
+.mc{break-inside:avoid;margin-bottom:10px;border:1px solid var(--g2);border-radius:3px;overflow:hidden;cursor:pointer;background:var(--white);position:relative;}
+.mc:hover{box-shadow:0 3px 16px rgba(240,90,0,.15);border-color:var(--accent);}
+.mimg{height:90px;width:100%;display:flex;align-items:center;justify-content:center;font-size:28px;}
+.mbody{padding:9px 11px;}
+.mname{font-size:12px;font-weight:500;margin-bottom:2px;}
+.msub{font-size:10px;color:var(--g4);margin-bottom:5px;}
+.mprice{font-size:14px;font-weight:300;}
+.mfoot{display:flex;justify-content:space-between;font-size:10px;color:var(--g4);margin-top:5px;padding-top:5px;border-top:1px solid var(--g1);}
+.mnew{position:absolute;top:7px;left:7px;background:var(--black);color:var(--white);font-size:9px;padding:1px 5px;letter-spacing:.3px;}
+.mheart{position:absolute;top:7px;right:9px;font-size:13px;color:var(--g3);cursor:pointer;}
+
+/* LOGIN */
+.lw{display:grid;grid-template-columns:1fr 380px;min-height:calc(100vh - 52px);}
+.ll{background:linear-gradient(160deg,#1a1a1a,#2a2a2a);display:flex;flex-direction:column;justify-content:flex-end;padding:48px;position:relative;overflow:hidden;}
+.llg{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(6,1fr);gap:1px;opacity:.06;}
+.llg div{background:var(--white);}
+.lbig{font-family:'DM Serif Display',serif;font-size:50px;color:var(--white);line-height:1.1;position:relative;z-index:1;}
+.ltag{font-size:12px;color:var(--g3);margin-top:10px;line-height:1.8;position:relative;z-index:1;}
+.lr2{background:var(--white);padding:44px 36px;display:flex;flex-direction:column;justify-content:center;}
+.llogo{font-family:'DM Serif Display',serif;font-size:14px;letter-spacing:3px;margin-bottom:32px;}
+.ltitle{font-size:20px;font-weight:300;margin-bottom:4px;}
+.lsub{font-size:11px;color:var(--g4);margin-bottom:20px;line-height:1.6;}
+.ltabs{display:flex;border-bottom:1px solid var(--g2);margin-bottom:18px;}
+.ltab{font-size:11px;padding:8px 0;margin-right:18px;cursor:pointer;color:var(--g4);border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;}
+.ltab.on{color:var(--accent);border-bottom:2px solid var(--accent);}
+.llabel{font-size:10px;letter-spacing:1px;color:var(--g4);text-transform:uppercase;margin-bottom:4px;display:block;}
+.linput{width:100%;border:1px solid var(--g2);padding:10px 11px;font-size:13px;font-family:inherit;outline:none;margin-bottom:12px;border-radius:2px;}
+.linput:focus{border-color:var(--accent);}
+.lcheck{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--g4);margin-bottom:18px;}
+.lsubmit{width:100%;background:var(--black);color:var(--white);border:none;padding:12px;font-size:12px;letter-spacing:2px;cursor:pointer;font-family:inherit;border-radius:2px;}
+.ldiv{display:flex;align-items:center;gap:10px;margin:12px 0;font-size:10px;color:var(--g3);}
+.ldiv::before,.ldiv::after{content:'';flex:1;height:1px;background:var(--g2);}
+.lalt{width:100%;border:1px solid var(--g2);background:var(--white);color:var(--black);padding:10px;font-size:11px;letter-spacing:.5px;cursor:pointer;font-family:inherit;border-radius:2px;}
+.placeholder{padding:80px;text-align:center;font-size:12px;color:#aaa;letter-spacing:1px;}
+
+/* HOME */
+.hero{position:relative;}
+.hero-bg{min-height:340px;display:flex;align-items:center;padding:60px 48px;position:relative;overflow:hidden;}
+.hero-content{position:relative;z-index:1;max-width:500px;}
+.hero-eyebrow{font-size:10px;letter-spacing:3px;color:var(--g3);margin-bottom:14px;}
+.hero-title{font-family:'DM Serif Display',serif;font-size:44px;color:white;font-weight:400;line-height:1.15;margin-bottom:14px;}
+.hero-desc{font-size:13px;color:var(--g3);line-height:1.8;margin-bottom:24px;max-width:380px;}
+.hero-btns{display:flex;gap:10px;flex-wrap:wrap;}
+.hbtn-primary{background:var(--accent);color:var(--white);border:none;padding:10px 22px;font-size:12px;cursor:pointer;font-family:inherit;border-radius:2px;letter-spacing:.5px;display:flex;align-items:center;gap:6px;}
+.hbtn-ghost{background:transparent;color:white;border:1px solid rgba(255,255,255,.5);padding:10px 22px;font-size:12px;cursor:pointer;font-family:inherit;border-radius:2px;letter-spacing:.5px;display:flex;align-items:center;gap:6px;}
+.hbtn-ghost:hover{border-color:rgba(255,255,255,.7);}
+.home-section{padding:32px 40px;}
+.home-sec-title{font-size:13px;font-weight:500;letter-spacing:.5px;margin-bottom:16px;border-left:3px solid var(--accent);padding-left:10px;}
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.cat-card{border:1px solid var(--g2);border-radius:3px;padding:20px 16px;cursor:pointer;background:var(--white);transition:box-shadow .15s;}
+.cat-card:hover{box-shadow:0 3px 14px rgba(240,90,0,.15);border-color:var(--accent);}
+.cat-icon{font-size:24px;margin-bottom:8px;}
+.cat-name{font-size:13px;font-weight:500;margin-bottom:4px;}
+.cat-desc{font-size:11px;color:var(--g4);line-height:1.5;}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.feat-card{border:1px solid var(--g2);border-radius:3px;overflow:hidden;cursor:pointer;background:var(--white);}
+.feat-card:hover{box-shadow:0 3px 14px rgba(240,90,0,.15);}
+.feat-img{width:100%;}
+.feat-img.tall{height:140px;}
+.feat-img.short{height:100px;}
+.feat-body{padding:12px;}
+
+/* SERVICE */
+.sv-hero{min-height:200px;display:flex;align-items:flex-end;padding:40px 40px 32px;position:relative;overflow:hidden;}
+.sv-hero-text{position:relative;z-index:1;}
+.sv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.sv-card{border:1px solid var(--g2);border-radius:3px;overflow:hidden;background:var(--white);}
+.sv-card:hover{box-shadow:0 3px 14px rgba(0,0,0,.07);}
+.sv-body{padding:12px 14px;}
+.sv-img{width:100%;}
+
+/* OFFERS */
+.offers-cats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;}
+.offers-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.offer-card{border:1px solid var(--g2);border-radius:3px;overflow:hidden;background:var(--white);display:flex;flex-direction:column;}
+.offer-img{height:100px;flex-shrink:0;}
+.offer-body{padding:14px;flex:1;}
+.offer-badge{display:inline-block;font-size:9px;letter-spacing:1px;background:var(--g1);color:var(--g5);padding:2px 7px;border-radius:2px;margin-bottom:8px;text-transform:uppercase;}
+.offer-title{font-size:13px;font-weight:500;margin-bottom:6px;}
+.offer-desc{font-size:11px;color:var(--g4);line-height:1.6;margin-bottom:10px;}
+.offer-discount{font-size:16px;font-weight:300;color:var(--black);}
+.offer-exp{font-size:10px;color:var(--g3);margin-top:4px;}
+
+/* PAYMENT */
+.pay-wrap{display:grid;grid-template-columns:180px 1fr;min-height:calc(100vh - 48px);}
+.pay-sidebar{border-right:1px solid var(--g2);padding:24px 16px;}
+.pay-nav-item{font-size:12px;color:var(--g4);padding:8px 10px;border-radius:2px;cursor:pointer;margin-bottom:2px;}
+.pay-nav-item:hover{background:var(--g1);color:var(--black);}
+.pay-nav-item.on{background:var(--accent);color:var(--white);}
+.pay-main{padding:24px 28px;}
+.pay-balance-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.pay-balance-card{border-radius:3px;padding:24px;display:flex;flex-direction:column;}
+.pay-stat-card{border:1px solid var(--g2);border-radius:3px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
+.pay-stat-label{font-size:11px;color:var(--g4);}
+.pay-stat-val{font-size:14px;font-weight:500;}
+.pay-table{width:100%;border-collapse:collapse;font-size:12px;}
+.pay-table th{text-align:left;font-size:10px;letter-spacing:1px;color:var(--g4);text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--g2);font-weight:400;}
+.pay-table td{padding:10px 12px;border-bottom:1px solid var(--g1);color:var(--g5);}
+.pay-table tr:last-child td{border-bottom:none;}
+.pay-status{font-size:10px;padding:2px 8px;border-radius:2px;}
+.pay-status.ok{background:#fff0e6;color:#c04600;}
+.pay-status.pending{background:#f5f0e0;color:#7a5a10;}
+
+/* DETAIL */
+.detail-wrap{display:grid;grid-template-columns:1fr 300px;gap:0;min-height:calc(100vh - 48px);}
+.detail-main{padding:20px 28px 40px;border-right:1px solid var(--g2);overflow-y:auto;}
+.detail-sidebar{padding:20px 20px;position:sticky;top:48px;height:calc(100vh - 48px);overflow-y:auto;}
+.back-btn{font-size:11px;color:var(--g4);background:none;border:none;cursor:pointer;font-family:inherit;margin-bottom:16px;padding:0;}
+.back-btn:hover{color:var(--accent);}
+.detail-main-img{height:220px;width:100%;border-radius:3px;margin-bottom:8px;}
+.detail-thumb-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.detail-thumb{height:60px;border-radius:2px;}
+.detail-price-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--g2);}
+.detail-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.detail-stat{text-align:center;padding:12px 8px;background:var(--g1);border-radius:2px;}
+.detail-stat-val{font-size:16px;font-weight:400;margin-bottom:2px;}
+.detail-stat-label{font-size:10px;color:var(--g4);}
+.detail-contact-card{border:1px solid var(--g2);border-radius:3px;padding:18px;}
+
+/* ========== MOBILE NAV ========== */
+.hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:6px;border:none;background:none;}
+.hamburger span{width:18px;height:1.5px;background:var(--black);display:block;}
+.mobile-menu{display:none;position:fixed;inset:0;background:var(--white);z-index:100;flex-direction:column;}
+.mobile-menu.open{display:flex;}
+.mobile-menu-header{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--g2);flex-shrink:0;}
+.mobile-menu-logo{font-family:'DM Serif Display',serif;font-size:13px;letter-spacing:2px;}
+.mobile-close{font-size:22px;cursor:pointer;background:none;border:none;color:var(--black);line-height:1;padding:0;}
+.mobile-menu-body{flex:1;overflow-y:auto;}
+.mnl{display:block;width:100%;text-align:left;font-size:15px;color:var(--black);padding:16px 20px;border:none;border-bottom:1px solid var(--g1);background:none;font-family:inherit;cursor:pointer;}
+.mnl:active{background:var(--accent-light);color:var(--accent);}
+.mnl.on{font-weight:500;}
+.mobile-menu-footer{padding:16px 20px;border-top:1px solid var(--g2);}
+
+/* BOTTOM NAV */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:54px;background:var(--white);border-top:1px solid var(--g2);z-index:20;justify-content:space-around;align-items:center;}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:var(--g4);cursor:pointer;border:none;background:none;font-family:inherit;flex:1;padding:4px 0;}
+.bnav-item.on{color:var(--accent);font-weight:500;}
+.bnav-icon{font-size:19px;line-height:1;}
+
+/* MOBILE FILTER TOGGLE */
+.filter-toggle-btn{display:none;align-items:center;gap:6px;font-size:12px;color:var(--black);background:var(--g1);border:1px solid var(--g2);padding:8px 14px;border-radius:2px;cursor:pointer;font-family:inherit;margin-bottom:12px;width:100%;}
+
+/* ========== GROCERY PRICE PAGE ========== */
+
+/* HERO */
+.gp-hero{background:var(--black);border-bottom:3px solid var(--accent);padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;}
+.gp-hero-label{font-size:9px;letter-spacing:3px;color:var(--g3);text-transform:uppercase;margin-bottom:8px;}
+.gp-hero-title{font-family:'DM Serif Display',serif;font-size:32px;color:var(--white);line-height:1.1;margin-bottom:8px;}
+.gp-hero-sub{font-size:12px;color:var(--g4);max-width:360px;line-height:1.6;}
+.gp-hero-right{display:flex;align-items:center;gap:0;flex-shrink:0;}
+.gp-hstat{text-align:center;padding:0 28px;}
+.gp-hnum{display:block;font-size:26px;font-weight:300;color:var(--white);letter-spacing:-1px;line-height:1;}
+.gp-hlabel{display:block;font-size:10px;color:var(--g4);margin-top:4px;letter-spacing:.3px;}
+.gp-hdiv{width:1px;height:40px;background:var(--g5);}
+
+/* CONTROLS */
+.gp-controls{background:var(--white);border-bottom:1px solid var(--g2);padding:14px 24px;display:flex;flex-direction:column;gap:10px;}
+.gp-search-box{display:flex;align-items:center;gap:8px;border:1px solid var(--g2);border-radius:3px;padding:0 14px;max-width:560px;}
+.gp-search-ico{font-size:15px;color:var(--g4);}
+.gp-sinput{flex:1;border:none;outline:none;font-size:13px;padding:10px 0;font-family:inherit;}
+.gp-filter-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.gp-fpill{font-size:11px;padding:4px 12px;border:1px solid var(--g2);border-radius:20px;cursor:pointer;color:var(--g4);background:var(--white);}
+.gp-fpill:hover{border-color:var(--black);color:var(--black);}
+.gp-fpill.on{background:var(--accent);color:var(--white);border-color:var(--accent);}
+.gp-store-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.gp-spill{font-size:11px;padding:3px 10px;border:1px solid var(--g2);border-radius:3px;cursor:pointer;color:var(--g4);background:var(--white);}
+.gp-spill:hover{border-color:var(--black);color:var(--black);}
+.gp-spill.on{background:var(--accent-light);color:var(--accent-dark);border-color:var(--accent);font-weight:500;}
+
+/* CONTENT */
+.gp-content{padding:20px 24px 40px;background:var(--g1);}
+.gp-content-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.gp-count{font-size:12px;color:var(--g4);}
+.gp-sort{border:1px solid var(--g2);padding:6px 10px;font-size:11px;font-family:inherit;outline:none;border-radius:2px;background:var(--white);}
+
+/* PRODUCT CARDS GRID */
+.gp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.gp-card{background:var(--white);border:1px solid var(--g2);border-radius:3px;overflow:hidden;cursor:pointer;position:relative;transition:box-shadow .15s;}
+.gp-card:hover{box-shadow:0 4px 18px rgba(240,90,0,.2);border-color:var(--accent);}
+.gp-card-badge{position:absolute;top:10px;left:10px;background:var(--accent);font-weight:700;color:var(--white);font-size:11px;font-weight:500;padding:3px 7px;border-radius:2px;letter-spacing:.3px;}
+.gp-card-img{height:120px;width:100%;}
+.gp-card-body{padding:12px;}
+.gp-card-store{display:inline-block;font-size:9px;letter-spacing:.8px;text-transform:uppercase;background:var(--g1);color:var(--g5);padding:2px 7px;border-radius:2px;margin-bottom:8px;}
+.gp-card-name{font-size:13px;font-weight:500;color:var(--black);line-height:1.35;margin-bottom:3px;}
+.gp-card-brand{font-size:11px;color:var(--g4);margin-bottom:8px;}
+.gp-card-promo{font-size:10px;color:var(--g5);background:var(--g1);padding:3px 8px;border-radius:2px;display:inline-block;margin-bottom:10px;}
+.gp-card-price-row{display:flex;align-items:baseline;gap:8px;padding-top:10px;border-top:1px solid var(--g1);}
+.gp-card-sale{font-size:16px;font-weight:500;color:var(--black);}
+.gp-card-orig{font-size:11px;color:var(--g3);text-decoration:line-through;}
+
+.gp-updated-bar{margin-top:20px;font-size:10px;color:var(--g4);text-align:center;letter-spacing:.3px;}
+
+@media(max-width:768px){
+  .gp-hero{flex-direction:column;align-items:flex-start;padding:20px 16px;gap:16px;}
+  .gp-hero-right{gap:0;}
+  .gp-hstat{padding:0 16px;}
+  .gp-hstat:first-child{padding-left:0;}
+  .gp-hero-title{font-size:26px;}
+  .gp-controls{padding:12px 14px;}
+  .gp-content{padding:14px 14px 32px;}
+  .gp-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
+  .gp-card-img{height:90px;}
+}
+
+@media(max-width:768px){
+  .nav-links,.nav-r{display:none;}
+  .hamburger{display:flex;}
+  .bottom-nav{display:flex;}
+  body{padding-bottom:54px;}
+
+  /* LISTING */
+  .lp{grid-template-columns:1fr;}
+  .lf{display:none;position:static;height:auto;border-right:none;border-bottom:1px solid var(--g2);}
+  .lf.open{display:block;}
+  .lr{padding:12px 14px 28px;}
+  .grid{columns:1;}
+  .filter-toggle-btn{display:flex;}
+
+  /* MARKET */
+  .mp{grid-template-columns:1fr;}
+  .mf{display:none;position:static;height:auto;border-right:none;border-bottom:1px solid var(--g2);}
+  .mf.open{display:block;}
+  .mr{padding:12px 14px 28px;}
+  .mgrid{columns:2;}
+
+  /* LOGIN */
+  .lw{grid-template-columns:1fr;}
+  .ll{display:none;}
+  .lr2{padding:32px 20px;}
+
+  /* HOME */
+  .hero-bg{padding:36px 20px;min-height:240px;}
+  .hero-title{font-size:30px;}
+  .hero-desc{font-size:12px;}
+  .home-section{padding:20px 16px;}
+  .cat-grid{grid-template-columns:repeat(2,1fr);}
+  .feat-grid{grid-template-columns:1fr;}
+
+  /* SERVICE */
+  .sv-hero{padding:28px 20px 24px;}
+  .sv-grid{grid-template-columns:1fr;}
+
+  /* OFFERS */
+  .offers-grid{grid-template-columns:1fr;}
+
+  /* PAYMENT */
+  .pay-wrap{grid-template-columns:1fr;}
+  .pay-sidebar{display:none;}
+  .pay-main{padding:16px;}
+  .pay-balance-row{grid-template-columns:1fr;}
+  .pay-table-wrap{overflow-x:auto;}
+  .pay-table{min-width:400px;}
+
+  /* DETAIL */
+  .detail-wrap{grid-template-columns:1fr;}
+  .detail-sidebar{position:static;height:auto;border-left:none;border-top:1px solid var(--g2);padding:16px;}
+  .detail-main{padding:14px 16px 20px;border-right:none;}
+  .detail-stats{grid-template-columns:repeat(2,1fr);}
+  .detail-main-img{height:160px;}
+
+  .gi.tall{height:120px;}
+  .gi.short{height:80px;}
+}
+
+
+/* HERO ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+@keyframes countUp{from{opacity:0;}to{opacity:1;}}
+.hero-eyebrow{animation:fadeUp .5s ease .1s both;}
+.hero-title{animation:fadeUp .5s ease .25s both;}
+.hero-desc{animation:fadeUp .5s ease .4s both;}
+.hero-btns{animation:fadeUp .5s ease .55s both;}
+.hero-stats{animation:fadeUp .5s ease .7s both;}
+.hero-stat-num{display:inline-block;transition:all .3s;}
+
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;align-items:center;justify-content:center;flex-direction:column;}
+.lightbox.open{display:flex;}
+.lb-img{max-width:90vw;max-height:75vh;border-radius:4px;background:var(--g2);display:flex;align-items:center;justify-content:center;min-width:320px;min-height:200px;}
+.lb-close{position:fixed;top:20px;right:24px;color:white;font-size:28px;cursor:pointer;background:none;border:none;line-height:1;opacity:.7;}
+.lb-close:hover{opacity:1;}
+.lb-nav{display:flex;align-items:center;gap:24px;margin-top:16px;}
+.lb-arrow{color:white;font-size:22px;cursor:pointer;background:rgba(255,255,255,.1);border:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.lb-arrow:hover{background:rgba(255,255,255,.2);}
+.lb-counter{color:rgba(255,255,255,.6);font-size:12px;}
+.lb-thumbs{display:flex;gap:8px;margin-top:12px;}
+.lb-thumb{width:48px;height:36px;border-radius:3px;cursor:pointer;opacity:.5;border:2px solid transparent;transition:all .15s;}
+.lb-thumb.active{opacity:1;border-color:var(--accent);}
+/* Make detail thumbs and main img clickable */
+.detail-main-img,.detail-thumb{cursor:zoom-in;}
+
+/* EMPTY STATES & SKELETON */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;}
+.empty-icon{font-size:48px;margin-bottom:16px;opacity:.4;}
+.empty-title{font-size:15px;font-weight:500;color:var(--black);margin-bottom:6px;}
+.empty-desc{font-size:12px;color:var(--g4);max-width:280px;line-height:1.6;margin-bottom:20px;}
+.empty-btn{background:var(--accent);color:white;border:none;padding:9px 20px;font-size:12px;cursor:pointer;border-radius:2px;font-family:inherit;}
+@keyframes shimmer{0%{background-position:-400px 0;}100%{background-position:400px 0;}}
+.skeleton{background:linear-gradient(90deg,var(--g1) 25%,var(--g2) 50%,var(--g1) 75%);background-size:800px 100%;animation:shimmer 1.4s infinite;}
+.sk-card{border:1px solid var(--g2);border-radius:3px;overflow:hidden;background:var(--white);}
+.sk-img{height:120px;width:100%;}
+.sk-body{padding:12px;}
+.sk-line{height:11px;border-radius:2px;margin-bottom:8px;}
+.sk-line.w80{width:80%;}
+.sk-line.w60{width:60%;}
+.sk-line.w40{width:40%;}
+
+/* NOTIFICATION PAGE */
+.notif-wrap{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 48px);}
+.notif-sidebar{border-right:1px solid var(--g2);padding:20px 16px;background:var(--white);}
+.notif-sidebar-title{font-size:14px;font-weight:500;margin-bottom:16px;}
+.notif-filter{display:flex;flex-direction:column;gap:2px;}
+.nf-item{font-size:12px;color:var(--g4);padding:9px 12px;border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;}
+.nf-item:hover{background:var(--g1);color:var(--black);}
+.nf-item.on{background:var(--accent-light, #fff0e6);color:var(--accent);font-weight:500;}
+.nf-badge{font-size:10px;background:var(--accent);color:white;padding:1px 6px;border-radius:10px;}
+.notif-main{padding:20px 24px;}
+.notif-group-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--g4);margin-bottom:8px;margin-top:20px;}
+.notif-group-title:first-child{margin-top:0;}
+.notif-list{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
+.notif-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid var(--g2);border-radius:3px;background:var(--white);cursor:pointer;transition:border-color .15s;}
+.notif-item:hover{border-color:var(--accent);}
+.notif-item.unread{border-left:3px solid var(--accent);background:#fffaf7;}
+.notif-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:5px;}
+.notif-dot.read{background:var(--g2);}
+.notif-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.notif-icon.orange{background:var(--accent-light, #fff0e6);}
+.notif-icon.blue{background:#e6f0ff;}
+.notif-icon.green{background:#e6f7ee;}
+.notif-icon.gray{background:var(--g1);}
+.notif-content{flex:1;}
+.notif-title{font-size:13px;font-weight:500;color:var(--black);margin-bottom:3px;}
+.notif-desc{font-size:11px;color:var(--g4);line-height:1.5;}
+.notif-time{font-size:10px;color:var(--g3);margin-top:4px;}
+@media(max-width:768px){
+  .notif-wrap{grid-template-columns:1fr;}
+  .notif-sidebar{display:none;}
+  .notif-main{padding:14px;}
+}
+
+/* MAP VIEW */
+.map-toggle{display:flex;gap:4px;background:var(--g1);border-radius:3px;padding:3px;}
+.mtoggle{font-size:11px;padding:5px 12px;border-radius:2px;cursor:pointer;color:var(--g4);border:none;background:none;font-family:inherit;}
+.mtoggle.on{background:var(--white);color:var(--black);font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.1);}
+.map-view{display:none;}
+.map-view.on{display:block;}
+.list-view{display:block;}
+.list-view.hidden{display:none;}
+.map-canvas{width:100%;height:480px;background:linear-gradient(135deg,#e8ede8,#d4dcd4);border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--g2);}
+.map-grid-bg{position:absolute;inset:0;opacity:.15;background-image:linear-gradient(var(--g3) 1px,transparent 1px),linear-gradient(90deg,var(--g3) 1px,transparent 1px);background-size:40px 40px;}
+.map-pin{position:absolute;transform:translate(-50%,-100%);cursor:pointer;}
+.map-pin-bubble{background:var(--black);color:white;font-size:11px;font-weight:500;padding:4px 9px;border-radius:3px;white-space:nowrap;}
+.map-pin-bubble.accent{background:var(--accent);}
+.map-pin-arrow{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--black);margin:0 auto;}
+.map-pin-arrow.accent{border-top-color:var(--accent);}
+.map-pin:hover .map-pin-bubble{background:var(--accent);}
+.map-pin:hover .map-pin-arrow{border-top-color:var(--accent);}
+.map-popup{position:absolute;background:var(--white);border:1px solid var(--g2);border-radius:4px;padding:12px;width:180px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:10;display:none;}
+.map-popup.open{display:block;}
+
+/* PROFILE PAGE */
+.profile-wrap{display:grid;grid-template-columns:260px 1fr;min-height:calc(100vh - 48px);}
+.profile-sidebar{border-right:1px solid var(--g2);padding:24px 16px;background:var(--white);}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 12px;}
+.profile-name{font-size:14px;font-weight:500;text-align:center;margin-bottom:3px;}
+.profile-email{font-size:11px;color:var(--g4);text-align:center;margin-bottom:20px;}
+.profile-nav{display:flex;flex-direction:column;gap:2px;}
+.pnav-item{font-size:12px;color:var(--g4);padding:9px 12px;border-radius:2px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+.pnav-item:hover{background:var(--g1);color:var(--black);}
+.pnav-item.on{background:var(--accent-light,#fff0e6);color:var(--accent);font-weight:500;}
+.profile-main{padding:24px 28px;}
+.profile-section{margin-bottom:28px;}
+.profile-section-title{font-size:12px;font-weight:500;letter-spacing:.5px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--g2);}
+.profile-field{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin-bottom:10px;}
+.pf-label{font-size:11px;color:var(--g4);}
+.pf-val{font-size:13px;color:var(--black);}
+.pf-input{width:100%;border:1px solid var(--g2);padding:8px 10px;font-size:12px;font-family:inherit;outline:none;border-radius:2px;}
+.pf-input:focus{border-color:var(--accent);}
+.saved-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.history-list{display:flex;flex-direction:column;gap:6px;}
+.history-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--g2);border-radius:3px;font-size:12px;cursor:pointer;}
+.history-item:hover{border-color:var(--accent);}
+.history-thumb{width:40px;height:32px;border-radius:2px;background:var(--g1);flex-shrink:0;}
+@media(max-width:768px){
+  .profile-wrap{grid-template-columns:1fr;}
+  .profile-sidebar{display:none;}
+  .profile-main{padding:16px;}
+  .saved-grid{grid-template-columns:repeat(2,1fr);}
+}
+
+/* PRICE COMPARE MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--white);border-radius:6px;width:100%;max-width:560px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+.modal-header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--g2);position:sticky;top:0;background:var(--white);z-index:1;}
+.modal-title{font-size:14px;font-weight:500;}
+.modal-brand{font-size:11px;color:var(--g4);margin-top:2px;}
+.modal-close{font-size:20px;cursor:pointer;background:none;border:none;color:var(--g4);line-height:1;padding:2px;}
+.modal-close:hover{color:var(--black);}
+.modal-body{padding:16px 20px;}
+.modal-best{background:var(--accent-light,#fff0e6);border:1px solid var(--accent);border-radius:4px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:12px;}
+.modal-best-label{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:3px;}
+.modal-best-price{font-size:20px;font-weight:500;color:var(--black);}
+.modal-best-store{font-size:11px;color:var(--g4);}
+.modal-compare-title{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:10px;}
+.modal-store-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--g1);}
+.modal-store-row:last-child{border-bottom:none;}
+.modal-store-name{font-size:12px;font-weight:500;width:100px;flex-shrink:0;}
+.modal-bar-wrap{flex:1;height:6px;background:var(--g1);border-radius:3px;overflow:hidden;}
+.modal-bar{height:100%;background:var(--g2);border-radius:3px;transition:width .6s ease;}
+.modal-bar.best{background:var(--accent);}
+.modal-store-price{font-size:13px;font-weight:500;width:80px;text-align:right;flex-shrink:0;}
+.modal-store-promo{font-size:10px;color:var(--g4);width:80px;text-align:right;}
+.modal-chart-title{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin:16px 0 10px;}
+.price-chart{width:100%;height:80px;display:flex;align-items:flex-end;gap:3px;padding-bottom:1px;}
+.price-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.price-bar-val{background:var(--g2);border-radius:2px 2px 0 0;width:100%;transition:height .4s ease;}
+.price-bar-val.hi{background:var(--accent);opacity:.7;}
+.price-bar-val.now{background:var(--accent);}
+.price-bar-label{font-size:9px;color:var(--g4);}
+
+
+/* ══════════════════════════════
+   TOAST NOTIFICATIONS
+══════════════════════════════ */
+.toast-container{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;}
+.toast{background:var(--black);color:#fff;font-size:12px;padding:10px 18px;border-radius:20px;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:all .25s;pointer-events:none;white-space:nowrap;display:flex;align-items:center;gap:8px;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:#1a7a3a;}
+.toast.error{background:#c0392b;}
+.toast-icon{font-size:14px;}
+
+/* ══════════════════════════════
+   DARK MODE
+══════════════════════════════ */
+body.dark{--black:#f0f0f0;--white:#111;--g1:#1e1e1e;--g2:#2a2a2a;--g3:#555;--g4:#888;--g5:#bbb;--accent:#ff6b1a;--accent-light:#2a1800;--accent-dark:#ff8c45;}
+body.dark .nav{background:#161616;border-color:#2a2a2a;}
+body.dark .nav-logo{color:#f0f0f0;}
+body.dark .mobile-menu{background:#161616;}
+body.dark .bottom-nav{background:#161616;border-color:#2a2a2a;}
+body.dark .hero-bg{filter:brightness(.85);}
+body.dark .lf,body.dark .mf,body.dark .gp-sidebar,body.dark .pay-sidebar,body.dark .notif-sidebar,body.dark .profile-sidebar{background:#161616;}
+body.dark .d-mode-btn{background:#333;color:#f0f0f0;}
+.d-mode-btn{background:var(--g1);border:1px solid var(--g2);color:var(--g4);font-size:13px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
+.d-mode-btn:hover{background:var(--g2);}
+
+/* ══════════════════════════════
+   COMPARE PANEL
+══════════════════════════════ */
+.compare-bar{position:fixed;bottom:0;left:0;right:0;background:var(--black);color:#fff;z-index:50;transform:translateY(100%);transition:transform .3s ease;padding:12px 24px;display:flex;align-items:center;gap:12px;}
+.compare-bar.open{transform:translateY(0);}
+body.has-bottom-nav .compare-bar.open{transform:translateY(-54px);}
+.compare-slots{display:flex;gap:8px;flex:1;}
+.compare-slot{width:120px;height:48px;border:1px dashed rgba(255,255,255,.3);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(255,255,255,.4);flex-shrink:0;padding:6px;position:relative;}
+.compare-slot.filled{border-style:solid;border-color:var(--accent);background:rgba(240,90,0,.1);}
+.compare-slot-name{font-size:10px;color:#fff;font-weight:500;text-align:center;line-height:1.3;}
+.compare-slot-rm{position:absolute;top:2px;right:4px;font-size:12px;cursor:pointer;color:rgba(255,255,255,.5);}
+.compare-slot-rm:hover{color:#fff;}
+.compare-count{font-size:12px;color:rgba(255,255,255,.6);}
+.compare-btn{background:var(--accent);color:#fff;border:none;padding:9px 18px;font-size:12px;font-weight:500;cursor:pointer;border-radius:2px;font-family:inherit;white-space:nowrap;}
+.compare-btn:disabled{opacity:.4;cursor:not-allowed;}
+.compare-clear{background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);padding:9px 14px;font-size:11px;cursor:pointer;border-radius:2px;font-family:inherit;}
+
+/* Compare checkbox on card */
+.gc{position:relative;}
+.compare-check{position:absolute;top:8px;right:8px;z-index:2;width:18px;height:18px;accent-color:var(--accent);cursor:pointer;opacity:0;transition:opacity .15s;}
+.gc:hover .compare-check{opacity:1;}
+.compare-check:checked{opacity:1;}
+
+/* Compare modal */
+.compare-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;overflow-y:auto;padding:20px;}
+.compare-modal.open{display:flex;align-items:flex-start;justify-content:center;}
+.compare-modal-inner{background:var(--white);border-radius:6px;width:100%;max-width:800px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+.compare-modal-header{padding:16px 20px;border-bottom:1px solid var(--g2);display:flex;align-items:center;justify-content:space-between;}
+.compare-table{width:100%;border-collapse:collapse;}
+.compare-table th{padding:12px 16px;font-size:11px;font-weight:400;color:var(--g4);border-bottom:1px solid var(--g2);text-align:left;}
+.compare-table td{padding:12px 16px;font-size:12px;border-bottom:1px solid var(--g1);vertical-align:top;}
+.compare-table tr:last-child td{border-bottom:none;}
+.compare-table td:first-child{color:var(--g4);font-size:11px;width:100px;}
+.compare-best{color:var(--accent);font-weight:600;}
+
+/* ══════════════════════════════
+   AUTOCOMPLETE
+══════════════════════════════ */
+.autocomplete-wrap{position:relative;}
+.autocomplete-drop{position:absolute;top:100%;left:0;right:0;background:var(--white);border:1px solid var(--g2);border-top:none;border-radius:0 0 3px 3px;z-index:40;box-shadow:0 4px 12px rgba(0,0,0,.08);display:none;}
+.autocomplete-drop.open{display:block;}
+.ac-item{padding:9px 12px;font-size:12px;color:var(--g5);cursor:pointer;display:flex;align-items:center;gap:8px;}
+.ac-item:hover{background:var(--g1);}
+.ac-icon{font-size:13px;color:var(--g4);}
+.ac-highlight{color:var(--accent);font-weight:500;}
+
+/* ══════════════════════════════
+   FORM VALIDATION
+══════════════════════════════ */
+.form-group{position:relative;margin-bottom:14px;}
+.form-group .linput{margin-bottom:0;}
+.form-err{font-size:10px;color:#c0392b;margin-top:4px;display:none;}
+.form-ok{font-size:10px;color:#1a7a3a;margin-top:4px;display:none;}
+.form-group.error .linput{border-color:#c0392b;}
+.form-group.error .form-err{display:block;}
+.form-group.success .linput{border-color:#1a7a3a;}
+.form-group.success .form-ok{display:block;}
+.form-group .field-icon{position:absolute;right:10px;top:10px;font-size:14px;}
+
+/* ══════════════════════════════
+   CARD HOVER EXPAND
+══════════════════════════════ */
+.gc-actions{display:flex;gap:4px;padding:0 12px 10px;opacity:0;transform:translateY(-4px);transition:all .2s;height:0;overflow:hidden;}
+.gc:hover .gc-actions{opacity:1;transform:translateY(0);height:auto;}
+.gc-action-btn{flex:1;font-size:10px;padding:5px 0;border:1px solid var(--g2);background:var(--white);color:var(--g5);cursor:pointer;border-radius:2px;font-family:inherit;text-align:center;}
+.gc-action-btn:hover{background:var(--g1);}
+.gc-action-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* ══════════════════════════════
+   BREADCRUMB + SCROLL PROGRESS
+══════════════════════════════ */
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--g4);padding:10px 24px;background:var(--white);border-bottom:1px solid var(--g2);}
+.bc-sep{color:var(--g3);font-size:10px;}
+.bc-link{cursor:pointer;color:var(--g4);}
+.bc-link:hover{color:var(--accent);}
+.bc-current{color:var(--black);font-weight:500;}
+.scroll-progress{position:fixed;top:48px;left:0;height:2px;background:var(--accent);z-index:25;transition:width .1s;width:0%;}
+
+/* ══════════════════════════════
+   CHAT WIDGET
+══════════════════════════════ */
+.chat-fab{position:fixed;bottom:80px;right:20px;width:48px;height:48px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(240,90,0,.4);z-index:60;border:none;font-size:20px;transition:transform .2s;}
+.chat-fab:hover{transform:scale(1.08);}
+.chat-fab .chat-badge{position:absolute;top:0;right:0;width:14px;height:14px;background:#e53935;border-radius:50%;border:2px solid #fff;font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;}
+.chat-window{position:fixed;bottom:140px;right:20px;width:300px;background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:60;display:none;flex-direction:column;overflow:hidden;border:1px solid var(--g2);}
+.chat-window.open{display:flex;}
+.chat-header{background:var(--black);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+.chat-avatar{width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.chat-header-info{flex:1;}
+.chat-header-name{font-size:12px;font-weight:500;}
+.chat-header-status{font-size:10px;opacity:.7;}
+.chat-close-btn{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:16px;padding:0;}
+.chat-messages{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;background:var(--g1);}
+.chat-msg{max-width:80%;padding:8px 10px;border-radius:10px;font-size:12px;line-height:1.5;}
+.chat-msg.bot{background:var(--white);color:var(--black);align-self:flex-start;border-radius:3px 10px 10px 10px;}
+.chat-msg.user{background:var(--accent);color:#fff;align-self:flex-end;border-radius:10px 3px 10px 10px;}
+.chat-quick-replies{display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-top:1px solid var(--g2);background:var(--white);}
+.chat-qr{font-size:10px;padding:4px 9px;border:1px solid var(--g2);border-radius:12px;cursor:pointer;color:var(--g5);background:var(--white);}
+.chat-qr:hover{border-color:var(--accent);color:var(--accent);}
+.chat-input-row{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--g2);background:var(--white);}
+.chat-input{flex:1;border:1px solid var(--g2);border-radius:16px;padding:6px 12px;font-size:12px;font-family:inherit;outline:none;}
+.chat-input:focus{border-color:var(--accent);}
+.chat-send{background:var(--accent);color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* ══════════════════════════════
+   RENT CALCULATOR
+══════════════════════════════ */
+.calc-fab{position:fixed;bottom:80px;right:76px;width:48px;height:48px;background:var(--black);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:60;border:none;font-size:20px;transition:transform .2s;}
+.calc-fab:hover{transform:scale(1.08);}
+.calc-window{position:fixed;bottom:140px;right:76px;width:280px;background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:60;display:none;overflow:hidden;border:1px solid var(--g2);}
+.calc-window.open{display:block;}
+.calc-header{background:var(--black);color:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;}
+.calc-title{font-size:12px;font-weight:500;}
+.calc-close{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:16px;}
+.calc-body{padding:14px;}
+.calc-field{margin-bottom:12px;}
+.calc-label{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--g4);margin-bottom:4px;display:block;}
+.calc-input{width:100%;border:1px solid var(--g2);border-radius:3px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;}
+.calc-input:focus{border-color:var(--accent);}
+.calc-results{background:var(--g1);border-radius:3px;padding:12px;margin-top:4px;}
+.calc-result-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g2);font-size:12px;}
+.calc-result-row:last-child{border-bottom:none;}
+.calc-result-label{color:var(--g4);}
+.calc-result-val{font-weight:500;color:var(--black);}
+.calc-result-val.warn{color:#c0392b;}
+.calc-result-val.ok{color:#1a7a3a;}
+
+/* ══════════════════════════════
+   PARALLAX HERO
+══════════════════════════════ */
+.hero-bg{will-change:transform;}
+
+/* ══════════════════════════════
+   BREADCRUMB show on detail
+══════════════════════════════ */
+#page-detail .breadcrumb{display:flex;}
+
+
+/* ══ PROPERTY BADGES ══ */
+.prop-ribbon{position:absolute;top:10px;left:10px;font-size:9px;font-weight:600;padding:3px 8px;border-radius:2px;letter-spacing:.5px;z-index:2;text-transform:uppercase;}
+.ribbon-new{background:#f05a00;color:#fff;}
+.ribbon-urgent{background:#e53935;color:#fff;}
+.ribbon-nego{background:#1a7a3a;color:#fff;}
+.ribbon-excl{background:#1a1a1a;color:#fff;}
+
+/* ══ RATINGS ══ */
+.rating-row{display:flex;align-items:center;gap:6px;margin:8px 0;}
+.stars{color:#f05a00;font-size:13px;letter-spacing:1px;}
+.rating-num{font-size:13px;font-weight:500;}
+.rating-count{font-size:11px;color:var(--g4);}
+.review-list{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
+.review-item{border:1px solid var(--g2);border-radius:3px;padding:12px 14px;}
+.review-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.reviewer{font-size:12px;font-weight:500;}
+.review-stars{color:#f05a00;font-size:11px;}
+.review-text{font-size:12px;color:var(--g5);line-height:1.6;}
+.review-date{font-size:10px;color:var(--g3);margin-top:4px;}
+
+/* ══ SIMILAR LISTINGS ══ */
+.similar-section{padding:20px 0 0;}
+.similar-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;}
+.similar-scroll::-webkit-scrollbar{height:3px;}
+.similar-scroll::-webkit-scrollbar-thumb{background:var(--g2);}
+.sim-card{flex-shrink:0;width:180px;border:1px solid var(--g2);border-radius:3px;overflow:hidden;cursor:pointer;background:var(--white);}
+.sim-card:hover{border-color:var(--accent);}
+.sim-img{height:80px;width:100%;}
+.sim-body{padding:8px 10px;}
+.sim-name{font-size:11px;font-weight:500;margin-bottom:3px;}
+.sim-price{font-size:12px;font-weight:500;color:var(--accent);}
+.sim-meta{font-size:10px;color:var(--g4);margin-top:2px;}
+
+/* ══ TREND CHART ══ */
+.trend-page-wrap{padding:24px;}
+.trend-header{margin-bottom:20px;}
+.trend-title{font-size:20px;font-weight:500;margin-bottom:4px;}
+.trend-sub{font-size:12px;color:var(--g4);}
+.trend-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;}
+.trend-tab{font-size:11px;padding:5px 14px;border:1px solid var(--g2);border-radius:20px;cursor:pointer;color:var(--g4);background:var(--white);}
+.trend-tab.on{background:var(--black);color:var(--white);border-color:var(--black);}
+.chart-wrap{background:var(--white);border:1px solid var(--g2);border-radius:4px;padding:20px;margin-bottom:16px;}
+.chart-title{font-size:12px;font-weight:500;margin-bottom:14px;color:var(--black);}
+.svg-chart{width:100%;overflow:visible;}
+.district-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;}
+.district-card{border:1px solid var(--g2);border-radius:3px;padding:14px;background:var(--white);cursor:pointer;}
+.district-card:hover{border-color:var(--accent);}
+.dc-name{font-size:12px;font-weight:500;margin-bottom:4px;}
+.dc-price{font-size:18px;font-weight:300;letter-spacing:-.5px;}
+.dc-change{font-size:11px;margin-top:3px;}
+.dc-up{color:#1a7a3a;}
+.dc-dn{color:#c0392b;}
+
+/* ══ ONBOARDING ══ */
+.onboard-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:400;align-items:center;justify-content:center;}
+.onboard-overlay.open{display:flex;}
+.onboard-card{background:var(--white);border-radius:12px;padding:36px 32px;max-width:440px;width:90%;text-align:center;box-shadow:0 12px 48px rgba(0,0,0,.3);}
+.onboard-step-dots{display:flex;justify-content:center;gap:6px;margin-bottom:24px;}
+.od{width:8px;height:8px;border-radius:50%;background:var(--g2);}
+.od.on{background:var(--accent);width:24px;border-radius:4px;}
+.onboard-icon{font-size:48px;margin-bottom:16px;}
+.onboard-title{font-size:18px;font-weight:500;margin-bottom:8px;}
+.onboard-desc{font-size:13px;color:var(--g4);line-height:1.7;margin-bottom:24px;}
+.onboard-btns{display:flex;gap:10px;justify-content:center;}
+.ob-skip{background:none;border:1px solid var(--g2);color:var(--g4);padding:9px 20px;border-radius:3px;font-size:12px;cursor:pointer;font-family:inherit;}
+.ob-next{background:var(--accent);color:#fff;border:none;padding:9px 24px;border-radius:3px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;}
+
+/* ══ FOOTER ══ */
+.site-footer{background:var(--black);color:rgba(255,255,255,.7);padding:40px 32px 24px;margin-top:0;}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px;margin-bottom:32px;}
+.footer-brand{font-family:'DM Serif Display',serif;font-size:16px;letter-spacing:2px;color:#fff;margin-bottom:10px;border-bottom:2px solid var(--accent);padding-bottom:2px;display:inline-block;}
+.footer-tagline{font-size:11px;line-height:1.7;max-width:220px;}
+.footer-col-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#fff;margin-bottom:12px;font-weight:500;}
+.footer-link{display:block;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:7px;cursor:pointer;}
+.footer-link:hover{color:#fff;}
+.footer-social{display:flex;gap:8px;margin-top:14px;}
+.social-btn{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;}
+.social-btn:hover{background:var(--accent);}
+.footer-bottom{border-top:1px solid rgba(255,255,255,.1);padding-top:20px;display:flex;align-items:center;justify-content:space-between;font-size:10px;color:rgba(255,255,255,.3);}
+.footer-bottom-links{display:flex;gap:16px;}
+.footer-bottom-links span{cursor:pointer;}
+.footer-bottom-links span:hover{color:#fff;}
+@media(max-width:768px){
+  .footer-grid{grid-template-columns:1fr 1fr;gap:24px;}
+  .district-grid{grid-template-columns:repeat(2,1fr);}
+  .trend-page-wrap{padding:14px;}
+}
+
+/* ══ BUILDING INFO ══ */
+.binfo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+.binfo-card{border:1px solid var(--g2);border-radius:3px;padding:12px 14px;background:var(--g1);}
+.binfo-label{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:4px;}
+.binfo-val{font-size:13px;font-weight:500;color:var(--black);}
+.nearby-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.nearby-tag{font-size:10px;padding:3px 9px;background:var(--g1);border-radius:2px;color:var(--g5);}
+
+/* ══ TYPOGRAPHY POLISH ══ */
+h1,h2,h3{font-family:'DM Serif Display',serif;font-weight:400;}
+.section-eyebrow{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent);margin-bottom:6px;font-weight:500;}
+.body-text{font-size:13px;line-height:1.8;color:var(--g5);}
+.caption{font-size:10px;color:var(--g4);letter-spacing:.3px;}
+.label-text{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--g4);font-weight:500;}
+
+
+/* MOBILE */
+body{padding-bottom:54px;}
+.nav-links,.nav-r{display:none !important;}
+.hamburger{display:flex !important;}
+.bottom-nav{display:flex !important;}
+.lp,.mp,.pay-wrap,.detail-wrap,.login-wrap,.gp-body,.notif-wrap,.profile-wrap{grid-template-columns:1fr !important;}
+.lf,.mf,.pay-sidebar,.ll,.gp-sidebar,.notif-sidebar,.profile-sidebar{display:none !important;}
+.lr,.mr,.pay-main,.detail-main,.lr2,.gp-main,.notif-main,.profile-main{padding:12px 14px 28px !important;}
+.detail-sidebar{position:static !important;height:auto !important;border-left:none !important;border-top:1px solid var(--g2) !important;padding:16px !important;}
+.grid{columns:1 !important;}.mgrid,.market-grid{columns:2 !important;}
+.gp-grid{grid-template-columns:repeat(2,1fr) !important;}
+.gp-stat-row{grid-template-columns:repeat(2,1fr) !important;}
+.cat-grid{grid-template-columns:repeat(2,1fr) !important;}
+.feat-grid,.sv-grid,.offers-grid{grid-template-columns:1fr !important;}
+.pay-balance-row,.binfo-grid,.district-grid{grid-template-columns:1fr 1fr !important;}
+.detail-stats,.saved-grid{grid-template-columns:repeat(2,1fr) !important;}
+.hero-bg{padding:36px 20px !important;min-height:240px !important;}
+.hero-title{font-size:26px !important;}.home-section{padding:20px 16px !important;}
+.sv-hero{padding:28px 20px 24px !important;}
+.gp-hero{flex-direction:column !important;padding:20px 16px !important;gap:16px !important;}
+.gp-controls,.gp-content,.gp-topbar{padding:12px 14px !important;}
+.gp-card-img{height:90px !important;}
+.filter-toggle-btn{display:flex !important;}
+.gi.tall{height:120px !important;}.gi.short{height:80px !important;}
+.detail-main-img{height:160px !important;}
+.detail-main{padding:14px 16px 20px !important;border-right:none !important;}
+.pay-table-wrap{overflow-x:auto !important;}.pay-table{min-width:400px !important;}
+.login-wrap{grid-template-columns:1fr !important;}.ll{display:none !important;}.lr2{padding:32px 20px !important;}
+.map-canvas{height:320px !important;}.compare-slots{display:none !important;}
+.chat-fab,.calc-fab{bottom:70px !important;}
+.chat-window{bottom:130px !important;right:10px !important;}.calc-window{bottom:130px !important;right:70px !important;}
+.footer-grid{grid-template-columns:1fr 1fr !important;gap:20px !important;}
+.footer-bottom{flex-direction:column !important;gap:8px !important;text-align:center !important;}
+.trend-page-wrap{padding:14px !important;}.district-grid{grid-template-columns:repeat(2,1fr) !important;}
+
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">AJO LIVING</div>
+  <div class="nav-links">
+    <button class="nl" data-p="home">首頁</button>
+    <button class="nl on" data-p="listing">樓盤租售</button>
+    <button class="nl" data-p="service">服務式住宅</button>
+    <button class="nl" data-p="market">家具</button>
+    <button class="nl" data-p="offers">綜合優惠</button>
+    <button class="nl" data-p="payment">支付</button>
+    <button class="nl" data-p="login">會員中心</button>
+    <button class="nl" data-p="trend">📈 走勢</button>
+    <button class="nl" data-p="profile" style="display:none">個人資料</button>
+    <button class="nl" data-p="notif" style="position:relative;">🔔<span style="position:absolute;top:10px;right:6px;width:7px;height:7px;background:var(--accent);border-radius:50%;"></span></button>
+  </div>
+  <div class="nav-r">
+    <span>照映</span><span>繁中</span>
+    <button class="nav-login" onclick="go('login')">登入</button>
+  </div>
+  <button class="d-mode-btn" id="dark-toggle" title="深色模式" onclick="toggleDark()">🌙</button>
+  <button class="d-mode-btn" id="dark-toggle" title="深色模式">🌙</button>
+  <button class="hamburger" id="hamburger" aria-label="選單"><span></span><span></span><span></span></button>
+</nav>
+
+<div class="scroll-progress" id="scroll-progress"></div>
+<div class="scroll-progress" id="scroll-progress"></div>
+<div class="toast-container" id="toast-container"></div>
+
+<!-- MOBILE MENU -->
+<div class="scroll-progress" id="scroll-progress"></div>
+<div class="toast-container" id="toast-container"></div>
+<div class="mobile-menu" id="mobile-menu">
+  <div class="mobile-menu-header">
+    <div class="mobile-menu-logo">AJO LIVING</div>
+    <button class="mobile-close" id="mobile-close">&#x2715;</button>
+  </div>
+  <div class="mobile-menu-body">
+    <button class="mnl" data-p="home">🏠 首頁</button>
+    <button class="mnl" data-p="listing">🏢 樓盤租售</button>
+    <button class="mnl" data-p="service">🏨 服務式住宅</button>
+    <button class="mnl" data-p="market">🛋 家具市集</button>
+    <button class="mnl" data-p="offers">🛒 超市格價</button>
+    <button class="mnl" data-p="trend">📈 租金走勢</button>
+    <button class="mnl" data-p="payment">💳 支付</button>
+    <button class="mnl" data-p="notif">🔔 通知中心</button>
+    <button class="mnl" data-p="profile">👤 個人資料</button>
+    <button class="mnl" data-p="login">🔑 登入 / 註冊</button>
+  </div>
+  <div class="mobile-menu-footer">
+    <button class="nav-login" style="width:100%;padding:12px;font-size:13px;letter-spacing:.5px;" onclick="go('login');closeMobileMenu();">登入 / 註冊</button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav" id="bottom-nav">
+  <button class="bnav-item on" data-bp="home"><span class="bnav-icon">🏠</span>首頁</button>
+  <button class="bnav-item" data-bp="listing"><span class="bnav-icon">🏢</span>樓盤</button>
+  <button class="bnav-item" data-bp="market"><span class="bnav-icon">🛋</span>家具</button>
+  <button class="bnav-item" data-bp="offers"><span class="bnav-icon">🛒</span>格價</button>
+  <button class="bnav-item" data-bp="profile"><span class="bnav-icon">👤</span>我的</button>
+</div>
+
+<!-- 樓盤租售 -->
+<div class="page on" id="page-listing">
+  <div class="lp">
+    <aside class="lf">
+      <div class="sbar"><div class="autocomplete-wrap" style="flex:1;">
+        <input class="sinput" id="listing-search" placeholder="搜尋樓盤…" autocomplete="off" oninput="showAC(this,'listing-ac')" onblur="setTimeout(function(){hideAC('listing-ac')},200)">
+        <div class="autocomplete-drop" id="listing-ac">
+          <div class="ac-item" onclick="selectAC('佐敦','listing-search','listing-ac')"><span class="ac-icon">🏢</span><span><span class="ac-highlight">佐</span>敦 高級住宅</span></div>
+          <div class="ac-item" onclick="selectAC('中環','listing-search','listing-ac')"><span class="ac-icon">🏢</span><span><span class="ac-highlight">中</span>環甲級寫字樓</span></div>
+          <div class="ac-item" onclick="selectAC('沙田','listing-search','listing-ac')"><span class="ac-icon">🏠</span><span><span class="ac-highlight">沙</span>田第一城</span></div>
+          <div class="ac-item" onclick="selectAC('九龍','listing-search','listing-ac')"><span class="ac-icon">📍</span><span><span class="ac-highlight">九</span>龍區物件</span></div>
+        </div>
+      </div><button class="sbtn">搜</button></div>
+      <div class="fs"><div class="ft-title">地區</div><div class="ftags"><span class="ft on">全港</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div></div>
+      <div class="fs"><div class="ft-title">性質</div><div class="ftags"><span class="ft on">全部</span><span class="ft">出售</span><span class="ft">出租</span></div></div>
+      <div class="fs"><div class="ft-title">類型</div><div class="ftags"><span class="ft on">全部</span><span class="ft">住宅</span><span class="ft">車位</span><span class="ft">工業</span><span class="ft">商廈</span></div></div>
+      <div class="fs"><div class="ft-title">售價範圍</div><div class="ftags"><span class="ft on">不限</span><span class="ft">400萬以下</span><span class="ft">400–800萬</span><span class="ft">800–1200萬</span><span class="ft">2000萬+</span></div></div>
+      <div class="fs"><div class="ft-title">實用面積</div><div class="ftags"><span class="ft on">不限</span><span class="ft">300呎以下</span><span class="ft">300–500呎</span><span class="ft">500–1000呎</span><span class="ft">1000呎+</span></div></div>
+      <div class="fs"><div class="ft-title">房間</div><div class="ftags"><span class="ft on">全部</span><span class="ft">開放式</span><span class="ft">1房</span><span class="ft">2房</span><span class="ft">3房</span><span class="ft">4房+</span></div></div>
+      <div class="fs"><div class="ft-title">裝修</div><div class="ftags"><span class="ft on">全部</span><span class="ft">全新</span><span class="ft">有裝修</span><span class="ft">簡潔</span><span class="ft">特色</span></div></div>
+      <div class="fs"><div class="ft-title">業主類型</div><div class="ftags"><span class="ft on">全部</span><span class="ft">業主</span><span class="ft">代理</span></div></div>
+    </aside>
+    <main class="lr">
+      <div class="sort-row"><span class="rn">4 個結果</span><select class="ssel"><option>最新發現</option><option>價格低至高</option><option>面積大至小</option></select></div>
+      <div class="list-view"><div class="grid">
+        <div class="gc">
+          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'佐敦 高級住宅','HK$36,000')">
+          <div class="gi tall pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);">
+            <svg width="80" height="60" viewBox="0 0 80 60" opacity=".2"><rect x="5" y="15" width="70" height="40" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="31" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="52" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="28" y="37" width="24" height="18" rx="1" stroke="#000" fill="none"/></svg>
+          </div>
+          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span><span class="gtag dark">代理盤</span></div><div class="gtitle">佐敦 高級住宅</div><div class="gsub">佐敦站步行3分鐘 · 全新裝修 · 海景</div><div class="gprice">HK$36,000 <span>/ 月</span></div><div class="gpills"><span class="gpill">全新</span><span class="gpill">基本裝修</span><span class="gpill">廚房</span></div></div>
+          <div class="gc-actions">
+            <button class="gc-action-btn" onclick="addToCompare('佐敦 高級住宅');showToast('已加入比較','📊')">比較</button>
+            <button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">收藏</button>
+            <button class="gc-action-btn primary" onclick="go('detail')">查看</button>
+          </div>
+          <div class="gc-actions"><button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">♡ 收藏</button><button class="gc-action-btn" onclick="toggleCompareByBtn(this.closest('.gc'))">⚖ 比較</button><button class="gc-action-btn primary" onclick="go('detail')">查看</button></div>
+          <div class="gfoot"><span class="grooms">1房 1廁 · 200呎</span><span class="gview" onclick="go('detail')">查看詳情 →</span></div>
+        </div>
+        <div class="gc">
+          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'佐敦婚 38窗 套房','HK$6,500')">
+          <div class="gi short pat" style="background:linear-gradient(160deg,#d8e0e0,#c0cccc);">
+            <svg width="60" height="40" viewBox="0 0 60 40" opacity=".2"><rect x="3" y="5" width="54" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="8" y="10" width="44" height="15" stroke="#000" fill="none"/></svg>
+          </div>
+          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle">佐敦婚 38 窗 套房</div><div class="gsub">1–3房可選 · 地端式佣</div><div class="gprice">HK$6,500 <span>/ 月</span></div></div>
+          <div class="gc-actions">
+            <button class="gc-action-btn" onclick="addToCompare('佐敦婚 38窗 套房');showToast('已加入比較','📊')">比較</button>
+            <button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">收藏</button>
+            <button class="gc-action-btn primary" onclick="go('detail')">查看</button>
+          </div>
+          <div class="gc-actions"><button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">♡ 收藏</button><button class="gc-action-btn" onclick="toggleCompareByBtn(this.closest('.gc'))">⚖ 比較</button><button class="gc-action-btn primary" onclick="go('detail')">查看</button></div>
+          <div class="gfoot"><span class="grooms">6房 3廁 · 100呎</span><span class="gview">查看詳情 →</span></div>
+        </div>
+        <div class="gc">
+          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'中環甲級寫字樓','HK$120,000')">
+          <div class="gi tall pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);">
+            <svg width="70" height="55" viewBox="0 0 70 55" opacity=".2"><rect x="5" y="5" width="60" height="45" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><line x1="5" y1="20" x2="65" y2="20" stroke="#000" stroke-width=".8"/><line x1="35" y1="5" x2="35" y2="50" stroke="#000" stroke-width=".8"/></svg>
+          </div>
+          <div class="gb"><div class="gtags"><span class="gtag">香港島</span><span class="gtag dark">商廈</span></div><div class="gtitle">中環甲級寫字樓</div><div class="gsub">海景全層 · IFC 對面 · 即租</div><div class="gprice">HK$120,000 <span>/ 月</span></div><div class="gpills"><span class="gpill">海景</span><span class="gpill">全新裝修</span><span class="gpill">有冷氣</span></div></div>
+          <div class="gc-actions">
+            <button class="gc-action-btn" onclick="addToCompare('中環甲級寫字樓');showToast('已加入比較','📊')">比較</button>
+            <button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">收藏</button>
+            <button class="gc-action-btn primary" onclick="go('detail')">查看</button>
+          </div>
+          <div class="gc-actions"><button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">♡ 收藏</button><button class="gc-action-btn" onclick="toggleCompareByBtn(this.closest('.gc'))">⚖ 比較</button><button class="gc-action-btn primary" onclick="go('detail')">查看</button></div>
+          <div class="gfoot"><span class="grooms">全層 · 2,400呎</span><span class="gview">查看詳情 →</span></div>
+        </div>
+        <div class="gc">
+          <input type="checkbox" class="compare-check" onchange="toggleCompare(this,'沙田第一城 3房','HK$18,500')">
+          <div class="gi short pat" style="background:linear-gradient(160deg,#e4dcd8,#ccc0bc);">
+            <svg width="55" height="40" viewBox="0 0 55 40" opacity=".2"><rect x="5" y="5" width="45" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="10" width="15" height="10" stroke="#000" fill="none"/><rect x="30" y="10" width="15" height="10" stroke="#000" fill="none"/></svg>
+          </div>
+          <div class="gb"><div class="gtags"><span class="gtag">新界</span><span class="gtag dark">業主盤</span></div><div class="gtitle">沙田第一城 3房</div><div class="gsub">低層 · 靚裝 · 近港鐵</div><div class="gprice">HK$18,500 <span>/ 月</span></div></div>
+          <div class="gc-actions">
+            <button class="gc-action-btn" onclick="addToCompare('沙田第一城 3房');showToast('已加入比較','📊')">比較</button>
+            <button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">收藏</button>
+            <button class="gc-action-btn primary" onclick="go('detail')">查看</button>
+          </div>
+          <div class="gc-actions"><button class="gc-action-btn" onclick="showToast('已加入收藏 ❤️','success')">♡ 收藏</button><button class="gc-action-btn" onclick="toggleCompareByBtn(this.closest('.gc'))">⚖ 比較</button><button class="gc-action-btn primary" onclick="go('detail')">查看</button></div>
+          <div class="gfoot"><span class="grooms">3房 2廁 · 650呎</span><span class="gview">查看詳情 →</span></div>
+        </div>
+
+      <!-- MAP VIEW -->
+      <div class="map-view" id="map-view">
+        <div class="map-canvas">
+          <div class="map-grid-bg"></div>
+          <!-- pins -->
+          <div class="map-pin" style="left:28%;top:45%;" onclick="showMapPopup(this,'佐敦 高級住宅','HK$36,000/月','九龍')">
+            <div class="map-pin-bubble accent">$36,000</div>
+            <div class="map-pin-arrow accent"></div>
+          </div>
+          <div class="map-pin" style="left:48%;top:30%;" onclick="showMapPopup(this,'中環甲級寫字樓','HK$120,000/月','香港島')">
+            <div class="map-pin-bubble">$120,000</div>
+            <div class="map-pin-arrow"></div>
+          </div>
+          <div class="map-pin" style="left:68%;top:38%;" onclick="showMapPopup(this,'沙田第一城 3房','HK$18,500/月','新界')">
+            <div class="map-pin-bubble">$18,500</div>
+            <div class="map-pin-arrow"></div>
+          </div>
+          <div class="map-pin" style="left:38%;top:60%;" onclick="showMapPopup(this,'佐敦婚 38窗 套房','HK$6,500/月','九龍')">
+            <div class="map-pin-bubble">$6,500</div>
+            <div class="map-pin-arrow"></div>
+          </div>
+          <!-- popup -->
+          <div class="map-popup" id="map-popup">
+            <div style="font-size:12px;font-weight:500;margin-bottom:2px;" id="mp-name"></div>
+            <div style="font-size:11px;color:var(--g4);margin-bottom:6px;" id="mp-area"></div>
+            <div style="font-size:15px;font-weight:500;color:var(--accent);margin-bottom:8px;" id="mp-price"></div>
+            <button onclick="go('detail')" style="width:100%;background:var(--black);color:white;border:none;padding:6px;font-size:11px;cursor:pointer;border-radius:2px;font-family:inherit;">查看詳情</button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 家具市集 -->
+<div class="page" id="page-market">
+  <div class="mp">
+    <aside class="mf">
+      <div class="sbar"><input class="sinput" placeholder="搜尋物品…"><button class="sbtn">搜</button></div>
+      <div class="fs"><div class="ft-title">分類</div><div class="ftags"><span class="ft on">全部</span><span class="ft">家居傢俱</span><span class="ft">家庭電器</span><span class="ft">電子產品</span><span class="ft">BB用品</span><span class="ft">其他</span></div></div>
+      <div class="fs"><div class="ft-title">價格範圍</div><div class="ftags"><span class="ft on">全部</span><span class="ft">$1k以下</span><span class="ft">$1k–3k</span><span class="ft">$3k–5k</span><span class="ft">$10k+</span></div></div>
+      <div class="fs"><div class="ft-title">成色</div><div class="ftags"><span class="ft on">全部</span><span class="ft">近乎全新</span><span class="ft">良好</span><span class="ft">尚可</span></div></div>
+      <div class="fs"><div class="ft-title">地區</div><div class="ftags"><span class="ft on">全部</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div></div>
+      <div class="fs"><div class="ft-title">可見範圍</div><div class="ftags"><span class="ft on">全部</span><span class="ft">公開</span><span class="ft">同棟可見</span></div></div>
+    </aside>
+    <main class="mr">
+      <button class="filter-toggle-btn" id="market-filter-btn">&#x2630; 篩選條件</button>
+      <div class="sort-row"><span class="rn">3 個結果</span><select class="ssel"><option>最新發佈</option><option>價格低至高</option></select></div>
+      <div class="mgrid">
+        <div class="mc"><span class="mnew">全新</span><div class="mimg" style="background:#f0ece8;">🐱</div><div class="mbody"><div class="mname">一只活潑健康的三毛</div><div class="msub">香港島 · 黃埔 · 良好</div><div class="mprice">HK$3</div><div class="mfoot"><span>其他 · 28/03</span><span style="color:#000;cursor:pointer;">查看 →</span></div></div><span class="mheart">♡</span></div>
+        <div class="mc"><div class="mimg pat" style="background:linear-gradient(135deg,#eee,#ddd);"></div><div class="mbody"><div class="mname">北歐實木餐桌</div><div class="msub">九龍 · 旺角 · 近乎全新</div><div class="mprice">HK$2,400</div><div class="mfoot"><span>傢俱 · 02/04</span><span style="color:#000;cursor:pointer;">查看 →</span></div></div><span class="mheart">♡</span></div>
+        <div class="mc"><div class="mimg pat" style="background:linear-gradient(135deg,#e8eee8,#d0dcd0);"></div><div class="mbody"><div class="mname">LG 洗衣機 8kg</div><div class="msub">新界 · 沙田 · 良好</div><div class="mprice">HK$1,800</div><div class="mfoot"><span>電器 · 01/04</span><span style="color:#000;cursor:pointer;">查看 →</span></div></div><span class="mheart">♡</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 登入 -->
+<div class="page" id="page-login">
+  <div class="lw">
+    <div class="ll">
+      <div class="llg" id="lgrid"></div>
+      <div class="lbig">歡迎<br>回家</div>
+      <div class="ltag">開啟您的理想社區生活<br>管理您的。聯絡與居室交易。</div>
+    </div>
+    <div class="lr2">
+      <div class="llogo">AJO LIVING</div>
+      <div class="ltitle">住戶登入</div>
+      <div class="lsub">可使用密碼、手機號碼或驗證碼登入。</div>
+      <div class="ltabs">
+        <button class="ltab on">手機驗證</button>
+        <button class="ltab">用戶名</button>
+        <button class="ltab">驗證碼</button>
+      </div>
+      <label class="llabel">手機號碼</label>
+      <div class="form-group" id="fg-phone">
+        <input class="linput" id="login-phone" placeholder="+852 6123 4567" oninput="validatePhone()">
+        <div class="form-err">請輸入有效手機號碼（8位數字）</div>
+        <div class="form-ok">✓ 格式正確</div>
+      </div>
+      <label class="llabel">密碼</label>
+      <div class="form-group" id="fg-pwd">
+        <input class="linput" id="login-pwd" type="password" placeholder="請輸入密碼（最少6位）" oninput="validatePwd()">
+        <div class="form-err">密碼最少需要 6 個字元</div>
+        <div class="form-ok">✓ 密碼格式正確</div>
+      </div>
+      <div class="lcheck"><input type="checkbox" checked><span>記住我</span></div>
+      <button class="lsubmit">登 入</button>
+      <div class="ldiv">或</div>
+      <button class="lalt">以電郵登入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 首頁 -->
+<div class="page" id="page-home">
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-bg pat" style="background:linear-gradient(160deg,#1a1a1a 0%,#2e2e2e 100%);">
+      <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.08" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid slice"><rect x="0" y="280" width="60" height="140" fill="white"/><rect x="70" y="200" width="80" height="220" fill="white"/><rect x="160" y="240" width="55" height="180" fill="white"/><rect x="225" y="160" width="100" height="260" fill="white"/><rect x="335" y="210" width="70" height="210" fill="white"/><rect x="415" y="140" width="110" height="280" fill="white"/><rect x="535" y="190" width="75" height="230" fill="white"/><rect x="620" y="220" width="55" height="200" fill="white"/><rect x="685" y="170" width="90" height="250" fill="white"/><rect x="785" y="200" width="15" height="220" fill="white"/></svg>
+      <div class="hero-content">
+        <div class="hero-eyebrow">AJO LIVING</div>
+        <h1 class="hero-title">理想生活<br>由此出發</h1>
+        <p class="hero-desc">全港最大社區生活平台，搜尋住宅、服務式公寓、家具及生活優惠，一站式滿足您的所有需要。</p>
+        <div class="hero-btns">
+          <button class="hbtn-primary" onclick="go('listing')">搜尋樓盤</button>
+          <button class="hbtn-ghost" onclick="go('service')">了解服務</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- CATEGORIES -->
+  <div class="home-section">
+    <div class="home-sec-title">探索服務</div>
+    <div class="cat-grid">
+      <div class="cat-card" onclick="go('listing')">
+        <div class="cat-icon">🏢</div>
+        <div class="cat-name">樓盤租售</div>
+        <div class="cat-desc">住宅、商廈、車位一應俱全</div>
+      </div>
+      <div class="cat-card" onclick="go('service')">
+        <div class="cat-icon">🏨</div>
+        <div class="cat-name">服務式住宅</div>
+        <div class="cat-desc">短期靈活入住，設施齊備</div>
+      </div>
+      <div class="cat-card" onclick="go('market')">
+        <div class="cat-icon">🛋️</div>
+        <div class="cat-name">家具市集</div>
+        <div class="cat-desc">社區二手好物交易平台</div>
+      </div>
+      <div class="cat-card" onclick="go('offers')">
+        <div class="cat-icon">🎁</div>
+        <div class="cat-name">綜合優惠</div>
+        <div class="cat-desc">住戶專屬折扣與生活禮遇</div>
+      </div>
+    </div>
+  </div>
+  <!-- FEATURED -->
+  <div class="home-section" style="background:var(--g1);padding-top:32px;padding-bottom:32px;">
+    <div class="home-sec-title">精選樓盤</div>
+    <div class="feat-grid">
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img tall pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag dark">熱門</span><span class="gtag">九龍</span></div>
+          <div class="gtitle">佐敦 高級住宅</div>
+          <div class="gprice">HK$36,000 <span>/ 月</span></div>
+        </div>
+      </div>
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img short pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag">香港島</span><span class="gtag">商廈</span></div>
+          <div class="gtitle">中環甲級寫字樓</div>
+          <div class="gprice">HK$120,000 <span>/ 月</span></div>
+        </div>
+      </div>
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img tall pat" style="background:linear-gradient(160deg,#e4dcd8,#ccc0bc);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag dark">業主盤</span><span class="gtag">新界</span></div>
+          <div class="gtitle">沙田第一城 3房</div>
+          <div class="gprice">HK$18,500 <span>/ 月</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 服務式住宅 -->
+<div class="page" id="page-service">
+  <div class="sv-hero pat" style="background:linear-gradient(160deg,#1a1a1a,#2e2e2e);">
+    <div class="sv-hero-text">
+      <div class="hero-eyebrow" style="color:var(--g3);">SERVICE APARTMENTS</div>
+      <h2 style="font-family:'DM Serif Display',serif;font-size:36px;color:white;font-weight:400;line-height:1.2;margin-bottom:12px;">靈活短租<br>全城精選</h2>
+      <p style="font-size:13px;color:var(--g3);line-height:1.8;max-width:400px;">酒店式管理，家的感覺。按日、按週、按月靈活租用，適合商務出行及過渡期居住。</p>
+    </div>
+  </div>
+  <div class="home-section">
+    <div class="home-sec-title">精選服務式住宅</div>
+    <div class="sv-grid">
+      <div class="sv-card">
+        <div class="sv-img pat" style="background:linear-gradient(160deg,#dde4e8,#b8c8d0);height:140px;"></div>
+        <div class="sv-body">
+          <div class="gtags" style="margin-bottom:6px;"><span class="gtag dark">每日起租</span><span class="gtag">中環</span></div>
+          <div class="gtitle">中環服務式公寓 Superior</div>
+          <div class="gsub">780呎 · 獨立廚房 · 健身室 · 24hr禮賓</div>
+          <div class="gprice" style="margin-top:6px;">HK$1,800 <span>/ 晚起</span></div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+            <span class="gpill">WiFi</span><span class="gpill">清潔服務</span><span class="gpill">洗衣房</span><span class="gpill">停車場</span>
+          </div>
+        </div>
+        <div class="gfoot"><span class="grooms">1房 1廁</span><span class="gview">查看 →</span></div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-img pat" style="background:linear-gradient(160deg,#e8e4d8,#d0c8b0);height:140px;"></div>
+        <div class="sv-body">
+          <div class="gtags" style="margin-bottom:6px;"><span class="gtag dark">每月起租</span><span class="gtag">尖沙咀</span></div>
+          <div class="gtitle">尖沙咀豪華套房 Deluxe</div>
+          <div class="gsub">520呎 · 海景 · 游泳池 · 管家服務</div>
+          <div class="gprice" style="margin-top:6px;">HK$28,000 <span>/ 月起</span></div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+            <span class="gpill">海景</span><span class="gpill">泳池</span><span class="gpill">健身室</span><span class="gpill">餐廳</span>
+          </div>
+        </div>
+        <div class="gfoot"><span class="grooms">開放式</span><span class="gview">查看 →</span></div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-img pat" style="background:linear-gradient(160deg,#e0e8e0,#c0d4c0);height:140px;"></div>
+        <div class="sv-body">
+          <div class="gtags" style="margin-bottom:6px;"><span class="gtag">銅鑼灣</span></div>
+          <div class="gtitle">銅鑼灣家庭套房 Family</div>
+          <div class="gsub">1,200呎 · 2房 · 近學校 · 超市</div>
+          <div class="gprice" style="margin-top:6px;">HK$45,000 <span>/ 月起</span></div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+            <span class="gpill">兒童設施</span><span class="gpill">學區</span><span class="gpill">私人陽台</span>
+          </div>
+        </div>
+        <div class="gfoot"><span class="grooms">2房 2廁</span><span class="gview">查看 →</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 綜合優惠 / 超市格價 -->
+<div class="page" id="page-offers">
+
+  <!-- HERO STRIP -->
+  <div class="gp-hero">
+    <div class="gp-hero-left">
+      <div class="gp-hero-label">超市格價</div>
+      <div class="gp-hero-title">今日最抵買</div>
+      <div class="gp-hero-sub">追蹤全港 9 大超市即時優惠，一鍵比較最低價格</div>
+    </div>
+    <div class="gp-hero-right">
+      <div class="gp-hstat"><span class="gp-hnum">2,122</span><span class="gp-hlabel">活躍優惠</span></div>
+      <div class="gp-hdiv"></div>
+      <div class="gp-hstat"><span class="gp-hnum">9</span><span class="gp-hlabel">連鎖商店</span></div>
+      <div class="gp-hdiv"></div>
+      <div class="gp-hstat"><span class="gp-hnum">-60%</span><span class="gp-hlabel">最高折扣</span></div>
+    </div>
+  </div>
+
+  <!-- SEARCH + FILTERS -->
+  <div class="gp-controls">
+    <div class="gp-search-box">
+      <span class="gp-search-ico">⌕</span>
+      <input class="gp-sinput" placeholder="搜尋商品、品牌或分類…">
+    </div>
+    <div class="gp-filter-pills">
+      <span class="gp-fpill on">全部</span>
+      <span class="gp-fpill">個人護理</span>
+      <span class="gp-fpill">粉麵食品</span>
+      <span class="gp-fpill">飲品</span>
+      <span class="gp-fpill">零食</span>
+      <span class="gp-fpill">家居用品</span>
+      <span class="gp-fpill">奶類</span>
+    </div>
+    <div class="gp-store-pills">
+      <span class="gp-spill on">全部商店</span>
+      <span class="gp-spill">惠康</span>
+      <span class="gp-spill">百佳</span>
+      <span class="gp-spill">AEON</span>
+      <span class="gp-spill">Market Place</span>
+      <span class="gp-spill">CitySuper</span>
+    </div>
+  </div>
+
+  <!-- PRODUCT GRID -->
+  <div class="gp-content">
+    <div class="gp-content-header">
+      <span class="gp-count">2,122 個優惠</span>
+      <select class="gp-sort">
+        <option>優惠力度 ↓</option>
+        <option>價格低至高</option>
+        <option>最新加入</option>
+      </select>
+    </div>
+
+    <div class="gp-grid">
+
+      <div class="gp-card" onclick="openPriceModal('纖柔牙刷 精巧頭 3支裝','高露潔')">
+        <div class="gp-card-badge">-60%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#f2f2f2,#e4e4e4);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">AEON</div>
+          <div class="gp-card-name">纖柔牙刷 精巧頭 3支裝</div>
+          <div class="gp-card-brand">高露潔</div>
+          <div class="gp-card-promo">買2件 $29.00</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$14.50</span>
+            <span class="gp-card-orig">$35.90</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-60%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#f2f2f2,#e4e4e4);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">AEON</div>
+          <div class="gp-card-name">纖柔備長炭牙刷 3支裝</div>
+          <div class="gp-card-brand">高露潔</div>
+          <div class="gp-card-promo">買2件 $29.00</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$14.50</span>
+            <span class="gp-card-orig">$35.90</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-60%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#ede8e0,#ddd4c4);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store" style="background:#f0f0f0;">惠康 · Market Place</div>
+          <div class="gp-card-name">Shiraz Cabernet 紅酒 750ml</div>
+          <div class="gp-card-brand">羅遜氏</div>
+          <div class="gp-card-promo">$80任揀2件 / 買6件享85折</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$40.00</span>
+            <span class="gp-card-orig">$99.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-57%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#f0ece4,#e4dcd0);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">百佳</div>
+          <div class="gp-card-name">即食海鮮烏冬 5包裝</div>
+          <div class="gp-card-brand">出前一丁</div>
+          <div class="gp-card-promo">買2件 $25.80</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$12.90</span>
+            <span class="gp-card-orig">$29.90</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-56%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#eeeef2,#dcdce4);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">AEON</div>
+          <div class="gp-card-name">純棉面巾紙 200抽 4盒裝</div>
+          <div class="gp-card-brand">維達</div>
+          <div class="gp-card-promo">買3件 $59.70</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$19.90</span>
+            <span class="gp-card-orig">$45.50</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-54%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#eef2ee,#dce8dc);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">惠康</div>
+          <div class="gp-card-name">特濃全脂牛奶 1L</div>
+          <div class="gp-card-brand">Anchor</div>
+          <div class="gp-card-promo">買2件 $33.00</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$16.50</span>
+            <span class="gp-card-orig">$36.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-50%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#f2eef0,#e4d8e0);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">百佳</div>
+          <div class="gp-card-name">有機豆腐 300g 2件裝</div>
+          <div class="gp-card-brand">田園</div>
+          <div class="gp-card-promo">買2件 $18.00</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$9.00</span>
+            <span class="gp-card-orig">$18.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gp-card">
+        <div class="gp-card-badge">-48%</div>
+        <div class="gp-card-img pat" style="background:linear-gradient(135deg,#f0f2f0,#e0e8e0);"></div>
+        <div class="gp-card-body">
+          <div class="gp-card-store">CitySuper</div>
+          <div class="gp-card-name">Japanese Green Tea 50袋裝</div>
+          <div class="gp-card-brand">ITO EN</div>
+          <div class="gp-card-promo">會員價</div>
+          <div class="gp-card-price-row">
+            <span class="gp-card-sale">HK$38.00</span>
+            <span class="gp-card-orig">$72.00</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /gp-grid -->
+
+    <div class="gp-updated-bar">資料更新：2026年06月05日 · 共監測 2,555 件商品</div>
+  </div>
+
+</div>
+<!-- 支付 -->
+<div class="page" id="page-payment">
+  <div class="pay-wrap">
+    <aside class="pay-sidebar">
+      <div style="font-size:11px;letter-spacing:1px;color:var(--g4);text-transform:uppercase;margin-bottom:16px;">支付中心</div>
+      <div class="pay-nav-item on">概覽</div>
+      <div class="pay-nav-item">繳費記錄</div>
+      <div class="pay-nav-item">自動付款</div>
+      <div class="pay-nav-item">付款方式</div>
+    </aside>
+    <main class="pay-main">
+      <div class="pay-balance-row">
+        <div class="pay-balance-card" style="background:linear-gradient(135deg,#1a1a1a,#333);color:white;">
+          <div style="font-size:10px;letter-spacing:1px;opacity:.6;margin-bottom:8px;">本月待繳</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:36px;font-weight:400;letter-spacing:-1px;">HK$4,680</div>
+          <div style="font-size:11px;opacity:.5;margin-top:6px;">到期日：2025年6月15日</div>
+          <button style="margin-top:20px;background:white;color:black;border:none;padding:10px 20px;font-size:12px;cursor:pointer;border-radius:2px;font-family:inherit;letter-spacing:.5px;">立即繳費</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;flex:1;">
+          <div class="pay-stat-card"><div class="pay-stat-label">管理費</div><div class="pay-stat-val">HK$2,800</div></div>
+          <div class="pay-stat-card"><div class="pay-stat-label">水費</div><div class="pay-stat-val">HK$480</div></div>
+          <div class="pay-stat-card"><div class="pay-stat-label">電費</div><div class="pay-stat-val">HK$1,200</div></div>
+          <div class="pay-stat-card"><div class="pay-stat-label">其他費用</div><div class="pay-stat-val">HK$200</div></div>
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <div class="home-sec-title" style="margin-bottom:12px;">最近繳費記錄</div>
+        <div class="pay-table-wrap"><table class="pay-table">
+          <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td>2025/05/15</td><td>5月管理費</td><td>HK$2,800</td><td><span class="pay-status ok">已繳</span></td></tr>
+            <tr><td>2025/05/12</td><td>4月水費</td><td>HK$450</td><td><span class="pay-status ok">已繳</span></td></tr>
+            <tr><td>2025/05/10</td><td>4月電費</td><td>HK$1,150</td><td><span class="pay-status ok">已繳</span></td></tr>
+            <tr><td>2025/04/15</td><td>4月管理費</td><td>HK$2,800</td><td><span class="pay-status ok">已繳</span></td></tr>
+            <tr><td>2025/04/03</td><td>停車場月費</td><td>HK$1,200</td><td><span class="pay-status pending">待確認</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 物件詳情頁 -->
+<div class="page" id="page-detail">
+  <div class="detail-wrap">
+    <div class="detail-main">
+      <div class="breadcrumb">
+        <span class="bc-link" onclick="go('home')">首頁</span>
+        <span class="bc-sep">›</span>
+        <span class="bc-link" onclick="go('listing')">樓盤租售</span>
+        <span class="bc-sep">›</span>
+        <span class="bc-current">佐敦 高級住宅</span>
+      </div>
+      <button class="back-btn" onclick="go('listing')" style="margin-top:12px;">← 返回列表</button>
+      <div class="detail-imgs">
+        <div class="detail-main-img pat" onclick="openLB(0)" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);">
+          <svg width="120" height="80" viewBox="0 0 120 80" opacity=".15"><rect x="5" y="10" width="110" height="60" rx="1" stroke="#000" stroke-width="1.5" fill="none"/><rect x="10" y="15" width="30" height="22" rx="1" stroke="#000" fill="none"/><rect x="45" y="15" width="30" height="22" rx="1" stroke="#000" fill="none"/><rect x="80" y="15" width="30" height="22" rx="1" stroke="#000" fill="none"/><rect x="35" y="42" width="50" height="28" rx="1" stroke="#000" fill="none"/></svg>
+        </div>
+        <div class="detail-thumb-row">
+          <div class="detail-thumb pat" onclick="openLB(1)" style="background:linear-gradient(160deg,#e0e4e8,#c8d0d8);"></div>
+          <div class="detail-thumb pat" onclick="openLB(1)" style="background:linear-gradient(160deg,#e8e4e0,#d0c8c0);"></div>
+          <div class="detail-thumb pat" onclick="openLB(1)" style="background:linear-gradient(160deg,#e0e8e0,#c8d8c8);"></div>
+          <div class="detail-thumb pat" onclick="openLB(1)" style="background:linear-gradient(160deg,#e8e0e8,#d0c0d0);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--g4);">+8</div>
+        </div>
+      </div>
+      <div style="margin-top:20px;">
+        <div class="gtags" style="margin-bottom:8px;"><span class="gtag dark">代理盤</span><span class="gtag">九龍</span><span class="gtag">住宅</span></div>
+        <h2 style="font-size:22px;font-weight:400;margin-bottom:6px;">佐敦 高級住宅</h2>
+        <div style="font-size:12px;color:var(--g4);margin-bottom:16px;">📍 油尖旺區 佐敦道 38 號</div>
+        <div class="detail-price-row">
+          <div style="font-size:28px;font-weight:300;letter-spacing:-1px;">HK$36,000<span style="font-size:13px;color:var(--g4);font-weight:400;"> / 月</span></div>
+          <div style="font-size:12px;color:var(--g4);">約 HK$180 / 呎</div>
+        </div>
+        <div class="detail-stats">
+          <div class="detail-stat"><div class="detail-stat-val">200</div><div class="detail-stat-label">實用呎數</div></div>
+          <div class="detail-stat"><div class="detail-stat-val">1</div><div class="detail-stat-label">睡房</div></div>
+          <div class="detail-stat"><div class="detail-stat-val">1</div><div class="detail-stat-label">浴室</div></div>
+          <div class="detail-stat"><div class="detail-stat-val">高層</div><div class="detail-stat-label">樓層</div></div>
+        </div>
+        <div style="border-top:1px solid var(--g2);padding-top:16px;margin-top:16px;">
+          <div style="font-size:12px;font-weight:500;margin-bottom:10px;">設施配套</div>
+          <div class="gpills" style="gap:6px;">
+            <span class="gpill">全新裝修</span><span class="gpill">冷氣</span><span class="gpill">熱水爐</span><span class="gpill">電視</span><span class="gpill">雪櫃</span><span class="gpill">洗衣機</span><span class="gpill">寬頻</span><span class="gpill">升降機</span>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--g2);padding-top:16px;margin-top:16px;">
+          <div style="font-size:12px;font-weight:500;margin-bottom:8px;">物業描述</div>
+          <p class="body-text">位於佐敦黃金地段，步行3分鐘到佐敦地鐵站，交通四通八達。單位採光充足，全新裝修，廚衛設施齊備，適合單身或情侶入住。大廈管理完善，24小時閉路電視。</p>
+        </div>
+        <!-- BUILDING INFO -->
+        <div style="border-top:1px solid var(--g2);padding-top:16px;margin-top:16px;">
+          <div class="label-text" style="margin-bottom:10px;">大廈資料</div>
+          <div class="binfo-grid">
+            <div class="binfo-card"><div class="binfo-label">落成年份</div><div class="binfo-val">2018年</div></div>
+            <div class="binfo-card"><div class="binfo-label">樓層數目</div><div class="binfo-val">38層</div></div>
+            <div class="binfo-card"><div class="binfo-label">管理公司</div><div class="binfo-val">第一太平</div></div>
+            <div class="binfo-card"><div class="binfo-label">管理費</div><div class="binfo-val">HK$2,800/月</div></div>
+          </div>
+          <div class="label-text" style="margin:12px 0 8px;">附近設施</div>
+          <div class="nearby-row">
+            <span class="nearby-tag">🚇 佐敦站 3分鐘</span>
+            <span class="nearby-tag">🏫 佐敦小學 5分鐘</span>
+            <span class="nearby-tag">🏥 廣華醫院 8分鐘</span>
+            <span class="nearby-tag">🛒 百佳超市 2分鐘</span>
+            <span class="nearby-tag">🍜 廟街 5分鐘</span>
+          </div>
+        </div>
+        <!-- RATINGS -->
+        <div style="border-top:1px solid var(--g2);padding-top:16px;margin-top:16px;">
+          <div class="label-text" style="margin-bottom:10px;">住戶評分</div>
+          <div class="rating-row">
+            <span class="stars">★★★★☆</span>
+            <span class="rating-num">4.2</span>
+            <span class="rating-count">(18 個評價)</span>
+          </div>
+          <div class="review-list">
+            <div class="review-item">
+              <div class="review-header"><span class="reviewer">陳先生</span><span class="review-stars">★★★★★</span></div>
+              <div class="review-text">交通非常方便，裝修新淨，管理員服務態度好。附近食肆選擇多，生活配套齊全，推薦！</div>
+              <div class="review-date">2026年4月</div>
+            </div>
+            <div class="review-item">
+              <div class="review-header"><span class="reviewer">林小姐</span><span class="review-stars">★★★★☆</span></div>
+              <div class="review-text">位置好，近地鐵。單位採光不錯，隔音一般，偶爾聽到鄰居聲音。整體性價比合理。</div>
+              <div class="review-date">2026年3月</div>
+            </div>
+          </div>
+        </div>
+        <!-- SIMILAR -->
+        <div class="similar-section">
+          <div class="label-text" style="margin-bottom:12px;">相似物件推薦</div>
+          <div class="similar-scroll">
+            <div class="sim-card" onclick="showToast('正在載入物件…')">
+              <div class="sim-img pat" style="background:linear-gradient(135deg,#e4dcd8,#ccc0bc);"></div>
+              <div class="sim-body"><div class="sim-name">沙田第一城 3房</div><div class="sim-price">HK$18,500/月</div><div class="sim-meta">新界 · 650呎</div></div>
+            </div>
+            <div class="sim-card" onclick="showToast('正在載入物件…')">
+              <div class="sim-img pat" style="background:linear-gradient(135deg,#d8e0e0,#c0cccc);"></div>
+              <div class="sim-body"><div class="sim-name">旺角商業中心</div><div class="sim-price">HK$28,000/月</div><div class="sim-meta">九龍 · 320呎</div></div>
+            </div>
+            <div class="sim-card" onclick="showToast('正在載入物件…')">
+              <div class="sim-img pat" style="background:linear-gradient(135deg,#e0e8e0,#c8d8c8);"></div>
+              <div class="sim-body"><div class="sim-name">銅鑼灣精裝1房</div><div class="sim-price">HK$22,000/月</div><div class="sim-meta">香港島 · 280呎</div></div>
+            </div>
+            <div class="sim-card" onclick="showToast('正在載入物件…')">
+              <div class="sim-img pat" style="background:linear-gradient(135deg,#e8e0e8,#d0c8d0);"></div>
+              <div class="sim-body"><div class="sim-name">尖沙咀海景套房</div><div class="sim-price">HK$32,000/月</div><div class="sim-meta">九龍 · 420呎</div></div>
+            </div>
+            <div class="sim-card" onclick="showToast('正在載入物件…')">
+              <div class="sim-img pat" style="background:linear-gradient(135deg,#e8e8d8,#d0d0b8);"></div>
+              <div class="sim-body"><div class="sim-name">將軍澳新盤2房</div><div class="sim-price">HK$16,500/月</div><div class="sim-meta">新界 · 540呎</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="detail-sidebar">
+      <div class="detail-contact-card">
+        <div style="font-size:11px;color:var(--g4);margin-bottom:4px;">代理人</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--g2);display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div>
+          <div><div style="font-size:13px;font-weight:500;">陳大文</div><div style="font-size:11px;color:var(--g4);">AJO 認證代理</div></div>
+        </div>
+        <button class="hbtn-primary" style="width:100%;margin-bottom:8px;justify-content:center;">📞 立即致電</button>
+        <button class="hbtn-ghost" style="width:100%;justify-content:center;">💬 發送訊息</button>
+        <div style="border-top:1px solid var(--g2);margin-top:14px;padding-top:14px;">
+          <div style="font-size:10px;letter-spacing:1px;color:var(--g4);text-transform:uppercase;margin-bottom:10px;">預約睇樓</div>
+          <input class="linput" style="margin-bottom:8px;" placeholder="選擇日期">
+          <input class="linput" style="margin-bottom:12px;" placeholder="選擇時間">
+          <button class="lsubmit">確認預約</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+function go(name){
+  document.querySelectorAll('.page.on').forEach(function(el){
+    el.style.opacity='0';el.style.transform='translateY(8px)';
+    setTimeout(function(){el.classList.remove('on');el.style.opacity='';el.style.transform='';},200);
+  });
+  document.querySelectorAll('.nl,.mnl').forEach(function(el){el.classList.remove('on');});
+  document.querySelectorAll('.bnav-item').forEach(function(el){el.classList.remove('on');});
+  setTimeout(function(){
+    var p=document.getElementById('page-'+name);
+    if(p){p.classList.add('on');}
+    var n=document.querySelector('.nl[data-p="'+name+'"]');if(n)n.classList.add('on');
+    var mn=document.querySelector('.mnl[data-p="'+name+'"]');if(mn)mn.classList.add('on');
+    var bn=document.querySelector('.bnav-item[data-bp="'+name+'"]');if(bn)bn.classList.add('on');
+    window.scrollTo(0,0);
+  },210);
+}
+function closeMobileMenu(){document.getElementById('mobile-menu').classList.remove('open');}
+document.getElementById('hamburger').addEventListener('click',function(){document.getElementById('mobile-menu').classList.add('open');});
+document.getElementById('mobile-close').addEventListener('click',closeMobileMenu);
+document.querySelectorAll('.mnl').forEach(function(btn){btn.addEventListener('click',function(){go(this.getAttribute('data-p'));closeMobileMenu();});});
+document.querySelectorAll('.bnav-item').forEach(function(btn){btn.addEventListener('click',function(){go(this.getAttribute('data-bp'));});});
+document.querySelectorAll('.nl').forEach(function(btn){btn.addEventListener('click',function(){go(this.getAttribute('data-p'));});});
+document.querySelectorAll('.ftags').forEach(function(g){g.querySelectorAll('.ft').forEach(function(t){t.addEventListener('click',function(){g.querySelectorAll('.ft').forEach(function(x){x.classList.remove('on');});this.classList.add('on');});});});
+document.querySelectorAll('.ltab').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.ltab').forEach(function(x){x.classList.remove('on');});this.classList.add('on');});});
+// Filter toggles
+var lft=document.getElementById('listing-filter-btn');
+if(lft){lft.addEventListener('click',function(){var s=document.querySelector('.lf');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'✕ 關閉篩選':'☰ 篩選條件';});}
+var mft=document.getElementById('market-filter-btn');
+if(mft){mft.addEventListener('click',function(){var s=document.querySelector('.mf');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'✕ 關閉篩選':'☰ 篩選條件';});}
+// Pay nav
+document.querySelectorAll('.pay-nav-item').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.pay-nav-item').forEach(function(x){x.classList.remove('on');});this.classList.add('on');});});
+function gpNav(el){document.querySelectorAll('.gp-sidebar-nav-item').forEach(function(x){x.classList.remove('on');});el.classList.add('on');}
+function smNav(el,name){
+  document.querySelectorAll('.sm-nav-item').forEach(function(x){x.classList.remove('on');});
+  el.classList.add('on');
+}
+document.querySelectorAll('.gp-fpill').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.gp-fpill').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+document.querySelectorAll('.gp-spill').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.gp-spill').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+document.querySelectorAll('.sm-cat,.gp-cat').forEach(function(t){
+  t.addEventListener('click',function(){
+    var cls=this.classList.contains('gp-cat')?'.gp-cat':'.sm-cat';
+    document.querySelectorAll(cls).forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+document.querySelectorAll('.sm-vtoggle').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.sm-vtoggle').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+var lg=document.getElementById('lgrid');if(lg){for(var i=0;i<48;i++){var d=document.createElement('div');lg.appendChild(d);}}
+// Start on home
+go('home');
+// Hide footer on login initially if needed
+var _f=document.getElementById('site-footer');
+if(_f) _f.style.display='block';
+
+// ── LIGHTBOX ──
+var lbImgs=['linear-gradient(135deg,#e8e8e8,#d0d0d0)','linear-gradient(135deg,#e0e4e8,#c8d0d8)','linear-gradient(135deg,#e8e4e0,#d0c8c0)','linear-gradient(135deg,#e0e8e0,#c8d8c8)'];
+var lbIdx=0;
+function openLB(i){lbIdx=i||0;updateLB();document.getElementById('lightbox').classList.add('open');}
+function closeLB(){document.getElementById('lightbox').classList.remove('open');}
+function updateLB(){
+  var img=document.getElementById('lb-img');
+  img.style.background=lbImgs[lbIdx];
+  document.getElementById('lb-counter').textContent=(lbIdx+1)+' / '+lbImgs.length;
+  var thumbs=document.getElementById('lb-thumbs');
+  thumbs.innerHTML='';
+  lbImgs.forEach(function(bg,i){
+    var t=document.createElement('div');
+    t.style.cssText='width:48px;height:36px;border-radius:3px;cursor:pointer;border:2px solid '+(i===lbIdx?'var(--accent)':'transparent')+';background:'+bg+';';
+    t.onclick=function(){lbIdx=i;updateLB();};
+    thumbs.appendChild(t);
+  });
+}
+function lbPrev(){lbIdx=(lbIdx-1+lbImgs.length)%lbImgs.length;updateLB();}
+function lbNext(){lbIdx=(lbIdx+1)%lbImgs.length;updateLB();}
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('lightbox').classList.contains('open')){
+    if(e.key==='ArrowLeft')lbPrev();
+    if(e.key==='ArrowRight')lbNext();
+    if(e.key==='Escape')closeLB();
+  }
+  if(document.getElementById('price-modal').classList.contains('open')&&e.key==='Escape'){
+    document.getElementById('price-modal').classList.remove('open');
+  }
+  if(document.getElementById('lightbox').classList.contains('open')||document.getElementById('price-modal').classList.contains('open')){e.preventDefault&&e.preventDefault();}
+});
+
+// ── PRICE MODAL ──
+function openPriceModal(name,brand){
+  document.getElementById('modal-prod-name').textContent=name;
+  document.getElementById('modal-prod-brand').textContent=brand;
+  // build chart
+  var chart=document.getElementById('price-chart');
+  chart.innerHTML='';
+  var prices=[35.9,35.9,28,35.9,22,35.9,29,35.9,14.5];
+  var labels=['5/9','5/14','5/19','5/24','5/29','6/1','6/3','6/5','今日'];
+  var max=Math.max.apply(null,prices);
+  prices.forEach(function(p,i){
+    var col=document.createElement('div');col.className='price-bar-col';
+    var bar=document.createElement('div');bar.className='price-bar-val'+(i===prices.length-1?' now':(p<20?' hi':''));
+    bar.style.height=Math.round((p/max)*70)+'px';bar.style.width='100%';
+    var lbl=document.createElement('div');lbl.className='price-bar-label';lbl.textContent=labels[i];
+    col.appendChild(bar);col.appendChild(lbl);chart.appendChild(col);
+  });
+  document.getElementById('price-modal').classList.add('open');
+}
+document.getElementById('price-modal').addEventListener('click',function(e){
+  if(e.target===this)this.classList.remove('open');
+});
+
+// ── MAP VIEW TOGGLE ──
+function setView(type,btn){
+  document.querySelectorAll('.mtoggle').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+  var listEl=document.querySelector('.list-view');
+  var mapEl=document.getElementById('map-view');
+  if(!listEl||!mapEl)return;
+  if(type==='map'){listEl.classList.add('hidden');mapEl.classList.add('on');}
+  else{listEl.classList.remove('hidden');mapEl.classList.remove('on');}
+}
+function showMapPopup(pin,name,price,area){
+  var popup=document.getElementById('map-popup');
+  document.getElementById('mp-name').textContent=name;
+  document.getElementById('mp-price').textContent=price;
+  document.getElementById('mp-area').textContent=area;
+  // position near pin
+  var canvas=pin.closest('.map-canvas');
+  var pr=pin.getBoundingClientRect(),cr=canvas.getBoundingClientRect();
+  var left=pr.left-cr.left;var top=pr.top-cr.top;
+  popup.style.left=Math.min(left-20,canvas.offsetWidth-200)+'px';
+  popup.style.top=(top+10)+'px';
+  popup.classList.add('open');
+}
+document.addEventListener('click',function(e){
+  var popup=document.getElementById('map-popup');
+  if(popup&&!e.target.closest('.map-pin')&&!e.target.closest('.map-popup')){popup.classList.remove('open');}
+});
+
+// ── WRAP GRID IN .list-view ──
+// (done via CSS class in HTML)
+
+// ── NOTIF FILTER ──
+document.querySelectorAll('.nf-item').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.nf-item').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+
+// ── PROFILE NAV ──
+document.querySelectorAll('.pnav-item').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.pnav-item').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+  });
+});
+
+
+// ══ DARK MODE ══
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  var btn=document.getElementById('dark-toggle');
+  btn.textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  showToast(document.body.classList.contains('dark')?'深色模式已開啟':'淺色模式已開啟');
+}
+
+// ══ TOAST ══
+function showToast(msg,type){
+  var c=document.getElementById('toast-container');
+  var t=document.createElement('div');
+  t.className='toast'+(type==='success'?' success':type==='error'?' error':'');
+  t.innerHTML='<span>'+msg+'</span>';
+  c.appendChild(t);
+  requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},300);},2500);
+}
+
+// ══ SCROLL PROGRESS ══
+window.addEventListener('scroll',function(){
+  var el=document.getElementById('scroll-progress');
+  if(!el)return;
+  var h=document.documentElement.scrollHeight-window.innerHeight;
+  el.style.width=(h>0?(window.scrollY/h*100):0)+'%';
+});
+
+// ══ AUTOCOMPLETE ══
+function showAC(input,dropId){
+  var drop=document.getElementById(dropId);
+  if(!drop)return;
+  drop.classList.toggle('open', input.value.length>0);
+}
+function hideAC(dropId){
+  var drop=document.getElementById(dropId);
+  if(drop)drop.classList.remove('open');
+}
+function selectAC(val,inputId,dropId){
+  var inp=document.getElementById(inputId);
+  if(inp)inp.value=val;
+  hideAC(dropId);
+  showToast('搜尋：'+val);
+}
+
+// ══ FORM VALIDATION ══
+function validatePhone(){
+  var v=document.getElementById('login-phone').value.replace(/[\s\-+]/g,'');
+  var fg=document.getElementById('fg-phone');
+  if(!fg)return;
+  if(v.length===0){fg.classList.remove('error','success');return;}
+  var ok=/^[0-9]{8}$/.test(v)||/^852[0-9]{8}$/.test(v);
+  fg.classList.toggle('error',!ok);
+  fg.classList.toggle('success',ok);
+}
+function validatePw(){
+  var v=document.getElementById('login-pw').value;
+  var fg=document.getElementById('fg-pw');
+  if(!fg)return;
+  if(v.length===0){fg.classList.remove('error','success');return;}
+  fg.classList.toggle('error',v.length<6);
+  fg.classList.toggle('success',v.length>=6);
+}
+function submitLogin(e){
+  e.preventDefault();
+  validatePhone();validatePw();
+  var pe=document.getElementById('fg-phone');
+  var we=document.getElementById('fg-pw');
+  if(pe&&we&&pe.classList.contains('success')&&we.classList.contains('success')){
+    showToast('登入成功！歡迎回來 👋','success');
+    setTimeout(function(){go('profile');},800);
+  } else {
+    showToast('請檢查輸入資料','error');
+  }
+}
+
+// ══ COMPARE ══
+var compareList=[];
+var compareData={
+  '佐敦 高級住宅':{price:'HK$36,000',area:'200呎',rooms:'1房1廁',district:'九龍',type:'住宅',floor:'高層',age:'3年'},
+  '佐敦婚 38窗 套房':{price:'HK$6,500',area:'100呎',rooms:'6房3廁',district:'九龍',type:'住宅',floor:'中層',age:'20年'},
+  '中環甲級寫字樓':{price:'HK$120,000',area:'2,400呎',rooms:'全層',district:'香港島',type:'商廈',floor:'高層',age:'5年'},
+  '沙田第一城 3房':{price:'HK$18,500',area:'650呎',rooms:'3房2廁',district:'新界',type:'住宅',floor:'低層',age:'35年'}
+};
+function toggleCompare(cb,name,price){
+  if(cb.checked){
+    if(compareList.length>=3){cb.checked=false;showToast('最多比較3個物件','error');return;}
+    compareList.push({name:name,price:price});
+  } else {
+    compareList=compareList.filter(function(x){return x.name!==name;});
+  }
+  updateCompareBar();
+}
+function addToCompare(name){
+  if(compareList.find(function(x){return x.name===name;}))return;
+  if(compareList.length>=3){showToast('最多比較3個物件','error');return;}
+  compareList.push({name:name,price:(compareData[name]||{}).price||''});
+  updateCompareBar();
+}
+function updateCompareBar(){
+  var bar=document.getElementById('compare-bar');
+  var btn=document.getElementById('compare-go-btn');
+  var cnt=document.getElementById('compare-count');
+  bar.classList.toggle('open',compareList.length>0);
+  cnt.textContent=compareList.length+' / 3';
+  if(btn)btn.disabled=compareList.length<2;
+  for(var i=0;i<3;i++){
+    var sl=document.getElementById('cs-'+i);
+    if(!sl)continue;
+    if(compareList[i]){
+      sl.className='compare-slot filled';
+      sl.innerHTML='<span class="compare-slot-name">'+compareList[i].name+'</span><span class="compare-slot-rm" onclick="removeCompare('+i+')">✕</span>';
+    } else {
+      sl.className='compare-slot';
+      sl.innerHTML='+ 加入比較';
+    }
+  }
+}
+function removeCompare(i){
+  compareList.splice(i,1);
+  document.querySelectorAll('.compare-check').forEach(function(cb){cb.checked=false;});
+  updateCompareBar();
+}
+function clearCompare(){
+  compareList=[];
+  document.querySelectorAll('.compare-check').forEach(function(cb){cb.checked=false;});
+  updateCompareBar();
+}
+function openCompareModal(){
+  var thead=document.getElementById('compare-thead');
+  var tbody=document.getElementById('compare-tbody');
+  if(!thead||!tbody)return;
+  var fields=[
+    {key:'price',label:'月租'},
+    {key:'area',label:'實用面積'},
+    {key:'rooms',label:'房間數目'},
+    {key:'district',label:'地區'},
+    {key:'type',label:'物業類型'},
+    {key:'floor',label:'樓層'},
+    {key:'age',label:'樓齡'}
+  ];
+  thead.innerHTML='<th style="width:100px;">項目</th>'+compareList.map(function(p){return '<th>'+p.name+'</th>';}).join('');
+  tbody.innerHTML=fields.map(function(f){
+    var vals=compareList.map(function(p){return (compareData[p.name]||{})[f.key]||'—';});
+    var row='<tr><td>'+f.label+'</td>'+vals.map(function(v,i){
+      var best=f.key==='price'&&vals.every(function(x,j){return j===i||parseInt(x.replace(/[^0-9]/g,''))>=parseInt(v.replace(/[^0-9]/g,''));});
+      return '<td class="'+(best?'compare-best':'')+'">'+(best?'✓ ':'')+v+'</td>';
+    }).join('')+'</tr>';
+    return row;
+  }).join('');
+  document.getElementById('compare-modal').classList.add('open');
+}
+document.getElementById('compare-modal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+
+// ══ CHAT ══
+var chatReplies={
+  '睇樓安排':'請問你想睇哪個物件？可以提供你聯絡方式，我哋會安排代理跟進。',
+  '租金查詢':'我哋平台有超過 2,555 件物件，月租由 HK$6,500 起，你有特定地區或預算嗎？',
+  '付款方式':'支援 FPS、銀行轉帳、信用卡及 PayMe 付款，詳情可喺「支付」頁面查閱。',
+  '聯絡代理':'我幫你接駁專屬代理，請稍等... 代理陳大文將於 5 分鐘內回覆您。'
+};
+function toggleChat(){
+  var w=document.getElementById('chat-window');
+  w.classList.toggle('open');
+  if(w.classList.contains('open'))document.querySelector('.chat-badge').style.display='none';
+}
+function chatReply(el,topic){
+  var msgs=document.getElementById('chat-messages');
+  var userMsg=document.createElement('div');
+  userMsg.className='chat-msg user';
+  userMsg.textContent=topic;
+  msgs.appendChild(userMsg);
+  setTimeout(function(){
+    var botMsg=document.createElement('div');
+    botMsg.className='chat-msg bot';
+    botMsg.textContent=chatReplies[topic]||'收到！我哋會盡快跟進。';
+    msgs.appendChild(botMsg);
+    msgs.scrollTop=msgs.scrollHeight;
+  },600);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+function sendChat(){
+  var input=document.getElementById('chat-input');
+  var val=input.value.trim();
+  if(!val)return;
+  var msgs=document.getElementById('chat-messages');
+  var userMsg=document.createElement('div');
+  userMsg.className='chat-msg user';
+  userMsg.textContent=val;
+  msgs.appendChild(userMsg);
+  input.value='';
+  setTimeout(function(){
+    var botMsg=document.createElement('div');
+    botMsg.className='chat-msg bot';
+    botMsg.textContent='多謝你的查詢！我哋客服團隊會盡快回覆，或者你可以致電 +852 3456 7890。';
+    msgs.appendChild(botMsg);
+    msgs.scrollTop=msgs.scrollHeight;
+  },800);
+}
+
+// ══ CALCULATOR ══
+function toggleCalc(){
+  document.getElementById('calc-window').classList.toggle('open');
+}
+function calcRent(){
+  var rent=parseFloat(document.getElementById('calc-rent').value)||0;
+  var income=parseFloat(document.getElementById('calc-income').value)||0;
+  var sqft=parseFloat(document.getElementById('calc-sqft').value)||0;
+  if(!rent){
+    document.getElementById('cr-annual').textContent='—';
+    document.getElementById('cr-psf').textContent='—';
+    document.getElementById('cr-ratio').textContent='—';
+    document.getElementById('cr-advice').textContent='輸入數據後顯示';
+    return;
+  }
+  var annual='HK$'+Math.round(rent*12).toLocaleString();
+  var psf=sqft>0?'HK$'+Math.round(rent/sqft).toLocaleString()+' /呎':'需要輸入面積';
+  var ratio=income>0?Math.round(rent/income*100)+'%':'需要輸入收入';
+  var ratioNum=income>0?rent/income*100:0;
+  var advice=ratioNum===0?'輸入收入後顯示':ratioNum<=30?'✓ 合理範圍（≤30%）':ratioNum<=40?'⚠ 略高（建議≤30%）':'✗ 偏高（建議控制在30%以內）';
+  document.getElementById('cr-annual').textContent=annual;
+  document.getElementById('cr-psf').textContent=psf;
+  var ratioEl=document.getElementById('cr-ratio');
+  ratioEl.textContent=ratio;
+  ratioEl.className='calc-result-val'+(ratioNum>40?' warn':ratioNum>0&&ratioNum<=30?' ok':'');
+  var advEl=document.getElementById('cr-advice');
+  advEl.textContent=advice;
+  advEl.className='calc-result-val'+(ratioNum>40?' warn':ratioNum>0&&ratioNum<=30?' ok':'');
+}
+
+// ══ PARALLAX HERO ══
+window.addEventListener('scroll',function(){
+  var hero=document.querySelector('#page-home .hero-bg');
+  if(!hero)return;
+  var page=document.getElementById('page-home');
+  if(!page||!page.classList.contains('on'))return;
+  hero.style.transform='translateY('+Math.round(window.scrollY*0.3)+'px)';
+});
+
+// ── COUNTER ANIMATION on hero ──
+function animateCounter(el,target){
+  var start=0,duration=1200,step=Math.ceil(target/60);
+  var timer=setInterval(function(){
+    start+=step;
+    if(start>=target){start=target;clearInterval(timer);}
+    el.textContent=start.toLocaleString();
+  },duration/60);
+}
+// run when home page shown
+var homeObserver=new MutationObserver(function(mutations){
+  mutations.forEach(function(m){
+    if(m.target.id==='page-home'&&m.target.classList.contains('on')){
+      document.querySelectorAll('.hero-stat-num').forEach(function(el){
+        var val=parseInt(el.textContent.replace(/,/g,''));
+        if(!isNaN(val))animateCounter(el,val);
+      });
+    }
+  });
+});
+var homeEl=document.getElementById('page-home');
+if(homeEl)homeObserver.observe(homeEl,{attributes:true,attributeFilter:['class']});
+
+
+// ══ TOAST ══
+function showToast(msg, type){
+  var c=document.getElementById('toast-container');
+  var t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.innerHTML='<span class="toast-icon">'+(type==='success'?'✓':type==='error'?'✕':'ℹ')+'</span>'+msg;
+  c.appendChild(t);
+  requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},300);},2500);
+}
+
+// ══ DARK MODE ══
+var darkBtn=document.getElementById('dark-toggle');
+if(darkBtn){
+  darkBtn.addEventListener('click',function(){
+    document.body.classList.toggle('dark');
+    this.textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+    showToast(document.body.classList.contains('dark')?'深色模式已開啟':'淺色模式已開啟');
+  });
+}
+
+// ══ COMPARE ══
+var compareItems=[];
+function toggleCompare(cb){
+  var card=cb.closest('.gc');
+  var name=card.dataset.name;
+  if(cb.checked){
+    if(compareItems.length>=3){cb.checked=false;showToast('最多比較3個物件','error');return;}
+    compareItems.push({name:name,price:card.dataset.price,area:card.dataset.area,rooms:card.dataset.rooms,district:card.dataset.district});
+    showToast('已加入比較：'+name);
+  } else {
+    compareItems=compareItems.filter(function(i){return i.name!==name;});
+  }
+  updateCompareBar();
+}
+function toggleCompareByBtn(card){
+  var cb=card.querySelector('.compare-check');
+  cb.checked=!cb.checked;
+  toggleCompare(cb);
+}
+function updateCompareBar(){
+  var bar=document.getElementById('compare-bar');
+  var count=document.getElementById('compare-count');
+  var btn=document.getElementById('compare-go-btn');
+  count.textContent=compareItems.length+'/3';
+  btn.disabled=compareItems.length<2;
+  for(var i=0;i<3;i++){
+    var slot=document.getElementById('cs'+i);
+    if(compareItems[i]){
+      slot.className='compare-slot filled';
+      slot.innerHTML='<span class="compare-slot-name">'+compareItems[i].name+'</span><span class="compare-slot-rm" data-i="'+i+'" onclick="removeCompare('+i+')">✕</span>';
+    } else {
+      slot.className='compare-slot';
+      slot.innerHTML='+ 新增比較';
+    }
+  }
+  if(compareItems.length>0){bar.classList.add('open');}
+  else{bar.classList.remove('open');}
+}
+function removeCompare(i){
+  var name=compareItems[i].name;
+  compareItems.splice(i,1);
+  document.querySelectorAll('.compare-check').forEach(function(cb){
+    if(cb.closest('.gc')&&cb.closest('.gc').dataset.name===name)cb.checked=false;
+  });
+  updateCompareBar();
+}
+function clearCompare(){
+  compareItems=[];
+  document.querySelectorAll('.compare-check').forEach(function(cb){cb.checked=false;});
+  updateCompareBar();
+}
+function openCompareModal(){
+  if(compareItems.length<2)return;
+  var thead=document.getElementById('compare-thead');
+  var tbody=document.getElementById('compare-tbody');
+  thead.innerHTML='<th>項目</th>'+compareItems.map(function(i){return'<th>'+i.name+'</th>';}).join('');
+  var rows=[
+    ['地區',compareItems.map(function(i){return i.district;})],
+    ['月租',compareItems.map(function(i){return i.price;})],
+    ['實用面積',compareItems.map(function(i){return i.area;})],
+    ['房間',compareItems.map(function(i){return i.rooms;})],
+  ];
+  tbody.innerHTML=rows.map(function(r){
+    return'<tr><td>'+r[0]+'</td>'+r[1].map(function(v,idx){
+      var best=(r[0]==='月租'&&idx===r[1].map(function(x){return parseInt(x.replace(/[^0-9]/g,''));}).indexOf(Math.min.apply(null,r[1].map(function(x){return parseInt(x.replace(/[^0-9]/g,''));}))));
+      return'<td class="'+(best?'compare-best':'')+'">'+(best?'✓ ':'')+v+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+  document.getElementById('compare-modal').classList.add('open');
+}
+document.getElementById('compare-modal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+
+// ══ AUTOCOMPLETE ══
+function showAC(input){
+  var drop=document.getElementById('ac-drop');
+  if(input.value.length>0){drop.classList.add('open');}
+  else{drop.classList.remove('open');}
+}
+function hideAC(){var drop=document.getElementById('ac-drop');if(drop)drop.classList.remove('open');}
+function selectAC(val){
+  var input=document.getElementById('ac-input');
+  if(input)input.value=val;
+  hideAC();
+  showToast('搜尋：'+val);
+}
+
+// ══ FORM VALIDATION ══
+function validatePhone(){
+  var input=document.getElementById('login-phone');
+  var fg=document.getElementById('fg-phone');
+  if(!input||!fg)return;
+  var digits=input.value.replace(/[^0-9]/g,'');
+  if(input.value.length===0){fg.className='form-group';}
+  else if(digits.length>=8){fg.className='form-group success';}
+  else{fg.className='form-group error';}
+}
+function validatePwd(){
+  var input=document.getElementById('login-pwd');
+  var fg=document.getElementById('fg-pwd');
+  if(!input||!fg)return;
+  if(input.value.length===0){fg.className='form-group';}
+  else if(input.value.length>=6){fg.className='form-group success';}
+  else{fg.className='form-group error';}
+}
+
+// ══ CHAT ══
+function toggleChat(){
+  var w=document.getElementById('chat-window');
+  w.classList.toggle('open');
+  if(w.classList.contains('open')){
+    var badge=document.querySelector('.chat-badge');
+    if(badge)badge.style.display='none';
+  }
+}
+function chatReply(msg){
+  addChatMsg(msg,'user');
+  setTimeout(function(){
+    var replies={'搜尋樓盤':'好的！你可以用左側篩選條件搜尋，或者直接睇樓盤列表 😊','睇優惠':'我哋有超市格價同住戶專屬優惠，點擊頂部「綜合優惠」就可以睇！','聯絡代理':'你可以喺物件詳情頁直接預約睇樓，代理會盡快聯絡你 📞'};
+    addChatMsg(replies[msg]||'收到！我幫你處理中…','bot');
+  },600);
+}
+function sendChat(){
+  var input=document.getElementById('chat-input');
+  if(!input||!input.value.trim())return;
+  addChatMsg(input.value,'user');
+  input.value='';
+  setTimeout(function(){addChatMsg('收到你嘅訊息，客服人員會盡快回覆你！','bot');},800);
+}
+function addChatMsg(text,type){
+  var msgs=document.getElementById('chat-messages');
+  var msg=document.createElement('div');
+  msg.className='chat-msg '+type;
+  msg.textContent=text;
+  msgs.appendChild(msg);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+// ══ CALCULATOR ══
+function toggleCalc(){document.getElementById('calc-window').classList.toggle('open');}
+function updateCalc(){
+  var rent=parseFloat(document.getElementById('calc-rent').value)||0;
+  var income=parseFloat(document.getElementById('calc-income').value)||0;
+  var area=parseFloat(document.getElementById('calc-area').value)||0;
+  document.getElementById('cr-annual').textContent=rent?'HK$'+Math.round(rent*12).toLocaleString():'—';
+  document.getElementById('cr-psf').textContent=(rent&&area)?'HK$'+(rent/area).toFixed(1)+'/呎':'—';
+  if(rent&&income){
+    var ratio=Math.round(rent/income*100);
+    var el=document.getElementById('cr-ratio');
+    el.textContent=ratio+'%';
+    el.className='calc-result-val '+(ratio>40?'warn':ratio>30?'':'ok');
+    document.getElementById('cr-advice').textContent=ratio>40?'⚠ 超出建議上限':ratio>30?'注意：略高':'✓ 合理範圍';
+    document.getElementById('cr-advice').className='calc-result-val '+(ratio>40?'warn':ratio>30?'':'ok');
+  } else {
+    document.getElementById('cr-ratio').textContent='—';
+    document.getElementById('cr-advice').textContent='—';
+  }
+}
+
+// ══ SCROLL PROGRESS ══
+window.addEventListener('scroll',function(){
+  var el=document.getElementById('scroll-progress');
+  if(!el)return;
+  var h=document.documentElement.scrollHeight-window.innerHeight;
+  el.style.width=h>0?(window.scrollY/h*100)+'%':'0%';
+});
+
+// ══ PARALLAX HERO ══
+window.addEventListener('scroll',function(){
+  var hero=document.querySelector('#page-home .hero-bg');
+  if(hero&&document.getElementById('page-home').classList.contains('on')){
+    hero.style.transform='translateY('+(window.scrollY*0.3)+'px)';
+  }
+});
+
+
+// ══ ONBOARDING ══
+var obStep=0;
+var obSteps=[
+  {icon:'🏠',title:'歡迎使用 AJO Living',desc:'香港最完整嘅物業管理與生活平台，搜尋樓盤、比較價格、管理社區，一站式搞掂。'},
+  {icon:'🔍',title:'搜尋同比較樓盤',desc:'用篩選條件快速搵到心儀物件，勾選最多3個並排比較，仲可以切換地圖視圖睇位置。'},
+  {icon:'🎁',title:'生活優惠同格價',desc:'追蹤全港9大超市即時優惠，享用住戶專屬折扣，租金計算器幫你計算最佳預算。'}
+];
+function nextOnboard(){
+  obStep++;
+  if(obStep>=obSteps.length){closeOnboard();return;}
+  var s=obSteps[obStep];
+  document.getElementById('onboard-icon').textContent=s.icon;
+  document.getElementById('onboard-title').textContent=s.title;
+  document.getElementById('onboard-desc').textContent=s.desc;
+  document.querySelectorAll('.od').forEach(function(d,i){d.className='od'+(i===obStep?' on':'');});
+  if(obStep===obSteps.length-1)document.getElementById('ob-next').textContent='開始使用 ✓';
+}
+function closeOnboard(){document.getElementById('onboard').classList.remove('open');}
+// Show onboarding on login
+
+
+// ══ TREND TABS ══
+document.querySelectorAll('.trend-tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.trend-tab').forEach(function(x){x.classList.remove('on');});
+    this.classList.add('on');
+    showToast('載入'+this.textContent+'數據…');
+  });
+});
+
+// ══ LOGIN -> show onboarding ══
+var lsubmit=document.querySelector('.lsubmit');
+if(lsubmit){
+  lsubmit.addEventListener('click',function(e){
+    var phone=document.getElementById('login-phone');
+    var pwd=document.getElementById('login-pwd');
+    validatePhone();validatePwd();
+    var phoneOk=phone&&phone.value.replace(/[^0-9]/g,'').length>=8;
+    var pwdOk=pwd&&pwd.value.length>=6;
+    if(phoneOk&&pwdOk){
+      showToast('登入成功！歡迎回來 👋','success');
+      setTimeout(function(){
+        go('home');
+        obStep=0;
+        var s=obSteps[0];
+        document.getElementById('onboard-icon').textContent=s.icon;
+        document.getElementById('onboard-title').textContent=s.title;
+        document.getElementById('onboard-desc').textContent=s.desc;
+        document.querySelectorAll('.od').forEach(function(d,i){d.className='od'+(i===0?' on':'');});
+        document.getElementById('ob-next').textContent='下一步 →';
+        document.getElementById('onboard').classList.add('open');
+      },800);
+    } else {
+      showToast('請填寫正確嘅手機號碼同密碼','error');
+    }
+  });
+}
+
+// ══ FOOTER on page switch ══
+window.addEventListener('DOMContentLoaded',function(){
+  var footer=document.getElementById('site-footer');
+  if(footer)footer.style.display='block';
+});
+
+</script>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" onclick="closeLB()">✕</button>
+  <div class="lb-img pat" id="lb-img" style="background:linear-gradient(135deg,#e8e8e8,#d0d0d0);width:480px;height:320px;border-radius:4px;"></div>
+  <div class="lb-nav">
+    <button class="lb-arrow" onclick="lbPrev()">‹</button>
+    <span class="lb-counter" id="lb-counter">1 / 4</span>
+    <button class="lb-arrow" onclick="lbNext()">›</button>
+  </div>
+  <div class="lb-thumbs" id="lb-thumbs"></div>
+</div>
+
+<!-- PRICE COMPARE MODAL -->
+<div class="modal-overlay" id="price-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-prod-name">纖柔牙刷 精巧頭 3支裝</div>
+        <div class="modal-brand" id="modal-prod-brand">高露潔</div>
+      </div>
+      <button class="modal-close" onclick="document.getElementById('price-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-best">
+        <div>
+          <div class="modal-best-label">最低價</div>
+          <div class="modal-best-price">HK$14.50</div>
+          <div class="modal-best-store">AEON · 買2件$29.00</div>
+        </div>
+        <div style="margin-left:auto;background:var(--accent);color:white;font-size:13px;font-weight:700;padding:6px 12px;border-radius:3px;">-60%</div>
+      </div>
+      <div class="modal-compare-title">各超市價格比較</div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">AEON</div>
+        <div class="modal-bar-wrap"><div class="modal-bar best" style="width:40%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$14.50</div><div class="modal-store-promo">買2件$29</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">百佳</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:62%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$22.90</div><div class="modal-store-promo">—</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">惠康</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:72%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$26.50</div><div class="modal-store-promo">—</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">CitySuper</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:100%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$35.90</div><div class="modal-store-promo">原價</div></div>
+      </div>
+      <div class="modal-chart-title">近30日價格走勢</div>
+      <div class="price-chart" id="price-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 通知中心 -->
+<div class="page" id="page-notif">
+  <div class="notif-wrap">
+    <aside class="notif-sidebar">
+      <div class="notif-sidebar-title">通知中心</div>
+      <div class="notif-filter">
+        <div class="nf-item on">全部 <span class="nf-badge">8</span></div>
+        <div class="nf-item">優惠提醒 <span class="nf-badge">3</span></div>
+        <div class="nf-item">系統通知</div>
+        <div class="nf-item">物件更新</div>
+        <div class="nf-item">支付提醒 <span class="nf-badge">1</span></div>
+      </div>
+    </aside>
+    <main class="notif-main">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:500;">所有通知</div>
+        <button style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;">全部標為已讀</button>
+      </div>
+      <div class="notif-group-title">今日</div>
+      <div class="notif-list">
+        <div class="notif-item unread">
+          <div class="notif-dot"></div>
+          <div class="notif-icon orange">🔥</div>
+          <div class="notif-content">
+            <div class="notif-title">你收藏嘅商品有新優惠！</div>
+            <div class="notif-desc">高露潔牙刷喺 AEON 減價 60%，即刻去睇。</div>
+            <div class="notif-time">5 分鐘前</div>
+          </div>
+        </div>
+        <div class="notif-item unread">
+          <div class="notif-dot"></div>
+          <div class="notif-icon blue">💳</div>
+          <div class="notif-content">
+            <div class="notif-title">6月管理費待繳提醒</div>
+            <div class="notif-desc">截止日期：2026年6月15日，金額 HK$2,800。</div>
+            <div class="notif-time">1 小時前</div>
+          </div>
+        </div>
+        <div class="notif-item unread">
+          <div class="notif-dot"></div>
+          <div class="notif-icon green">🏠</div>
+          <div class="notif-content">
+            <div class="notif-title">你睇過嘅物件降價了</div>
+            <div class="notif-desc">佐敦高級住宅月租由 HK$38,000 降至 HK$36,000。</div>
+            <div class="notif-time">3 小時前</div>
+          </div>
+        </div>
+      </div>
+      <div class="notif-group-title">昨日</div>
+      <div class="notif-list">
+        <div class="notif-item">
+          <div class="notif-dot read"></div>
+          <div class="notif-icon gray">📋</div>
+          <div class="notif-content">
+            <div class="notif-title">預約睇樓確認</div>
+            <div class="notif-desc">中環甲級寫字樓睇樓時間：6月8日下午2時。</div>
+            <div class="notif-time">昨天 14:30</div>
+          </div>
+        </div>
+        <div class="notif-item">
+          <div class="notif-dot read"></div>
+          <div class="notif-icon orange">🎁</div>
+          <div class="notif-content">
+            <div class="notif-title">新優惠上架：Pure Fitness 住戶月費</div>
+            <div class="notif-desc">全港分店月費 HK$799，限時優惠。</div>
+            <div class="notif-time">昨天 09:15</div>
+          </div>
+        </div>
+        <div class="notif-item">
+          <div class="notif-dot read"></div>
+          <div class="notif-icon green">✅</div>
+          <div class="notif-content">
+            <div class="notif-title">5月管理費已收妥</div>
+            <div class="notif-desc">HK$2,800 已成功入賬，謝謝。</div>
+            <div class="notif-time">昨天 08:02</div>
+          </div>
+        </div>
+      </div>
+      <div class="notif-group-title">更早</div>
+      <div class="notif-list">
+        <div class="notif-item">
+          <div class="notif-dot read"></div>
+          <div class="notif-icon blue">📢</div>
+          <div class="notif-content">
+            <div class="notif-title">社區公告：電梯保養</div>
+            <div class="notif-desc">A棟電梯將於 6/8 上午 9–12 時進行年度保養。</div>
+            <div class="notif-time">6月5日</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 個人資料 -->
+<div class="page" id="page-profile">
+  <div class="profile-wrap">
+    <aside class="profile-sidebar">
+      <div class="profile-avatar">👤</div>
+      <div class="profile-name">陳大文</div>
+      <div class="profile-email">chan@example.com</div>
+      <nav class="profile-nav">
+        <div class="pnav-item on">👤 個人資訊</div>
+        <div class="pnav-item">🏠 我的收藏</div>
+        <div class="pnav-item">🕐 瀏覽記錄</div>
+        <div class="pnav-item">🔔 通知設定</div>
+        <div class="pnav-item">🔒 帳號安全</div>
+        <div class="pnav-item" style="margin-top:20px;color:#e05050;">🚪 登出</div>
+      </nav>
+    </aside>
+    <main class="profile-main">
+      <div class="profile-section">
+        <div class="profile-section-title">個人資訊</div>
+        <div class="profile-field"><span class="pf-label">姓名</span><input class="pf-input" value="陳大文"></div>
+        <div class="profile-field"><span class="pf-label">電郵</span><input class="pf-input" value="chan@example.com"></div>
+        <div class="profile-field"><span class="pf-label">手機號碼</span><input class="pf-input" value="+852 9123 4567"></div>
+        <div class="profile-field"><span class="pf-label">所在地區</span><input class="pf-input" value="九龍區"></div>
+        <button style="margin-top:8px;background:var(--accent);color:white;border:none;padding:9px 20px;font-size:12px;cursor:pointer;border-radius:2px;font-family:inherit;">儲存更改</button>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-title">我的收藏物件</div>
+        <div class="saved-grid">
+          <div class="gc" onclick="go('detail')">
+            <div class="gi short pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);"></div>
+            <div class="gb"><div class="gtags"><span class="gtag">九龍</span></div><div class="gtitle">佐敦 高級住宅</div><div class="gprice">HK$36,000 <span>/ 月</span></div></div>
+            <div class="gfoot"><span class="grooms">1房 · 200呎</span><span class="gview">查看 →</span></div>
+          </div>
+          <div class="gc" onclick="go('detail')">
+            <div class="gi short pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);"></div>
+            <div class="gb"><div class="gtags"><span class="gtag">香港島</span></div><div class="gtitle">中環甲級寫字樓</div><div class="gprice">HK$120,000 <span>/ 月</span></div></div>
+            <div class="gfoot"><span class="grooms">全層 · 2,400呎</span><span class="gview">查看 →</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-section">
+        <div class="profile-section-title">最近瀏覽</div>
+        <div class="history-list">
+          <div class="history-item" onclick="go('detail')">
+            <div class="history-thumb pat" style="background:linear-gradient(135deg,#e8e8e8,#d0d0d0);"></div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:500;">佐敦 高級住宅</div><div style="font-size:10px;color:var(--g4);">HK$36,000 / 月 · 3小時前</div></div>
+          </div>
+          <div class="history-item" onclick="go('detail')">
+            <div class="history-thumb pat" style="background:linear-gradient(135deg,#e4dcd8,#ccc0bc);"></div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:500;">沙田第一城 3房</div><div style="font-size:10px;color:var(--g4);">HK$18,500 / 月 · 昨天</div></div>
+          </div>
+          <div class="history-item" onclick="go('detail')">
+            <div class="history-thumb pat" style="background:linear-gradient(135deg,#e0e0e8,#c8c8d8);"></div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:500;">中環甲級寫字樓</div><div style="font-size:10px;color:var(--g4);">HK$120,000 / 月 · 2天前</div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- COMPARE BAR -->
+<div class="compare-bar" id="compare-bar">
+  <div class="compare-slots" id="compare-slots">
+    <div class="compare-slot" id="cs-0">+ 加入比較</div>
+    <div class="compare-slot" id="cs-1">+ 加入比較</div>
+    <div class="compare-slot" id="cs-2">+ 加入比較</div>
+  </div>
+  <span class="compare-count" id="compare-count">0 / 3</span>
+  <button class="compare-clear" onclick="clearCompare()">清除</button>
+  <button class="compare-btn" id="compare-go-btn" onclick="openCompareModal()" disabled>開始比較</button>
+</div>
+
+<!-- COMPARE MODAL -->
+<div class="compare-modal" id="compare-modal">
+  <div class="compare-modal-inner">
+    <div class="compare-modal-header">
+      <div style="font-size:14px;font-weight:500;">物件比較</div>
+      <button class="modal-close" onclick="document.getElementById('compare-modal').classList.remove('open')">✕</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="compare-table" id="compare-table">
+        <thead><tr id="compare-thead"></tr></thead>
+        <tbody id="compare-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT FAB -->
+<button class="chat-fab" onclick="toggleChat()">
+  💬
+  <span class="chat-badge">1</span>
+</button>
+
+<!-- CHAT WINDOW -->
+<div class="chat-window" id="chat-window">
+  <div class="chat-header">
+    <div class="chat-avatar">🤖</div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">AJO 客服助理</div>
+      <div class="chat-header-status">● 在線</div>
+    </div>
+    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg bot">你好！我係 AJO Living 客服助理，有咩可以幫到你？😊</div>
+  </div>
+  <div class="chat-quick-replies">
+    <span class="chat-qr" onclick="chatReply(this,'睇樓安排')">📅 睇樓安排</span>
+    <span class="chat-qr" onclick="chatReply(this,'租金查詢')">💰 租金查詢</span>
+    <span class="chat-qr" onclick="chatReply(this,'付款方式')">💳 付款方式</span>
+    <span class="chat-qr" onclick="chatReply(this,'聯絡代理')">📞 聯絡代理</span>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chat-input" placeholder="輸入訊息…" onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<!-- CALCULATOR FAB -->
+<button class="calc-fab" onclick="toggleCalc()" title="租金計算器">🧮</button>
+
+<!-- CALCULATOR WINDOW -->
+<div class="calc-window" id="calc-window">
+  <div class="calc-header">
+    <span class="calc-title">🧮 租金計算器</span>
+    <button class="calc-close" onclick="toggleCalc()">✕</button>
+  </div>
+  <div class="calc-body">
+    <div class="calc-field">
+      <label class="calc-label">月租金額 (HK$)</label>
+      <input class="calc-input" id="calc-rent" type="number" placeholder="例如 36000" oninput="calcRent()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">每月收入 (HK$)</label>
+      <input class="calc-input" id="calc-income" type="number" placeholder="例如 80000" oninput="calcRent()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">實用面積 (呎)</label>
+      <input class="calc-input" id="calc-sqft" type="number" placeholder="例如 200" oninput="calcRent()">
+    </div>
+    <div class="calc-results" id="calc-results">
+      <div class="calc-result-row"><span class="calc-result-label">年租</span><span class="calc-result-val" id="cr-annual">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">每呎月租</span><span class="calc-result-val" id="cr-psf">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">佔收入比例</span><span class="calc-result-val" id="cr-ratio">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">建議</span><span class="calc-result-val" id="cr-advice">輸入數據後顯示</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- COMPARE BAR -->
+<div class="compare-bar" id="compare-bar">
+  <div class="compare-slots" id="compare-slots">
+    <div class="compare-slot" id="cs0">+ 新增比較</div>
+    <div class="compare-slot" id="cs1">+ 新增比較</div>
+    <div class="compare-slot" id="cs2">+ 新增比較</div>
+  </div>
+  <span class="compare-count" id="compare-count">0/3</span>
+  <button class="compare-clear" onclick="clearCompare()">清除</button>
+  <button class="compare-btn" id="compare-go-btn" onclick="openCompareModal()" disabled>比較</button>
+</div>
+
+<!-- COMPARE MODAL -->
+<div class="compare-modal" id="compare-modal">
+  <div class="compare-modal-inner">
+    <div class="compare-modal-header">
+      <div style="font-size:14px;font-weight:500;">物件比較</div>
+      <button class="modal-close" onclick="document.getElementById('compare-modal').classList.remove('open')">✕</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="compare-table" id="compare-table">
+        <thead><tr id="compare-thead"></tr></thead>
+        <tbody id="compare-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT FAB -->
+<button class="chat-fab" id="chat-fab" onclick="toggleChat()">
+  💬<span class="chat-badge">1</span>
+</button>
+<div class="chat-window" id="chat-window">
+  <div class="chat-header">
+    <div class="chat-avatar">🏠</div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">AJO 客服助理</div>
+      <div class="chat-header-status">● 在線</div>
+    </div>
+    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg bot">你好！我係 AJO 客服助理，有咩可以幫到你？😊</div>
+    <div class="chat-msg bot">你可以問我關於樓盤、服務或優惠嘅問題。</div>
+  </div>
+  <div class="chat-quick-replies">
+    <span class="chat-qr" onclick="chatReply('搜尋樓盤')">🏢 搜尋樓盤</span>
+    <span class="chat-qr" onclick="chatReply('睇優惠')">🎁 睇優惠</span>
+    <span class="chat-qr" onclick="chatReply('聯絡代理')">📞 聯絡代理</span>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chat-input" placeholder="輸入訊息…" onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<!-- CALC FAB -->
+<button class="calc-fab" id="calc-fab" onclick="toggleCalc()" title="租金計算器">🧮</button>
+<div class="calc-window" id="calc-window">
+  <div class="calc-header">
+    <span class="calc-title">租金計算器</span>
+    <button class="calc-close" onclick="toggleCalc()">✕</button>
+  </div>
+  <div class="calc-body">
+    <div class="calc-field">
+      <label class="calc-label">月租 (HK$)</label>
+      <input class="calc-input" id="calc-rent" placeholder="例如 36000" oninput="updateCalc()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">月收入 (HK$)</label>
+      <input class="calc-input" id="calc-income" placeholder="例如 80000" oninput="updateCalc()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">實用面積 (呎)</label>
+      <input class="calc-input" id="calc-area" placeholder="例如 500" oninput="updateCalc()">
+    </div>
+    <div class="calc-results" id="calc-results">
+      <div class="calc-result-row"><span class="calc-result-label">年租</span><span class="calc-result-val" id="cr-annual">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">每呎月租</span><span class="calc-result-val" id="cr-psf">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">佔收入比例</span><span class="calc-result-val" id="cr-ratio">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">建議?</span><span class="calc-result-val" id="cr-advice">—</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- 租金走勢 -->
+<div class="page" id="page-trend">
+  <div class="trend-page-wrap">
+    <div class="trend-header">
+      <div class="section-eyebrow">市場數據</div>
+      <div class="trend-title">香港租金走勢</div>
+      <div class="trend-sub">過去6個月各區平均月租變化（每呎）</div>
+    </div>
+    <div class="trend-tabs">
+      <span class="trend-tab on">全港</span>
+      <span class="trend-tab">香港島</span>
+      <span class="trend-tab">九龍</span>
+      <span class="trend-tab">新界</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">平均呎租趨勢（HK$/呎）</div>
+      <svg class="svg-chart" viewBox="0 0 600 180" id="trend-svg">
+        <!-- grid lines -->
+        <line x1="60" y1="20" x2="580" y2="20" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="60" x2="580" y2="60" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="100" x2="580" y2="100" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="140" x2="580" y2="140" stroke="#e8e8e8" stroke-width="1"/>
+        <!-- y labels -->
+        <text x="50" y="24" text-anchor="end" font-size="10" fill="#aaa">$60</text>
+        <text x="50" y="64" text-anchor="end" font-size="10" fill="#aaa">$50</text>
+        <text x="50" y="104" text-anchor="end" font-size="10" fill="#aaa">$40</text>
+        <text x="50" y="144" text-anchor="end" font-size="10" fill="#aaa">$30</text>
+        <!-- x labels -->
+        <text x="108" y="165" text-anchor="middle" font-size="10" fill="#aaa">1月</text>
+        <text x="192" y="165" text-anchor="middle" font-size="10" fill="#aaa">2月</text>
+        <text x="276" y="165" text-anchor="middle" font-size="10" fill="#aaa">3月</text>
+        <text x="360" y="165" text-anchor="middle" font-size="10" fill="#aaa">4月</text>
+        <text x="444" y="165" text-anchor="middle" font-size="10" fill="#aaa">5月</text>
+        <text x="528" y="165" text-anchor="middle" font-size="10" fill="#aaa">6月</text>
+        <!-- HK Island line (orange) -->
+        <polyline points="108,45 192,40 276,50 360,35 444,38 528,30" fill="none" stroke="#f05a00" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- Kowloon line (black) -->
+        <polyline points="108,75 192,72 276,80 360,68 444,65 528,60" fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- NT line (gray) -->
+        <polyline points="108,115 192,112 276,118 360,108 444,110 528,105" fill="none" stroke="#aaa" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4,3"/>
+        <!-- dots HK Island -->
+        <circle cx="528" cy="30" r="4" fill="#f05a00"/>
+        <circle cx="528" cy="60" r="4" fill="#1a1a1a"/>
+        <circle cx="528" cy="105" r="4" fill="#aaa"/>
+        <!-- legend -->
+        <rect x="300" y="8" width="10" height="3" fill="#f05a00" rx="1"/>
+        <text x="314" y="13" font-size="10" fill="#555">香港島</text>
+        <rect x="360" y="8" width="10" height="3" fill="#1a1a1a" rx="1"/>
+        <text x="374" y="13" font-size="10" fill="#555">九龍</text>
+        <rect x="410" y="8" width="10" height="3" fill="#aaa" rx="1"/>
+        <text x="424" y="13" font-size="10" fill="#555">新界</text>
+      </svg>
+    </div>
+    <div class="label-text" style="margin-bottom:12px;">各區最新呎租</div>
+    <div class="district-grid">
+      <div class="district-card"><div class="dc-name">中環 / 金鐘</div><div class="dc-price">HK$62/呎</div><div class="dc-change dc-up">↑ +3.2% 本月</div></div>
+      <div class="district-card"><div class="dc-name">銅鑼灣</div><div class="dc-price">HK$55/呎</div><div class="dc-change dc-up">↑ +1.8% 本月</div></div>
+      <div class="district-card"><div class="dc-name">尖沙咀</div><div class="dc-price">HK$48/呎</div><div class="dc-change dc-up">↑ +0.9% 本月</div></div>
+      <div class="district-card"><div class="dc-name">旺角</div><div class="dc-price">HK$42/呎</div><div class="dc-change dc-dn">↓ -0.5% 本月</div></div>
+      <div class="district-card"><div class="dc-name">沙田</div><div class="dc-price">HK$32/呎</div><div class="dc-change dc-up">↑ +1.1% 本月</div></div>
+      <div class="district-card"><div class="dc-name">將軍澳</div><div class="dc-price">HK$28/呎</div><div class="dc-change dc-dn">↓ -0.3% 本月</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div class="onboard-overlay" id="onboard">
+  <div class="onboard-card">
+    <div class="onboard-step-dots">
+      <div class="od on" id="od0"></div>
+      <div class="od" id="od1"></div>
+      <div class="od" id="od2"></div>
+    </div>
+    <div id="onboard-icon" class="onboard-icon">🏠</div>
+    <div id="onboard-title" class="onboard-title">歡迎使用 AJO Living</div>
+    <div id="onboard-desc" class="onboard-desc">香港最完整嘅物業管理與生活平台，搜尋樓盤、比較價格、管理社區，一站式搞掂。</div>
+    <div class="onboard-btns">
+      <button class="ob-skip" onclick="closeOnboard()">跳過</button>
+      <button class="ob-next" id="ob-next" onclick="nextOnboard()">下一步 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="site-footer" id="site-footer">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brand">AJO LIVING</div>
+      <div class="footer-tagline" style="margin-top:10px;">香港最完整嘅物業管理與生活平台。搜尋樓盤、超市格價、社區市集，一站式搞掂。</div>
+      <div class="footer-social">
+        <div class="social-btn" onclick="showToast('Facebook 連結')">f</div>
+        <div class="social-btn" onclick="showToast('Instagram 連結')">📸</div>
+        <div class="social-btn" onclick="showToast('WhatsApp 聯絡')">💬</div>
+        <div class="social-btn" onclick="showToast('YouTube 頻道')">▶</div>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-title">服務</div>
+      <span class="footer-link" onclick="go('listing')">樓盤租售</span>
+      <span class="footer-link" onclick="go('service')">服務式住宅</span>
+      <span class="footer-link" onclick="go('market')">家具市集</span>
+      <span class="footer-link" onclick="go('offers')">超市格價</span>
+      <span class="footer-link" onclick="go('trend')">租金走勢</span>
+    </div>
+    <div>
+      <div class="footer-col-title">支援</div>
+      <span class="footer-link">常見問題</span>
+      <span class="footer-link">聯絡客服</span>
+      <span class="footer-link" onclick="go('payment')">支付說明</span>
+      <span class="footer-link">代理登記</span>
+      <span class="footer-link">廣告合作</span>
+    </div>
+    <div>
+      <div class="footer-col-title">關於</div>
+      <span class="footer-link">關於 AJO Living</span>
+      <span class="footer-link">新聞稿</span>
+      <span class="footer-link">加入我們</span>
+      <span class="footer-link">私隱政策</span>
+      <span class="footer-link">使用條款</span>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 AJO Living. 版權所有。</span>
+    <div class="footer-bottom-links">
+      <span>私隱政策</span>
+      <span>使用條款</span>
+      <span>Cookie 設定</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

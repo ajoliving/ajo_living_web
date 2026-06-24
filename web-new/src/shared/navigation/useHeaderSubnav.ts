@@ -34,16 +34,16 @@ export const useHeaderSubnav = () => {
     if (route.path.startsWith('/properties')) {
       return [
         { key: 'properties-discover', label: t('nav.propertiesDiscover'), to: '/properties', match: ['/properties'], exact: true },
-        { key: 'properties-sale', label: t('nav.propertiesMap'), to: '/properties/my', match: ['/properties/my'], exact: true },
-        { key: 'properties-guide', label: t('nav.propertiesGuide'), to: '/properties/my/new', match: ['/properties/my/new', '/properties/my/editor'] },
+        { key: 'properties-sale', label: t('nav.propertiesMap'), to: '/account/properties/sale', match: ['/account/properties/sale'], exact: true },
+        { key: 'properties-guide', label: t('nav.propertiesGuide'), to: '/account/properties/sale/new', match: ['/account/properties/sale/new', '/account/properties/sale/editor'] },
       ];
     }
 
     if (route.path.startsWith('/serviced-residences')) {
       return [
         { key: 'serviced-discover', label: t('nav.servicedDiscover'), to: '/serviced-residences', match: ['/serviced-residences'], exact: true },
-        { key: 'serviced-stay', label: t('nav.servicedStay'), to: '/serviced-residences/my', match: ['/serviced-residences/my'], exact: true },
-        { key: 'serviced-guide', label: t('nav.servicedGuide'), to: '/serviced-residences/my/new', match: ['/serviced-residences/my/new', '/serviced-residences/my/editor'] },
+        { key: 'serviced-stay', label: t('nav.servicedStay'), to: '/account/properties/serviced-residences', match: ['/account/properties/serviced-residences'], exact: true },
+        { key: 'serviced-guide', label: t('nav.servicedGuide'), to: '/account/properties/serviced-residences/new', match: ['/account/properties/serviced-residences/new', '/account/properties/serviced-residences/editor'] },
       ];
     }
 

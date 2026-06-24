@@ -121,7 +121,7 @@ const handlePayBill = async (row: POSPaymentRow, index: number): Promise<void> =
       </div>
       <BaseButton
         variant="secondary"
-        size="md"
+        size="sm"
         :disabled="isLoading"
         @click="reload"
       >
@@ -165,7 +165,7 @@ const handlePayBill = async (row: POSPaymentRow, index: number): Promise<void> =
       <BaseButton
         v-if="profileRequired"
         variant="primary"
-        size="md"
+        size="sm"
         @click="goPaymentUnit"
       >
         選擇單元

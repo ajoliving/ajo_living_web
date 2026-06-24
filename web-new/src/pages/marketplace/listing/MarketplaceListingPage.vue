@@ -28,6 +28,7 @@ const {
   ownerName,
   publishedAt,
   revealContact,
+  selectedImageIndex,
   isFavorited,
   t,
   toggleFavorite,
@@ -67,10 +68,12 @@ const {
         </div>
         <div class="detail-gallery__thumbs">
           <button
-            v-for="image in galleryImages"
+            v-for="(image, index) in galleryImages"
             :key="image.id"
             type="button"
             class="detail-gallery__thumb"
+            :class="{ 'detail-gallery__thumb--active': selectedImageIndex === index }"
+            @click="selectedImageIndex = index"
           >
             <img
               :src="image.url"
@@ -249,15 +252,15 @@ const {
   width: 100%;
   max-width: var(--layout-page-max-width);
   min-height: calc(100vh - var(--app-header-offset, 0rem));
-  gap: 14px;
+  gap: 16px;
   margin: 0 auto;
-  padding: 18px var(--layout-page-padding-inline) 72px;
+  padding: 24px var(--layout-page-padding-inline) 72px;
   color: rgb(var(--color-text));
 }
 
 .detail-main {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .detail-gallery,
@@ -265,7 +268,7 @@ const {
 .detail-panel,
 .detail-safety {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
   box-shadow: none;
 }
@@ -275,7 +278,7 @@ const {
 }
 
 .detail-gallery__hero {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   background: rgb(var(--color-surface-muted));
 }
 
@@ -290,8 +293,8 @@ const {
 .detail-gallery__thumbs {
   display: grid;
   gap: 8px;
-  padding: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .detail-gallery__thumb {
@@ -300,10 +303,18 @@ const {
   border: 1px solid rgb(var(--color-border));
   border-radius: 2px;
   background: rgb(var(--color-surface-muted));
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.detail-gallery__thumb:hover,
+.detail-gallery__thumb--active {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary-soft));
 }
 
 .detail-content {
-  padding: 16px;
+  padding: 18px;
 }
 
 .detail-kicker,
@@ -318,42 +329,44 @@ const {
 
 .detail-heading {
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
 }
 
 .detail-heading h1 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 400;
-  line-height: 1.16;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 .detail-heading p {
-  margin-top: 8px;
+  margin: 8px 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.8;
 }
 
 .detail-price {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 24px;
-  font-weight: 500;
+  font-size: 22px;
+  font-weight: 600;
   color: rgb(var(--color-primary));
 }
 
 .detail-section {
-  margin-top: 16px;
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid rgb(var(--color-border));
-  padding-top: 14px;
 }
 
 .detail-section h2 {
   margin: 0 0 10px;
-  color: rgb(var(--color-text-muted));
+  color: rgb(var(--color-text));
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -362,14 +375,14 @@ const {
 }
 
 .detail-section p {
-  color: rgb(var(--color-text-muted));
-  font-size: 13px;
+  color: rgb(var(--color-text));
+  font-size: 12px;
   line-height: 1.75;
 }
 
 .detail-spec-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .detail-spec-grid dt {
@@ -380,10 +393,18 @@ const {
 }
 
 .detail-spec-grid dd {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   color: rgb(var(--color-text));
   font-size: 12px;
   font-weight: 600;
+}
+
+.detail-spec-grid > div {
+  min-width: 0;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface-muted));
+  padding: 10px 12px;
 }
 
 .detail-tags {
@@ -404,19 +425,19 @@ const {
 .detail-sidebar {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .detail-panel,
 .detail-safety {
-  padding: 14px;
+  padding: 16px;
 }
 
 .detail-seller-profile {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .detail-panel h2 {
@@ -437,20 +458,27 @@ const {
 .detail-actions {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .detail-action {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
   gap: 6px;
   border: 1px solid rgb(var(--color-border));
   border-radius: 2px;
+  background: rgb(var(--color-surface));
   color: rgb(var(--color-text-muted));
   font-size: 12px;
   font-weight: 600;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.detail-action:hover {
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
 }
 
 .detail-action--primary {
@@ -467,13 +495,16 @@ const {
 
 .detail-mini-list {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .detail-mini-card {
   display: grid;
   gap: 8px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  padding: 8px;
   grid-template-columns: 58px 1fr;
 }
 
@@ -513,27 +544,36 @@ const {
   .detail-spec-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .detail-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
 }
 
 @media (min-width: 1024px) {
   .marketplace-detail-page {
-    grid-template-columns: minmax(0, 1fr) 21rem;
+    grid-template-columns: minmax(0, 1fr) 20rem;
   }
 
   .detail-main {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
     align-items: start;
   }
 
   .detail-sidebar {
     position: sticky;
-    top: 66px;
+    top: 72px;
   }
 }
 
 @media (max-width: 767px) {
   .marketplace-detail-page {
     padding: 18px var(--layout-page-padding-inline) 96px;
+  }
+
+  .detail-price {
+    font-size: 20px;
   }
 }
 </style>

@@ -26,8 +26,6 @@ const props = defineProps<HomeModuleSectionProps>();
     :data-home-module="props.module.code"
     :data-tone="props.module.tone"
   >
-    <div class="home-module__orb" />
-
     <div class="relative space-y-8">
       <div class="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
         <div class="max-w-3xl">
@@ -136,35 +134,11 @@ const props = defineProps<HomeModuleSectionProps>();
   opacity: 0.96;
 }
 
-.home-module__orb {
-  display: none;
-  position: absolute;
-  top: -6rem;
-  right: -5rem;
-  width: 15rem;
-  height: 15rem;
-  border-radius: 999px;
-  filter: blur(18px);
-  opacity: 0.52;
-}
-
-.home-module[data-tone='copper'] .home-module__orb {
-  background: rgb(var(--color-primary-soft));
-}
-
-.home-module[data-tone='slate'] .home-module__orb {
-  background: rgb(var(--color-surface-muted));
-}
-
-.home-module[data-tone='sage'] .home-module__orb {
-  background: rgb(var(--color-surface-raised));
-}
-
 .home-module__title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 2.9rem);
-  line-height: 1.05;
+  font-size: clamp(1.8rem, 3vw, 2.45rem);
+  line-height: 1.08;
   color: rgb(var(--color-text));
 }
 
@@ -177,7 +151,7 @@ const props = defineProps<HomeModuleSectionProps>();
 
 .home-module__index {
   font-family: var(--font-display);
-  font-size: 4rem;
+  font-size: 3.35rem;
   line-height: 1;
   color: rgb(var(--color-text) / 0.12);
 }
@@ -186,10 +160,10 @@ const props = defineProps<HomeModuleSectionProps>();
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 3.1rem;
+  height: 3.1rem;
   border: 1px solid rgb(var(--color-border) / 0.72);
-  border-radius: 1.35rem;
+  border-radius: 0.2rem;
   background: rgb(var(--color-surface) / 0.88);
   color: rgb(var(--color-text));
 }
@@ -236,38 +210,6 @@ const props = defineProps<HomeModuleSectionProps>();
   font-weight: 600;
   line-height: 1.5;
   color: rgb(var(--color-text-muted));
-}
-
-.home-module__chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.55rem 0.85rem;
-  border: 1px solid rgb(var(--color-border) / 0.7);
-  border-radius: 999px;
-  background: rgb(var(--color-surface) / 0.88);
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: rgb(var(--color-text-muted));
-}
-
-.home-module__highlight {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.85rem;
-  align-items: start;
-  padding: 1rem 1rem 1.05rem;
-  border: 1px solid rgb(var(--color-border) / 0.62);
-  border-radius: 1.35rem;
-  background: rgb(var(--color-surface) / 0.86);
-}
-
-.home-module__highlight-marker {
-  width: 0.65rem;
-  height: 0.65rem;
-  margin-top: 0.55rem;
-  border-radius: 999px;
-  background: rgb(var(--color-primary));
-  box-shadow: 0 0 0 5px rgb(var(--color-primary) / 0.12);
 }
 
 .home-module__coming-soon {

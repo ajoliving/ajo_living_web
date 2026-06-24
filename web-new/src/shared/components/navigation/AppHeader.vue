@@ -1,24 +1,26 @@
 <!--
  * 全域頂部導航。
- * 1. 提供平台主模組入口。
- * 2. 整合主題、語系與登入狀態操作。
- * 3. 提供 mobile 全屏導航與底部主入口。
+ * 1. 還原 HTML 設計稿的 52px 高度導航欄。
+ * 2. 提供 11 個主模組入口與通知鈴鐺。
+ * 3. 整合主題切換按鈕（月亮/太陽）與登入入口。
+ * 4. 提供 mobile 全屏導航與底部主入口。
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
-import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
-import { type AppThemeName, THEME_OPTIONS } from '@/utils/theme';
+import { useFeedbackStore } from '@/stores/feedback';
+import { type AppThemeName } from '@/utils/theme';
 
 interface NavigationItem {
   key: string;
   to: string;
   label: string;
   match: string[];
+  isBell?: boolean;
 }
 
 const route = useRoute();
@@ -26,17 +28,8 @@ const router = useRouter();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
+const feedbackStore = useFeedbackStore();
 
-const themeOptions = computed<Array<{ label: string; value: AppThemeName }>>(() => [
-  ...THEME_OPTIONS.map((option) => ({
-    label: t(option.labelKey),
-    value: option.value,
-  })),
-]);
-const localeOptions = computed<Array<{ label: string; value: AppLocale }>>(() => [
-  { label: t('common.locale.zhHkShort'), value: 'zh-HK' },
-  { label: t('common.locale.enShort'), value: 'en' },
-]);
 const mobileDrawerOpen = computed({
   get: () => preferenceStore.mobile_menu_open,
   set: (value: boolean) => {
@@ -45,36 +38,53 @@ const mobileDrawerOpen = computed({
 });
 const accountPath = computed(() => (sessionStore.isAuthenticated ? '/account/profile' : '/login'));
 const notificationUnreadCount = computed(() => 3);
+const isDarkTheme = computed(() => preferenceStore.theme === 'dark-neutral');
 
-// 1. 建立主導航入口
-const primaryNavigationItems = computed<NavigationItem[]>(() => [
-  { key: 'home', to: '/', label: t('nav.home'), match: ['/'] },
-  { key: 'properties', to: '/properties', label: t('nav.properties'), match: ['/properties'] },
-  { key: 'servicedResidences', to: '/serviced-residences', label: t('nav.servicedResidences'), match: ['/serviced-residences'] },
-  { key: 'furniture', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'] },
-  { key: 'offers', to: '/supermarket-offers', label: t('nav.combinedOffers'), match: ['/supermarket-offers'] },
-  { key: 'payments', to: '/payments', label: t('nav.payments'), match: ['/payments'] },
-  { key: 'account', to: accountPath.value, label: t('nav.memberCenter'), match: ['/account', '/login'] },
-  { key: 'notifications', to: '/notifications', label: t('nav.notifications'), match: ['/notifications'] },
-]);
+// 1. 建立主導航入口，對齊 HTML 設計稿 11 個導航項
+const primaryNavigationItems = computed<NavigationItem[]>(() => {
+  const items: NavigationItem[] = [
+    { key: 'home', to: '/', label: t('nav.home'), match: ['/'] },
+    { key: 'properties', to: '/properties', label: t('nav.properties'), match: ['/properties'] },
+    { key: 'servicedResidences', to: '/serviced-residences', label: t('nav.servicedResidences'), match: ['/serviced-residences'] },
+    { key: 'furniture', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'] },
+    { key: 'offers', to: '/supermarket-offers', label: t('nav.combinedOffers'), match: ['/supermarket-offers'] },
+    { key: 'payments', to: '/payments', label: t('nav.ajoPay'), match: ['/payments'] },
+    { key: 'building', to: '/building', label: t('nav.building'), match: ['/building'] },
+    { key: 'profile', to: accountPath.value, label: t('nav.memberCenter'), match: ['/account', '/login'] },
+    { key: 'management', to: '/account/marketplace/management', label: t('nav.marketplaceManagement'), match: ['/account/marketplace/management'] },
+    { key: 'trend', to: '/trend', label: t('nav.trend'), match: ['/trend'] },
+    { key: 'notifications', to: '/notifications', label: t('nav.notifications'), match: ['/notifications'], isBell: true },
+  ];
+
+  return items;
+});
 
 const mobileNavigationItems = computed<NavigationItem[]>(() => [
-  ...primaryNavigationItems.value,
+  ...primaryNavigationItems.value.filter((item) => !item.isBell),
 ]);
 
 // 2. 判斷目前路由是否命中導航項
-const isRouteActive = (item: NavigationItem): boolean =>
-  item.match.some((path) => (path === '/' ? route.path === '/' : route.path.startsWith(path)));
+const isRouteActive = (item: NavigationItem): boolean => {
+  if (item.key === 'profile') {
+    return (
+      route.path === '/login' ||
+      (route.path.startsWith('/account') &&
+        !route.path.startsWith('/account/marketplace/settings') &&
+        !route.path.startsWith('/account/marketplace/management'))
+    );
+  }
 
-// 3. 切換主題與語系
-const handleThemeChange = (event: Event): void => {
-  const target = event.target as HTMLSelectElement;
-  preferenceStore.setTheme(target.value as AppThemeName);
+  return item.match.some((path) => (path === '/' ? route.path === '/' : route.path.startsWith(path)));
 };
 
-const handleLocaleChange = (event: Event): void => {
-  const target = event.target as HTMLSelectElement;
-  preferenceStore.setLocale(target.value as AppLocale);
+// 3. 切換主題：亮色 html-fidelity ↔ 深色 dark-neutral
+const handleThemeToggle = (): void => {
+  const nextTheme: AppThemeName = isDarkTheme.value ? 'html-fidelity' : 'dark-neutral';
+  preferenceStore.setTheme(nextTheme);
+  feedbackStore.pushToast(
+    nextTheme === 'dark-neutral' ? t('common.action.darkModeOn') : t('common.action.lightModeOn'),
+    'info',
+  );
 };
 
 // 4. 執行帳戶入口操作
@@ -105,7 +115,7 @@ watch(
       to="/"
       class="ajo-nav__logo"
     >
-      {{ t('common.brand.name') }}
+      AJO LIVING
     </RouterLink>
 
     <nav class="ajo-nav__links">
@@ -114,18 +124,21 @@ watch(
         :key="item.key"
         :to="item.to"
         class="ajo-nav__link"
-        :class="{ 'ajo-nav__link--active': isRouteActive(item) }"
+        :class="{ 'ajo-nav__link--active': isRouteActive(item), 'ajo-nav__link--bell': item.isBell }"
       >
-        <template v-if="item.key === 'notifications'">
+        <template v-if="item.isBell">
           <span
             class="ajo-nav__bell"
             :aria-label="item.label"
             :title="item.label"
           >
-            <AppIcon
-              name="bell"
-              :size="17"
-            />
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+              <path d="M10 21h4"></path>
+            </svg>
             <i v-if="notificationUnreadCount > 0" />
           </span>
         </template>
@@ -136,38 +149,6 @@ watch(
     </nav>
 
     <div class="ajo-nav__right">
-      <label class="ajo-nav__select">
-        <span>{{ t('common.action.switchTheme') }}</span>
-        <select
-          :value="preferenceStore.theme"
-          @change="handleThemeChange"
-        >
-          <option
-            v-for="option in themeOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
-      <label class="ajo-nav__select ajo-nav__select--compact">
-        <span>{{ t('common.action.switchLanguage') }}</span>
-        <select
-          :value="preferenceStore.locale"
-          @change="handleLocaleChange"
-        >
-          <option
-            v-for="option in localeOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
       <button
         type="button"
         class="ajo-nav__login"
@@ -178,14 +159,40 @@ watch(
 
       <button
         type="button"
+        class="ajo-nav__theme-toggle"
+        :title="isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark')"
+        :aria-label="isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark')"
+        :aria-pressed="isDarkTheme"
+        @click="handleThemeToggle"
+      >
+        <span
+          class="ajo-nav__theme-icon ajo-nav__theme-moon"
+          aria-hidden="true"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M21 14.2A8.6 8.6 0 0 1 9.8 3a7.4 7.4 0 1 0 11.2 11.2Z"></path>
+          </svg>
+        </span>
+        <span
+          class="ajo-nav__theme-icon ajo-nav__theme-sun"
+          aria-hidden="true"
+        >
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"></path>
+          </svg>
+        </span>
+      </button>
+
+      <button
+        type="button"
         class="ajo-nav__menu"
         :aria-label="t('nav.account')"
         @click="mobileDrawerOpen = true"
       >
-        <AppIcon
-          name="menu"
-          :size="18"
-        />
+        <span></span>
+        <span></span>
+        <span></span>
       </button>
     </div>
 
@@ -198,9 +205,9 @@ watch(
           <div class="ajo-mobile-menu__header">
             <RouterLink
               to="/"
-              class="ajo-nav__logo"
+              class="ajo-mobile-menu__logo"
             >
-              {{ t('common.brand.name') }}
+              AJO LIVING
             </RouterLink>
             <button
               type="button"
@@ -208,10 +215,12 @@ watch(
               :aria-label="t('common.action.close')"
               @click="mobileDrawerOpen = false"
             >
-              <AppIcon
-                name="close"
-                :size="20"
-              />
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6l-12 12" />
+              </svg>
             </button>
           </div>
 
@@ -228,37 +237,13 @@ watch(
           </nav>
 
           <div class="ajo-mobile-menu__footer">
-            <label class="ajo-mobile-menu__field">
-              <span>{{ t('common.action.switchTheme') }}</span>
-              <select
-                :value="preferenceStore.theme"
-                @change="handleThemeChange"
-              >
-                <option
-                  v-for="option in themeOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="ajo-mobile-menu__field">
-              <span>{{ t('common.action.switchLanguage') }}</span>
-              <select
-                :value="preferenceStore.locale"
-                @change="handleLocaleChange"
-              >
-                <option
-                  v-for="option in localeOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
+            <button
+              type="button"
+              class="ajo-mobile-menu__theme"
+              @click="handleThemeToggle"
+            >
+              {{ isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark') }}
+            </button>
 
             <button
               v-if="sessionStore.isAuthenticated"
@@ -295,7 +280,7 @@ watch(
   right: 0;
   left: 0;
   display: flex;
-  height: 48px;
+  height: var(--nav-h);
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -308,9 +293,9 @@ watch(
   flex: 0 0 auto;
   color: rgb(var(--color-text));
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -326,20 +311,25 @@ watch(
 
 .ajo-nav__link {
   display: inline-flex;
-  height: 48px;
+  height: var(--nav-h);
   align-items: center;
   border-bottom: 2px solid transparent;
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
+  color: rgb(var(--color-ink-3));
+  font-size: 12px;
   font-weight: 500;
-  padding: 0 8px;
+  padding: 0 10px;
   white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .ajo-nav__link:hover,
 .ajo-nav__link--active {
   border-bottom-color: rgb(var(--color-primary));
   color: rgb(var(--color-primary));
+}
+
+.ajo-nav__link--bell {
+  padding: 0 6px;
 }
 
 .ajo-nav__bell {
@@ -349,6 +339,17 @@ watch(
   height: 28px;
   align-items: center;
   justify-content: center;
+  color: rgb(var(--color-ink-3));
+}
+
+.ajo-nav__bell svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .ajo-nav__bell i {
@@ -359,7 +360,7 @@ watch(
   height: 7px;
   border: 1px solid rgb(var(--color-surface));
   border-radius: 999px;
-  background: #e11d48;
+  background: #e52b54;
 }
 
 .ajo-nav__right {
@@ -369,58 +370,95 @@ watch(
   gap: 8px;
 }
 
-.ajo-nav__select {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgb(var(--color-text-muted));
-  font-size: 10px;
-}
-
-.ajo-nav__select span {
-  position: absolute;
-  overflow: hidden;
-  width: 1px;
-  height: 1px;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.ajo-nav__select select {
-  height: 26px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text-muted));
-  font: inherit;
-  outline: none;
-  padding: 0 6px;
-}
-
 .ajo-nav__login {
-  height: 28px;
+  height: 30px;
   border: 1px solid rgb(var(--color-primary));
-  border-radius: 2px;
+  border-radius: var(--radius-md);
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 0 12px;
+  padding: 0 14px;
   white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.ajo-nav__login:hover {
+  background: rgb(var(--color-brand-dark));
+  border-color: rgb(var(--color-brand-dark));
+}
+
+.ajo-nav__theme-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  box-shadow: none;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.ajo-nav__theme-toggle:hover {
+  color: rgb(var(--color-primary));
+  transform: translateY(-1px);
+}
+
+.ajo-nav__theme-icon {
+  display: block;
+  width: 21px;
+  height: 21px;
+}
+
+.ajo-nav__theme-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.ajo-nav__theme-sun {
+  display: none;
+}
+
+html[data-theme='dark-neutral'] .ajo-nav__theme-moon {
+  display: none;
+}
+
+html[data-theme='dark-neutral'] .ajo-nav__theme-sun {
+  display: block;
 }
 
 .ajo-nav__menu {
   display: none;
+  flex-direction: column;
   width: 32px;
   height: 32px;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: var(--radius-md);
   background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  cursor: pointer;
+}
+
+.ajo-nav__menu span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: rgb(var(--color-text));
 }
 
 .ajo-mobile-menu {
@@ -434,11 +472,20 @@ watch(
 
 .ajo-mobile-menu__header {
   display: flex;
-  height: 48px;
+  height: var(--nav-h);
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgb(var(--color-border));
   padding: 0 16px;
+}
+
+.ajo-mobile-menu__logo {
+  color: rgb(var(--color-text));
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .ajo-mobile-menu__close {
@@ -448,9 +495,19 @@ watch(
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: var(--radius-md);
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
+  cursor: pointer;
+}
+
+.ajo-mobile-menu__close svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
 }
 
 .ajo-mobile-menu__body {
@@ -478,29 +535,25 @@ watch(
   padding: 16px 20px;
 }
 
-.ajo-mobile-menu__field {
-  display: grid;
-  gap: 5px;
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
-}
-
-.ajo-mobile-menu__field select {
-  height: 34px;
+.ajo-mobile-menu__theme {
+  height: 40px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-surface-muted));
   color: rgb(var(--color-text));
-  padding: 0 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
 }
 
 .ajo-mobile-menu__signout {
-  height: 36px;
+  height: 40px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: var(--radius-md);
   background: rgb(var(--color-surface-muted));
   color: rgb(var(--color-text));
   font-weight: 600;
+  cursor: pointer;
 }
 
 .ajo-bottom-nav {
@@ -519,13 +572,13 @@ watch(
 
 @media (max-width: 1023px) {
   .ajo-nav__links,
-  .ajo-nav__select,
-  .ajo-nav__login {
+  .ajo-nav__login,
+  .ajo-nav__theme-toggle {
     display: none;
   }
 
   .ajo-nav__menu {
-    display: inline-flex;
+    display: flex;
   }
 
   .ajo-bottom-nav {

@@ -258,6 +258,9 @@ func (s *POSPaymentService) QueryH5Order(ctx context.Context, userID int64, payl
 	if !h5OrderMatchesContext(detail, contextValue) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "payment order is not visible")
 	}
+	if err := s.creditPOSPaymentReward(ctx, userID, detail); err != nil {
+		return nil, err
+	}
 	return detail, nil
 }
 

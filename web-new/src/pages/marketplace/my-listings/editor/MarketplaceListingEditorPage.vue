@@ -115,22 +115,28 @@ const {
 <style scoped>
 .listing-editor-page {
   width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
+  max-width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 0.75rem 0 4rem;
   color: rgb(var(--color-text));
 }
 
 .listing-editor-heading {
-  margin-top: 0;
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  padding: 1rem;
 }
 
 .listing-editor-kicker {
-  margin: 0 0 0.7rem;
+  margin: 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -139,17 +145,17 @@ const {
   margin: 0;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1.45rem, 2.2vw, 1.9rem);
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.22;
 }
 
 .listing-editor-loading {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1rem;
   color: rgb(var(--color-text-muted));
   font-size: 0.875rem;
 }
@@ -157,15 +163,16 @@ const {
 .listing-editor-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 2rem;
+  gap: 1rem;
   align-items: start;
-  margin-top: 2rem;
+  margin-top: 1rem;
   min-width: 0;
 }
 
 @media (max-width: 767px) {
   .listing-editor-page {
-    padding: 0;
+    max-width: none;
+    padding: 1rem var(--layout-page-padding-inline) 4rem;
   }
 }
 

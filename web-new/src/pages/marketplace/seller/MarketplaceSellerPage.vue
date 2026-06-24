@@ -96,44 +96,43 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 .seller-page {
   display: grid;
   width: 100%;
-  max-width: var(--layout-page-max-width);
+  max-width: 1180px;
   min-height: calc(100vh - var(--app-header-offset, 0rem));
-  gap: 2rem;
+  gap: 1rem;
   margin: 0 auto;
-  padding: 4rem var(--layout-page-padding-inline);
+  padding: 0.75rem var(--layout-page-padding-inline) 4rem;
   color: rgb(var(--color-text));
 }
 
 .seller-profile,
 .seller-results {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
-  box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
 }
 
 .seller-profile {
   align-content: start;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .seller-avatar {
   display: grid;
-  width: 4.5rem;
-  height: 4.5rem;
+  width: 3.4rem;
+  height: 3.4rem;
   place-items: center;
-  border-radius: 999px;
+  border-radius: 2px;
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.15rem;
 }
 
 .seller-kicker {
-  margin: 1.5rem 0 0;
+  margin: 1rem 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: 800;
   letter-spacing: 0.1em;
   line-height: 1;
   text-transform: uppercase;
@@ -143,34 +142,35 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 .seller-results__header h2 {
   margin: 0.75rem 0 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
   font-weight: 500;
-  line-height: 1.1;
+  line-height: 1.18;
 }
 
 .seller-profile p:not(.seller-kicker) {
   margin-top: 1rem;
   color: rgb(var(--color-text-muted));
-  line-height: 1.75;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 
 .seller-stats {
   display: grid;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .seller-stats div {
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
-  padding: 1rem;
+  border-radius: 2px;
+  padding: 0.8rem;
 }
 
 .seller-stats strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 1.45rem;
   color: rgb(var(--color-primary));
 }
 
@@ -180,7 +180,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 }
 
 .seller-results {
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
 .seller-results__header {
@@ -188,7 +188,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
   gap: 1rem;
   align-items: center;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding-bottom: 1.5rem;
+  padding-bottom: 1rem;
 }
 
 .seller-contact {
@@ -197,7 +197,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 999px;
+  border-radius: 2px;
   background: rgb(var(--color-primary));
   padding: 0.6rem 1rem;
   color: rgb(var(--color-primary-contrast));
@@ -207,20 +207,19 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 
 .seller-grid {
   display: grid;
-  gap: 1.25rem;
-  margin-top: 1.5rem;
+  gap: 0.9rem;
+  margin-top: 1rem;
 }
 
 .seller-card {
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface-raised));
-  box-shadow: 0 4px 24px rgb(0 0 0 / 0.03);
 }
 
 .seller-card__media {
-  height: 12rem;
+  height: 10rem;
   overflow: hidden;
   background: rgb(var(--color-surface-muted));
 }
@@ -229,28 +228,24 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.seller-card:hover img {
-  transform: scale(1.05);
 }
 
 .seller-card__body {
-  padding: 1.25rem;
+  padding: 0.9rem;
 }
 
 .seller-card__body h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 0.95rem;
   color: rgb(var(--color-text));
 }
 
 .seller-card__body p {
   margin-top: 0.5rem;
   color: rgb(var(--color-text-muted));
-  line-height: 1.65;
+  font-size: 0.8125rem;
+  line-height: 1.55;
 }
 
 .seller-card__body strong {
@@ -258,7 +253,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
   margin-top: 1rem;
   color: rgb(var(--color-primary));
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1rem;
 }
 
 @media (min-width: 768px) {
@@ -273,18 +268,18 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 
 @media (min-width: 1024px) {
   .seller-page {
-    grid-template-columns: 20rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
   }
 
   .seller-profile {
     position: sticky;
-    top: calc(var(--app-header-offset, 0rem) + 2rem);
+    top: calc(var(--app-header-offset, 0rem) + 1rem);
   }
 }
 
 @media (max-width: 767px) {
   .seller-page {
-    padding: 2.5rem var(--layout-page-padding-inline);
+    padding: 1rem var(--layout-page-padding-inline) 4rem;
   }
 }
 </style>

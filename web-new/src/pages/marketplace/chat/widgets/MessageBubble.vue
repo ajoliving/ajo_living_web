@@ -100,9 +100,8 @@ const formattedTime = computed(() =>
 .message-bubble {
   width: fit-content;
   max-width: min(76%, 34rem);
-  border-radius: 0.75rem;
-  box-shadow: 0 12px 28px rgb(15 23 42 / 0.08);
-  padding: 0.72rem 0.9rem 0.82rem;
+  border-radius: 2px;
+  padding: 0.65rem 0.8rem 0.72rem;
 }
 
 .message-bubble--self {
@@ -136,24 +135,23 @@ const formattedTime = computed(() =>
   margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  font-size: 0.9rem;
-  line-height: 1.65;
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 .notice-card {
   width: min(100%, 24rem);
   border: 1px solid rgb(var(--color-border) / 0.72);
-  border-radius: 0.75rem;
+  border-radius: 2px;
   background: rgb(var(--color-surface));
-  padding: 1rem;
+  padding: 0.9rem;
   text-align: left;
-  box-shadow: 0 14px 36px rgb(15 23 42 / 0.08);
 }
 
 .notice-card__title {
   margin: 0;
   color: rgb(var(--color-text));
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 800;
   line-height: 1.5;
 }
@@ -161,15 +159,15 @@ const formattedTime = computed(() =>
 .notice-card__body {
   margin: 0.45rem 0 0;
   color: rgb(var(--color-text-muted));
-  font-size: 0.9rem;
-  line-height: 1.65;
+  font-size: 0.8125rem;
+  line-height: 1.55;
 }
 
 .notice-card__action {
   display: inline-flex;
   margin-top: 0.85rem;
   color: rgb(var(--color-primary));
-  font-size: 0.9rem;
+  font-size: 0.8125rem;
   font-weight: 800;
 }
 

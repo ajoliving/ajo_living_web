@@ -43,10 +43,18 @@ const isActiveRoute = (path: string): boolean =>
 <template>
   <main class="profile-shell">
     <aside class="profile-shell__sidebar">
-      <div>
+      <div class="profile-shell__heading">
         <h1>{{ t('account.profile.title') }}</h1>
         <p>{{ t('account.profile.description') }}</p>
       </div>
+
+      <section class="profile-shell__role-card">
+        <span class="profile-shell__role-label">{{ t('account.profile.accountRole') }}</span>
+        <strong class="profile-shell__role-value">{{ t('account.profile.primaryOwner') }}</strong>
+        <p class="profile-shell__role-text">{{ t('account.profile.manageDescription') }}</p>
+      </section>
+
+      <div class="profile-shell__nav-heading">{{ t('account.profile.accountSection') }}</div>
 
       <nav class="profile-shell__nav">
         <RouterLink
@@ -202,6 +210,120 @@ const isActiveRoute = (path: string): boolean =>
 @media (max-width: 767px) {
   .profile-shell {
     padding: 18px var(--layout-page-padding-inline) 96px;
+  }
+}
+
+.profile-shell {
+  max-width: min(1240px, calc(100vw - 32px));
+  gap: 18px;
+  padding: 10px 0 72px;
+}
+
+.profile-shell__sidebar {
+  gap: 18px;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.profile-shell__heading {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-shell__sidebar h1 {
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.profile-shell__sidebar p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.profile-shell__role-card {
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid rgb(var(--color-primary));
+  background: rgb(var(--color-surface-raised));
+  padding: 12px 14px;
+}
+
+.profile-shell__role-label,
+.profile-shell__nav-heading {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-shell__role-value {
+  color: rgb(var(--color-text));
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.profile-shell__role-text {
+  font-size: 12px;
+}
+
+.profile-shell__nav {
+  gap: 8px;
+}
+
+.profile-shell__nav-item {
+  min-height: 42px;
+  gap: 10px;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: rgb(var(--color-text) / 0.82);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.profile-shell__nav-item:hover {
+  border-color: rgb(var(--color-primary) / 0.45);
+}
+
+.profile-shell__nav-item--active,
+.profile-shell__nav-item--active:hover {
+  background: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
+}
+
+.profile-shell__nav-item::after,
+.profile-shell__nav-item--active::after {
+  display: none;
+}
+
+.profile-shell__content {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 1024px) {
+  .profile-shell {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .profile-shell__sidebar {
+    top: 72px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .profile-shell {
+    max-width: 100%;
+    padding-bottom: 96px;
+  }
+
+  .profile-shell__nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .profile-shell__nav {
+    grid-template-columns: 1fr;
   }
 }
 </style>

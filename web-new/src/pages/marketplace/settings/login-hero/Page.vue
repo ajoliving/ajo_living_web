@@ -418,4 +418,67 @@ const {
     width: 100%;
   }
 }
+
+.login-hero-page,
+.login-hero-list {
+  gap: 0.9rem;
+}
+
+.login-hero-header h2 {
+  font-size: clamp(1.4rem, 1.9vw, 2rem);
+  font-weight: 600;
+  line-height: 1.18;
+}
+
+.login-hero-header p:not(.login-hero-kicker),
+.login-hero-spec {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.login-hero-kicker {
+  font-size: 0.7rem;
+}
+
+.login-hero-panel,
+.login-hero-button,
+.login-hero-upload,
+.login-hero-mini-button,
+.login-hero-field input {
+  border-radius: 2px;
+}
+
+.login-hero-form {
+  padding: 0.9rem;
+}
+
+.login-hero-button {
+  min-height: 2.45rem;
+  font-size: 0.8125rem;
+}
+
+.login-hero-upload {
+  min-height: 2.25rem;
+  font-size: 0.78rem;
+}
+
+.login-hero-mini-button {
+  min-height: 1.9rem;
+  font-size: 0.72rem;
+}
+
+.login-hero-form__top p {
+  font-size: 0.875rem;
+}
+
+.login-hero-field span,
+.login-hero-object span,
+.login-hero-object code {
+  font-size: 0.72rem;
+}
+
+.login-hero-field input {
+  padding: 0.65rem;
+  font-size: 0.875rem;
+}
 </style>

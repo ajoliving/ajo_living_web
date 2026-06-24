@@ -5,6 +5,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
+import FurnitureDetailPage from '@/pages/furniture/detail/FurnitureDetailPage.vue';
 import FurniturePage from '@/pages/furniture/Page.vue';
 import SupermarketOffersPage from '@/pages/offers/Page.vue';
 
@@ -14,6 +15,12 @@ export const channelRoutes: RouteRecordRaw[] = [
     path: '/furniture',
     name: 'Furniture',
     component: FurniturePage,
+    meta: { titleKey: 'nav.furniture' },
+  },
+  {
+    path: '/furniture/:listingId',
+    name: 'FurnitureDetail',
+    component: FurnitureDetailPage,
     meta: { titleKey: 'nav.furniture' },
   },
   {

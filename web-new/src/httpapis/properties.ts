@@ -7,6 +7,7 @@ import httpClient from '@/httpapis';
 import type { ApiResponse, PaginatedResult } from '@/model/api';
 import type {
   ContactAccessResult,
+  PropertyAddressSuggestion,
   PropertyListParams,
   PropertyListingDetailResponse,
   PropertyListingSummaryResponse,
@@ -73,27 +74,34 @@ export const fetchPropertySaleContactAccess = (listingId: string) =>
     `/property-sales/${listingId}/contact-access`,
   );
 
-// 11. 查詢公開服務式住宅列表
+// 11. 查詢樓盤地址聯想
+export const searchPropertyAddresses = (params: { keyword: string; district_code?: string; limit?: number }) =>
+  httpClient.get<ApiResponse<PropertyAddressSuggestion[]>>(
+    '/property-addresses/search',
+    { params },
+  );
+
+// 12. 查詢公開服務式住宅列表
 export const fetchServicedApartmentListings = (params: PropertyListParams = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<PropertyListingSummaryResponse>>>(
     '/serviced-apartments',
     { params },
   );
 
-// 12. 取得服務式住宅詳情
+// 13. 取得服務式住宅詳情
 export const fetchServicedApartmentDetail = (listingId: string) =>
   httpClient.get<ApiResponse<PropertyListingDetailResponse>>(
     `/serviced-apartments/${listingId}`,
   );
 
-// 13. 建立服務式住宅草稿
+// 14. 建立服務式住宅草稿
 export const createServicedApartment = (payload: UpsertServicedApartmentPayload) =>
   httpClient.post<ApiResponse<PropertyListingDetailResponse>>(
     '/serviced-apartments',
     payload,
   );
 
-// 14. 更新服務式住宅
+// 15. 更新服務式住宅
 export const updateServicedApartment = (
   listingId: string,
   payload: UpsertServicedApartmentPayload,
@@ -103,32 +111,32 @@ export const updateServicedApartment = (
     payload,
   );
 
-// 15. 發布服務式住宅
+// 16. 發布服務式住宅
 export const publishServicedApartment = (listingId: string) =>
   httpClient.post<ApiResponse<PropertyListingDetailResponse>>(
     `/serviced-apartments/${listingId}/publish`,
   );
 
-// 16. 重新發布服務式住宅
+// 17. 重新發布服務式住宅
 export const republishServicedApartment = (listingId: string) =>
   httpClient.post<ApiResponse<PropertyListingDetailResponse>>(
     `/serviced-apartments/${listingId}/republish`,
   );
 
-// 17. 下架服務式住宅
+// 18. 下架服務式住宅
 export const deactivateServicedApartment = (listingId: string) =>
   httpClient.post<ApiResponse<{ listing_id: string; publication_status: string }>>(
     `/serviced-apartments/${listingId}/deactivate`,
   );
 
-// 18. 取得我的服務式住宅
+// 19. 取得我的服務式住宅
 export const fetchMyServicedApartmentListings = (params: PropertyListParams = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<PropertyListingSummaryResponse>>>(
     '/me/serviced-apartments',
     { params },
   );
 
-// 19. 解鎖服務式住宅聯絡方式
+// 20. 解鎖服務式住宅聯絡方式
 export const fetchServicedApartmentContactAccess = (listingId: string) =>
   httpClient.post<ApiResponse<ContactAccessResult>>(
     `/serviced-apartments/${listingId}/contact-access`,
