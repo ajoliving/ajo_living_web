@@ -14,7 +14,7 @@ type Notification struct {
 	UserID          int64      `gorm:"not null;index:idx_notifications_user_read_created,priority:1" json:"user_id"`
 	Category        string     `gorm:"type:varchar(64);not null;index" json:"category"`
 	Title           string     `gorm:"type:varchar(200);not null" json:"title"`
-	Body            string     `gorm:"type:varchar(500);not null" json:"body"`
+	Body            string     `gorm:"type:varchar(1000);not null" json:"body"`
 	RelatedType     string     `gorm:"type:varchar(64)" json:"related_type"`
 	RelatedPublicID string     `gorm:"type:varchar(64)" json:"related_public_id"`
 	IsRead          bool       `gorm:"not null;default:false;index:idx_notifications_user_read_created,priority:2" json:"is_read"`

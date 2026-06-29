@@ -112,6 +112,7 @@ func buildChatListingSummary(row chatListRow, cover *ListingImageResponse) *Chat
 
 	return &ChatListingSummary{
 		ListingID:      row.ListingPublicID,
+		BizModule:      row.BizModule,
 		Title:          row.Title,
 		Summary:        row.Summary,
 		PublishedAt:    publishedAt,
@@ -144,4 +145,46 @@ func safeUserDisplayName(profile *UserPreviewResponse, fallback string) string {
 // 10. fmtInt64 converts int64 to string.
 func fmtInt64(value int64) string {
 	return strconv.FormatInt(value, 10)
+}
+
+// 11. loadChatListingImages loads listing images for all chat modules.
+func (s *ChatService) loadChatListingImages(ctx context.Context, listingIDs []int64) (map[int64][]ListingImageResponse, error) {
+	result := make(map[int64][]ListingImageResponse)
+	if len(listingIDs) == 0 {
+		return result, nil
+	}
+
+	var images []model.ListingImage
+	if err := s.runtime.DB.WithContext(ctx).Where("listing_id IN ?", listingIDs).Order("sort_order asc").Find(&images).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load listing images")
+	}
+
+	assetIDs := make([]int64, 0, len(images))
+	for _, image := range images {
+		assetIDs = append(assetIDs, image.MediaAssetID)
+	}
+
+	var assets []model.MediaAsset
+	if len(assetIDs) > 0 {
+		if err := s.runtime.DB.WithContext(ctx).Where("id IN ?", assetIDs).Find(&assets).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load media assets")
+		}
+	}
+
+	assetMap := make(map[int64]model.MediaAsset, len(assets))
+	for _, asset := range assets {
+		assetMap[asset.ID] = asset
+	}
+
+	for _, image := range images {
+		asset := assetMap[image.MediaAssetID]
+		result[image.ListingID] = append(result[image.ListingID], ListingImageResponse{
+			MediaAssetID: asset.PublicID,
+			URL:          buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey),
+			SortOrder:    image.SortOrder,
+			IsCover:      image.IsCover,
+		})
+	}
+
+	return result, nil
 }

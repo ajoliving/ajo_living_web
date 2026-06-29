@@ -177,6 +177,7 @@ const {
             {{ updatingFavorite ? t('common.status.loading') : isFavorited ? t('marketplace.detail.favoritedAction') : t('marketplace.detail.favoriteAction') }}
           </button>
           <button
+            v-if="listing.contact_summary.show_chat"
             type="button"
             class="detail-action detail-action--primary"
             :disabled="openingChat"

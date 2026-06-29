@@ -2,7 +2,7 @@
  * Chat business logic.
  * 1. Create or reuse listing-scoped chats.
  * 2. Persist messages and unread state.
- * 3. Enforce participant and listing access checks.
+ * 3. Enforce participant and listing access checks across listing modules.
  */
 package service
 
@@ -38,12 +38,14 @@ type defaultNoticeMessage struct {
 type ChatService struct {
 	runtime           *Runtime
 	secondhandService *SecondhandService
+	propertyService   *PropertyService
 }
 
 // 2. chatListRow defines the internal chat list query row.
 type chatListRow struct {
 	UnreadCount        int
 	ChatPublicID       string
+	BizModule          string
 	ChatType           string
 	LastMessagePreview string
 	LastMessageAt      *time.Time
@@ -58,21 +60,22 @@ type chatListRow struct {
 }
 
 // 3. NewChatService creates a chat service instance.
-func NewChatService(runtime *Runtime, secondhandService *SecondhandService) *ChatService {
+func NewChatService(runtime *Runtime, secondhandService *SecondhandService, propertyService *PropertyService) *ChatService {
 	return &ChatService{
 		runtime:           runtime,
 		secondhandService: secondhandService,
+		propertyService:   propertyService,
 	}
 }
 
-// 4. CreateOrReuseChat creates or reuses a listing chat for the current user.
+// 4. CreateOrReuseChat creates or reuses a secondhand listing chat for the current user.
 func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, communityID *int64, listingPublicID string) (map[string]any, error) {
-	listing, secondhand, _, err := s.secondhandService.loadListingByPublicID(ctx, listingPublicID)
+	listing, secondhand, contact, err := s.secondhandService.loadListingByPublicID(ctx, listingPublicID)
 	if err != nil {
 		return nil, err
 	}
 	if listing.OwnerUserID == userID {
-		return nil, errcode.New(errcode.CodeValidationError, "seller cannot start a chat with the same listing")
+		return nil, errcode.New(errcode.CodeValidationError, "publisher cannot start a chat with the same listing")
 	}
 	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for chat")
@@ -80,9 +83,36 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 	if !s.secondhandService.canViewListing(listing, secondhand, communityID) {
 		return nil, errcode.New(errcode.CodeVisibilityForbidden, "listing is not visible to the current user")
 	}
+	if !contact.ShowChat {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "chat is not enabled for this listing")
+	}
 
+	return s.createOrReuseListingChat(ctx, userID, listing, "secondhand")
+}
+
+// 5. CreateOrReusePropertyChat creates or reuses a property listing chat.
+func (s *ChatService) CreateOrReusePropertyChat(ctx context.Context, channel PropertyChannel, userID int64, listingPublicID string) (map[string]any, error) {
+	listing, contact, err := s.propertyService.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
+	if err != nil {
+		return nil, err
+	}
+	if listing.OwnerUserID == userID {
+		return nil, errcode.New(errcode.CodeValidationError, "publisher cannot start a chat with the same listing")
+	}
+	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for chat")
+	}
+	if !contact.ShowChat {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "chat is not enabled for this listing")
+	}
+
+	return s.createOrReuseListingChat(ctx, userID, listing, string(channel))
+}
+
+// 6. createOrReuseListingChat creates the shared chat aggregate.
+func (s *ChatService) createOrReuseListingChat(ctx context.Context, userID int64, listing *model.Listing, bizModule string) (map[string]any, error) {
 	var chat model.Chat
-	err = s.runtime.DB.WithContext(ctx).Where("listing_id = ? AND created_by = ?", listing.ID, userID).First(&chat).Error
+	err := s.runtime.DB.WithContext(ctx).Where("listing_id = ? AND created_by = ?", listing.ID, userID).First(&chat).Error
 	if err == nil {
 		return map[string]any{"chat_id": chat.PublicID, "is_new": false}, nil
 	}
@@ -92,7 +122,7 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 
 	chat = model.Chat{
 		PublicID:  utils.NewPublicID(),
-		BizModule: "secondhand",
+		BizModule: strings.TrimSpace(bizModule),
 		ListingID: listing.ID,
 		ChatType:  chatTypeDirectListing,
 		CreatedBy: userID,
@@ -106,8 +136,8 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 		}
 
 		participants := []model.ChatParticipant{
-			{ChatID: chat.ID, UserID: userID, RoleInChat: "buyer", UnreadCount: 0, JoinedAt: s.runtime.Now()},
-			{ChatID: chat.ID, UserID: listing.OwnerUserID, RoleInChat: "owner", UnreadCount: 0, JoinedAt: s.runtime.Now()},
+			{ChatID: chat.ID, UserID: userID, RoleInChat: "inquirer", UnreadCount: 0, JoinedAt: s.runtime.Now()},
+			{ChatID: chat.ID, UserID: listing.OwnerUserID, RoleInChat: "publisher", UnreadCount: 0, JoinedAt: s.runtime.Now()},
 		}
 		return tx.Create(&participants).Error
 	}); err != nil {
@@ -117,7 +147,7 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 	return map[string]any{"chat_id": chat.PublicID, "is_new": true}, nil
 }
 
-// 5. ListChats returns chats for the current user.
+// 7. ListChats returns chats for the current user.
 func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pageSize int) ([]ChatSummary, *model.Pagination, error) {
 	if _, err := s.ensureSystemNoticeChat(ctx, userID); err != nil {
 		return nil, nil, err
@@ -125,7 +155,7 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 
 	page, pageSize = normalizePagination(page, pageSize)
 	baseQuery := s.runtime.DB.WithContext(ctx).Table("chat_participants").
-		Select("chat_participants.unread_count, chats.public_id AS chat_public_id, chats.chat_type, chats.last_message_preview, chats.last_message_at, listings.public_id AS listing_public_id, listings.title, listings.summary, listings.id AS listing_id, listings.business_status, listings.published_at, secondhand_listings.price_mode, secondhand_listings.price_hkd").
+		Select("chat_participants.unread_count, chats.public_id AS chat_public_id, chats.biz_module, chats.chat_type, chats.last_message_preview, chats.last_message_at, listings.public_id AS listing_public_id, listings.title, listings.summary, listings.id AS listing_id, listings.business_status, listings.published_at, secondhand_listings.price_mode, secondhand_listings.price_hkd").
 		Joins("JOIN chats ON chats.id = chat_participants.chat_id").
 		Joins("LEFT JOIN listings ON listings.id = chats.listing_id").
 		Joins("LEFT JOIN secondhand_listings ON secondhand_listings.listing_id = listings.id").
@@ -146,7 +176,7 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load chats")
 	}
 
-	imageMap, err := s.secondhandService.loadListingImages(ctx, extractListingIDs(rows))
+	imageMap, err := s.loadChatListingImages(ctx, extractListingIDs(rows))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,6 +211,7 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 			ChatID:             item.ChatPublicID,
 			ListingID:          item.ListingPublicID,
 			ListingTitle:       item.Title,
+			BizModule:          item.BizModule,
 			ChatType:           item.ChatType,
 			LastMessagePreview: item.LastMessagePreview,
 			LastMessageAt:      lastMessageAt,
@@ -194,7 +225,7 @@ func (s *ChatService) ListChats(ctx context.Context, userID int64, page int, pag
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 6. GetChat returns a single chat summary with participant data.
+// 8. GetChat returns a single chat summary with participant data.
 func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID string) (*ChatDetail, error) {
 	chat, listing, _, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
 	if err != nil {
@@ -216,13 +247,14 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 
 	result := &ChatDetail{
 		ChatID:       chat.PublicID,
+		BizModule:    chat.BizModule,
 		ChatType:     chat.ChatType,
 		CreatedAt:    chat.CreatedAt.UTC().Format(time.RFC3339),
 		Peer:         peerMap[chat.PublicID],
 		Participants: make([]ChatMember, 0, len(participants)),
 	}
 	if chat.ChatType != chatTypeSystemNotice {
-		images, imageErr := s.secondhandService.loadListingImages(ctx, []int64{listing.ID})
+		images, imageErr := s.loadChatListingImages(ctx, []int64{listing.ID})
 		if imageErr != nil {
 			return nil, imageErr
 		}
@@ -230,6 +262,7 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 		result.ListingTitle = listing.Title
 		result.Listing = buildChatListingSummary(chatListRow{
 			ListingPublicID: listing.PublicID,
+			BizModule:       chat.BizModule,
 			Title:           listing.Title,
 			Summary:         listing.Summary,
 			BusinessStatus:  listing.BusinessStatus,
@@ -249,7 +282,7 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 	return result, nil
 }
 
-// 7. ListMessages returns messages for a chat the current user belongs to.
+// 9. ListMessages returns messages for a chat the current user belongs to.
 func (s *ChatService) ListMessages(ctx context.Context, userID int64, chatPublicID string, page int, pageSize int) ([]MessageResponse, *model.Pagination, error) {
 	chat, _, _, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
 	if err != nil {
@@ -286,7 +319,7 @@ func (s *ChatService) ListMessages(ctx context.Context, userID int64, chatPublic
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 8. SendMessage creates a new text message in the target chat.
+// 10. SendMessage creates a new text message in the target chat.
 func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicID string, content string) (*MessageResponse, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -368,7 +401,7 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	}, nil
 }
 
-// 9. PublishSystemNotice sends one read-only notice card to every active member.
+// 11. PublishSystemNotice sends one read-only notice card to every active member.
 func (s *ChatService) PublishSystemNotice(ctx context.Context, params SystemNoticePublishParams) (*SystemNoticePublishResult, error) {
 	title := strings.TrimSpace(params.Title)
 	body := strings.TrimSpace(params.Body)
@@ -398,6 +431,7 @@ func (s *ChatService) PublishSystemNotice(ctx context.Context, params SystemNoti
 
 	delivered := 0
 	noticeContent := title + "\n" + body
+	notificationService := NewNotificationService(s.runtime)
 	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, user := range users {
 			chat, err := s.ensureSystemNoticeChatWithDB(ctx, tx, user.ID, systemUser)
@@ -436,6 +470,16 @@ func (s *ChatService) PublishSystemNotice(ctx context.Context, params SystemNoti
 				Error; err != nil {
 				return err
 			}
+			if err := notificationService.CreateNotification(ctx, tx, CreateNotificationParams{
+				UserID:          user.ID,
+				Category:        chatTypeSystemNotice,
+				Title:           title,
+				Body:            body,
+				RelatedType:     "chat",
+				RelatedPublicID: chat.PublicID,
+			}); err != nil {
+				return err
+			}
 
 			delivered++
 		}
@@ -448,7 +492,7 @@ func (s *ChatService) PublishSystemNotice(ctx context.Context, params SystemNoti
 	return &SystemNoticePublishResult{DeliveredCount: delivered}, nil
 }
 
-// 10. MarkRead clears unread count for the current participant.
+// 12. MarkRead clears unread count for the current participant.
 func (s *ChatService) MarkRead(ctx context.Context, userID int64, chatPublicID string) error {
 	chat, _, participant, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
 	if err != nil {
@@ -473,7 +517,7 @@ func (s *ChatService) MarkRead(ctx context.Context, userID int64, chatPublicID s
 	return nil
 }
 
-// 11. loadAuthorizedChat loads a chat and validates membership.
+// 13. loadAuthorizedChat loads a chat and validates membership.
 func (s *ChatService) loadAuthorizedChat(ctx context.Context, userID int64, chatPublicID string) (*model.Chat, *model.Listing, *model.ChatParticipant, error) {
 	var chat model.Chat
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", chatPublicID).First(&chat).Error; err != nil {
@@ -501,7 +545,7 @@ func (s *ChatService) loadAuthorizedChat(ctx context.Context, userID int64, chat
 	return &chat, &listing, &participant, nil
 }
 
-// 12. ensureSystemNoticeChat creates a read-only system notice chat for a user.
+// 14. ensureSystemNoticeChat creates a read-only system notice chat for a user.
 func (s *ChatService) ensureSystemNoticeChat(ctx context.Context, userID int64) (*model.Chat, error) {
 	systemUser, err := s.loadSystemNotificationUser(ctx)
 	if err != nil {
@@ -511,7 +555,7 @@ func (s *ChatService) ensureSystemNoticeChat(ctx context.Context, userID int64) 
 	return s.ensureSystemNoticeChatWithDB(ctx, s.runtime.DB, userID, systemUser)
 }
 
-// 13. ensureSystemNoticeChatWithDB creates a system notice chat with the provided DB handle.
+// 15. ensureSystemNoticeChatWithDB creates a system notice chat with the provided DB handle.
 func (s *ChatService) ensureSystemNoticeChatWithDB(ctx context.Context, db *gorm.DB, userID int64, systemUser *model.User) (*model.Chat, error) {
 	if systemUser.ID == userID {
 		return nil, nil
@@ -574,7 +618,7 @@ func (s *ChatService) ensureSystemNoticeChatWithDB(ctx context.Context, db *gorm
 	return &chat, nil
 }
 
-// 14. loadSystemNotificationUser returns the built-in notification sender.
+// 16. loadSystemNotificationUser returns the built-in notification sender.
 func (s *ChatService) loadSystemNotificationUser(ctx context.Context) (*model.User, error) {
 	var user model.User
 	if err := s.runtime.DB.WithContext(ctx).
@@ -587,7 +631,7 @@ func (s *ChatService) loadSystemNotificationUser(ctx context.Context) (*model.Us
 	return &user, nil
 }
 
-// 15. defaultSystemNoticeMessages returns initial read-only announcement cards.
+// 17. defaultSystemNoticeMessages returns initial read-only announcement cards.
 func defaultSystemNoticeMessages(now time.Time) []defaultNoticeMessage {
 	return []defaultNoticeMessage{
 		{

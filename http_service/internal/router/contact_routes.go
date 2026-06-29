@@ -1,7 +1,7 @@
 /*
  * Contact route registration.
  * 1. Register rate-limited contact access routes for listing and property modules.
- * 2. Register the source listing chat entry route.
+ * 2. Register source listing chat entry routes.
  */
 package router
 
@@ -52,4 +52,6 @@ func registerContactRoutes(
 		propertyHandler.ContactAccessServicedApartment,
 	)
 	api.POST("/listings/:listingId/chats", requireAuth, chatHandler.CreateOrReuse)
+	api.POST("/property-sales/:listingId/chats", requireAuth, chatHandler.CreateOrReusePropertySale)
+	api.POST("/serviced-apartments/:listingId/chats", requireAuth, chatHandler.CreateOrReuseServicedApartment)
 }

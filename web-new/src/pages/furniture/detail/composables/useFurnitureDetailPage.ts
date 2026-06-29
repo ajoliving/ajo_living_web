@@ -1,7 +1,7 @@
 /*
- * 二手帖子詳情頁 - 狀態與資料。
- * 1. 讀取真實帖子詳情並格式化展示欄位。
- * 2. 處理聯絡方式授權與建立聊天會話。
+ * 家具詳情 - 狀態與資料。
+ * 1. 讀取真實二手帖子詳情並輸出家具詳情展示欄位。
+ * 2. 管理圖片選取、收藏、聯絡方式授權與站內聊天入口。
  */
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
@@ -22,17 +22,48 @@ import {
 } from '@/constants/marketplace';
 import type { ContactAccessResult, SecondhandListingDetailResponse } from '@/model/marketplace';
 import { useFeedbackStore } from '@/stores/feedback';
-import { useSessionStore } from '@/stores/session';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import { formatDate, formatPrice } from '@/utils/format';
 import {
   getDeliveryTagTranslationKey,
+  resolveListingCommunityName,
   resolveListingImages,
   resolveListingOwnerName,
 } from '@/utils/marketplace';
 
-// 1. 管理帖子詳情頁資料與動作
-export const useMarketplaceListingPage = () => {
+interface ContactDisplayRow {
+  key: string;
+  label: string;
+  value: string;
+  href: string;
+  isWhatsApp: boolean;
+}
+
+// 1. 建立電話撥號連結
+const buildPhoneHref = (phone: string): string => {
+  const normalizedPhone = phone.replace(/\s+/g, '');
+
+  return normalizedPhone ? `tel:${normalizedPhone}` : '';
+};
+
+// 2. 建立 WhatsApp 跳轉連結
+const buildWhatsAppHref = (value: string): string => {
+  if (value.startsWith('https://wa.me/')) {
+    return value;
+  }
+
+  const digits = value.replace(/[+\s\-()]/g, '');
+
+  return digits ? `https://wa.me/${digits}` : '';
+};
+
+// 3. 判斷聯絡方式類型
+const isWhatsAppContact = (key: string): boolean =>
+  key === 'whatsapp_url' || key === 'whatsapp';
+
+// 4. 管理家具詳情資料與動作
+export const useFurnitureDetailPage = () => {
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
@@ -68,19 +99,51 @@ export const useMarketplaceListingPage = () => {
   const districtLabel = computed(() =>
     listing.value ? getMarketplaceDistrictLabel(listing.value.district_code, preferenceStore.locale) : '',
   );
+  const communityName = computed(() =>
+    listing.value ? resolveListingCommunityName(listing.value) : '',
+  );
   const ownerName = computed(() => listing.value ? resolveListingOwnerName(listing.value) : '');
-  const ownerAvatarUrl = computed(() => listing.value?.owner?.avatar_url ?? '');
   const publishedAt = computed(() =>
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );
-  const contactPayload = computed(() => contactAccess.value?.contact_payload ?? {});
   const isFavorited = computed(() => Boolean(listing.value?.is_favorited));
+  const contactPayload = computed(() => contactAccess.value?.contact_payload ?? {});
+  const contactRows = computed<ContactDisplayRow[]>(() =>
+    Object.entries(contactPayload.value)
+      .filter(([, value]) => Boolean(value))
+      .map(([key, value]) => ({
+        key,
+        label: resolveContactLabel(key),
+        value,
+        href: isWhatsAppContact(key) ? buildWhatsAppHref(value) : buildPhoneHref(value),
+        isWhatsApp: isWhatsAppContact(key),
+      })),
+  );
+  const revealContactLabel = computed(() =>
+    contactRows.value.length > 0
+      ? t('marketplace.detail.contactUnlockedAction')
+      : t('common.action.revealContact'),
+  );
+
   const formatDeliveryTag = (tag: string): string => {
     const translationKey = getDeliveryTagTranslationKey(tag);
+
     return translationKey ? t(translationKey) : tag;
   };
 
-  // 1.1 讀取帖子詳情
+  // 4.1 輸出聯絡方式欄位標籤
+  const resolveContactLabel = (key: string): string => {
+    if (key === 'phone') {
+      return t('marketplace.detail.contactPhone');
+    }
+    if (key === 'whatsapp_url' || key === 'whatsapp') {
+      return t('marketplace.detail.contactWhatsApp');
+    }
+
+    return key;
+  };
+
+  // 4.2 讀取帖子詳情
   const loadListing = async (): Promise<void> => {
     if (!listingId.value) {
       return;
@@ -94,7 +157,7 @@ export const useMarketplaceListingPage = () => {
       selectedImageIndex.value = 0;
     } catch (error) {
       feedbackStore.pushToast(
-        axios.isAxiosError(error)
+        axios.isAxiosError<{ message?: string }>(error)
           ? error.response?.data?.message ?? t('marketplace.detail.loadError')
           : t('marketplace.detail.loadError'),
         'error',
@@ -104,9 +167,16 @@ export const useMarketplaceListingPage = () => {
     }
   };
 
-  // 1.2 取得可展示聯絡方式
+  // 4.3 取得可展示聯絡方式
   const revealContact = async (): Promise<void> => {
-    if (!listing.value) {
+    if (!listing.value || loadingContact.value || contactRows.value.length > 0) {
+      return;
+    }
+    if (!sessionStore.isAuthenticated) {
+      await router.push({
+        path: '/login',
+        query: { redirect: route.fullPath },
+      });
       return;
     }
 
@@ -115,9 +185,10 @@ export const useMarketplaceListingPage = () => {
     try {
       const { data } = await fetchListingContactAccess(listing.value.listing_id);
       contactAccess.value = data.data;
+      feedbackStore.pushToast(t('marketplace.detail.contactUnlockedSuccess'), 'success');
     } catch (error) {
       feedbackStore.pushToast(
-        axios.isAxiosError(error)
+        axios.isAxiosError<{ message?: string }>(error)
           ? error.response?.data?.message ?? t('marketplace.detail.contactError')
           : t('marketplace.detail.contactError'),
         'error',
@@ -127,7 +198,7 @@ export const useMarketplaceListingPage = () => {
     }
   };
 
-  // 1.3 切換收藏狀態
+  // 4.4 切換收藏狀態
   const toggleFavorite = async (): Promise<void> => {
     if (!listing.value || updatingFavorite.value) {
       return;
@@ -158,7 +229,7 @@ export const useMarketplaceListingPage = () => {
       );
     } catch (error) {
       feedbackStore.pushToast(
-        axios.isAxiosError(error)
+        axios.isAxiosError<{ message?: string }>(error)
           ? error.response?.data?.message ?? t('marketplace.detail.favoriteError')
           : t('marketplace.detail.favoriteError'),
         'error',
@@ -168,7 +239,7 @@ export const useMarketplaceListingPage = () => {
     }
   };
 
-  // 1.4 建立或重用聊天
+  // 4.5 建立或重用聊天
   const openChat = async (): Promise<void> => {
     if (!listing.value || openingChat.value) {
       return;
@@ -188,7 +259,7 @@ export const useMarketplaceListingPage = () => {
       await router.push(`/account/chat/${data.data.chat_id}`);
     } catch (error) {
       feedbackStore.pushToast(
-        axios.isAxiosError(error)
+        axios.isAxiosError<{ message?: string }>(error)
           ? error.response?.data?.message ?? t('marketplace.detail.chatError')
           : t('marketplace.detail.chatError'),
         'error',
@@ -198,18 +269,25 @@ export const useMarketplaceListingPage = () => {
     }
   };
 
+  // 4.6 切換主圖
+  const selectImage = (index: number): void => {
+    selectedImageIndex.value = index;
+  };
+
   onMounted(() => {
     void loadListing();
   });
 
   return {
     categoryLabel,
+    communityName,
     conditionLabel,
-    contactPayload,
+    contactRows,
     coverImage,
     districtLabel,
-    galleryImages,
     formatDeliveryTag,
+    galleryImages,
+    isFavorited,
     listing,
     listingId,
     listingPrice,
@@ -217,12 +295,12 @@ export const useMarketplaceListingPage = () => {
     loadingContact,
     openChat,
     openingChat,
-    ownerAvatarUrl,
     ownerName,
     publishedAt,
     revealContact,
+    revealContactLabel,
+    selectImage,
     selectedImageIndex,
-    isFavorited,
     t,
     toggleFavorite,
     updatingFavorite,

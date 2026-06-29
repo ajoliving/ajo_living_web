@@ -10,6 +10,7 @@ type ChatSummary struct {
 	ChatID             string                `json:"chat_id"`
 	ListingID          string                `json:"listing_id"`
 	ListingTitle       string                `json:"listing_title"`
+	BizModule          string                `json:"biz_module"`
 	ChatType           string                `json:"chat_type"`
 	LastMessagePreview string                `json:"last_message_preview"`
 	LastMessageAt      *string               `json:"last_message_at,omitempty"`
@@ -24,6 +25,7 @@ type ChatDetail struct {
 	ChatID       string              `json:"chat_id"`
 	ListingID    string              `json:"listing_id"`
 	ListingTitle string              `json:"listing_title"`
+	BizModule    string              `json:"biz_module"`
 	ChatType     string              `json:"chat_type"`
 	CreatedAt    string              `json:"created_at"`
 	Peer         *ChatPeerSummary    `json:"peer,omitempty"`
@@ -42,6 +44,7 @@ type ChatPeerSummary struct {
 // 4. ChatListingSummary defines the listing snippet shown in chat payloads.
 type ChatListingSummary struct {
 	ListingID      string                `json:"listing_id"`
+	BizModule      string                `json:"biz_module"`
 	Title          string                `json:"title"`
 	Summary        string                `json:"summary"`
 	PublishedAt    *string               `json:"published_at,omitempty"`

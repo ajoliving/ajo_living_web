@@ -1,134 +1,168 @@
 <!--
  * 家具市集詳情頁。
- * 1. 高保真還原 HTML 設計稿 page-market-detail 雙欄布局。
+ * 1. 嚴格對齊 HTML 設計稿 #page-market-detail 雙欄布局。
  * 2. 左側主區：麵包屑、圖集、標籤、標題、價格、統計資料與商品描述。
  * 3. 右側邊欄：賣家聯絡卡片（聯絡賣家、加入收藏）。
- * 4. 全部使用靜態 mock 資料，不呼叫 API。
+ * 4. 接入真實二手帖子詳情、聯絡授權、收藏與聊天入口。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 
-import AppBreadcrumb from '@/shared/components/navigation/AppBreadcrumb.vue';
+import { useFurnitureDetailPage } from './composables/useFurnitureDetailPage';
 
 // 1. 路由
-const route = useRoute();
 const router = useRouter();
+const {
+  categoryLabel,
+  communityName,
+  conditionLabel,
+  contactRows,
+  coverImage,
+  districtLabel,
+  formatDeliveryTag,
+  galleryImages,
+  isFavorited,
+  listing,
+  listingPrice,
+  loading,
+  loadingContact,
+  openChat,
+  openingChat,
+  ownerName,
+  publishedAt,
+  revealContact,
+  revealContactLabel,
+  selectImage,
+  selectedImageIndex,
+  t,
+  toggleFavorite,
+  updatingFavorite,
+} = useFurnitureDetailPage();
 
-// 2. 麵包屑項目
-const breadcrumbItems = [
-  { label: '首頁', to: '/' },
-  { label: '家具市集', to: '/furniture' },
-  { label: '北歐實木餐桌' },
-];
+// 2. 麵包屑導向
+const goHome = (): void => {
+  void router.push('/');
+};
+const goMarket = (): void => {
+  void router.push('/furniture');
+};
 
-// 3. 標籤
-interface FurnitureTag {
-  label: string;
-  dark?: boolean;
-}
-const tags: FurnitureTag[] = [
-  { label: '家居傢俱', dark: true },
-  { label: '九龍' },
-  { label: '近乎全新' },
-];
+// 3. 詳情標籤
+const tags = computed(() => {
+  if (!listing.value) {
+    return [];
+  }
+
+  return [
+    { label: categoryLabel.value, dark: true },
+    { label: districtLabel.value },
+    { label: conditionLabel.value },
+  ].filter((tag) => tag.label);
+});
 
 // 4. 統計資料
-interface DetailStat {
-  value: string;
-  label: string;
-}
-const stats: DetailStat[] = [
-  { value: '良好', label: '成色' },
-  { value: '餐桌', label: '分類' },
-  { value: '自取', label: '交收' },
-  { value: '公開', label: '可見範圍' },
-];
-
-// 5. 圖集資料
-interface GalleryImage {
-  id: number;
-  background: string;
-}
-const galleryImages: GalleryImage[] = [
-  { id: 1, background: 'linear-gradient(160deg,#eee,#ddd)' },
-  { id: 2, background: 'linear-gradient(160deg,#f3f0ec,#ded8d0)' },
-  { id: 3, background: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)' },
-  { id: 4, background: 'linear-gradient(160deg,#ece8e0,#d4ccc0)' },
-];
-const selectedImageIndex = ref(0);
-
-// 6. 選擇圖片
-const selectImage = (index: number): void => {
-  selectedImageIndex.value = index;
-};
-
-// 7. 聯絡賣家（跳轉站內聊天）
-const handleContactSeller = (): void => {
-  void router.push('/account/chat');
-};
-
-// 8. 加入收藏（mock）
-const isFavorited = ref(false);
-const handleToggleFavorite = (): void => {
-  isFavorited.value = !isFavorited.value;
-};
-
-// 9. 取得 listing id（保留路由參數參考）
-void route.params.listingId;
+const stats = computed(() => [
+  { value: conditionLabel.value || '-', label: t('common.label.condition') },
+  { value: categoryLabel.value || '-', label: t('marketplace.mine.category') },
+  {
+    value: listing.value?.delivery_tags.length
+      ? listing.value.delivery_tags.map(formatDeliveryTag).join(' / ')
+      : t('marketplace.detail.selfPickup'),
+    label: t('marketplace.detail.tradeInfo'),
+  },
+]);
 </script>
 
 <template>
   <main class="furniture-detail-page">
-    <div class="detail-wrap">
-      <!-- 1. 左側主區 -->
-      <div class="detail-main">
-        <!-- 1.1 麵包屑 -->
-        <AppBreadcrumb :items="breadcrumbItems" />
+    <!-- 1. 麵包屑 -->
+    <nav class="breadcrumb">
+      <button type="button" class="bc-link" @click="goHome">首頁</button>
+      <span class="bc-sep">›</span>
+      <button type="button" class="bc-link" @click="goMarket">家具市集</button>
+      <span class="bc-sep">›</span>
+      <span class="bc-current">{{ listing?.title || t('marketplace.detail.title') }}</span>
+    </nav>
 
-        <!-- 1.2 圖集 -->
+    <section
+      v-if="loading"
+      class="detail-state"
+    >
+      {{ t('common.status.loading') }}
+    </section>
+
+    <section
+      v-else-if="!listing"
+      class="detail-state"
+    >
+      {{ t('marketplace.detail.loadError') }}
+    </section>
+
+    <div
+      v-else
+      class="detail-wrap"
+    >
+      <!-- 2. 左側主區 -->
+      <div class="detail-main">
+        <!-- 2.1 圖集 -->
         <div class="detail-imgs">
+          <div class="detail-main-img" :class="coverImage ? '' : 'pat'">
+            <img
+              v-if="coverImage"
+              :src="coverImage.url"
+              :alt="coverImage.alt"
+            />
+            <span v-else>{{ t('marketplace.filter.noImage') }}</span>
+          </div>
           <div
-            class="detail-main-img pat"
-            :style="{ background: galleryImages[selectedImageIndex].background }"
-          ></div>
-          <div class="detail-thumb-row">
-            <div
-              v-for="(img, index) in galleryImages.slice(1)"
-              :key="img.id"
-              class="detail-thumb pat"
-              :class="{ 'is-active': index + 1 === selectedImageIndex }"
-              :style="{ background: img.background }"
-              @click="selectImage(index + 1)"
-            ></div>
+            v-if="galleryImages.length > 1"
+            class="detail-thumb-row"
+          >
+            <button
+              v-for="(image, index) in galleryImages"
+              :key="image.id"
+              type="button"
+              class="detail-thumb"
+              :class="{ 'is-active': selectedImageIndex === index }"
+              @click="selectImage(index)"
+            >
+              <img
+                :src="image.url"
+                :alt="image.alt"
+              />
+            </button>
           </div>
         </div>
 
-        <!-- 1.3 詳情資訊 -->
+        <!-- 2.2 詳情資訊 -->
         <div class="detail-info">
-          <!-- 1.3.1 標籤 -->
+          <!-- 2.2.1 標籤 -->
           <div class="gtags">
             <span
               v-for="tag in tags"
               :key="tag.label"
               class="gtag"
-              :class="{ 'gtag--dark': tag.dark }"
+              :class="{ dark: tag.dark }"
             >
               {{ tag.label }}
             </span>
           </div>
 
-          <!-- 1.3.2 標題 -->
-          <h2 class="detail-title">北歐實木餐桌</h2>
-          <div class="detail-sub">旺角 · 可約時間交收 · 同棟優先</div>
-
-          <!-- 1.3.3 價格列 -->
-          <div class="detail-price-row">
-            <div class="detail-price">HK$2,400</div>
-            <div class="detail-published">發布於 2026年6月4日</div>
+          <!-- 2.2.2 標題與副標題 -->
+          <h2 class="detail-title">{{ listing.title }}</h2>
+          <div class="detail-sub">
+            {{ communityName }} · {{ districtLabel }} ·
+            {{ listing.visibility_scope === 'building_only' ? t('common.state.buildingOnly') : t('common.state.public') }}
           </div>
 
-          <!-- 1.3.4 統計資料 -->
+          <!-- 2.2.3 價格列 -->
+          <div class="detail-price-row">
+            <div class="detail-price">{{ listingPrice }}</div>
+            <div class="detail-published">{{ t('marketplace.detail.publishedAt') }} {{ publishedAt }}</div>
+          </div>
+
+          <!-- 2.2.4 統計資料 -->
           <div class="detail-stats">
             <div
               v-for="stat in stats"
@@ -140,37 +174,92 @@ void route.params.listingId;
             </div>
           </div>
 
-          <!-- 1.3.5 商品描述 -->
+          <!-- 2.2.5 商品描述 -->
           <div class="detail-desc">
-            <div class="detail-desc-title">商品描述</div>
-            <p class="body-text">
-              實木餐桌保養良好，適合四至六人使用。桌面有正常使用痕跡，不影響日常使用。買家需自行安排搬運，可在晚上或週末交收。
+            <div class="detail-desc-title">{{ t('marketplace.detail.description') }}</div>
+            <p
+              v-if="listing.summary"
+              class="body-summary"
+            >
+              {{ listing.summary }}
             </p>
+            <p class="body-text">
+              {{ listing.description }}
+            </p>
+          </div>
+
+          <div class="detail-desc">
+            <div class="detail-desc-title">{{ t('marketplace.detail.tradeInfo') }}</div>
+            <p class="body-text">
+              {{ listing.pickup_location_text || districtLabel }}
+            </p>
+            <div
+              v-if="listing.delivery_tags.length > 0"
+              class="detail-delivery-tags"
+            >
+              <span
+                v-for="tag in listing.delivery_tags"
+                :key="tag"
+              >
+                {{ formatDeliveryTag(tag) }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 2. 右側邊欄 -->
+      <!-- 3. 右側邊欄 -->
       <aside class="detail-sidebar">
         <div class="detail-contact-card">
-          <div class="seller-kicker">賣家</div>
-          <div class="seller-name">Admin</div>
-          <div class="seller-verified">已通過 AJO Living 帳戶驗證</div>
+          <div class="seller-kicker">{{ t('marketplace.detail.seller') }}</div>
+          <div class="seller-name">{{ ownerName }}</div>
+          <div class="seller-verified">
+            {{ listing.visibility_scope === 'building_only' ? t('marketplace.detail.buildingHint') : t('marketplace.detail.publicHint') }}
+          </div>
           <button
+            v-if="listing.contact_summary.show_chat"
             type="button"
             class="hbtn-primary"
-            @click="handleContactSeller"
+            :disabled="openingChat"
+            @click="openChat"
           >
-            聯絡賣家
+            {{ openingChat ? t('common.status.loading') : t('common.action.openChat') }}
+          </button>
+          <button
+            v-if="listing.contact_summary.show_phone || listing.contact_summary.show_whatsapp"
+            type="button"
+            class="hbtn-ghost"
+            :disabled="loadingContact"
+            @click="revealContact"
+          >
+            {{ loadingContact ? t('common.status.loading') : revealContactLabel }}
           </button>
           <button
             type="button"
             class="hbtn-ghost"
             :class="{ 'is-favorited': isFavorited }"
-            @click="handleToggleFavorite"
+            :disabled="updatingFavorite"
+            @click="toggleFavorite"
           >
-            {{ isFavorited ? '已收藏' : '加入收藏' }}
+            {{ updatingFavorite ? t('common.status.loading') : isFavorited ? t('marketplace.detail.favoritedAction') : t('marketplace.detail.favoriteAction') }}
           </button>
+
+          <div
+            v-if="contactRows.length > 0"
+            class="contact-link-list"
+          >
+            <a
+              v-for="row in contactRows"
+              :key="row.key"
+              class="contact-link"
+              :href="row.href"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>{{ row.label }}</span>
+              <strong>{{ row.isWhatsApp ? 'WhatsApp' : row.value }}</strong>
+            </a>
+          </div>
         </div>
       </aside>
     </div>
@@ -178,61 +267,138 @@ void route.params.listingId;
 </template>
 
 <style scoped>
+/*
+ * 樣式區塊。
+ * 1. 頁面容器與雙欄布局。
+ * 2. 麵包屑與左側主區：圖集、詳情資訊。
+ * 3. 右側邊欄：賣家聯絡卡片。
+ * 4. 按鈕與響應式。
+ */
+
 /* 1. 頁面容器 */
 .furniture-detail-page {
   width: 100%;
-  background: rgb(var(--color-surface-2));
+  background: var(--sur-2);
 }
 
-/* 2. 雙欄布局 */
+/* 2. 雙欄布局（對齊設計稿 .detail-wrap + #page-market-detail 覆蓋） */
 .detail-wrap {
   display: grid;
   grid-template-columns: 1fr 300px;
   gap: 0;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
+  min-height: auto;
   margin: 0 auto;
-  min-height: calc(100vh - var(--nav-h, 52px));
-  background: rgb(var(--color-surface-2));
+  padding: var(--sp-5);
 }
 
 /* 3. 左側主區 */
 .detail-main {
   padding: 20px 28px 40px;
-  border-right: 1px solid rgb(var(--color-border));
+  border-right: 1px solid var(--g2);
   overflow-y: auto;
 }
 
-/* 4. 圖集 */
-.detail-imgs {
-  margin-top: 16px;
+/* 4. 麵包屑 */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 12px max(24px, calc((100vw - 1180px) / 2 + 24px));
+  border: 1px solid var(--bdr);
+  border-right: 0;
+  border-left: 0;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
+.bc-link {
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 0;
+}
+
+.bc-link:hover {
+  color: var(--brand);
+}
+
+.bc-sep {
+  color: var(--ink-4);
+}
+
+.bc-current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.detail-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: var(--layout-page-max-width);
+  min-height: 240px;
+  margin: var(--sp-5) auto;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+/* 5. 圖集 */
 .detail-main-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 220px;
   width: 100%;
   border-radius: 3px;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
+  overflow: hidden;
+  background: var(--g1);
+  color: var(--g4);
+  font-size: var(--text-sm);
+}
+
+.detail-main-img img,
+.detail-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .detail-thumb-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .detail-thumb {
   height: 60px;
+  overflow: hidden;
+  border: 1px solid var(--g2);
   border-radius: 2px;
+  background: var(--sur);
   cursor: zoom-in;
-  border: 2px solid transparent;
-  transition: border-color 0.15s ease;
+  padding: 0;
 }
 
 .detail-thumb.is-active {
-  border-color: rgb(var(--color-primary));
+  border-color: var(--accent);
 }
 
-/* 5. 斜紋圖案 */
+/* 6. 斜紋圖案覆蓋層 */
 .pat {
   position: relative;
   overflow: hidden;
@@ -255,82 +421,82 @@ void route.params.listingId;
   pointer-events: none;
 }
 
-/* 6. 詳情資訊區 */
+/* 7. 詳情資訊區 */
 .detail-info {
   margin-top: 20px;
 }
 
-/* 7. 標籤 */
+/* 8. 標籤 */
 .gtags {
   display: flex;
   gap: 3px;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 
 .gtag {
   font-size: 9px;
   letter-spacing: 0.8px;
-  color: rgb(var(--color-ink-3));
-  border: 1px solid rgb(var(--color-border));
+  color: var(--g4);
+  border: 1px solid var(--g2);
   padding: 1px 5px;
   border-radius: 1px;
 }
 
-.gtag--dark {
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-surface));
-  border-color: rgb(var(--color-primary));
+.gtag.dark {
+  background: var(--accent);
+  color: var(--white);
+  border-color: var(--accent);
   font-weight: 500;
 }
 
-/* 8. 標題與副標題 */
+/* 9. 標題與副標題 */
 .detail-title {
   font-size: 22px;
   font-weight: 400;
   margin-bottom: 6px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .detail-sub {
-  font-size: 12px;
-  color: rgb(var(--color-ink-3));
-  margin-bottom: 16px;
+  font-size: var(--text-sm);
+  color: var(--g4);
+  margin-bottom: var(--sp-4);
 }
 
-/* 9. 價格列 */
+/* 10. 價格列 */
 .detail-price-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgb(var(--color-border));
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--g2);
 }
 
 .detail-price {
   font-size: 28px;
   font-weight: 300;
   letter-spacing: -1px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .detail-published {
-  font-size: 12px;
-  color: rgb(var(--color-ink-3));
+  font-size: var(--text-sm);
+  color: var(--g4);
 }
 
-/* 10. 統計資料 */
+/* 11. 統計資料（對齊設計稿 #page-market-detail 三欄覆蓋） */
 .detail-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-4);
 }
 
 .detail-stat {
   text-align: center;
   padding: 12px 8px;
-  background: rgb(var(--color-surface-2));
+  background: var(--g1);
   border-radius: 2px;
 }
 
@@ -338,54 +504,75 @@ void route.params.listingId;
   font-size: 16px;
   font-weight: 400;
   margin-bottom: 2px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .detail-stat-label {
-  font-size: 10px;
-  color: rgb(var(--color-ink-3));
+  font-size: var(--text-xs);
+  color: var(--g4);
 }
 
-/* 11. 商品描述 */
+/* 12. 商品描述 */
 .detail-desc {
-  border-top: 1px solid rgb(var(--color-border));
-  padding-top: 16px;
-  margin-top: 16px;
+  border-top: 1px solid var(--g2);
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-4);
 }
 
 .detail-desc-title {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  margin-bottom: 8px;
-  color: rgb(var(--color-text));
+  margin-bottom: var(--sp-2);
+  color: var(--ink);
 }
 
 .body-text {
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.8;
-  color: rgb(var(--color-ink-2));
+  color: var(--g5);
 }
 
-/* 12. 右側邊欄 */
+.body-summary {
+  margin: 0 0 var(--sp-2);
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+
+.detail-delivery-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--sp-2);
+}
+
+.detail-delivery-tags span {
+  border: 1px solid var(--g2);
+  border-radius: 2px;
+  color: var(--g4);
+  font-size: var(--text-xs);
+  padding: 3px 7px;
+}
+
+/* 13. 右側邊欄 */
 .detail-sidebar {
   padding: 20px;
   position: sticky;
-  top: var(--nav-h, 52px);
-  height: calc(100vh - var(--nav-h, 52px));
+  top: 48px;
+  height: calc(100vh - 48px);
   overflow-y: auto;
 }
 
-/* 13. 賣家聯絡卡片 */
+/* 14. 賣家聯絡卡片 */
 .detail-contact-card {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--g2);
   border-radius: 3px;
   padding: 18px;
-  background: rgb(var(--color-surface));
 }
 
 .seller-kicker {
   font-size: 11px;
-  color: rgb(var(--color-ink-3));
+  color: var(--g4);
   margin-bottom: 4px;
 }
 
@@ -393,24 +580,24 @@ void route.params.listingId;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 4px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .seller-verified {
   font-size: 11px;
-  color: rgb(var(--color-ink-3));
+  color: var(--g4);
   line-height: 1.6;
   margin-bottom: 14px;
 }
 
-/* 14. 按鈕 */
+/* 15. 按鈕 */
 .hbtn-primary {
   width: 100%;
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-surface));
+  background: var(--accent);
+  color: var(--white);
   border: none;
   padding: 10px 22px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
   font-family: inherit;
   border-radius: 2px;
@@ -419,21 +606,27 @@ void route.params.listingId;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
   transition: background 0.15s ease;
 }
 
 .hbtn-primary:hover {
-  background: rgb(var(--color-brand-dark));
+  background: var(--accent-dark);
+}
+
+.hbtn-primary:disabled,
+.hbtn-ghost:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .hbtn-ghost {
   width: 100%;
   background: transparent;
-  color: rgb(var(--color-text));
-  border: 1px solid rgb(var(--color-border));
+  color: var(--ink);
+  border: 1px solid var(--g2);
   padding: 10px 22px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
   font-family: inherit;
   border-radius: 2px;
@@ -446,17 +639,57 @@ void route.params.listingId;
 }
 
 .hbtn-ghost:hover {
-  border-color: rgb(var(--color-brand-mid));
-  color: rgb(var(--color-primary));
+  border-color: var(--brand-mid);
+  color: var(--accent);
 }
 
 .hbtn-ghost.is-favorited {
-  border-color: rgb(var(--color-primary));
-  color: rgb(var(--color-primary));
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-/* 15. 響應式 */
+.contact-link-list {
+  display: grid;
+  gap: 8px;
+  margin-top: var(--sp-3);
+}
+
+.contact-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--g2);
+  border-radius: 2px;
+  color: var(--ink);
+  font-size: 12px;
+  padding: 9px 10px;
+  text-decoration: none;
+}
+
+.contact-link:hover {
+  border-color: var(--brand-mid);
+  color: var(--accent);
+}
+
+.contact-link span {
+  color: var(--g4);
+}
+
+/* 16. 響應式（對齊設計稿 @media max-width:900px） */
 @media (max-width: 900px) {
+  .breadcrumb {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
+  .detail-wrap {
+    padding: var(--sp-4);
+  }
+}
+
+/* 17. 響應式：窄屏堆疊雙欄 */
+@media (max-width: 760px) {
   .detail-wrap {
     grid-template-columns: 1fr;
   }
@@ -473,9 +706,11 @@ void route.params.listingId;
   }
 }
 
-@media (max-width: 600px) {
-  .detail-stats {
-    grid-template-columns: repeat(2, 1fr);
+/* 18. 響應式：極窄屏 */
+@media (max-width: 480px) {
+  .breadcrumb {
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .detail-main-img {

@@ -15,6 +15,7 @@ export interface ChatPeerSummaryResponse {
 
 export interface ChatListingSummaryResponse {
   listing_id: string;
+  biz_module?: 'secondhand' | 'property_sale' | 'serviced_apartment' | 'system';
   title: string;
   summary: string;
   published_at?: string | null;
@@ -33,6 +34,7 @@ export interface ChatSummaryResponse {
   chat_id: string;
   listing_id: string;
   listing_title: string;
+  biz_module?: 'secondhand' | 'property_sale' | 'serviced_apartment' | 'system';
   chat_type: 'direct_listing_chat' | 'system_notice';
   last_message_preview: string;
   last_message_at?: string | null;
@@ -51,6 +53,7 @@ export interface ChatDetailResponse {
   chat_id: string;
   listing_id: string;
   listing_title: string;
+  biz_module?: 'secondhand' | 'property_sale' | 'serviced_apartment' | 'system';
   chat_type: 'direct_listing_chat' | 'system_notice';
   created_at: string;
   participants: Array<{
@@ -79,22 +82,33 @@ export interface PublishSystemNoticeResponse {
   delivered_count: number;
 }
 
-// 1. 建立或復用一個帖子聊天
+export type PropertyChatChannel = 'sale' | 'serviced';
+
+// 1. 建立或復用一個二手帖子聊天
 export const createOrReuseChat = (listingId: string) =>
   httpClient.post<ApiResponse<{ chat_id: string; is_new: boolean }>>(`/listings/${listingId}/chats`);
 
-// 2. 取得聊天會話列表
+// 2. 建立或復用一個物業頻道聊天
+export const createOrReusePropertyChat = (channel: PropertyChatChannel, listingId: string) => {
+  const resource = channel === 'serviced' ? 'serviced-apartments' : 'property-sales';
+
+  return httpClient.post<ApiResponse<{ chat_id: string; is_new: boolean }>>(
+    `/${resource}/${listingId}/chats`,
+  );
+};
+
+// 3. 取得聊天會話列表
 export const fetchChats = (params: FetchChatsParams = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<ChatSummaryResponse>>>('/chats', { params });
 
-// 3. 取得單個聊天詳情
+// 4. 取得單個聊天詳情
 export const fetchChatDetail = (chatId: string) =>
   httpClient.get<ApiResponse<ChatDetailResponse>>(`/chats/${chatId}`);
 
-// 4. 標記聊天已讀
+// 5. 標記聊天已讀
 export const markChatRead = (chatId: string) =>
   httpClient.post<ApiResponse<{ chat_id: string; read: boolean }>>(`/chats/${chatId}/read`);
 
-// 5. 發布系統通知
+// 6. 發布系統通知
 export const publishSystemNotice = (payload: PublishSystemNoticePayload) =>
   httpClient.post<ApiResponse<PublishSystemNoticeResponse>>('/staff/system-notices', payload);

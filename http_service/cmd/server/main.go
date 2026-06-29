@@ -80,7 +80,7 @@ func main() {
 	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
 	supermarketOfferService := service.NewSupermarketOfferService(runtime)
-	chatService := service.NewChatService(runtime, secondhandService)
+	chatService := service.NewChatService(runtime, secondhandService, propertyService)
 	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
 	lifecycleService := service.NewLifecycleService(runtime)
 

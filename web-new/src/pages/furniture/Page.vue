@@ -3,170 +3,197 @@
  * 1. 三欄布局：左側篩選欄 + 中間列表區 + 右側廣告欄。
  * 2. 左側含搜尋框與 5 組篩選標籤（分類、價格範圍、成色、地區、可見範圍）。
  * 3. 中間含排序欄、商品卡片網格（懸停顯示操作按鈕）與分頁。
- * 4. 右側含 3 個 banner 廣告與 2 個 vertical 廣告。
- * 5. 全部使用靜態 mock 資料，不呼叫 API。
+ * 4. 右側接入 3 個 16:9 短廣告與 2 個 9:16 長廣告。
+ * 5. 接入真實二手帖子 API，保留舊版家具篩選能力與新版 UI 風格。
+ * 6. 樣式對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的 #page-market 規則。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+import type { MarketplaceCategoryCode, MarketplaceConditionCode } from '@/constants/marketplace';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
-import PaginationBar from '@/shared/components/navigation/PaginationBar.vue';
-import AdCard from '@/shared/components/marketplace/AdCard.vue';
+import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+
+import { useFurniturePage } from './composables/useFurniturePage';
 
 // 1. 路由
 const router = useRouter();
 
-// 2. 搜尋關鍵字
-const keyword = ref('');
+const {
+  area,
+  areaOptions,
+  categories,
+  clearConditions,
+  clearFilters,
+  conditionOptions,
+  formatListingTime,
+  isFavoriteUpdating,
+  keyword,
+  listings,
+  loading,
+  maxPrice,
+  maxPriceLimit,
+  minPrice,
+  page,
+  selectedCategoryKeys,
+  selectedConditions,
+  setPage,
+  sortBy,
+  sortOptions,
+  syncFiltersToQuery,
+  t,
+  toggleCategory,
+  toggleCondition,
+  toggleFavorite,
+  totalPages,
+  totalResults,
+  visibility,
+  visibilityOptions,
+  withPhotos,
+} = useFurniturePage();
 
-// 3. 排序選項
-const sortBy = ref('latest');
+// 2. 價格快捷選項
+const selectedPriceRange = ref('');
+const furniturePriceRangeOptions = [
+  { value: 'under_1000', label: '$1,000以下', min: 0, max: 1000 },
+  { value: '1000_3000', label: '$1,000-$3,000', min: 1000, max: 3000 },
+  { value: '3000_5000', label: '$3,000-$5,000', min: 3000, max: 5000 },
+  { value: '5000_10000', label: '$5,000-$10,000', min: 5000, max: 10000 },
+  { value: 'over_10000', label: '$10,000以上', min: 10000, max: maxPriceLimit },
+];
 
-// 4. 篩選群組資料
-interface FilterOption {
-  label: string;
-  value: string;
-}
-interface FilterGroup {
-  key: string;
-  title: string;
-  options: FilterOption[];
-  activeValue: string;
-}
-const filterGroups = ref<FilterGroup[]>([
-  {
-    key: 'category',
-    title: '分類',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '家居傢俱', value: 'home_furniture' },
-      { label: '家庭電器', value: 'home_appliance' },
-      { label: '電子產品', value: 'electronics' },
-      { label: 'BB用品', value: 'baby' },
-      { label: '其他', value: 'other' },
-    ],
-    activeValue: 'all',
-  },
-  {
-    key: 'price',
-    title: '價格範圍',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '$1k以下', value: 'under_1k' },
-      { label: '$1k–3k', value: '1k_3k' },
-      { label: '$3k–5k', value: '3k_5k' },
-      { label: '$10k+', value: 'over_10k' },
-    ],
-    activeValue: 'all',
-  },
-  {
-    key: 'condition',
-    title: '成色',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '近乎全新', value: 'like_new' },
-      { label: '良好', value: 'good' },
-      { label: '尚可', value: 'fair' },
-    ],
-    activeValue: 'all',
-  },
-  {
-    key: 'region',
-    title: '地區',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '香港島', value: 'hk_island' },
-      { label: '九龍', value: 'kowloon' },
-      { label: '新界', value: 'nt' },
-      { label: '離島', value: 'islands' },
-    ],
-    activeValue: 'all',
-  },
-  {
-    key: 'visibility',
-    title: '可見範圍',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '公開', value: 'public' },
-      { label: '同棟可見', value: 'building' },
-    ],
-    activeValue: 'all',
-  },
-]);
+const selectedPriceRangeFromValues = computed(() => {
+  const minValue = Number(minPrice.value || 0);
+  const maxValue = Number(maxPrice.value || maxPriceLimit);
+  const matched = furniturePriceRangeOptions.find((option) =>
+    option.min === minValue && option.max === maxValue,
+  );
 
-// 5. 家具卡片 mock 資料
-interface FurnitureCard {
-  id: number;
-  isNew?: boolean;
-  hasPattern: boolean;
-  imageBg: string;
-  name: string;
-  sub: string;
-  price: string;
-  foot: string;
-}
-const cards = ref<FurnitureCard[]>([
-  {
-    id: 1,
-    isNew: true,
-    hasPattern: false,
-    imageBg: '#f0ece8',
-    name: '三色短毛貓領養',
-    sub: '香港島 · 黃埔 · 良好',
-    price: 'HK$3',
-    foot: '其他 · 28/03',
-  },
-  {
-    id: 2,
-    hasPattern: true,
-    imageBg: 'linear-gradient(135deg,#eee,#ddd)',
-    name: '北歐實木餐桌',
-    sub: '九龍 · 旺角 · 近乎全新',
-    price: 'HK$2,400',
-    foot: '傢俱 · 02/04',
-  },
-  {
-    id: 3,
-    hasPattern: true,
-    imageBg: 'linear-gradient(135deg,#e8eee8,#d0dcd0)',
-    name: 'LG 洗衣機 8kg',
-    sub: '新界 · 沙田 · 良好',
-    price: 'HK$1,800',
-    foot: '電器 · 01/04',
-  },
-]);
+  return matched?.value ?? '';
+});
 
-// 6. 分頁資料
-const paginationPages = ref([
-  { label: '上一頁', key: 'prev' },
-  { label: 1, active: true, key: 1 },
-  { label: 2, key: 2 },
-  { label: 3, key: 3 },
-  { label: '下一頁', key: 'next' },
-]);
+const isAllPriceSelected = computed(() => {
+  const minValue = Number(minPrice.value || 0);
+  const maxValue = Number(maxPrice.value || maxPriceLimit);
 
-// 7. 切換篩選標籤（同組互斥）
-const handleFilterToggle = (groupKey: string, optionValue: string) => {
-  const group = filterGroups.value.find((g) => g.key === groupKey);
-  if (group) {
-    group.activeValue = optionValue;
+  return minValue <= 0 && maxValue >= maxPriceLimit;
+});
+
+// 3. 分頁按鈕資料
+const paginationButtons = computed(() => {
+  const buttons: Array<{ label: string | number; key: string | number; pageValue: number; active?: boolean; disabled?: boolean }> = [
+    {
+      label: '上一頁',
+      key: 'prev',
+      pageValue: page.value - 1,
+      disabled: page.value <= 1,
+    },
+  ];
+  const start = Math.max(1, page.value - 1);
+  const end = Math.min(totalPages.value, start + 2);
+
+  for (let index = start; index <= end; index += 1) {
+    buttons.push({
+      label: index,
+      key: index,
+      pageValue: index,
+      active: index === page.value,
+    });
+  }
+
+  buttons.push({
+    label: '下一頁',
+    key: 'next',
+    pageValue: page.value + 1,
+    disabled: page.value >= totalPages.value,
+  });
+
+  return buttons;
+});
+
+// 4. 套用價格區間
+const applyPriceRange = (option?: (typeof furniturePriceRangeOptions)[number]): void => {
+  selectedPriceRange.value = option?.value ?? '';
+  minPrice.value = String(option?.min ?? 0);
+  maxPrice.value = String(option?.max ?? maxPriceLimit);
+  void syncFiltersToQuery();
+};
+
+// 5. 切換篩選標籤
+const handleFilterToggle = (groupKey: string, optionValue: string): void => {
+  if (groupKey === 'category') {
+    if (optionValue === 'all') {
+      selectedCategoryKeys.value = [];
+      void syncFiltersToQuery();
+      return;
+    }
+    void toggleCategory(optionValue as MarketplaceCategoryCode);
+    return;
+  }
+
+  if (groupKey === 'price') {
+    const target = furniturePriceRangeOptions.find((option) => option.value === optionValue);
+    applyPriceRange(target);
+    return;
+  }
+
+  if (groupKey === 'condition') {
+    if (optionValue === 'all') {
+      void clearConditions();
+      return;
+    }
+    void toggleCondition(optionValue as MarketplaceConditionCode);
+    return;
+  }
+
+  if (groupKey === 'area') {
+    area.value = optionValue;
+    void syncFiltersToQuery();
+    return;
+  }
+
+  if (groupKey === 'visibility') {
+    visibility.value = optionValue as typeof visibility.value;
+    void syncFiltersToQuery();
   }
 };
 
-// 8. 點擊卡片跳轉詳情
-const handleCardClick = (id: number) => {
+// 6. 搜尋與清除條件
+const handleSearch = (): void => {
+  void syncFiltersToQuery(1);
+};
+
+const handleClearFilters = (): void => {
+  selectedPriceRange.value = '';
+  void clearFilters();
+};
+
+// 7. 點擊卡片跳轉詳情
+const handleCardClick = (id: string): void => {
   void router.push(`/furniture/${id}`);
 };
 
-// 9. 點擊分頁
-const handlePageSelect = () => {
-  // mock：不實作實際分頁邏輯
+// 8. 點擊分頁
+const handlePageClick = (targetPage: number): void => {
+  void setPage(targetPage);
 };
+
+// 9. 從 URL 價格條件反推快捷區間狀態
+watch(
+  selectedPriceRangeFromValues,
+  (value) => {
+    selectedPriceRange.value = value;
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
-  <div class="page">
+  <div
+    id="page-market"
+    class="page"
+  >
     <div class="mp">
       <!-- 左側篩選欄 -->
       <aside class="mf">
@@ -174,31 +201,113 @@ const handlePageSelect = () => {
           <input
             v-model="keyword"
             class="sinput"
-            placeholder="搜尋物品…"
+            :placeholder="t('channels.furniture.searchPlaceholder')"
             autocomplete="off"
+            @keyup.enter="handleSearch"
           />
           <button
             type="button"
             class="sbtn"
-          >搜</button>
+            @click="handleSearch"
+          >{{ t('marketplace.list.searchAction') }}</button>
         </div>
 
-        <section
-          v-for="group in filterGroups"
-          :key="group.key"
-          class="fs"
-        >
-          <div class="ft-title">{{ group.title }}</div>
+        <section class="fs">
+          <div class="ft-title">{{ t('marketplace.filter.categories') }}</div>
           <div class="ftags">
             <FilterTag
-              v-for="option in group.options"
-              :key="`${group.key}-${option.value}`"
-              :label="option.label"
-              :active="option.value === group.activeValue"
-              @toggle="handleFilterToggle(group.key, option.value)"
+              :label="t('channels.furniture.allFurniture')"
+              :active="selectedCategoryKeys.length === 0"
+              @toggle="handleFilterToggle('category', 'all')"
+            />
+            <FilterTag
+              v-for="category in categories"
+              :key="category.key"
+              :label="category.label"
+              :active="selectedCategoryKeys.includes(category.key)"
+              @toggle="handleFilterToggle('category', category.key)"
             />
           </div>
         </section>
+
+        <section class="fs">
+          <div class="ft-title">{{ t('marketplace.filter.priceRange') }}</div>
+          <div class="ftags">
+            <FilterTag
+              :label="t('marketplace.list.priceAll')"
+              :active="isAllPriceSelected"
+              @toggle="applyPriceRange()"
+            />
+            <FilterTag
+              v-for="option in furniturePriceRangeOptions"
+              :key="option.value"
+              :label="option.label"
+              :active="selectedPriceRange === option.value"
+              @toggle="handleFilterToggle('price', option.value)"
+            />
+          </div>
+        </section>
+
+        <section class="fs">
+          <div class="ft-title">{{ t('marketplace.filter.condition') }}</div>
+          <div class="ftags">
+            <FilterTag
+              :label="t('marketplace.filter.conditionAll')"
+              :active="selectedConditions.length === 0"
+              @toggle="handleFilterToggle('condition', 'all')"
+            />
+            <FilterTag
+              v-for="condition in conditionOptions"
+              :key="condition.value"
+              :label="condition.label"
+              :active="selectedConditions.includes(condition.value)"
+              @toggle="handleFilterToggle('condition', condition.value)"
+            />
+          </div>
+        </section>
+
+        <section class="fs">
+          <div class="ft-title">{{ t('marketplace.filter.area') }}</div>
+          <div class="ftags">
+            <FilterTag
+              v-for="option in areaOptions"
+              :key="option.value"
+              :label="option.label"
+              :active="area === option.value"
+              @toggle="handleFilterToggle('area', option.value)"
+            />
+          </div>
+        </section>
+
+        <section class="fs">
+          <div class="ft-title">{{ t('common.label.visibility') }}</div>
+          <div class="ftags">
+            <FilterTag
+              v-for="option in visibilityOptions"
+              :key="option.value"
+              :label="option.label"
+              :active="visibility === option.value"
+              @toggle="handleFilterToggle('visibility', option.value)"
+            />
+          </div>
+        </section>
+
+        <label class="photo-toggle">
+          <input
+            v-model="withPhotos"
+            type="checkbox"
+            @change="syncFiltersToQuery()"
+          />
+          <span>{{ t('marketplace.filter.onlyPhotos') }}</span>
+        </label>
+
+        <button
+          type="button"
+          class="clear-filter-btn"
+          @click="handleClearFilters"
+        >
+          {{ t('marketplace.filter.clearAll') }}
+        </button>
       </aside>
 
       <!-- 中間列表區 -->
@@ -206,126 +315,123 @@ const handlePageSelect = () => {
         <button
           type="button"
           class="filter-toggle-btn"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M1 2h12M1 7h12M1 12h12"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
-          </svg>
-          篩選條件
-        </button>
+        >篩選條件</button>
 
         <div class="sort-row">
-          <span class="rn">3 個結果</span>
+          <span class="rn">
+            {{ loading ? t('common.status.loading') : t('channels.furniture.results', { count: totalResults }) }}
+          </span>
           <select
             v-model="sortBy"
             class="ssel"
+            @change="syncFiltersToQuery(page)"
           >
-            <option value="latest">最新發佈</option>
-            <option value="price_asc">價格低至高</option>
+            <option
+              v-for="option in sortOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
           </select>
         </div>
 
-        <div class="mgrid">
+        <div
+          v-if="loading"
+          class="market-state"
+        >
+          {{ t('common.status.loading') }}
+        </div>
+
+        <div
+          v-else-if="listings.length === 0"
+          class="market-state"
+        >
+          {{ t('channels.furniture.empty') }}
+        </div>
+
+        <div
+          v-else
+          class="mgrid"
+        >
           <div
-            v-for="card in cards"
-            :key="card.id"
+            v-for="listing in listings"
+            :key="listing.id"
             class="mc"
-            @click="handleCardClick(card.id)"
+            @click="handleCardClick(listing.id)"
           >
             <span
-              v-if="card.isNew"
+              v-if="listing.conditionLevel === 'brand_new'"
               class="mnew"
-            >全新</span>
+            >{{ t('marketplace.filter.newBadge') }}</span>
             <div
               class="mimg"
-              :class="card.hasPattern ? 'pat' : ''"
-              :style="{ background: card.imageBg }"
-            ></div>
+              :class="listing.imageUrl ? '' : 'pat'"
+            >
+              <img
+                v-if="listing.imageUrl"
+                :src="listing.imageUrl"
+                :alt="listing.title"
+              />
+              <span v-else>{{ t('marketplace.filter.noImage') }}</span>
+            </div>
             <div class="mbody">
-              <div class="mname">{{ card.name }}</div>
-              <div class="msub">{{ card.sub }}</div>
-              <div class="mprice">{{ card.price }}</div>
-              <div class="mfoot"><span>{{ card.foot }}</span></div>
+              <div class="mname">{{ listing.title }}</div>
+              <div class="msub">
+                {{ listing.districtLabel }} · {{ listing.conditionLabel }} ·
+                {{ listing.visibilityScope === 'building_only' ? t('common.state.buildingOnly') : t('common.state.public') }}
+              </div>
+              <div class="mprice">{{ listing.price }}</div>
+              <div class="mfoot">
+                <span>{{ listing.categoryLabel }} · {{ formatListingTime(listing.publishedAt, listing.updatedAt) }}</span>
+              </div>
             </div>
             <div class="mc-actions">
               <button
                 type="button"
                 class="mc-action-btn"
-                @click.stop
-              >收藏</button>
-              <button
-                type="button"
-                class="mc-action-btn"
-                @click.stop
-              >比較</button>
+                :disabled="isFavoriteUpdating(listing.id)"
+                @click.stop="toggleFavorite(listing.id)"
+              >{{ listing.isFavorited ? t('marketplace.detail.favoritedAction') : t('marketplace.detail.favoriteAction') }}</button>
               <button
                 type="button"
                 class="mc-action-btn primary"
-                @click.stop="handleCardClick(card.id)"
-              >查看</button>
+                @click.stop="handleCardClick(listing.id)"
+              >{{ t('common.action.viewDetail') }}</button>
             </div>
           </div>
         </div>
 
-        <PaginationBar
-          info="第 1-3 筆，共 18 筆"
-          :pages="paginationPages"
+        <nav
+          v-if="!loading && totalResults > 0"
+          class="market-pagination"
           aria-label="家具市集分頁"
-          @select="handlePageSelect"
-        />
+        >
+          <span class="market-pagination-info">
+            {{ t('marketplace.list.pageLabel') }} {{ page }} / {{ totalPages }}
+          </span>
+          <div class="market-pagination-actions">
+            <button
+              v-for="button in paginationButtons"
+              :key="button.key"
+              type="button"
+              class="market-page-btn"
+              :class="{ on: button.active, disabled: button.disabled }"
+              :disabled="button.disabled"
+              @click="handlePageClick(button.pageValue)"
+            >
+              {{ button.label }}
+            </button>
+          </div>
+        </nav>
       </main>
 
       <!-- 右側廣告欄 -->
-      <aside class="market-ad-aside">
-        <div class="ad-side-panel">
-          <AdCard
-            variant="banner"
-            visual="market"
-            label="16:9"
-            title="社區家具回收"
-            desc="大件家具回收、清拆與轉售安排。"
-          />
-          <AdCard
-            variant="banner"
-            visual="home"
-            label="16:9"
-            title="精選家居用品"
-            desc="收納、餐桌、燈具與日常設備。"
-          />
-          <AdCard
-            variant="banner"
-            visual="office"
-            label="16:9"
-            title="電器保養服務"
-            desc="洗衣機、雪櫃與冷氣維修預約。"
-          />
-          <div class="ad-vertical-grid">
-            <AdCard
-              variant="vertical"
-              visual="service"
-              label="9:16"
-              title="上門安裝"
-              desc="窗簾、層架與燈具安裝。"
-            />
-            <AdCard
-              variant="vertical"
-              visual="move"
-              label="9:16"
-              title="即日配送"
-              desc="同區交收與預約送貨。"
-            />
-          </div>
-        </div>
+      <aside
+        class="market-ad-aside"
+        aria-label="家具市集展示廣告"
+      >
+        <ListingSideAds channel="furniture" />
       </aside>
     </div>
   </div>
@@ -335,30 +441,34 @@ const handlePageSelect = () => {
 /* 1. 頁面容器 */
 .page {
   width: 100%;
+  min-height: calc(100vh - var(--nav-h, 52px));
+  background: var(--sur-2);
 }
 
-/* 2. 三欄布局 */
+/* 2. 三欄布局：對齊全局頁面寬度與左右留白 */
 .mp {
   display: grid;
-  grid-template-columns: 250px minmax(0, 700px) 360px;
+  grid-template-columns: 250px minmax(0, 1fr) 360px;
   justify-content: center;
-  max-width: 1440px;
+  align-items: stretch;
+  width: min(100%, var(--layout-page-max-width));
   margin: 0 auto;
-  background: rgb(var(--color-surface-2));
-  min-height: calc(100vh - var(--nav-h, 52px));
+  padding: 0 var(--layout-page-padding-inline);
+  background: var(--sur-2);
 }
 
-/* 3. 左側篩選欄 */
+/* 3. 左側篩選欄：對齊 .mf 與 #page-market .mf */
 .mf {
-  background: rgb(var(--color-surface));
-  border-right: 1px solid rgb(var(--color-border));
+  border-right: 1px solid var(--bdr);
   padding: 18px 18px;
   position: sticky;
   top: var(--nav-h, 52px);
-  height: calc(100vh - var(--nav-h, 52px));
-  overflow-y: auto;
+  align-self: start;
+  height: auto;
   min-height: calc(100vh - var(--nav-h, 52px));
+  overflow: visible;
   scrollbar-width: none;
+  background: var(--sur);
 }
 
 .mf::-webkit-scrollbar {
@@ -368,35 +478,45 @@ const handlePageSelect = () => {
 .sbar {
   display: flex;
   gap: 6px;
+  min-width: 0;
+  margin-left: -14px;
+  margin-right: -14px;
+  margin-top: -18px;
   margin-bottom: 14px;
+  padding: 18px 0 14px;
+  background: var(--sur);
 }
 
 .sinput {
   flex: 1;
   min-width: 0;
   width: 100%;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   padding: 8px 10px;
   font-size: 12px;
   font-family: inherit;
   outline: none;
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  border-radius: var(--r-md);
+  background: var(--sur);
+  color: var(--ink);
+  transition: border-color 0.15s;
 }
 
 .sinput:focus {
-  border-color: rgb(var(--color-primary));
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(240, 90, 0, 0.1);
 }
 
 .sbtn {
-  background: rgb(var(--color-primary));
-  color: #fff;
+  background: var(--brand);
+  color: var(--sur);
   border: none;
   padding: 8px 12px;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: var(--r-md);
   font-family: inherit;
 }
 
@@ -407,7 +527,7 @@ const handlePageSelect = () => {
 .ft-title {
   font-size: 9px;
   letter-spacing: 2px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-4);
   text-transform: uppercase;
   margin-bottom: 6px;
 }
@@ -420,12 +540,46 @@ const handlePageSelect = () => {
   overflow: hidden;
 }
 
-/* 4. 中間列表區 */
+.photo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.photo-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand);
+}
+
+.clear-filter-btn {
+  width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.clear-filter-btn:hover {
+  border-color: var(--brand-mid);
+  color: var(--brand);
+}
+
+/* 4. 中間列表區：對齊 .mr 與 #page-market .mr */
 .mr {
-  background: rgb(var(--color-surface-2));
   padding: 14px 14px 36px;
   min-width: 0;
   min-height: calc(100vh - var(--nav-h, 52px));
+  background: var(--sur-2);
 }
 
 .filter-toggle-btn {
@@ -433,9 +587,9 @@ const handlePageSelect = () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: rgb(var(--color-text));
-  background: rgb(var(--color-surface-2));
-  border: 1px solid rgb(var(--color-border));
+  color: var(--ink);
+  background: var(--sur-2);
+  border: 1px solid var(--bdr);
   padding: 8px 14px;
   border-radius: 2px;
   cursor: pointer;
@@ -449,33 +603,46 @@ const handlePageSelect = () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
-  max-width: 700px;
+  width: 100%;
   margin-left: 0;
   margin-right: auto;
 }
 
 .rn {
   font-size: 11px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-4);
 }
 
 .ssel {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   padding: 5px 8px;
   font-size: 11px;
   font-family: inherit;
   outline: none;
   border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
 }
 
-/* 5. 商品卡片網格 */
+.market-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* 5. 商品卡片網格：對齊 #page-market .mgrid、.mc、.mimg */
 .mgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  max-width: 700px;
+  width: 100%;
   margin-left: 0;
   margin-right: auto;
 }
@@ -483,29 +650,31 @@ const handlePageSelect = () => {
 .mc {
   position: relative;
   margin-bottom: 0;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  background: rgb(var(--color-surface));
-  transition: box-shadow 0.15s, border-color 0.15s;
+  background: var(--sur);
+  break-inside: avoid;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .mc:hover {
-  box-shadow: var(--shadow-raised);
-  border-color: rgb(var(--color-brand-mid));
+  border-color: var(--brand-mid);
+  box-shadow: var(--shadow-md);
 }
 
 .mnew {
   position: absolute;
   top: 7px;
   left: 7px;
-  z-index: 2;
-  background: rgb(var(--color-text));
-  color: rgb(var(--color-surface));
+  background: var(--ink);
+  color: var(--sur);
   font-size: 9px;
+  font-weight: 600;
   padding: 1px 5px;
   letter-spacing: 0.3px;
+  border-radius: var(--r-sm);
 }
 
 .mimg {
@@ -514,12 +683,30 @@ const handlePageSelect = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--g1);
 }
 
-/* 6. 斜紋圖案 */
+.mimg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mimg span {
+  position: relative;
+  z-index: 1;
+  color: var(--ink-4);
+  font-size: 11px;
+}
+
+/* 6. 斜紋圖案：對齊 .pat */
 .pat {
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pat::after {
@@ -545,29 +732,29 @@ const handlePageSelect = () => {
   font-size: 12px;
   font-weight: 500;
   margin-bottom: 2px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .msub {
   font-size: 10px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-4);
   margin-bottom: 5px;
 }
 
 .mprice {
   font-size: 14px;
   font-weight: 300;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .mfoot {
-  display: none;
+  display: none !important;
 }
 
-/* 7. 懸停操作按鈕 */
+/* 7. 懸停操作按鈕：對齊 .mc-actions、.mc-action-btn */
 .mc-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   height: auto;
   max-height: 0;
@@ -589,69 +776,115 @@ const handlePageSelect = () => {
 
 .mc-action-btn {
   min-height: 34px;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
-  color: rgb(var(--color-ink-2));
+  background: var(--sur);
+  color: var(--ink-2);
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font);
   font-size: 12px;
   font-weight: 500;
 }
 
 .mc-action-btn:hover {
-  border-color: rgb(var(--color-brand-mid));
-  color: rgb(var(--color-primary));
+  border-color: var(--brand-mid);
+  color: var(--brand);
 }
 
 .mc-action-btn.primary {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: #fff;
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--sur);
 }
 
 .mc-action-btn.primary:hover {
-  background: rgb(var(--color-brand-dark));
-  color: #fff;
+  background: var(--brand-dark);
+  color: var(--sur);
 }
 
-/* 8. 右側廣告欄 */
+.mc-action-btn:disabled,
+.market-page-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 8. 分頁：對齊 .market-pagination、.market-page-btn */
+.market-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.market-pagination-info {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.market-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.market-page-btn {
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-3);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 7px 11px;
+}
+
+.market-page-btn:hover {
+  border-color: var(--brand-mid);
+  color: var(--brand);
+}
+
+.market-page-btn.on {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.market-page-btn.disabled:hover {
+  border-color: var(--bdr);
+  color: var(--ink-3);
+}
+
+/* 9. 右側廣告欄 */
 .market-ad-aside {
   position: sticky;
   top: var(--nav-h, 52px);
   align-self: start;
   overflow: visible;
-  border-left: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface-2));
+  border-left: 1px solid var(--bdr);
+  background: var(--sur-2);
   padding: 18px 18px 40px;
 }
 
-.ad-side-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.ad-vertical-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-/* 9. 響應式 */
-@media (max-width: 1100px) {
+/* 10. 響應式 - 大螢幕：對齊 @media (min-width:1440px) */
+@media (min-width: 1440px) {
   .mp {
-    grid-template-columns: 210px 1fr;
-  }
-
-  .market-ad-aside {
-    display: none;
+    grid-template-columns: 260px minmax(0, 1fr) 380px;
   }
 }
 
-@media (max-width: 767px) {
+/* 11. 響應式 - 平板與行動裝置：對齊 @media (max-width:900px) */
+@media (max-width: 900px) {
   .mp {
     grid-template-columns: 1fr;
-    max-width: none;
   }
 
   .mf {
@@ -660,11 +893,18 @@ const handlePageSelect = () => {
     padding: 14px;
   }
 
+  .sbar {
+    margin-left: -14px;
+    margin-right: -14px;
+    margin-top: -14px;
+  }
+
   .filter-toggle-btn {
     display: inline-flex;
   }
 
   .mgrid,
+  .market-pagination,
   .sort-row {
     max-width: none;
   }
@@ -672,5 +912,19 @@ const handlePageSelect = () => {
   .mgrid {
     grid-template-columns: 1fr;
   }
+
+  .market-ad-aside {
+    position: static;
+    height: auto;
+    border-left: 0;
+    border-top: 1px solid var(--bdr);
+    padding: 14px;
+  }
+
+  .market-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
 }
 </style>

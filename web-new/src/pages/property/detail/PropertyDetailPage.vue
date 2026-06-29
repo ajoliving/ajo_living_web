@@ -11,6 +11,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { readStoredAccessToken } from '@/httpapis/auth-session';
+import { createOrReusePropertyChat } from '@/httpapis/chats';
 import {
   createPropertyAppointment,
   favoritePropertySale,
@@ -48,6 +49,7 @@ const actionMessage = ref('');
 const errorMessage = ref('');
 const appointmentOpen = ref(route.query.action === 'appointment');
 const reportOpen = ref(false);
+const openingChat = ref(false);
 
 // 2. 物件標籤
 interface PropertyTag {
@@ -190,11 +192,24 @@ const goSimilar = (id: string): void => {
 
 // 10. 跳轉站內聊天
 const goChat = async (): Promise<void> => {
+  if (!listing.value || openingChat.value) {
+    return;
+  }
   if (!readStoredAccessToken()) {
     await router.push({ path: '/login', query: { redirect: route.fullPath } });
     return;
   }
-  void router.push('/account/chat');
+
+  openingChat.value = true;
+
+  try {
+    const { data } = await createOrReusePropertyChat('sale', listing.value.listing_id);
+    await router.push(`/account/chat/${data.data.chat_id}`);
+  } catch {
+    actionMessage.value = '暫時無法開啟站內訊息。';
+  } finally {
+    openingChat.value = false;
+  }
 };
 
 // 11. 載入詳情
@@ -606,8 +621,10 @@ onMounted(() => {
                   查看 WhatsApp
                 </button>
                 <button
+                  v-if="listing.contact_summary.show_chat"
                   class="detail-agent-contact"
                   type="button"
+                  :disabled="openingChat"
                   @click="goChat"
                 >
                   <svg
@@ -628,7 +645,7 @@ onMounted(() => {
                       stroke-linejoin="round"
                     />
                   </svg>
-                  留言查詢
+                  {{ openingChat ? '開啟中' : '站內訊息' }}
                 </button>
               </div>
               <div class="detail-agent-actions">

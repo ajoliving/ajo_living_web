@@ -1,7 +1,7 @@
 <!--
  * 聊天頁。
  * 1. 串接真實會話列表、詳情、訊息與已讀流程。
- * 2. 保持左欄會話與右欄商品上下文的高資訊密度布局。
+ * 2. 保持左欄會話與右欄內容上下文的高資訊密度布局。
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
@@ -16,6 +16,7 @@ import MessageBubble from './widgets/MessageBubble.vue';
 
 const {
   activeConversation,
+  activeReferencePrice,
   activeMessages,
   chatEmojiOptions,
   conversations,
@@ -121,12 +122,12 @@ const {
                   </p>
                 </div>
                 <div
-                  v-if="!isSystemNoticeConversation"
+                  v-if="!isSystemNoticeConversation && activeReferencePrice > 0"
                   class="chat-listing-summary"
                 >
                   <p class="chat-listing-summary__label">{{ t('chat.listingPrice') }}</p>
                   <p class="chat-listing-summary__price">
-                    {{ formatPrice(activeConversation.listing.price_hkd, preferenceStore.locale) }}
+                    {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
                   </p>
                 </div>
               </div>

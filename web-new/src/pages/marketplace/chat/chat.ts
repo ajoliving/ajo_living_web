@@ -79,6 +79,7 @@ export const useMarketplaceChatPage = () => {
     conversations.value.find((conversation) => conversation.id === selectedChatId.value),
   );
   const isSystemNoticeConversation = computed(() => activeConversation.value?.type === 'system_notice');
+  const activeReferencePrice = computed(() => Number(activeConversation.value?.listing.price_hkd || 0));
 
   // 1.1 映射會話資料
   const mapConversation = (item: ChatSummaryResponse): ChatConversationView => ({
@@ -298,6 +299,7 @@ export const useMarketplaceChatPage = () => {
 
   return {
     activeConversation,
+    activeReferencePrice,
     activeMessages,
     chatEmojiOptions,
     conversations,

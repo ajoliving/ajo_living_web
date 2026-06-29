@@ -261,7 +261,7 @@ const form = reactive<PropertyEditorForm>({
   email: sessionStore.me?.email || '',
   allowPhone: true,
   allowWhatsapp: true,
-  allowChat: false,
+  allowChat: true,
   adPackageCode: 'basic',
   propertyNo: '',
   transactionType: 'sale',
