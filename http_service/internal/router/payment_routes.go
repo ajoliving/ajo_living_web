@@ -23,7 +23,14 @@ func registerPublicPOSPaymentRoutes(
 }
 
 // 2. registerPOSPaymentRoutes registers authenticated POS payment center routes.
-func registerPOSPaymentRoutes(api *gin.RouterGroup, posPaymentHandler *handler.POSPaymentHandler, requireAuth gin.HandlerFunc) {
+func registerPOSPaymentRoutes(
+	api *gin.RouterGroup,
+	posBuildingHandler *handler.POSBuildingHandler,
+	posPaymentHandler *handler.POSPaymentHandler,
+	requireAuth gin.HandlerFunc,
+) {
+	api.GET("/me/pos/buildings", requireAuth, posBuildingHandler.ListMemberBuildings)
+	api.GET("/me/pos/buildings/:buildingId/units", requireAuth, posBuildingHandler.ListMemberUnits)
 	api.GET("/me/payments/pos/overview", requireAuth, posPaymentHandler.Overview)
 	api.GET("/me/payments/pos/fees", requireAuth, posPaymentHandler.ListFees)
 	api.GET("/me/payments/pos/bank-accounts", requireAuth, posPaymentHandler.ListBankAccounts)

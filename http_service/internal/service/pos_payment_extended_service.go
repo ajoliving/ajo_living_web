@@ -8,9 +8,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"gorm.io/gorm"
 
 	"ajoliving_web/http_service/internal/errcode"
 )
@@ -107,6 +110,9 @@ func (s *POSPaymentService) ReportPayment(ctx context.Context, params POSPayment
 
 	var result map[string]any
 	if err := s.posRelayJSONWithRefresh(ctx, params.UserID, token, http.MethodPost, "/bill", nil, payload, &result); err != nil {
+		return nil, err
+	}
+	if err := s.creditPOSReportPaymentReward(ctx, params.UserID, payload, result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -343,4 +349,60 @@ func (s *POSPaymentService) SimulateH5Order(ctx context.Context, userID int64, m
 // 17. posH5SimulationAllowed allows simulation only outside production.
 func posH5SimulationAllowed(appEnv string) bool {
 	return !strings.EqualFold(strings.TrimSpace(appEnv), "production")
+}
+
+// 18. creditPOSReportPaymentReward credits AJO Points once after offline POS payment succeeds.
+func (s *POSPaymentService) creditPOSReportPaymentReward(ctx context.Context, userID int64, payload map[string]any, result map[string]any) error {
+	if s.runtime.WalletService == nil {
+		return nil
+	}
+	points := posPaymentRewardPoints(payload)
+	if points <= 0 {
+		return nil
+	}
+	key := posReportPaymentRewardKey(payload, result)
+	if key == "" {
+		return nil
+	}
+
+	return s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		_, err := s.runtime.WalletService.CreditPointsWithTx(ctx, tx, WalletCreditParams{
+			UserID:         userID,
+			Amount:         points,
+			SourceType:     WalletSourcePOSPayment,
+			BizModule:      "payment",
+			ActionType:     WalletActionPOSReward,
+			IdempotencyKey: "pos_payment_reward:" + key,
+			Note:           fmt.Sprintf("POS payment reward %s", key),
+		})
+		return err
+	})
+}
+
+// 19. posReportPaymentRewardKey builds a stable reward idempotency key.
+func posReportPaymentRewardKey(payload map[string]any, result map[string]any) string {
+	for _, source := range []map[string]any{result, payload} {
+		if source == nil {
+			continue
+		}
+		for _, key := range []string{"receipt_id", "receipt_no", "TRAN_REF_NO", "tran_ref_no", "payment_id"} {
+			value := strings.TrimSpace(paymentStringValue(source[key]))
+			if value != "" {
+				return value
+			}
+		}
+		if nested := paymentMapValue(source["ismart_receipt_no"]); len(nested) > 0 {
+			if value := strings.TrimSpace(paymentStringValue(nested["receipt_id"])); value != "" {
+				return value
+			}
+		}
+	}
+
+	parts := []string{
+		paymentStringValue(payload["BLG_ID"]),
+		paymentStringValue(payload["UNIT_ID"]),
+		paymentStringValue(payload["TRAN_DATETIME"]),
+		paymentStringValue(payload["FINAL_AMOUNT"]),
+	}
+	return strings.Trim(strings.Join(parts, ":"), ":")
 }

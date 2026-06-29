@@ -677,7 +677,7 @@ func (s *UserService) loadIsmartAccountProfile(ctx context.Context, userID int64
 	return &IsmartAccountProfileResponse{
 		AccountCode:    firstLegacyText(raw, account.Username, "account_code", "account_no", "account_number", "username", "memberno"),
 		AccountPhone:   firstLegacyText(raw, account.Phone, "account_phone", "memberphone", "phone", "tel"),
-		AccountEmail:   firstLegacyText(raw, "", "account_email", "memberemail", "email", "billing_email"),
+		AccountEmail:   firstLegacyText(raw, account.Email, "account_email", "memberemail", "email", "billing_email"),
 		OwnerNameEN:    firstLegacyText(raw, "", "owner_name_en", "memberengname", "eng_name", "english_name"),
 		OwnerNameZH:    firstLegacyText(raw, "", "owner_name_zh", "memberchiname", "chi_name", "chinese_name"),
 		IdentityNumber: firstLegacyText(raw, "", "identity_number", "memberid", "id_number", "hkid"),
@@ -686,7 +686,7 @@ func (s *UserService) loadIsmartAccountProfile(ctx context.Context, userID int64
 		BirthDate:      firstLegacyText(raw, "", "birth_date", "birthday", "date_of_birth", "dob"),
 		ContactName:    firstLegacyText(raw, "", "contact_name", "contact_person", "contactperson"),
 		ContactPhone:   firstLegacyText(raw, account.Phone, "contact_phone", "contact_tel", "contactphone"),
-		BillingEmail:   firstLegacyText(raw, "", "billing_email", "bill_email", "memberemail"),
+		BillingEmail:   firstLegacyText(raw, account.Email, "billing_email", "bill_email", "memberemail"),
 		BillingAddress: firstLegacyText(raw, "", "billing_address", "bill_address", "address"),
 		Properties:     properties,
 	}

@@ -9,7 +9,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
-import { fetchPosBuildings, fetchPosBuildingUnits } from '@/httpapis/building';
+import { fetchMemberPosBuildings, fetchMemberPosBuildingUnits } from '@/httpapis/building';
 import { bindCurrentUserIsmart, updateMe } from '@/httpapis/me';
 import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
@@ -107,7 +107,111 @@ const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean =>
   return !(normalizedBuildingID && normalizedUnitID === normalizedBuildingID && !hasFloor && !hasUnit);
 };
 
-// 1.10 取得 POS 顯示排序分組
+// 1.10 由 POS 權限 ID 建立可選單位
+const buildUnitsFromFlatUnitPermissions = (
+  buildingID: string,
+  flatUnitPermissions: string[],
+): PosBuildingUnit[] => {
+  const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
+  if (!normalizedBuildingID || flatUnitPermissions.length === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const units: PosBuildingUnit[] = [];
+  flatUnitPermissions.forEach((rawPermission) => {
+    const permission = digitsOnly(rawPermission);
+    let normalizedUnitID = '';
+    if (permission.startsWith(normalizedBuildingID) && permission.length >= 11) {
+      normalizedUnitID = permission.slice(0, 11);
+    } else if (permission.startsWith(normalizedBuildingID.slice(0, 6)) && permission.length > 6) {
+      const suffix = permission.slice(6);
+      if (suffix.length > 0 && suffix.length <= 4) {
+        normalizedUnitID = `${normalizedBuildingID}${suffix.padStart(4, '0')}`;
+      }
+    }
+    if (!normalizedUnitID || seen.has(normalizedUnitID) || !normalizedUnitID.startsWith(normalizedBuildingID)) {
+      return;
+    }
+
+    const floorCode = normalizedUnitID.slice(7, 9);
+    const unitCode = normalizedUnitID.slice(9, 11);
+    const unitName = unitCode.replace(/^0+/, '') || unitCode;
+    seen.add(normalizedUnitID);
+    units.push({
+      unit_id: normalizedUnitID,
+      floor: floorCode === '00' ? '' : floorCode,
+      unit: unitName,
+      unit_name: unitName,
+    });
+  });
+
+  return units.sort((left, right) => getUnitID(left).localeCompare(getUnitID(right), 'en', { numeric: true }));
+};
+
+// 1.11 轉換 POS 權限碼
+const toTwoDigitCode = (value: unknown): string => {
+  const digits = digitsOnly(value);
+  return digits ? digits.slice(-2).padStart(2, '0') : '';
+};
+
+// 1.12 取得單位權限碼
+const getUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): string => {
+  const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
+  const unitID = digitsOnly(getUnitID(item));
+  if (unitID.startsWith(normalizedBuildingID) && unitID.length >= 11) {
+    return unitID.slice(0, 11);
+  }
+
+  const floorCode = toTwoDigitCode(getUnitFloor(item));
+  const unitCode = toTwoDigitCode(getUnitName(item));
+  return normalizedBuildingID && floorCode && unitCode ? `${normalizedBuildingID}${floorCode}${unitCode}` : '';
+};
+
+// 1.13 判斷單位是否符合 POS 權限
+const matchesUnitPermission = (
+  buildingID: string,
+  item: PosBuildingUnit,
+  flatUnitPermissions: string[],
+): boolean => {
+  if (flatUnitPermissions.length === 0) {
+    return true;
+  }
+
+  const permissionCode = getUnitPermissionCode(buildingID, item);
+  if (!permissionCode) {
+    return false;
+  }
+
+  const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
+  const compactUnitID = permissionCode.replace(/0/g, '');
+  return flatUnitPermissions.some((rawPermission) => {
+    const permission = digitsOnly(rawPermission);
+    if (!permission) {
+      return false;
+    }
+    const compactPermission = permission.replace(/0/g, '');
+    return (
+      permission === normalizedBuildingID ||
+      permissionCode === permission ||
+      compactUnitID === compactPermission ||
+      permissionCode.startsWith(permission) ||
+      compactUnitID.startsWith(compactPermission)
+    );
+  });
+};
+
+// 1.14 按權限過濾 POS 單位
+const filterUnitsByPermission = (
+  buildingID: string,
+  units: PosBuildingUnit[],
+  flatUnitPermissions: string[],
+): PosBuildingUnit[] =>
+  units
+    .filter((item) => isSelectableUnit(buildingID, item))
+    .filter((item) => matchesUnitPermission(buildingID, item, flatUnitPermissions));
+
+// 1.15 取得 POS 顯示排序分組
 const getDisplaySortBucket = (value: string): number => {
   const normalized = value.trim().toUpperCase();
   if (!normalized) {
@@ -122,7 +226,7 @@ const getDisplaySortBucket = (value: string): number => {
   return 2;
 };
 
-// 1.11 按 POS 顯示規則排序
+// 1.16 按 POS 顯示規則排序
 const compareDisplayCodes = (left: string, right: string): number => {
   const bucketDiff = getDisplaySortBucket(left) - getDisplaySortBucket(right);
   if (bucketDiff !== 0) {
@@ -230,9 +334,11 @@ export const useAccountProfilePage = () => {
   // 2.3.3 取得住戶可見大廈
   const clientBuildingIDs = computed(() => {
     const message = sessionStore.me?.ismart_msg;
-    return message
+    const values = message
       ? normalizeTextList(message.client_building_permissions)
       : normalizeTextList(sessionStore.me?.bound_building_ids);
+    const primaryCommunityID = sessionStore.me?.primary_community?.public_id?.trim() ?? '';
+    return values.length > 0 || !primaryCommunityID ? values : [primaryCommunityID];
   });
 
   // 2.3.4 取得住戶可見單位
@@ -299,8 +405,9 @@ export const useAccountProfilePage = () => {
       return selectedBuildingUnits.value;
     }
 
-    const allowed = new Set(clientUnitIDs.value);
-    return selectedBuildingUnits.value.filter((item) => allowed.has(getUnitID(item)));
+    return selectedBuildingUnits.value.filter((item) =>
+      matchesUnitPermission(selectedBuildingID.value, item, clientUnitIDs.value),
+    );
   });
 
   // 2.3.10 顯示住戶所屬大廈 / 樓層 / 單位
@@ -309,9 +416,8 @@ export const useAccountProfilePage = () => {
       return '';
     }
 
-    const allowed = new Set(clientUnitIDs.value);
     const labels = memberVisibleUnits.value
-      .filter((item) => allowed.has(getUnitID(item)))
+      .filter((item) => matchesUnitPermission(digitsOnly(getUnitID(item)).slice(0, 7), item, clientUnitIDs.value))
       .map((item) => {
         const buildingID = digitsOnly(getUnitID(item)).slice(0, 7);
         return [
@@ -680,10 +786,16 @@ export const useAccountProfilePage = () => {
   const loadBuildings = async (): Promise<void> => {
     isBuildingsLoading.value = true;
     try {
-      buildings.value = await fetchPosBuildings();
+      buildings.value = await fetchMemberPosBuildings();
     } catch (error) {
-      buildings.value = [];
-      feedbackStore.pushToast(readErrorMessage(error, '大廈資料載入失敗。'), 'error');
+      const fallbackBuildings = allowedBuildingIDs.value.map((buildingID) => ({
+        building_id: buildingID,
+        buildname: resolveBuildingName(buildingID),
+      }));
+      buildings.value = fallbackBuildings;
+      if (fallbackBuildings.length === 0) {
+        feedbackStore.pushToast(readErrorMessage(error, '大廈資料載入失敗。'), 'error');
+      }
     } finally {
       isBuildingsLoading.value = false;
     }
@@ -702,25 +814,26 @@ export const useAccountProfilePage = () => {
       return;
     }
 
-    try {
-      const result = await Promise.all(
-        buildingIDs.map(async (buildingID) => {
-          const units = await fetchPosBuildingUnits(buildingID);
-          return units.filter((item) => isSelectableUnit(buildingID, item));
-        }),
-      );
-      const merged = new Map<string, PosBuildingUnit>();
-      result.flat().forEach((item) => {
-        const unitID = getUnitID(item);
+    const result = await Promise.allSettled(
+      buildingIDs.map(async (buildingID) => {
+        const units = await fetchMemberPosBuildingUnits(buildingID);
+        return filterUnitsByPermission(buildingID, units, clientUnitIDs.value);
+      }),
+    );
+    const merged = new Map<string, PosBuildingUnit>();
+    result.forEach((item, index) => {
+      const buildingID = buildingIDs[index] ?? '';
+      const units = item.status === 'fulfilled'
+        ? item.value
+        : buildUnitsFromFlatUnitPermissions(buildingID, clientUnitIDs.value);
+      units.forEach((unit) => {
+        const unitID = getUnitID(unit);
         if (unitID) {
-          merged.set(unitID, item);
+          merged.set(unitID, unit);
         }
       });
-      memberVisibleUnits.value = Array.from(merged.values());
-    } catch (error) {
-      memberVisibleUnits.value = [];
-      feedbackStore.pushToast(readErrorMessage(error, '單位資料載入失敗。'), 'error');
-    }
+    });
+    memberVisibleUnits.value = Array.from(merged.values());
   };
 
   // 2.17 同步目前已保存繳費單位
@@ -759,12 +872,18 @@ export const useAccountProfilePage = () => {
 
     isUnitsLoading.value = true;
     try {
-      const units = await fetchPosBuildingUnits(value);
-      selectedBuildingUnits.value = units.filter((item) => isSelectableUnit(value, item));
+      const units = await fetchMemberPosBuildingUnits(value);
+      const filteredUnits = filterUnitsByPermission(value, units, clientUnitIDs.value);
+      const fallbackUnits = buildUnitsFromFlatUnitPermissions(value, clientUnitIDs.value);
+      selectedBuildingUnits.value = filteredUnits.length > 0 ? filteredUnits : fallbackUnits;
       syncSelectedUnitFromProfile();
     } catch (error) {
-      selectedBuildingUnits.value = [];
-      feedbackStore.pushToast(readErrorMessage(error, '單位資料載入失敗。'), 'error');
+      const fallbackUnits = buildUnitsFromFlatUnitPermissions(value, clientUnitIDs.value);
+      selectedBuildingUnits.value = fallbackUnits;
+      syncSelectedUnitFromProfile();
+      if (fallbackUnits.length === 0) {
+        feedbackStore.pushToast(readErrorMessage(error, '單位資料載入失敗。'), 'error');
+      }
     } finally {
       isUnitsLoading.value = false;
     }
@@ -799,6 +918,8 @@ export const useAccountProfilePage = () => {
         publisher_identity_type: formState.publisher_identity_type.trim(),
         primary_community_id: selectedBuildingID.value,
         primary_community_name: buildingName,
+        bound_building_ids: [selectedBuildingID.value],
+        bound_flat_unit_ids: [selectedUnitID.value],
         district_code: formState.district_code.trim(),
         residence_floor: selectedFloor.value,
         residence_unit: getUnitName(selectedUnit.value),

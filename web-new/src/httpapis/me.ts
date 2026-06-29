@@ -19,6 +19,8 @@ export const updateMe = (payload: {
   publisher_identity_type?: string;
   primary_community_id?: string;
   primary_community_name?: string;
+  bound_building_ids?: string[];
+  bound_flat_unit_ids?: string[];
   district_code?: string;
   avatar_asset_id?: string;
   residence_floor?: string;

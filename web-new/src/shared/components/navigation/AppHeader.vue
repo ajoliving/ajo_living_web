@@ -10,7 +10,7 @@ import { computed, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
-import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
+import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { useFeedbackStore } from '@/stores/feedback';
 import { type AppThemeName } from '@/utils/theme';

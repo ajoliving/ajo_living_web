@@ -1,7 +1,7 @@
 /*
  * 登入頁 - 狀態與資料流程。
  * 1. 管理登入表單狀態、模式切換與顯示文字。
- * 2. 處理郵箱密碼登入、手機密碼登入、郵箱驗證碼登入、ismart 帳戶登入與住戶註冊。
+ * 2. 處理電郵密碼登入、手提電話密碼登入、用戶名稱 / iSmart 登入與住戶註冊。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
 import axios from 'axios';
@@ -11,7 +11,6 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { fetchPosBuildings, fetchPosBuildingUnits } from '@/httpapis/building';
 import { fetchLoginHero } from '@/httpapis/home-content';
-import type { RequestOtpResult } from '@/model/auth';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import type { LoginHeroImageSetting } from '@/model/home-content';
 import { useFeedbackStore } from '@/stores/feedback';
@@ -21,15 +20,13 @@ export type LoginAuthMode = 'email' | 'phone' | 'username';
 
 export type LoginEmailAction = 'login' | 'register';
 
-export type LoginEmailMethod = 'password' | 'code';
-
-export type LoginAccountSource = 'local' | 'ismart';
-
 export interface LoginFormState {
   email: string;
   password: string;
   displayName: string;
   phone: string;
+  phoneCountryCode: string;
+  publisherIdentityType: string;
   otp: string;
   ismartAccount: string;
   primaryCommunityID: string;
@@ -55,6 +52,9 @@ interface ParsedPhoneInput {
 
 const LOGIN_HERO_MAX_IMAGES = 3;
 const EMAIL_PLACEHOLDER = 'name@example.com';
+const DEFAULT_PHONE_COUNTRY_CODE = '+852';
+const DEFAULT_PUBLISHER_IDENTITY_TYPE = 'owner';
+const SUPPORTED_PHONE_COUNTRY_CODES = ['+852', '+86'] as const;
 
 const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
   {
@@ -75,6 +75,8 @@ const createInitialFormState = (): LoginFormState => ({
   password: '',
   displayName: '',
   phone: '',
+  phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
+  publisherIdentityType: DEFAULT_PUBLISHER_IDENTITY_TYPE,
   otp: '',
   ismartAccount: '',
   primaryCommunityID: '',
@@ -82,7 +84,7 @@ const createInitialFormState = (): LoginFormState => ({
   residenceUnit: '',
 });
 
-// 2. 解析手機輸入
+// 2. 解析手提電話輸入
 const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
   const compactValue = rawValue.replace(/[()-]/g, ' ').trim();
   const parts = compactValue.split(/\s+/).filter(Boolean);
@@ -138,7 +140,31 @@ const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
   };
 };
 
-// 2.1 檢查手機格式是否符合後端要求
+// 2.1 標準化手提電話區號
+const normalizePhoneCountryCode = (value: string): string =>
+  SUPPORTED_PHONE_COUNTRY_CODES.includes(value as (typeof SUPPORTED_PHONE_COUNTRY_CODES)[number])
+    ? value
+    : DEFAULT_PHONE_COUNTRY_CODE;
+
+// 2.2 解析手提電話表單輸入
+const parsePhoneFormInput = (phoneCountryCode: string, rawValue: string): ParsedPhoneInput => {
+  const trimmedValue = rawValue.trim();
+  if (trimmedValue.startsWith('+')) {
+    return parsePhoneInput(trimmedValue);
+  }
+
+  const normalizedCountryCode = normalizePhoneCountryCode(phoneCountryCode);
+  const countryDigits = normalizedCountryCode.replace(/^\+/, '');
+  const phoneDigits = trimmedValue.replace(/\D/g, '');
+  const normalizedPhoneNumber =
+    phoneDigits.startsWith(countryDigits) && phoneDigits.length > countryDigits.length + 4
+      ? phoneDigits.slice(countryDigits.length)
+      : phoneDigits;
+
+  return parsePhoneInput(`${normalizedCountryCode} ${normalizedPhoneNumber}`);
+};
+
+// 2.3 檢查手提電話格式是否符合後端要求
 const isValidParsedPhone = ({ phoneCountryCode, phoneNumber }: ParsedPhoneInput): boolean => {
   const countryCodeDigits = phoneCountryCode.replace(/^\+/, '');
   return (
@@ -151,7 +177,7 @@ const isValidParsedPhone = ({ phoneCountryCode, phoneNumber }: ParsedPhoneInput)
   );
 };
 
-// 3. 檢查郵箱格式
+// 3. 檢查電郵格式
 const isValidEmailInput = (email: string): boolean => {
   const value = email.trim();
   return value.includes('@') && value.includes('.') && value.length <= 255;
@@ -163,13 +189,30 @@ const readErrorMessage = (error: unknown): string =>
     ? error.response?.data?.message ?? error.message
     : 'Request failed.';
 
-// 5. 取得隨機登入頁主視覺
+// 5. 判斷是否可回退本地帳戶登入
+const canFallbackToLocalLogin = (error: unknown): boolean => {
+  const message = readErrorMessage(error).toLowerCase();
+  return (
+    message.includes('ismart') ||
+    message.includes('pos login') ||
+    message.includes('pos relay') ||
+    message.includes('account and password')
+  );
+};
+
+// 6. 檢查本地用戶名稱格式
+const isValidUsernameInput = (value: string): boolean => {
+  const username = value.trim();
+  return username.length >= 2 && username.length <= 120 && !/\s/.test(username);
+};
+
+// 7. 取得隨機登入頁主視覺
 const getRandomHeroImage = (): LoginHeroImage => {
   const selectedIndex = Math.floor(Math.random() * LOGIN_HERO_IMAGES.length);
   return LOGIN_HERO_IMAGES[selectedIndex] ?? LOGIN_HERO_IMAGES[0];
 };
 
-// 6. 將後台登入背景圖轉為頁面主視覺列表
+// 8. 將後台登入背景圖轉為頁面主視覺列表
 const buildConfiguredHeroImages = (items: LoginHeroImageSetting[]): LoginHeroImage[] =>
   items
     .slice()
@@ -182,34 +225,34 @@ const buildConfiguredHeroImages = (items: LoginHeroImageSetting[]): LoginHeroIma
       location: item.location || 'Hong Kong',
     }));
 
-// 7. 讀取 POS 大廈 ID
+// 9. 讀取 POS 大廈 ID
 const getBuildingId = (item: PosBuilding): string =>
   String(item.building_id ?? item.id ?? '').trim();
 
-// 8. 讀取 POS 大廈名稱
+// 10. 讀取 POS 大廈名稱
 const getBuildingName = (item: PosBuilding): string =>
   String(item.buildname_chi ?? item.buildname ?? item.name ?? getBuildingId(item)).trim();
 
-// 9. 讀取 POS 單位 ID
+// 11. 讀取 POS 單位 ID
 const getUnitId = (item: PosBuildingUnit): string =>
   String(item.unit_id ?? item.id ?? '').trim();
 
-// 10. 讀取 POS 單位樓層
+// 12. 讀取 POS 單位樓層
 const getRawUnitFloor = (item: PosBuildingUnit): string =>
   String(item.floor ?? '').trim();
 
-// 11. 讀取 POS 單位名稱
+// 13. 讀取 POS 單位名稱
 const getRawUnitName = (item: PosBuildingUnit): string =>
   String(item.unit ?? item.unit_name ?? item.name ?? '').trim();
 
-// 12. 讀取 POS 單位顯示名稱
+// 14. 讀取 POS 單位顯示名稱
 const getUnitName = (item: PosBuildingUnit): string =>
   getRawUnitName(item) || getUnitId(item);
 
-// 13. 取出數字字串
+// 15. 取出數字字串
 const digitsOnly = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
 
-// 14. 排除 POS 回傳的樓宇本身佔位資料
+// 16. 排除 POS 回傳的樓宇本身佔位資料
 const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean => {
   const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
   const normalizedUnitID = digitsOnly(getUnitId(item));
@@ -228,7 +271,7 @@ const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean =>
   return true;
 };
 
-// 15. 取得樓層與單位排序分組
+// 17. 取得樓層與單位排序分組
 const getDisplaySortBucket = (value: string): number => {
   const normalized = value.trim().toUpperCase();
   if (!normalized) {
@@ -243,7 +286,7 @@ const getDisplaySortBucket = (value: string): number => {
   return 2;
 };
 
-// 16. 依顯示規則排序樓層與單位
+// 18. 依顯示規則排序樓層與單位
 const compareDisplayCodes = (left: string, right: string): number => {
   const bucketDiff = getDisplaySortBucket(left) - getDisplaySortBucket(right);
   if (bucketDiff !== 0) {
@@ -256,7 +299,7 @@ const compareDisplayCodes = (left: string, right: string): number => {
   });
 };
 
-// 17. 管理登入頁資料與動作
+// 19. 管理登入頁資料與動作
 export const useLoginPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -264,15 +307,12 @@ export const useLoginPage = () => {
   const feedbackStore = useFeedbackStore();
   const sessionStore = useSessionStore();
   const formState = reactive(createInitialFormState());
-  const authMode = ref<LoginAuthMode>('username');
+  const authMode = ref<LoginAuthMode>('phone');
   const emailAction = ref<LoginEmailAction>('login');
-  const emailLoginMethod = ref<LoginEmailMethod>('password');
-  const accountSource = ref<LoginAccountSource>('local');
   const buildings = ref<PosBuilding[]>([]);
   const buildingUnits = ref<PosBuildingUnit[]>([]);
   const buildingsLoading = ref(false);
   const unitsLoading = ref(false);
-  const requestingOtp = ref(false);
   const submitting = ref(false);
   const rememberMe = ref(true);
   const selectedHero = ref(getRandomHeroImage());
@@ -298,10 +338,6 @@ export const useLoginPage = () => {
       : submitting.value ? t('auth.loading') : t('auth.submit');
   });
 
-  const otpRequestLabel = computed(() =>
-    requestingOtp.value ? t('auth.sending') : t('auth.requestOtp'),
-  );
-
   const emailActionSwitchLabel = computed(() =>
     emailAction.value === 'register' ? t('auth.emailLogin') : t('auth.emailRegister'),
   );
@@ -310,10 +346,16 @@ export const useLoginPage = () => {
     emailAction.value === 'register' ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount'),
   );
 
-  const selectedIsmartAccount = computed(() => formState.ismartAccount.trim());
+  const selectedAccountInput = computed(() => formState.ismartAccount.trim());
   const selectedBuildingName = computed(() =>
     buildingOptions.value.find((option) => option.value === formState.primaryCommunityID)?.label ?? '',
   );
+  const publisherIdentityOptions = computed<LoginSelectOption[]>(() => [
+    { label: t('auth.identityOwner'), value: 'owner' },
+    { label: t('auth.identityTenant'), value: 'tenant' },
+    { label: t('auth.identityResidentRepresentative'), value: 'resident_representative' },
+    { label: t('auth.identityCompanyAuthorizedPerson'), value: 'company_authorized_person' },
+  ]);
 
   const buildingOptions = computed<LoginSelectOption[]>(() => {
     const placeholder = buildingsLoading.value
@@ -379,7 +421,7 @@ export const useLoginPage = () => {
     ];
   });
 
-  // 18. 重置樓層與單位級聯選擇
+  // 20. 重置樓層與單位級聯選擇
   watch(
     () => formState.primaryCommunityID,
     (nextValue, previousValue) => {
@@ -394,7 +436,7 @@ export const useLoginPage = () => {
     },
   );
 
-  // 19. 重置單位選擇
+  // 21. 重置單位選擇
   watch(
     () => formState.residenceFloor,
     (nextValue, previousValue) => {
@@ -404,7 +446,7 @@ export const useLoginPage = () => {
     },
   );
 
-  // 20. 載入後台登入背景圖
+  // 22. 載入後台登入背景圖
   const loadConfiguredHero = async (): Promise<void> => {
     try {
       const { data } = await fetchLoginHero();
@@ -418,7 +460,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 21. 載入住戶註冊大廈選項
+  // 23. 載入住戶註冊大廈選項
   const loadBuildings = async (): Promise<void> => {
     buildingsLoading.value = true;
     try {
@@ -430,7 +472,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 22. 載入指定大廈單位清單
+  // 24. 載入指定大廈單位清單
   const loadUnitsForBuilding = async (buildingID: string): Promise<void> => {
     const requestID = ++latestUnitRequestID;
     unitsLoading.value = true;
@@ -455,66 +497,29 @@ export const useLoginPage = () => {
     }
   };
 
-  // 23. 請求郵箱驗證碼
-  const handleRequestOtp = async (): Promise<void> => {
-    let result: RequestOtpResult;
-    requestingOtp.value = true;
-
-    try {
-      if (!isValidEmailInput(formState.email)) {
-        feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-        return;
-      }
-
-      result = await sessionStore.sendEmailOtp(
-        formState.email.trim(),
-        emailAction.value === 'register' ? 'register' : 'login',
-      );
-
-      feedbackStore.pushToast(
-        result.mock_code ? t('auth.otpPreview', { code: result.mock_code }) : t('auth.otpSent'),
-        'info',
-      );
-    } catch (error) {
-      feedbackStore.pushToast(readErrorMessage(error), 'error');
-    } finally {
-      requestingOtp.value = false;
-    }
-  };
-
-  // 24. 完成登入後跳轉
+  // 25. 完成登入後跳轉
   const redirectAfterSignIn = async (): Promise<void> => {
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/marketplace';
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
     await router.push(redirect);
   };
 
-  // 25. 執行郵箱登入或註冊
+  // 26. 執行電郵登入或註冊
   const handleEmailSubmit = async (): Promise<void> => {
     if (emailAction.value === 'register') {
-      if (accountSource.value === 'ismart') {
-        await handleIsmartSubmit();
-        return;
-      }
-
       const optionalEmail = formState.email.trim();
       if (optionalEmail && !isValidEmailInput(optionalEmail)) {
         feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
         return;
       }
 
-      const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
-      if (!formState.displayName.trim() || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
+      const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
+      if (!isValidUsernameInput(formState.displayName) || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
         feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
         return;
       }
     } else if (!isValidEmailInput(formState.email)) {
       feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
       return;
-    } else if (emailLoginMethod.value === 'code') {
-      if (formState.otp.trim().length === 0) {
-        feedbackStore.pushToast(t('auth.emailOtpRequiredFields'), 'error');
-        return;
-      }
     } else if (formState.password.trim().length === 0) {
       feedbackStore.pushToast(t('auth.passwordRequired'), 'error');
       return;
@@ -524,7 +529,7 @@ export const useLoginPage = () => {
 
     try {
       if (emailAction.value === 'register') {
-        const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
+        const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
         await sessionStore.registerEmailAccount(
           formState.email.trim(),
           formState.password,
@@ -532,22 +537,27 @@ export const useLoginPage = () => {
           phoneCountryCode,
           phoneNumber,
           formState.displayName.trim(),
+          formState.publisherIdentityType.trim(),
           formState.primaryCommunityID.trim(),
           selectedBuildingName.value.trim(),
           formState.residenceFloor.trim(),
           formState.residenceUnit.trim(),
         );
         feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
-      } else if (emailLoginMethod.value === 'code') {
-        await sessionStore.signInWithEmailOtp(
-          formState.email.trim(),
-          formState.otp.trim(),
-          '',
-          'login',
-        );
-        feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       } else {
-        await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
+        try {
+          await sessionStore.signInWithIsmart(
+            formState.email.trim(),
+            formState.password,
+            undefined,
+            formState.email.trim(),
+          );
+        } catch (error) {
+          if (!canFallbackToLocalLogin(error)) {
+            throw error;
+          }
+          await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
+        }
         feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       }
 
@@ -559,9 +569,9 @@ export const useLoginPage = () => {
     }
   };
 
-  // 26. 執行手機密碼登入
+  // 27. 執行手提電話密碼登入
   const handlePhoneSubmit = async (): Promise<void> => {
-    const { phoneCountryCode, phoneNumber } = parsePhoneInput(formState.phone);
+    const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
     if (!isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length === 0) {
       feedbackStore.pushToast(t('auth.phonePasswordRequired'), 'error');
       return;
@@ -570,7 +580,14 @@ export const useLoginPage = () => {
     submitting.value = true;
 
     try {
-      await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
+      try {
+        await sessionStore.signInWithIsmart(phoneNumber, formState.password, `${phoneCountryCode}${phoneNumber}`);
+      } catch (error) {
+        if (!canFallbackToLocalLogin(error)) {
+          throw error;
+        }
+        await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
+      }
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
@@ -580,22 +597,43 @@ export const useLoginPage = () => {
     }
   };
 
-  // 27. 使用 ismart 帳戶登入或綁定
-  const handleIsmartSubmit = async (): Promise<void> => {
-    if (selectedIsmartAccount.value.length === 0 || formState.password.trim().length === 0) {
-      feedbackStore.pushToast(t('auth.ismartRequiredFields'), 'error');
+  // 28. 執行用戶名稱、電郵或 iSmart 密碼登入
+  const handleAccountSubmit = async (): Promise<void> => {
+    const accountInput = selectedAccountInput.value;
+    const isEmailAccount = accountInput.includes('@');
+    if (formState.password.trim().length === 0) {
+      feedbackStore.pushToast(t('auth.usernamePasswordRequired'), 'error');
+      return;
+    }
+    if (isEmailAccount && !isValidEmailInput(accountInput)) {
+      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+      return;
+    }
+    if (!isEmailAccount && !isValidUsernameInput(accountInput)) {
+      feedbackStore.pushToast(t('auth.usernamePasswordRequired'), 'error');
       return;
     }
 
     submitting.value = true;
 
     try {
-      await sessionStore.signInWithIsmart(
-        selectedIsmartAccount.value,
-        formState.password,
-        undefined,
-        formState.email.trim() || undefined,
-      );
+      try {
+        await sessionStore.signInWithIsmart(
+          accountInput,
+          formState.password,
+          undefined,
+          isEmailAccount ? accountInput : undefined,
+        );
+      } catch (error) {
+        if (!canFallbackToLocalLogin(error)) {
+          throw error;
+        }
+        if (isEmailAccount) {
+          await sessionStore.signInWithEmail(accountInput, formState.password);
+        } else {
+          await sessionStore.signInWithUsername(accountInput, formState.password);
+        }
+      }
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
@@ -605,10 +643,10 @@ export const useLoginPage = () => {
     }
   };
 
-  // 28. 按目前模式提交登入表單
+  // 29. 按目前模式提交登入表單
   const handleSubmit = async (): Promise<void> => {
     if (emailAction.value === 'login' && authMode.value === 'username') {
-      await handleIsmartSubmit();
+      await handleAccountSubmit();
       return;
     }
 
@@ -620,40 +658,28 @@ export const useLoginPage = () => {
     await handlePhoneSubmit();
   };
 
-  // 29. 執行登出
+  // 30. 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 30. 設定登入模式
+  // 31. 前往忘記密碼流程
+  const handleForgotPassword = async (): Promise<void> => {
+    await router.push('/forgot-password');
+  };
+
+  // 32. 設定登入模式
   const setAuthMode = (mode: LoginAuthMode): void => {
     authMode.value = mode;
     emailAction.value = 'login';
     formState.otp = '';
   };
 
-  // 31. 設定註冊帳戶來源
-  const setAccountSource = (source: LoginAccountSource): void => {
-    accountSource.value = source;
-    emailAction.value = 'register';
-    authMode.value = 'email';
-    formState.otp = '';
-  };
-
-  // 32. 切換郵箱登入與註冊模式
+  // 33. 切換電郵登入與註冊模式
   const toggleEmailAction = (): void => {
-    accountSource.value = 'local';
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
     authMode.value = emailAction.value === 'register' ? 'email' : 'phone';
-    formState.otp = '';
-  };
-
-  // 33. 切換郵箱登入方式
-  const setEmailLoginMethod = (method: LoginEmailMethod): void => {
-    authMode.value = 'email';
-    emailAction.value = 'login';
-    emailLoginMethod.value = method;
     formState.otp = '';
   };
 
@@ -663,29 +689,24 @@ export const useLoginPage = () => {
   });
 
   return {
-    accountSource,
     authMode,
     buildingOptions,
     buildingsLoading,
     emailAction,
     emailActionSwitchLabel,
-    emailLoginMethod,
     emailPlaceholder: EMAIL_PLACEHOLDER,
     footerPrompt,
     formState,
-    handleRequestOtp,
+    handleForgotPassword,
     handleSignOut,
     handleSubmit,
     isAuthenticated,
-    otpRequestLabel,
     rememberMe,
-    requestingOtp,
+    publisherIdentityOptions,
     residenceFloorOptions,
     residenceUnitOptions,
     selectedHero,
-    setAccountSource,
     setAuthMode,
-    setEmailLoginMethod,
     submitting,
     submitLabel,
     toggleEmailAction,

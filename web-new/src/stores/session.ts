@@ -1,7 +1,7 @@
 /*
  * 會員登入狀態。
  * 1. 保存真實登入 token 與當前會員資料。
- * 2. 提供手機 OTP、郵箱 OTP、郵箱密碼、手機密碼、ismart、當前會員查詢與登出流程。
+ * 2. 提供手機 OTP、郵箱 OTP、郵箱密碼、重設密碼、用戶名密碼、手機密碼、ismart、當前會員查詢與登出流程。
  */
 import { defineStore } from 'pinia';
 
@@ -9,10 +9,13 @@ import {
   loginWithEmail,
   loginWithIsmart,
   loginWithPhone,
+  loginWithUsername,
   logout,
   registerWithEmail,
+  requestEmailPasswordReset,
   requestEmailOtp,
   requestOtp,
+  resetPasswordWithEmail,
   verifyEmailOtp,
   verifyOtp,
 } from '@/httpapis/auth';
@@ -58,7 +61,7 @@ export const useSessionStore = defineStore('session', {
   }),
   getters: {
     // 2. 判斷是否已登入
-    isAuthenticated: (state) => state.accessToken.trim().length > 0,
+    isAuthenticated: (state) => Boolean(state.accessToken),
     // 3. 輸出導覽層可直接使用的會員資料
     currentUser: (state) => buildSessionUser(state.me),
   },
@@ -166,7 +169,27 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 11. 使用郵箱密碼登入
+    // 11. 請求電郵重設密碼驗證碼
+    async sendPasswordResetEmail(email: string): Promise<RequestOtpResult> {
+      const { data } = await requestEmailPasswordReset({
+        email,
+      });
+
+      return data.data;
+    },
+
+    // 12. 使用電郵驗證碼重設密碼
+    async resetPasswordByEmail(email: string, code: string, password: string): Promise<boolean> {
+      const { data } = await resetPasswordWithEmail({
+        email,
+        code,
+        password,
+      });
+
+      return data.data.password_reset;
+    },
+
+    // 13. 使用郵箱密碼登入
     async signInWithEmail(email: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithEmail({ email, password });
       this.setTokens(data.data.access_token, data.data.refresh_token);
@@ -181,7 +204,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 12. 使用手機密碼登入
+    // 14. 使用手機密碼登入
     async signInWithPhone(phoneCountryCode: string, phoneNumber: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithPhone({
         phone_country_code: phoneCountryCode,
@@ -200,7 +223,25 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 13. 註冊郵箱與手機密碼帳戶
+    // 15. 使用用戶名密碼登入
+    async signInWithUsername(username: string, password: string): Promise<VerifyOtpResult> {
+      const { data } = await loginWithUsername({
+        username,
+        password,
+      });
+      this.setTokens(data.data.access_token, data.data.refresh_token);
+
+      try {
+        await this.loadCurrentUser();
+      } catch (error) {
+        this.clearSession();
+        throw error;
+      }
+
+      return data.data;
+    },
+
+    // 16. 註冊郵箱與手機密碼帳戶
     async registerEmailAccount(
       email: string,
       password: string,
@@ -208,6 +249,7 @@ export const useSessionStore = defineStore('session', {
       phoneCountryCode: string,
       phoneNumber: string,
       username: string,
+      publisherIdentityType = '',
       primaryCommunityID = '',
       primaryCommunityName = '',
       residenceFloor = '',
@@ -221,6 +263,7 @@ export const useSessionStore = defineStore('session', {
         phone_country_code: phoneCountryCode,
         phone_number: phoneNumber,
         username,
+        publisher_identity_type: publisherIdentityType,
         primary_community_id: primaryCommunityID,
         primary_community_name: primaryCommunityName,
         residence_floor: residenceFloor,
@@ -238,7 +281,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 14. 使用 ismart 帳戶登入
+    // 17. 使用 ismart 帳戶登入
     async signInWithIsmart(account: string, password: string, phone?: string, email?: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithIsmart({
         account,
@@ -258,14 +301,18 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 15. 讀取目前會員資料
+    // 18. 讀取目前會員資料
     async loadCurrentUser() {
+      if (!this.accessToken) {
+        this.me = null;
+        return this.me;
+      }
       const { data } = await fetchMe();
       this.me = data.data;
       return data.data;
     },
 
-    // 16. 執行登出
+    // 19. 執行登出
     async signOut() {
       try {
         if (this.accessToken) {

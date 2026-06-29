@@ -1,46 +1,41 @@
 /*
  * 支付路由。
- * 1. 定義支付中心主路由。
- * 2. 對外輸出支付路由陣列供總路由組裝。
+ * 1. 定義 AJO Pay 首頁與付款頁兩個正式入口。
+ * 2. 保留舊支付子路徑兼容跳轉，避免外部鏈接失效。
  */
 import type { RouteRecordRaw } from 'vue-router';
 
 import PaymentsPage from '@/pages/payments/Page.vue';
-import PaymentAccountingPage from '@/pages/payments/accounting/Page.vue';
-import PaymentBillsPage from '@/pages/payments/bills/Page.vue';
-import PaymentCartPage from '@/pages/payments/cart/Page.vue';
-import PaymentHistoryPage from '@/pages/payments/history/Page.vue';
-import PaymentOverviewPage from '@/pages/payments/overview/Page.vue';
-import PaymentOrdersPage from '@/pages/payments/orders/Page.vue';
-import PaymentUnitsPage from '@/pages/payments/units/Page.vue';
+import PaymentPayPage from '@/pages/payments/pay/Page.vue';
 
 // 1. 輸出支付路由
 export const paymentRoutes: RouteRecordRaw[] = [
   {
+    path: '/payment',
+    redirect: '/payments',
+  },
+  {
     path: '/payment/unit',
-    redirect: (to) => ({
-      path: '/payments/units',
-      query: to.query,
-    }),
+    redirect: '/account/profile',
   },
   {
     path: '/payment/order',
     redirect: (to) => ({
-      path: '/payments/orders',
+      path: '/payments/pay',
       query: to.query,
     }),
   },
   {
     path: '/payment/result',
     redirect: (to) => ({
-      path: '/payments/orders',
+      path: '/payments/pay',
       query: to.query,
     }),
   },
   {
     path: '/payment/h5/redirect',
     redirect: (to) => ({
-      path: '/payments/orders',
+      path: '/payments/pay',
       query: to.query,
     }),
   },
@@ -49,54 +44,46 @@ export const paymentRoutes: RouteRecordRaw[] = [
     name: 'Payments',
     component: PaymentsPage,
     meta: { titleKey: 'nav.payments', requiresAuth: true },
-    children: [
-      {
-        path: '',
-        name: 'PaymentsOverview',
-        component: PaymentOverviewPage,
-        meta: { titleKey: 'nav.payments', requiresAuth: true },
-      },
-      {
-        path: 'units',
-        name: 'PaymentUnits',
-        component: PaymentUnitsPage,
-        meta: { titleKey: 'nav.paymentUnits', requiresAuth: true },
-      },
-      {
-        path: 'bills',
-        name: 'PaymentBills',
-        component: PaymentBillsPage,
-        meta: { titleKey: 'nav.paymentBills', requiresAuth: true },
-      },
-      {
-        path: 'cart',
-        name: 'PaymentCart',
-        component: PaymentCartPage,
-        meta: { titleKey: 'nav.paymentCart', requiresAuth: true },
-      },
-      {
-        path: 'records',
-        name: 'PaymentRecords',
-        redirect: '/payments/history',
-      },
-      {
-        path: 'orders',
-        name: 'PaymentOrders',
-        component: PaymentOrdersPage,
-        meta: { titleKey: 'nav.paymentOrders', requiresAuth: true },
-      },
-      {
-        path: 'accounting',
-        name: 'PaymentAccounting',
-        component: PaymentAccountingPage,
-        meta: { titleKey: 'nav.paymentAccounting', requiresAuth: true },
-      },
-      {
-        path: 'history',
-        name: 'PaymentHistory',
-        component: PaymentHistoryPage,
-        meta: { titleKey: 'nav.paymentHistory', requiresAuth: true },
-      },
-    ],
+  },
+  {
+    path: '/payments/pay',
+    name: 'PaymentPay',
+    component: PaymentPayPage,
+    meta: { titleKey: 'nav.payments', requiresAuth: true },
+  },
+  {
+    path: '/payments/overview',
+    redirect: '/payments',
+  },
+  {
+    path: '/payments/bills',
+    redirect: '/payments/pay',
+  },
+  {
+    path: '/payments/cart',
+    redirect: '/payments/pay',
+  },
+  {
+    path: '/payments/orders',
+    redirect: (to) => ({
+      path: '/payments/pay',
+      query: to.query,
+    }),
+  },
+  {
+    path: '/payments/records',
+    redirect: '/payments/pay',
+  },
+  {
+    path: '/payments/history',
+    redirect: '/payments/pay',
+  },
+  {
+    path: '/payments/accounting',
+    redirect: '/payments',
+  },
+  {
+    path: '/payments/units',
+    redirect: '/account/profile',
   },
 ];

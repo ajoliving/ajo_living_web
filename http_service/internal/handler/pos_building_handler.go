@@ -17,11 +17,12 @@ import (
 // 1. POSBuildingHandler handles POS building metadata endpoints.
 type POSBuildingHandler struct {
 	posBuildingService *service.POSBuildingService
+	posPaymentService  *service.POSPaymentService
 }
 
 // 2. NewPOSBuildingHandler creates a POS building handler instance.
-func NewPOSBuildingHandler(posBuildingService *service.POSBuildingService) *POSBuildingHandler {
-	return &POSBuildingHandler{posBuildingService: posBuildingService}
+func NewPOSBuildingHandler(posBuildingService *service.POSBuildingService, posPaymentService *service.POSPaymentService) *POSBuildingHandler {
+	return &POSBuildingHandler{posBuildingService: posBuildingService, posPaymentService: posPaymentService}
 }
 
 // 3. ListBuildings returns POS building options.
@@ -38,6 +39,40 @@ func (h *POSBuildingHandler) ListBuildings(c *gin.Context) {
 // 4. ListUnits returns POS flat units for a building.
 func (h *POSBuildingHandler) ListUnits(c *gin.Context) {
 	result, err := h.posBuildingService.ListUnits(c.Request.Context(), strings.TrimSpace(c.Param("buildingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, gin.H{"items": result})
+}
+
+// 5. ListMemberBuildings returns POS buildings through the current member token.
+func (h *POSBuildingHandler) ListMemberBuildings(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.posPaymentService.ListMemberBuildings(c.Request.Context(), user.UserID)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, gin.H{"items": result})
+}
+
+// 6. ListMemberUnits returns POS units through the current member token.
+func (h *POSBuildingHandler) ListMemberUnits(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.posPaymentService.ListMemberUnits(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("buildingId")))
 	if err != nil {
 		errcode.WriteError(c, err)
 		return

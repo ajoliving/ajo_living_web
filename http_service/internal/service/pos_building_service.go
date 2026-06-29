@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -67,7 +68,7 @@ func (s *POSBuildingService) ListUnits(ctx context.Context, buildingID string) (
 	}
 
 	var units []POSUnitSummary
-	if err := s.getPOS(ctx, "/building/"+value+"/units", &units); err != nil {
+	if err := s.getPOS(ctx, "/building/"+url.PathEscape(value)+"/units", &units); err != nil {
 		return nil, err
 	}
 

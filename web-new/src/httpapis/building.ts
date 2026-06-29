@@ -22,3 +22,15 @@ export const fetchPosBuildingUnits = async (buildingID: string): Promise<PosBuil
   const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuildingUnit>>>(`/pos/buildings/${encodeURIComponent(buildingID)}/units`);
   return data.data.items;
 };
+
+// 3. 取得目前會員可見 POS 樓宇清單
+export const fetchMemberPosBuildings = async (): Promise<PosBuilding[]> => {
+  const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuilding>>>('/me/pos/buildings');
+  return data.data.items;
+};
+
+// 4. 取得目前會員可見 POS 大廈單位清單
+export const fetchMemberPosBuildingUnits = async (buildingID: string): Promise<PosBuildingUnit[]> => {
+  const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuildingUnit>>>(`/me/pos/buildings/${encodeURIComponent(buildingID)}/units`);
+  return data.data.items;
+};

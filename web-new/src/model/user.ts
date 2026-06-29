@@ -55,6 +55,7 @@ export interface CurrentMemberProfile {
   local_password?: string;
   ismart_msg?: {
     username?: string;
+    email?: string;
     is_staff?: boolean;
     building?: string[];
     staff_building_permissions?: string[];

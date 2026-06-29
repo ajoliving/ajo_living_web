@@ -25,7 +25,7 @@ import (
 const (
 	posPaymentDefaultCurrency      = "HKD"
 	posPaymentDefaultExpireSeconds = 180
-	posPaymentRewardPointRate      = int64(1)
+	posPaymentRewardHKDPerPoint    = int64(100)
 )
 
 // 1. POSPaymentService handles POS property payment data.
@@ -111,21 +111,33 @@ func (s *POSPaymentService) Overview(ctx context.Context, userID int64, selectio
 		if !errors.As(contextErr, &appErr) {
 			return nil, contextErr
 		}
-		if appErr.Code != errcode.CodeValidationError {
+		switch appErr.Code {
+		case errcode.CodeValidationError:
+			profileRequired = true
+		case errcode.CodeInternalError:
+			if fallbackContext := s.profilePaymentContext(ctx, userID, selection, account); fallbackContext != nil {
+				contextValue = fallbackContext
+				profileRequired = true
+			} else {
+				return nil, contextErr
+			}
+		default:
 			return nil, contextErr
 		}
-		profileRequired = true
 	}
 	if accountErr != nil {
 		if !errors.As(accountErr, &appErr) || appErr.Code != errcode.CodeAuthRequired {
 			return nil, accountErr
 		}
 	}
+	if profileRequired && contextValue == nil {
+		contextValue = s.profilePaymentContext(ctx, userID, selection, account)
+	}
 
 	isStaff := account != nil && account.IsStaff
 	var summary *POSPaymentOverviewSummary
 	if includeSummary {
-		summary = s.overviewSummary(ctx, userID, contextValue, account != nil && strings.TrimSpace(account.RelayTokenEncrypted) != "")
+		summary = s.overviewSummary(ctx, userID, contextValue, account != nil && strings.TrimSpace(account.PasswordEncrypted) != "")
 	}
 	return &POSPaymentOverview{
 		Context:              contextValue,
@@ -133,13 +145,60 @@ func (s *POSPaymentService) Overview(ctx context.Context, userID int64, selectio
 		UnitOptions:          unitOptions,
 		IsStaff:              isStaff,
 		ProfileRequired:      profileRequired,
-		POSLoginRequired:     account == nil || strings.TrimSpace(account.RelayTokenEncrypted) == "",
+		POSLoginRequired:     account == nil || strings.TrimSpace(account.PasswordEncrypted) == "",
 		TerminalProxyEnabled: isStaff && contextValue != nil && s.TerminalProxyEnabled(contextValue.BuildingID),
 		Summary:              summary,
 	}, nil
 }
 
-// 10. overviewSummary returns non-blocking payment hub indicators.
+// 10. profilePaymentContext returns a non-relay unit context for overview readiness.
+func (s *POSPaymentService) profilePaymentContext(ctx context.Context, userID int64, selection POSPaymentSelection, account *model.UserIsmartAccount) *POSUnitContext {
+	var profile model.UserProfile
+	if err := s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error; err != nil {
+		return nil
+	}
+
+	buildingOptions, unitOptions, err := s.memberPaymentBindings(ctx, userID, account)
+	if err != nil {
+		return nil
+	}
+	buildingID := strings.TrimSpace(selection.BuildingID)
+	profileBuildingID := ""
+	if profile.PrimaryCommunity != nil {
+		profileBuildingID = strings.TrimSpace(profile.PrimaryCommunity.PublicID)
+	}
+	if buildingID == "" && containsString(buildingOptions, profileBuildingID) {
+		buildingID = profileBuildingID
+	}
+	if buildingID == "" || !containsString(buildingOptions, buildingID) {
+		return nil
+	}
+
+	unitID := strings.TrimSpace(selection.UnitID)
+	if unitID == "" && len(unitOptions) == 1 {
+		unitID = unitOptions[0]
+	}
+	if unitID != "" && len(unitOptions) > 0 && !containsString(unitOptions, unitID) && (account == nil || !account.IsStaff) {
+		return nil
+	}
+
+	floor := strings.TrimSpace(profile.ResidenceFloor)
+	unit := strings.TrimSpace(profile.ResidenceUnit)
+	if unitID == "" && unit == "" {
+		return nil
+	}
+
+	return &POSUnitContext{
+		BuildingID:   buildingID,
+		BuildingName: posPaymentBuildingName(profile.PrimaryCommunity, buildingID),
+		UnitID:       unitID,
+		Floor:        floor,
+		Unit:         unit,
+		UnitLabel:    posUnitLabel(floor, unit),
+	}
+}
+
+// 11. overviewSummary returns non-blocking payment hub indicators.
 func (s *POSPaymentService) overviewSummary(ctx context.Context, userID int64, contextValue *POSUnitContext, canReadPOS bool) *POSPaymentOverviewSummary {
 	if contextValue == nil || !canReadPOS {
 		return nil
@@ -179,7 +238,7 @@ func (s *POSPaymentService) overviewSummary(ctx context.Context, userID int64, c
 	return summary
 }
 
-// 11. posSummaryAmount reads an amount-like POS field.
+// 12. posSummaryAmount reads an amount-like POS field.
 func posSummaryAmount(row map[string]any) float64 {
 	for _, key := range []string{"paid_amount", "net_amount", "amount", "final_amount", "total", "total_amount", "payable"} {
 		raw := strings.TrimSpace(paymentStringValue(row[key]))
@@ -194,7 +253,7 @@ func posSummaryAmount(row map[string]any) float64 {
 	return 0
 }
 
-// 12. posSummaryOrderIsPending checks pending order state.
+// 13. posSummaryOrderIsPending checks pending order state.
 func posSummaryOrderIsPending(row map[string]any) bool {
 	state := strings.ToUpper(paymentFirstNonEmpty(
 		paymentStringValue(row["state"]),
@@ -205,7 +264,7 @@ func posSummaryOrderIsPending(row map[string]any) bool {
 	return state == "PAYING" || state == "PENDING" || state == "0" || businessState == "PENDING"
 }
 
-// 13. posSummaryOrderIsAbnormal checks failed or expired order state.
+// 14. posSummaryOrderIsAbnormal checks failed or expired order state.
 func posSummaryOrderIsAbnormal(row map[string]any) bool {
 	state := strings.ToUpper(paymentFirstNonEmpty(
 		paymentStringValue(row["state"]),
@@ -215,7 +274,7 @@ func posSummaryOrderIsAbnormal(row map[string]any) bool {
 	return state == "FAILED" || state == "EXPIRED" || state == "REVOKED" || businessState == "FAILED"
 }
 
-// 14. ListBills returns selected unit unpaid POS bills.
+// 15. ListBills returns selected unit unpaid POS bills.
 func (s *POSPaymentService) ListBills(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
 	contextValue, token, err := s.memberPOSAccess(ctx, userID, selection)
 	if err != nil {
@@ -237,7 +296,7 @@ func (s *POSPaymentService) ListBills(ctx context.Context, userID int64, selecti
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: rows}, nil
 }
 
-// 10. ListHistory returns POS transaction history for the selected unit.
+// 16. ListHistory returns POS transaction history for the selected unit.
 func (s *POSPaymentService) ListHistory(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
 	contextValue, token, err := s.memberPOSAccess(ctx, userID, selection)
 	if err != nil {
@@ -254,7 +313,7 @@ func (s *POSPaymentService) ListHistory(ctx context.Context, userID int64, selec
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: normalizePOSRows(response, "payment_objs")}, nil
 }
 
-// 11. ListAccounting returns staff cashier entries for the selected building.
+// 17. ListAccounting returns staff cashier entries for the selected building.
 func (s *POSPaymentService) ListAccounting(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
 	contextValue, token, err := s.staffBuildingAccess(ctx, userID, selection)
 	if err != nil {
@@ -271,7 +330,7 @@ func (s *POSPaymentService) ListAccounting(ctx context.Context, userID int64, se
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: normalizePOSAccountingRows(response)}, nil
 }
 
-// 12. CreateH5Order creates one POS H5 payment order.
+// 18. CreateH5Order creates one POS H5 payment order.
 func (s *POSPaymentService) CreateH5Order(ctx context.Context, params POSPaymentOrderCreateParams) (map[string]any, error) {
 	contextValue, _, err := s.memberPOSAccess(ctx, params.UserID, params.Selection)
 	if err != nil {
@@ -294,7 +353,7 @@ func (s *POSPaymentService) CreateH5Order(ctx context.Context, params POSPayment
 	return result, nil
 }
 
-// 13. GetH5Order returns one POS H5 payment order.
+// 19. GetH5Order returns one POS H5 payment order.
 func (s *POSPaymentService) GetH5Order(ctx context.Context, userID int64, mchOrderNo string, detail bool, refresh bool, selection POSPaymentSelection) (map[string]any, error) {
 	contextValue, _, err := s.memberPOSAccess(ctx, userID, selection)
 	if err != nil {
@@ -330,7 +389,7 @@ func (s *POSPaymentService) GetH5Order(ctx context.Context, userID int64, mchOrd
 	return result, nil
 }
 
-// 14. ListOrderRecords returns POS payment order snapshots for the selected unit.
+// 20. ListOrderRecords returns POS payment order snapshots for the selected unit.
 func (s *POSPaymentService) ListOrderRecords(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
 	contextValue, _, err := s.memberPOSAccess(ctx, userID, selection)
 	if err != nil {
@@ -350,7 +409,7 @@ func (s *POSPaymentService) ListOrderRecords(ctx context.Context, userID int64, 
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: normalizePaymentServiceRows(result)}, nil
 }
 
-// 15. memberPOSAccess returns selected unit context and POS relay token.
+// 21. memberPOSAccess returns selected unit context and POS relay token.
 func (s *POSPaymentService) memberPOSAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
 	contextValue, err := s.resolveMemberUnitContext(ctx, userID, selection)
 	if err != nil {
@@ -365,7 +424,7 @@ func (s *POSPaymentService) memberPOSAccess(ctx context.Context, userID int64, s
 	return contextValue, token, nil
 }
 
-// 16. staffPOSAccess returns staff context and token.
+// 22. staffPOSAccess returns staff context and token.
 func (s *POSPaymentService) staffPOSAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -378,7 +437,7 @@ func (s *POSPaymentService) staffPOSAccess(ctx context.Context, userID int64, se
 	return s.memberPOSAccess(ctx, userID, selection)
 }
 
-// 17. staffBuildingAccess returns staff building context and POS relay token.
+// 23. staffBuildingAccess returns staff building context and POS relay token.
 func (s *POSPaymentService) staffBuildingAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -410,7 +469,7 @@ func (s *POSPaymentService) staffBuildingAccess(ctx context.Context, userID int6
 	}, token, nil
 }
 
-// 18. resolveMemberUnitContext resolves POS unit from the member profile.
+// 24. resolveMemberUnitContext resolves POS unit from the member profile.
 func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, error) {
 	var profile model.UserProfile
 	if err := s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error; err != nil {
@@ -435,19 +494,32 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 		buildingID = profileBuildingID
 	}
 	unitID := strings.TrimSpace(selection.UnitID)
+	if unitID == "" && len(unitOptions) == 1 {
+		unitID = unitOptions[0]
+	}
 	if buildingID == "" || (unitID == "" && strings.TrimSpace(profile.ResidenceUnit) == "") {
 		return nil, errcode.New(errcode.CodeValidationError, "building and residence unit are required")
 	}
 	if !containsString(buildingOptions, buildingID) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
 	}
-	if unitID != "" && len(unitOptions) > 0 && !containsString(unitOptions, unitID) && !isStaff {
+	if unitID != "" && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, unitID, unitOptions) && !isStaff {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 	}
 
-	units, err := NewPOSBuildingService(s.runtime).ListUnits(ctx, buildingID)
+	units, err := s.memberPOSUnits(ctx, userID, buildingID)
 	if err != nil {
-		return nil, err
+		if unitID == "" {
+			return nil, err
+		}
+		return &POSUnitContext{
+			BuildingID:   buildingID,
+			BuildingName: posPaymentBuildingName(profile.PrimaryCommunity, buildingID),
+			UnitID:       unitID,
+			Floor:        strings.TrimSpace(profile.ResidenceFloor),
+			Unit:         strings.TrimSpace(profile.ResidenceUnit),
+			UnitLabel:    posUnitLabel(profile.ResidenceFloor, profile.ResidenceUnit),
+		}, nil
 	}
 
 	floor := strings.TrimSpace(profile.ResidenceFloor)
@@ -468,7 +540,7 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 		if selectedUnitID == "" {
 			continue
 		}
-		if !isStaff && len(unitOptions) > 0 && !containsString(unitOptions, selectedUnitID) {
+		if !isStaff && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, selectedUnitID, unitOptions) {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		selectedFloor := paymentFirstNonEmpty(posUnitFloor(item), floor)
@@ -483,11 +555,21 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 			UnitLabel:    posUnitLabel(selectedFloor, selectedUnit),
 		}, nil
 	}
+	if unitID != "" && (isStaff || len(unitOptions) > 0) {
+		return &POSUnitContext{
+			BuildingID:   buildingID,
+			BuildingName: posPaymentBuildingName(profile.PrimaryCommunity, buildingID),
+			UnitID:       unitID,
+			Floor:        floor,
+			Unit:         unitName,
+			UnitLabel:    posUnitLabel(floor, unitName),
+		}, nil
+	}
 
 	return nil, errcode.New(errcode.CodeValidationError, "selected residence unit is not available")
 }
 
-// 19. memberPaymentBindings returns the visible building and unit arrays.
+// 25. memberPaymentBindings returns the visible building and unit arrays.
 func (s *POSPaymentService) memberPaymentBindings(ctx context.Context, userID int64, account *model.UserIsmartAccount) ([]string, []string, error) {
 	var profile model.UserProfile
 	err := s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error
@@ -514,25 +596,25 @@ func (s *POSPaymentService) memberPaymentBindings(ctx context.Context, userID in
 	return buildings, units, nil
 }
 
-// 20. loadRelayToken decrypts the linked POS relay token.
+// 26. loadRelayToken decrypts the linked POS relay token.
 func (s *POSPaymentService) loadRelayToken(ctx context.Context, userID int64) (string, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(account.RelayTokenEncrypted) == "" {
-		return "", errcode.New(errcode.CodeAuthRequired, "ismart login is required")
+		return s.refreshRelayToken(ctx, userID)
 	}
 
 	token, err := utils.DecryptString(s.runtime.Config.EncryptionKey, account.RelayTokenEncrypted)
 	if err != nil || strings.TrimSpace(token) == "" {
-		return "", errcode.New(errcode.CodeAuthRequired, "ismart login is required")
+		return s.refreshRelayToken(ctx, userID)
 	}
 
 	return strings.TrimSpace(token), nil
 }
 
-// 21. posRelayJSONWithRefresh retries POS relay calls once after token refresh.
+// 27. posRelayJSONWithRefresh retries POS relay calls once after token refresh.
 func (s *POSPaymentService) posRelayJSONWithRefresh(ctx context.Context, userID int64, token string, method string, path string, query url.Values, payload any, target any) error {
 	err := s.posRelayJSON(ctx, method, path, token, query, payload, target)
 	if err == nil {
@@ -550,7 +632,7 @@ func (s *POSPaymentService) posRelayJSONWithRefresh(ctx context.Context, userID 
 	return s.posRelayJSON(ctx, method, path, refreshedToken, query, payload, target)
 }
 
-// 22. refreshRelayToken uses stored ismart credentials to renew the POS relay token.
+// 28. refreshRelayToken uses stored ismart credentials to renew the POS relay token.
 func (s *POSPaymentService) refreshRelayToken(ctx context.Context, userID int64) (string, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -594,7 +676,7 @@ func (s *POSPaymentService) refreshRelayToken(ctx context.Context, userID int64)
 	return "", errcode.New(errcode.CodeAuthRequired, "ismart login is required")
 }
 
-// 23. loadIsmartAccount loads the linked POS account.
+// 29. loadIsmartAccount loads the linked POS account.
 func (s *POSPaymentService) loadIsmartAccount(ctx context.Context, userID int64) (*model.UserIsmartAccount, error) {
 	var account model.UserIsmartAccount
 	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&account).Error; err != nil {
@@ -607,7 +689,99 @@ func (s *POSPaymentService) loadIsmartAccount(ctx context.Context, userID int64)
 	return &account, nil
 }
 
-// 24. buildH5OrderPayload creates the POS payment service request body.
+// 30. ListMemberBuildings returns POS buildings visible to the current member token.
+func (s *POSPaymentService) ListMemberBuildings(ctx context.Context, userID int64) ([]POSBuildingSummary, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	buildingOptions, _, err := s.memberPaymentBindings(ctx, userID, account)
+	if err != nil {
+		return nil, err
+	}
+	if len(buildingOptions) == 0 {
+		return []POSBuildingSummary{}, nil
+	}
+
+	token, err := s.loadRelayToken(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var rows []POSBuildingSummary
+	if err := s.posRelayJSONWithRefresh(ctx, userID, token, http.MethodGet, "/building", nil, nil, &rows); err != nil {
+		return nil, err
+	}
+
+	visible := make([]POSBuildingSummary, 0, len(rows))
+	for _, row := range rows {
+		if containsString(buildingOptions, posBuildingID(row)) {
+			visible = append(visible, row)
+		}
+	}
+	if len(visible) > 0 {
+		return visible, nil
+	}
+
+	return posBuildingSummariesFromIDs(buildingOptions), nil
+}
+
+// 31. ListMemberUnits returns POS units visible to the current member token.
+func (s *POSPaymentService) ListMemberUnits(ctx context.Context, userID int64, buildingID string) ([]POSUnitSummary, error) {
+	value := strings.TrimSpace(buildingID)
+	if value == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "building id is required")
+	}
+
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	buildingOptions, unitOptions, err := s.memberPaymentBindings(ctx, userID, account)
+	if err != nil {
+		return nil, err
+	}
+	if !containsString(buildingOptions, value) {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
+	}
+
+	units, err := s.memberPOSUnits(ctx, userID, value)
+	if err != nil {
+		return nil, err
+	}
+	if account.IsStaff || len(unitOptions) == 0 {
+		return units, nil
+	}
+
+	visible := make([]POSUnitSummary, 0, len(units))
+	for _, unit := range units {
+		if posUnitVisibleForPermissions(value, unit, unitOptions) {
+			visible = append(visible, unit)
+		}
+	}
+	if len(visible) > 0 {
+		return visible, nil
+	}
+
+	return posUnitsFromFlatUnitPermissions(value, unitOptions), nil
+}
+
+// 32. memberPOSUnits loads one building's units with the current member token.
+func (s *POSPaymentService) memberPOSUnits(ctx context.Context, userID int64, buildingID string) ([]POSUnitSummary, error) {
+	token, err := s.loadRelayToken(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var units []POSUnitSummary
+	path := "/building/" + url.PathEscape(strings.TrimSpace(buildingID)) + "/units"
+	if err := s.posRelayJSONWithRefresh(ctx, userID, token, http.MethodGet, path, nil, nil, &units); err != nil {
+		return nil, err
+	}
+
+	return units, nil
+}
+
+// 33. buildH5OrderPayload creates the POS payment service request body.
 func (s *POSPaymentService) buildH5OrderPayload(contextValue *POSUnitContext, account *model.UserIsmartAccount, params POSPaymentOrderCreateParams) map[string]any {
 	returnPath := strings.TrimSpace(params.ReturnPath)
 	if returnPath == "" {
@@ -655,7 +829,7 @@ func (s *POSPaymentService) buildH5OrderPayload(contextValue *POSUnitContext, ac
 	}
 }
 
-// 25. normalizePOSPaymentScene keeps old H5 order scene semantics.
+// 31. normalizePOSPaymentScene keeps old H5 order scene semantics.
 func normalizePOSPaymentScene(scene string) string {
 	if strings.EqualFold(strings.TrimSpace(scene), "billing") {
 		return "billing"
@@ -663,7 +837,7 @@ func normalizePOSPaymentScene(scene string) string {
 	return "cart"
 }
 
-// 26. sanitizePOSGatewayRequestOverrides keeps only supported gateway overrides.
+// 32. sanitizePOSGatewayRequestOverrides keeps only supported gateway overrides.
 func sanitizePOSGatewayRequestOverrides(payChannel string, overrides map[string]any) map[string]any {
 	result := map[string]any{}
 	if !strings.EqualFold(strings.TrimSpace(payChannel), "ALI_H5") {
@@ -677,7 +851,7 @@ func sanitizePOSGatewayRequestOverrides(payChannel string, overrides map[string]
 	return result
 }
 
-// 27. creditPOSPaymentReward credits AJO Points once when an H5 order is paid.
+// 33. creditPOSPaymentReward credits AJO Points once when an H5 order is paid.
 func (s *POSPaymentService) creditPOSPaymentReward(ctx context.Context, userID int64, order map[string]any) error {
 	if s.runtime.WalletService == nil || !posH5OrderPaid(order) {
 		return nil
@@ -705,7 +879,7 @@ func (s *POSPaymentService) creditPOSPaymentReward(ctx context.Context, userID i
 	})
 }
 
-// 28. posH5OrderPaid checks whether a POS H5 order has reached paid state.
+// 34. posH5OrderPaid checks whether a POS H5 order has reached paid state.
 func posH5OrderPaid(order map[string]any) bool {
 	state := strings.ToLower(paymentFirstNonEmpty(
 		paymentStringValue(order["state"]),
@@ -717,7 +891,7 @@ func posH5OrderPaid(order map[string]any) bool {
 	return state == "success" || state == "succeeded" || state == "paid" || state == "2"
 }
 
-// 29. posH5OrderNo reads the merchant order number.
+// 35. posH5OrderNo reads the merchant order number.
 func posH5OrderNo(order map[string]any) string {
 	return paymentFirstNonEmpty(
 		paymentStringValue(order["mch_order_no"]),
@@ -728,18 +902,18 @@ func posH5OrderNo(order map[string]any) string {
 	)
 }
 
-// 30. posPaymentRewardPoints converts paid HKD amount into reward points.
+// 36. posPaymentRewardPoints converts paid HKD amount into reward points.
 func posPaymentRewardPoints(order map[string]any) int64 {
 	for _, key := range []string{"amount_hkd", "paid_amount_hkd"} {
 		value, err := strconv.ParseFloat(strings.TrimSpace(paymentStringValue(order[key])), 64)
 		if err == nil && value > 0 {
-			return int64(value) * posPaymentRewardPointRate
+			return int64(value) / posPaymentRewardHKDPerPoint
 		}
 	}
-	for _, key := range []string{"final_amount", "amount", "paid_amount", "total_amount"} {
+	for _, key := range []string{"final_amount", "FINAL_AMOUNT", "amount", "paid_amount", "total_amount"} {
 		value, err := strconv.ParseInt(strings.TrimSpace(paymentStringValue(order[key])), 10, 64)
 		if err == nil && value > 0 {
-			return (value / 100) * posPaymentRewardPointRate
+			return value / (100 * posPaymentRewardHKDPerPoint)
 		}
 	}
 	return 0

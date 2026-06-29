@@ -33,20 +33,39 @@ export interface EmailPasswordPayload {
   phone_country_code?: string;
   phone_number?: string;
   username?: string;
+  publisher_identity_type?: string;
   primary_community_id?: string;
   primary_community_name?: string;
   residence_floor?: string;
   residence_unit?: string;
 }
 
-// 5. 手機密碼認證請求
+// 5. 重設密碼請求
+export interface EmailPasswordResetPayload {
+  email: string;
+  code: string;
+  password: string;
+}
+
+// 6. 重設密碼結果
+export interface EmailPasswordResetResult {
+  password_reset: boolean;
+}
+
+// 7. 用戶名密碼認證請求
+export interface UsernamePasswordPayload {
+  username: string;
+  password: string;
+}
+
+// 8. 手機密碼認證請求
 export interface PhonePasswordPayload {
   phone_country_code: string;
   phone_number: string;
   password: string;
 }
 
-// 6. ismart 帳戶登入請求
+// 9. ismart 帳戶登入請求
 export interface IsmartLoginPayload {
   account: string;
   password: string;

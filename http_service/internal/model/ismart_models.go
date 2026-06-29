@@ -17,6 +17,7 @@ type UserIsmartAccount struct {
 	UserID                             int64          `gorm:"primaryKey" json:"user_id"`
 	IsmartUserID                       int64          `gorm:"not null;uniqueIndex" json:"ismart_user_id"`
 	Username                           string         `gorm:"type:varchar(120);not null;index" json:"username"`
+	Email                              string         `gorm:"type:varchar(255);index" json:"email"`
 	Phone                              string         `gorm:"type:varchar(64)" json:"phone"`
 	IsStaff                            bool           `gorm:"not null;default:false;index" json:"is_staff"`
 	Building                           datatypes.JSON `gorm:"type:jsonb;not null" json:"building"`

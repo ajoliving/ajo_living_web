@@ -14,6 +14,7 @@ import (
 
 	"ajoliving_web/http_service/internal/config"
 	"ajoliving_web/http_service/internal/model"
+	"ajoliving_web/http_service/internal/utils"
 )
 
 // 1. TestEnsureReportPayloadContextNormalizesContextAndAmount verifies offline report payload normalization.
@@ -210,6 +211,27 @@ func TestBuildH5OrderPayloadKeepsOldReportFields(t *testing.T) {
 	}
 }
 
+// 8.1 TestPOSPaymentRewardPointsUsesOnePercent verifies AJO Coin reward ratio.
+func TestPOSPaymentRewardPointsUsesOnePercent(t *testing.T) {
+	if posPaymentRewardPoints(map[string]any{"amount_hkd": "20850"}) != 208 {
+		t.Fatal("expected one percent reward from HKD amount")
+	}
+	if posPaymentRewardPoints(map[string]any{"FINAL_AMOUNT": "2085000"}) != 208 {
+		t.Fatal("expected one percent reward from cents amount")
+	}
+}
+
+// 8.2 TestPOSReportPaymentRewardKeyPrefersReceipt verifies offline reward idempotency.
+func TestPOSReportPaymentRewardKeyPrefersReceipt(t *testing.T) {
+	key := posReportPaymentRewardKey(
+		map[string]any{"TRAN_REF_NO": "REF-001", "FINAL_AMOUNT": "2085000"},
+		map[string]any{"ismart_receipt_no": map[string]any{"receipt_id": "RCPT-001"}},
+	)
+	if key != "RCPT-001" {
+		t.Fatalf("expected receipt id key, got %s", key)
+	}
+}
+
 // 9. TestChargeAllinpayTerminalPostsExpectedForm verifies terminal request format.
 func TestChargeAllinpayTerminalPostsExpectedForm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -252,5 +274,88 @@ func TestChargeAllinpayTerminalPostsExpectedForm(t *testing.T) {
 	}
 	if rawResponse == "" || payload["TRAN_REF_NO"] != "TERM-001" {
 		t.Fatalf("expected parsed terminal response, got raw=%q payload=%#v", rawResponse, payload)
+	}
+}
+
+// 10. TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness verifies token refresh readiness.
+func TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness(t *testing.T) {
+	runtimeValue := newAuthTestRuntime(
+		t,
+		nil,
+		&model.User{},
+		&model.UserCredential{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	passwordEncrypted, err := utils.EncryptString(runtimeValue.Config.EncryptionKey, "s61980774")
+	if err != nil {
+		t.Fatalf("encrypt password: %v", err)
+	}
+	user := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234567",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	building := model.Community{
+		PublicID:      "BLG-001",
+		CommunityType: "building",
+		NameZH:        "BLG-001",
+		NameEN:        "BLG-001",
+		DistrictCode:  "unknown",
+		AddressText:   "BLG-001",
+	}
+	if err := runtimeValue.DB.Create(&building).Error; err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	buildingJSON, err := marshalJSON([]string{"BLG-001"})
+	if err != nil {
+		t.Fatalf("marshal building json: %v", err)
+	}
+	unitJSON, err := marshalJSON([]string{"BLG-0010000101"})
+	if err != nil {
+		t.Fatalf("marshal unit json: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserProfile{
+		UserID:             user.ID,
+		PrimaryCommunityID: &building.ID,
+		BoundBuildingIDs:   buildingJSON,
+		BoundFlatUnitIDs:   unitJSON,
+		ResidenceFloor:     "1",
+		ResidenceUnit:      "01",
+	}).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             user.ID,
+		IsmartUserID:                       88,
+		Username:                           "patrick",
+		Email:                              "patrick@example.com",
+		Phone:                              "+85261234567",
+		ClientBuildingPermissions:          buildingJSON,
+		ClientBuildingFlatUnitsPermissions: unitJSON,
+		Building:                           []byte("[]"),
+		StaffBuildingPermissions:           []byte("[]"),
+		RawMessage:                         []byte("{}"),
+		PasswordEncrypted:                  passwordEncrypted,
+	}).Error; err != nil {
+		t.Fatalf("create ismart account: %v", err)
+	}
+
+	overview, err := NewPOSPaymentService(runtimeValue).Overview(context.Background(), user.ID, POSPaymentSelection{}, false)
+	if err != nil {
+		t.Fatalf("load overview: %v", err)
+	}
+	if overview.POSLoginRequired {
+		t.Fatalf("expected stored password to satisfy POS login readiness")
+	}
+	if overview.Context == nil || overview.Context.BuildingID != "BLG-001" || overview.Context.UnitID != "BLG-0010000101" {
+		t.Fatalf("expected synced POS context, got %+v", overview.Context)
 	}
 }

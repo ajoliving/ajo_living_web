@@ -30,9 +30,10 @@ type User struct {
 	TimestampModel
 }
 
-// 2. UserCredential stores optional email and password login credentials.
+// 2. UserCredential stores optional username, email, and password login credentials.
 type UserCredential struct {
 	UserID            int64     `gorm:"primaryKey" json:"user_id"`
+	Username          *string   `gorm:"type:varchar(120);uniqueIndex" json:"username,omitempty"`
 	Email             *string   `gorm:"type:varchar(255);uniqueIndex" json:"email,omitempty"`
 	PasswordHash      string    `gorm:"type:text" json:"password_hash"`
 	PasswordEncrypted string    `gorm:"type:text" json:"-"`

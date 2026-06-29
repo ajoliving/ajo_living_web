@@ -8,11 +8,14 @@ package service
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
 )
+
+var posPermissionDigitsPattern = regexp.MustCompile(`\D+`)
 
 // 1. posRelayURL builds a POS relay URL.
 func posRelayURL(baseURL string, path string) string {
@@ -72,6 +75,11 @@ func posUnitName(item POSUnitSummary) string {
 	return strings.TrimSpace(paymentFirstNonEmpty(item.Unit, item.UnitName, item.Name))
 }
 
+// 8.1 posBuildingID returns a stable POS building id.
+func posBuildingID(item POSBuildingSummary) string {
+	return strings.TrimSpace(paymentFirstNonEmpty(item.BuildingID, item.ID))
+}
+
 // 9. posUnitLabel returns the display label for one unit.
 func posUnitLabel(floor string, unit string) string {
 	parts := make([]string, 0, 2)
@@ -96,6 +104,166 @@ func containsString(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// 10.1 posDigitsOnly keeps the numeric part of POS permission codes.
+func posDigitsOnly(value string) string {
+	return posPermissionDigitsPattern.ReplaceAllString(strings.TrimSpace(value), "")
+}
+
+// 10.2 posUnitIDVisibleForPermissions checks unit id against POS permission ids.
+func posUnitIDVisibleForPermissions(buildingID string, unitID string, permissions []string) bool {
+	if len(permissions) == 0 {
+		return true
+	}
+
+	normalizedBuildingID := posDigitsOnly(buildingID)
+	if len(normalizedBuildingID) > 7 {
+		normalizedBuildingID = normalizedBuildingID[:7]
+	}
+	normalizedUnitID := posDigitsOnly(unitID)
+	if len(normalizedUnitID) > 11 {
+		normalizedUnitID = normalizedUnitID[:11]
+	}
+	if normalizedUnitID == "" {
+		return false
+	}
+	compactUnitID := strings.ReplaceAll(normalizedUnitID, "0", "")
+
+	for _, rawPermission := range permissions {
+		permission := posDigitsOnly(rawPermission)
+		if permission == "" {
+			continue
+		}
+		compactPermission := strings.ReplaceAll(permission, "0", "")
+		if permission == normalizedBuildingID ||
+			normalizedUnitID == permission ||
+			compactUnitID == compactPermission ||
+			strings.HasPrefix(normalizedUnitID, permission) ||
+			strings.HasPrefix(compactUnitID, compactPermission) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 10.3 posUnitVisibleForPermissions checks one POS unit row against permissions.
+func posUnitVisibleForPermissions(buildingID string, item POSUnitSummary, permissions []string) bool {
+	unitID := posUnitID(item)
+	if unitID != "" && posUnitIDVisibleForPermissions(buildingID, unitID, permissions) {
+		return true
+	}
+
+	normalizedBuildingID := posDigitsOnly(buildingID)
+	if len(normalizedBuildingID) > 7 {
+		normalizedBuildingID = normalizedBuildingID[:7]
+	}
+	floor := posDigitsOnly(posUnitFloor(item))
+	unit := posDigitsOnly(posUnitName(item))
+	if normalizedBuildingID == "" || floor == "" || unit == "" {
+		return false
+	}
+	if len(floor) > 2 {
+		floor = floor[len(floor)-2:]
+	}
+	if len(unit) > 2 {
+		unit = unit[len(unit)-2:]
+	}
+	code := normalizedBuildingID + leftPadPOSCode(floor, 2) + leftPadPOSCode(unit, 2)
+	return posUnitIDVisibleForPermissions(buildingID, code, permissions)
+}
+
+// 10.4 posUnitsFromFlatUnitPermissions builds unit rows from permission ids.
+func posUnitsFromFlatUnitPermissions(buildingID string, permissions []string) []POSUnitSummary {
+	normalizedBuildingID := posDigitsOnly(buildingID)
+	if len(normalizedBuildingID) > 7 {
+		normalizedBuildingID = normalizedBuildingID[:7]
+	}
+	if normalizedBuildingID == "" || len(permissions) == 0 {
+		return []POSUnitSummary{}
+	}
+
+	seen := map[string]struct{}{}
+	units := make([]POSUnitSummary, 0)
+	for _, rawPermission := range permissions {
+		permission := posDigitsOnly(rawPermission)
+		if permission == "" {
+			continue
+		}
+
+		unitID := ""
+		if strings.HasPrefix(permission, normalizedBuildingID) && len(permission) >= 11 {
+			unitID = permission[:11]
+		} else if strings.HasPrefix(permission, normalizedBuildingID[:minInt(len(normalizedBuildingID), 6)]) && len(permission) > 6 {
+			suffix := permission[6:]
+			if len(suffix) > 0 && len(suffix) <= 4 {
+				unitID = normalizedBuildingID + leftPadPOSCode(suffix, 4)
+			}
+		}
+		if unitID == "" || !strings.HasPrefix(unitID, normalizedBuildingID) {
+			continue
+		}
+		if _, ok := seen[unitID]; ok {
+			continue
+		}
+		seen[unitID] = struct{}{}
+
+		floor := unitID[7:9]
+		unit := strings.TrimLeft(unitID[9:11], "0")
+		if unit == "" {
+			unit = unitID[9:11]
+		}
+		if floor == "00" {
+			floor = ""
+		}
+		units = append(units, POSUnitSummary{
+			UnitID:   unitID,
+			Floor:    floor,
+			Unit:     unit,
+			UnitName: unit,
+		})
+	}
+
+	return units
+}
+
+// 10.5 posBuildingSummariesFromIDs builds fallback building rows.
+func posBuildingSummariesFromIDs(buildingIDs []string) []POSBuildingSummary {
+	rows := make([]POSBuildingSummary, 0, len(buildingIDs))
+	for _, buildingID := range buildingIDs {
+		value := strings.TrimSpace(buildingID)
+		if value == "" {
+			continue
+		}
+		rows = append(rows, POSBuildingSummary{
+			BuildingID: value,
+			Buildname:  value,
+			ID:         value,
+			Name:       value,
+		})
+	}
+	return rows
+}
+
+// 10.6 leftPadPOSCode pads POS numeric permission fragments.
+func leftPadPOSCode(value string, size int) string {
+	value = posDigitsOnly(value)
+	for len(value) < size {
+		value = "0" + value
+	}
+	if len(value) > size {
+		return value[len(value)-size:]
+	}
+	return value
+}
+
+// 10.7 minInt returns the smaller integer.
+func minInt(left int, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 // 11. isPOSAuthRequiredError reports whether a POS relay call needs token refresh.

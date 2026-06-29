@@ -24,7 +24,10 @@ import (
 	"ajoliving_web/http_service/internal/utils"
 )
 
-const accessTokenTTL = 2 * time.Hour
+const (
+	accessTokenTTL          = 2 * time.Hour
+	passwordResetEmailScene = "password_reset"
+)
 
 // 1. AuthService handles OTP and token operations.
 type AuthService struct {
@@ -62,16 +65,29 @@ type EmailOTPParams struct {
 
 // 6. EmailPasswordParams defines email password auth input.
 type EmailPasswordParams struct {
-	Email                string
-	Password             string
-	DisplayName          string
-	PhoneCountryCode     string
-	PhoneNumber          string
-	Username             string
-	PrimaryCommunityID   string
-	PrimaryCommunityName string
-	ResidenceFloor       string
-	ResidenceUnit        string
+	Email                 string
+	Password              string
+	DisplayName           string
+	PhoneCountryCode      string
+	PhoneNumber           string
+	Username              string
+	PublisherIdentityType string
+	PrimaryCommunityID    string
+	PrimaryCommunityName  string
+	ResidenceFloor        string
+	ResidenceUnit         string
+}
+
+// 6.1 PasswordResetParams defines email password reset input.
+type PasswordResetParams struct {
+	Email    string
+	Code     string
+	Password string
+}
+
+// 6.2 PasswordResetResult defines password reset output.
+type PasswordResetResult struct {
+	PasswordReset bool `json:"password_reset"`
 }
 
 // 7. PhonePasswordParams defines phone password auth input.
@@ -93,6 +109,7 @@ type IsmartLoginParams struct {
 type IsmartMessage struct {
 	UserID                             int64    `json:"user_id"`
 	Username                           string   `json:"username"`
+	Email                              string   `json:"email,omitempty"`
 	Phone                              string   `json:"phone,omitempty"`
 	Password                           string   `json:"password,omitempty"`
 	IsStaff                            bool     `json:"is_staff"`
@@ -289,6 +306,15 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	if username == "" {
 		username = strings.TrimSpace(params.DisplayName)
 	}
+	normalizedUsername := normalizeUsername(username)
+	publisherIdentityType := strings.TrimSpace(params.PublisherIdentityType)
+	switch publisherIdentityType {
+	case "":
+		publisherIdentityType = "owner"
+	case "owner", "tenant", "resident_representative", "company_authorized_person":
+	default:
+		return nil, errcode.New(errcode.CodeValidationError, "publisher identity is invalid")
+	}
 	primaryCommunityPublicID := strings.TrimSpace(params.PrimaryCommunityID)
 	primaryCommunityName := strings.TrimSpace(params.PrimaryCommunityName)
 	residenceFloor := strings.TrimSpace(params.ResidenceFloor)
@@ -296,7 +322,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	if email != "" && !isValidEmail(email) {
 		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 	}
-	if !isValidPhone(phoneCountryCode, phoneNumber) || username == "" || len(password) < 8 {
+	if !isValidPhone(phoneCountryCode, phoneNumber) || !isValidUsername(normalizedUsername) || len(password) < 8 {
 		return nil, errcode.New(errcode.CodeValidationError, "valid phone number, username, and password are required")
 	}
 
@@ -321,6 +347,12 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 				return errcode.New(errcode.CodeValidationError, "email is already registered")
 			}
 		}
+		if err := tx.Model(&model.UserCredential{}).Where("username = ?", normalizedUsername).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return errcode.New(errcode.CodeValidationError, "username is already registered")
+		}
 		if err := tx.Model(&model.User{}).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).Count(&count).Error; err != nil {
 			return err
 		}
@@ -343,6 +375,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 
 		credential := model.UserCredential{
 			UserID:            user.ID,
+			Username:          &normalizedUsername,
 			PasswordHash:      passwordHash,
 			PasswordEncrypted: passwordEncrypted,
 			IsVerified:        email != "",
@@ -350,15 +383,16 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 		if email != "" {
 			credential.Email = &email
 		}
-		if err := tx.Select("UserID", "Email", "PasswordHash", "PasswordEncrypted", "IsVerified").Create(&credential).Error; err != nil {
+		if err := tx.Select("UserID", "Username", "Email", "PasswordHash", "PasswordEncrypted", "IsVerified").Create(&credential).Error; err != nil {
 			return err
 		}
 
 		profile = model.UserProfile{
-			UserID:         user.ID,
-			DisplayName:    username,
-			ResidenceFloor: residenceFloor,
-			ResidenceUnit:  residenceUnit,
+			UserID:                user.ID,
+			DisplayName:           username,
+			PublisherIdentityType: publisherIdentityType,
+			ResidenceFloor:        residenceFloor,
+			ResidenceUnit:         residenceUnit,
 		}
 		if primaryCommunityPublicID != "" {
 			community, err := s.resolveRegistrationCommunity(ctx, tx, primaryCommunityPublicID, primaryCommunityName)
@@ -424,7 +458,46 @@ func (s *AuthService) LoginWithEmail(ctx context.Context, params EmailPasswordPa
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 23. LoginWithPhone validates a phone password account and issues tokens.
+// 23. LoginWithUsername validates a username password account and issues tokens.
+func (s *AuthService) LoginWithUsername(ctx context.Context, params EmailPasswordParams) (*VerifyOTPResult, error) {
+	username := normalizeUsername(params.Username)
+	password := strings.TrimSpace(params.Password)
+	if !isValidUsername(username) || password == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "valid username and password are required")
+	}
+
+	var credential model.UserCredential
+	if err := s.runtime.DB.WithContext(ctx).Where("username = ?", username).First(&credential).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeValidationError, "username or password is incorrect")
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load username account")
+	}
+
+	if !utils.VerifyPassword(password, credential.PasswordHash) {
+		return nil, errcode.New(errcode.CodeValidationError, "username or password is incorrect")
+	}
+
+	var user model.User
+	if err := s.runtime.DB.WithContext(ctx).First(&user, credential.UserID).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load username account")
+	}
+
+	var profile model.UserProfile
+	profileErr := s.runtime.DB.WithContext(ctx).Where("user_id = ?", user.ID).First(&profile).Error
+	if errors.Is(profileErr, gorm.ErrRecordNotFound) {
+		profile = model.UserProfile{UserID: user.ID, DisplayName: username}
+		if err := s.runtime.DB.WithContext(ctx).Create(&profile).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to create username profile")
+		}
+	} else if profileErr != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load username profile")
+	}
+
+	return s.issueAuthResult(ctx, &user, &profile)
+}
+
+// 24. LoginWithPhone validates a phone password account and issues tokens.
 func (s *AuthService) LoginWithPhone(ctx context.Context, params PhonePasswordParams) (*VerifyOTPResult, error) {
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
 	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
@@ -466,7 +539,7 @@ func (s *AuthService) LoginWithPhone(ctx context.Context, params PhonePasswordPa
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 24. LoginWithIsmart validates POS Web credentials and signs into the local account.
+// 25. LoginWithIsmart validates POS Web credentials and signs into the local account.
 func (s *AuthService) LoginWithIsmart(ctx context.Context, params IsmartLoginParams) (*VerifyOTPResult, error) {
 	account := strings.TrimSpace(params.Account)
 	password := strings.TrimSpace(params.Password)
@@ -479,10 +552,7 @@ func (s *AuthService) LoginWithIsmart(ctx context.Context, params IsmartLoginPar
 	if err != nil {
 		return nil, err
 	}
-	relayToken, err := s.callPOSRelayLogin(ctx, loginAccount, password)
-	if err != nil {
-		return nil, err
-	}
+	relayToken, _ := s.callPOSRelayLogin(ctx, loginAccount, password)
 
 	if phone == "" {
 		phone = strings.TrimSpace(ismartMsg.Phone)
@@ -493,10 +563,86 @@ func (s *AuthService) LoginWithIsmart(ctx context.Context, params IsmartLoginPar
 	if phone == "" && looksLikePhoneAccount(account) {
 		phone = account
 	}
-	return s.upsertUserByIsmart(ctx, ismartMsg, phone, params.Email, relayToken, password)
+	email := params.Email
+	if email == "" && strings.Contains(account, "@") {
+		email = account
+	}
+	return s.upsertUserByIsmart(ctx, ismartMsg, phone, email, relayToken, password)
 }
 
-// 25. BindIsmartAccount links POS Web credentials to the current AJO user.
+// 25.1 RequestEmailPasswordReset sends a reset code to an existing email credential.
+func (s *AuthService) RequestEmailPasswordReset(ctx context.Context, params EmailOTPParams) (*RequestOTPResult, error) {
+	email := normalizeEmail(params.Email)
+	if !isValidEmail(email) {
+		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
+	}
+
+	var credential model.UserCredential
+	if err := s.runtime.DB.WithContext(ctx).Where("email = ?", email).First(&credential).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeValidationError, "email account not found")
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load email account")
+	}
+
+	return s.RequestEmailOTP(ctx, EmailOTPParams{
+		Email: email,
+		Scene: passwordResetEmailScene,
+	})
+}
+
+// 25.2 ResetPasswordWithEmail verifies the reset code and stores a new password.
+func (s *AuthService) ResetPasswordWithEmail(ctx context.Context, params PasswordResetParams) (*PasswordResetResult, error) {
+	email := normalizeEmail(params.Email)
+	code := strings.TrimSpace(params.Code)
+	password := strings.TrimSpace(params.Password)
+	if !isValidEmail(email) || code == "" || len(password) < 8 {
+		return nil, errcode.New(errcode.CodeValidationError, "valid email, code, and password are required")
+	}
+
+	key := emailOTPKey(email, passwordResetEmailScene)
+	record, ok := s.runtime.OTPStore.Get(key)
+	if !ok || s.runtime.Now().After(record.ExpiresAt) || code != record.Code {
+		return nil, errcode.New(errcode.CodeValidationError, "email otp is invalid or expired")
+	}
+
+	passwordHash, err := utils.HashPassword(password)
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare password")
+	}
+	passwordEncrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, password)
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare password")
+	}
+
+	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var credential model.UserCredential
+		if err := tx.Where("email = ?", email).First(&credential).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errcode.New(errcode.CodeValidationError, "email account not found")
+			}
+			return err
+		}
+
+		return tx.Model(&credential).Updates(map[string]any{
+			"password_hash":      passwordHash,
+			"password_encrypted": passwordEncrypted,
+			"is_verified":        true,
+		}).Error
+	})
+	if err != nil {
+		var appErr *errcode.AppError
+		if errors.As(err, &appErr) {
+			return nil, appErr
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to reset password")
+	}
+
+	s.runtime.OTPStore.Delete(key)
+	return &PasswordResetResult{PasswordReset: true}, nil
+}
+
+// 26. BindIsmartAccount links POS Web credentials to the current AJO user.
 func (s *AuthService) BindIsmartAccount(ctx context.Context, userID int64, params IsmartLoginParams) (*VerifyOTPResult, error) {
 	account := strings.TrimSpace(params.Account)
 	password := strings.TrimSpace(params.Password)
@@ -509,10 +655,7 @@ func (s *AuthService) BindIsmartAccount(ctx context.Context, userID int64, param
 	if err != nil {
 		return nil, err
 	}
-	relayToken, err := s.callPOSRelayLogin(ctx, loginAccount, password)
-	if err != nil {
-		return nil, err
-	}
+	relayToken, _ := s.callPOSRelayLogin(ctx, loginAccount, password)
 
 	if phone == "" {
 		phone = strings.TrimSpace(ismartMsg.Phone)
@@ -523,11 +666,22 @@ func (s *AuthService) BindIsmartAccount(ctx context.Context, userID int64, param
 	if phone == "" && looksLikePhoneAccount(account) {
 		phone = account
 	}
+	normalizedEmail := normalizeEmail(params.Email)
+	if normalizedEmail == "" {
+		normalizedEmail = normalizeEmail(ismartMsg.Email)
+	}
+	if normalizedEmail == "" && strings.Contains(account, "@") {
+		normalizedEmail = normalizeEmail(account)
+	}
+	if normalizedEmail != "" && !isValidEmail(normalizedEmail) {
+		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
+	}
 
 	var user model.User
 	var profile model.UserProfile
 	phoneCountryCode, phoneNumber := normalizeOptionalIsmartPhone(phone)
 	ismartMsg.Phone = joinPhone(phoneCountryCode, phoneNumber)
+	ismartMsg.Email = normalizedEmail
 	nextIsStaff := resolveIsmartStaffAccess(ismartMsg)
 
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -566,6 +720,9 @@ func (s *AuthService) BindIsmartAccount(ctx context.Context, userID int64, param
 		if err := s.saveIsmartAccount(ctx, tx, user.ID, ismartMsg, relayToken, password); err != nil {
 			return err
 		}
+		if err := s.saveIsmartCredential(ctx, tx, user.ID, ismartMsg, password); err != nil {
+			return err
+		}
 		nextProfile, err := s.syncProfileIsmartBindings(ctx, tx, user.ID, ismartMsg)
 		if err != nil {
 			return err
@@ -584,12 +741,12 @@ func (s *AuthService) BindIsmartAccount(ctx context.Context, userID int64, param
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 26. Logout returns a stable success path without token invalidation storage.
+// 27. Logout returns a stable success path without token invalidation storage.
 func (s *AuthService) Logout(context.Context, int64) error {
 	return nil
 }
 
-// 27. AuthenticateToken parses and validates a bearer token.
+// 28. AuthenticateToken parses and validates a bearer token.
 func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string) (*AuthIdentity, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &accessTokenClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(s.runtime.Config.JWTSecret), nil
@@ -632,7 +789,7 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 	}, nil
 }
 
-// 28. upsertUserByPhone creates or updates a user during OTP verify.
+// 29. upsertUserByPhone creates or updates a user during OTP verify.
 func (s *AuthService) upsertUserByPhone(ctx context.Context, countryCode string, phoneNumber string) (*VerifyOTPResult, error) {
 	var user model.User
 	var profile model.UserProfile
@@ -701,7 +858,7 @@ func (s *AuthService) upsertUserByPhone(ctx context.Context, countryCode string,
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 29. upsertUserByEmail creates or updates a user during email OTP verify.
+// 30. upsertUserByEmail creates or updates a user during email OTP verify.
 func (s *AuthService) upsertUserByEmail(ctx context.Context, email string, displayName string) (*VerifyOTPResult, error) {
 	var user model.User
 	var profile model.UserProfile
@@ -769,7 +926,7 @@ func (s *AuthService) upsertUserByEmail(ctx context.Context, email string, displ
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 30. upsertUserByIsmart creates or updates a user from POS Web data.
+// 31. upsertUserByIsmart creates or updates a user from POS Web data.
 func (s *AuthService) upsertUserByIsmart(ctx context.Context, ismartMsg *IsmartMessage, phone string, email string, relayToken string, password string) (*VerifyOTPResult, error) {
 	if ismartMsg == nil || ismartMsg.UserID <= 0 || strings.TrimSpace(ismartMsg.Username) == "" {
 		return nil, errcode.New(errcode.CodeValidationError, "invalid ismart account response")
@@ -780,11 +937,15 @@ func (s *AuthService) upsertUserByIsmart(ctx context.Context, ismartMsg *IsmartM
 	var account model.UserIsmartAccount
 	phoneCountryCode, phoneNumber := normalizeOptionalIsmartPhone(phone)
 	normalizedEmail := normalizeEmail(email)
+	if normalizedEmail == "" {
+		normalizedEmail = normalizeEmail(ismartMsg.Email)
+	}
 	nextIsStaff := resolveIsmartStaffAccess(ismartMsg)
 	if normalizedEmail != "" && !isValidEmail(normalizedEmail) {
 		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 	}
 	ismartMsg.Phone = joinPhone(phoneCountryCode, phoneNumber)
+	ismartMsg.Email = normalizedEmail
 
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		findErr := tx.Where("ismart_user_id = ?", ismartMsg.UserID).First(&account).Error
@@ -857,16 +1018,14 @@ func (s *AuthService) upsertUserByIsmart(ctx context.Context, ismartMsg *IsmartM
 		if err := s.saveIsmartAccount(ctx, tx, user.ID, ismartMsg, relayToken, password); err != nil {
 			return err
 		}
+		if err := s.saveIsmartCredential(ctx, tx, user.ID, ismartMsg, password); err != nil {
+			return err
+		}
 		nextProfile, err := s.syncProfileIsmartBindings(ctx, tx, user.ID, ismartMsg)
 		if err != nil {
 			return err
 		}
 		profile = *nextProfile
-		if normalizedEmail != "" {
-			if err := s.saveEmailCredential(ctx, tx, user.ID, normalizedEmail, ""); err != nil {
-				return err
-			}
-		}
 
 		return nil
 	})
@@ -881,7 +1040,7 @@ func (s *AuthService) upsertUserByIsmart(ctx context.Context, ismartMsg *IsmartM
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 31. issueAuthResult returns a token payload from the is_staff account flag.
+// 32. issueAuthResult returns a token payload from the is_staff account flag.
 func (s *AuthService) issueAuthResult(ctx context.Context, user *model.User, profile *model.UserProfile) (*VerifyOTPResult, error) {
 	access := buildAccessSnapshot(user.IsStaff)
 
@@ -908,7 +1067,7 @@ func (s *AuthService) issueAuthResult(ctx context.Context, user *model.User, pro
 	}, nil
 }
 
-// 32. issueTokens creates access and refresh JWT tokens.
+// 33. issueTokens creates access and refresh JWT tokens.
 func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool) (string, string, error) {
 	accessToken, err := s.signToken(userID, memberType, isStaff, accessTokenTTL)
 	if err != nil {
@@ -923,7 +1082,7 @@ func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool)
 	return accessToken, refreshToken, nil
 }
 
-// 32. signToken signs a JWT token with the configured secret.
+// 34. signToken signs a JWT token with the configured secret.
 func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, ttl time.Duration) (string, error) {
 	now := s.runtime.Now()
 	claims := &accessTokenClaims{
@@ -942,7 +1101,7 @@ func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, t
 	return token.SignedString([]byte(s.runtime.Config.JWTSecret))
 }
 
-// 33. loginPOSWithAccountFallback tries account and optional Hong Kong mobile candidates once.
+// 35. loginPOSWithAccountFallback tries account and optional Hong Kong mobile candidates once.
 func (s *AuthService) loginPOSWithAccountFallback(ctx context.Context, account string, phone string, password string) (*IsmartMessage, string, error) {
 	attempts := buildIsmartLoginAttempts(account, phone)
 	for _, attempt := range attempts {
@@ -958,7 +1117,7 @@ func (s *AuthService) loginPOSWithAccountFallback(ctx context.Context, account s
 	return nil, "", errcode.New(errcode.CodeValidationError, "ismart account or password is incorrect")
 }
 
-// 34. buildIsmartLoginAttempts returns stable POS login account candidates.
+// 36. buildIsmartLoginAttempts returns stable POS login account candidates.
 func buildIsmartLoginAttempts(values ...string) []string {
 	attempts := make([]string, 0, len(values)*2)
 	for _, raw := range values {
@@ -979,13 +1138,13 @@ func buildIsmartLoginAttempts(values ...string) []string {
 	return normalizeStringSlice(attempts)
 }
 
-// 35. isIsmartCredentialError reports whether POS rejected only the credentials.
+// 37. isIsmartCredentialError reports whether POS rejected only the credentials.
 func isIsmartCredentialError(err error) bool {
 	var appErr *errcode.AppError
 	return errors.As(err, &appErr) && appErr.Code == errcode.CodeValidationError
 }
 
-// 36. callPOSLogin sends the credential check to the configured POS Web endpoint.
+// 38. callPOSLogin sends the credential check to the configured POS Web endpoint.
 func (s *AuthService) callPOSLogin(ctx context.Context, account string, password string) (*IsmartMessage, error) {
 	loginURL := strings.TrimSpace(s.runtime.Config.POSLoginURL)
 	if loginURL == "" {
@@ -1055,7 +1214,7 @@ func (s *AuthService) callPOSLogin(ctx context.Context, account string, password
 	return normalizeIsmartMessage(result.Msg), nil
 }
 
-// 37. callPOSRelayLogin obtains the relay token used for member POS data reads.
+// 39. callPOSRelayLogin obtains the relay token used for member POS data reads.
 func (s *AuthService) callPOSRelayLogin(ctx context.Context, account string, password string) (string, error) {
 	account = strings.TrimSpace(account)
 	password = strings.TrimSpace(password)
@@ -1108,7 +1267,7 @@ func (s *AuthService) callPOSRelayLogin(ctx context.Context, account string, pas
 	return strings.TrimSpace(result.Token), nil
 }
 
-// 38. saveIsmartAccount persists the latest POS Web identity snapshot.
+// 40. saveIsmartAccount persists the latest POS Web identity snapshot.
 func (s *AuthService) saveIsmartAccount(ctx context.Context, tx *gorm.DB, userID int64, ismartMsg *IsmartMessage, relayToken string, password string) error {
 	building, err := marshalJSON(ismartMsg.Building)
 	if err != nil {
@@ -1154,6 +1313,7 @@ func (s *AuthService) saveIsmartAccount(ctx context.Context, tx *gorm.DB, userID
 		UserID:                             userID,
 		IsmartUserID:                       ismartMsg.UserID,
 		Username:                           strings.TrimSpace(ismartMsg.Username),
+		Email:                              normalizeEmail(ismartMsg.Email),
 		Phone:                              strings.TrimSpace(ismartMsg.Phone),
 		IsStaff:                            ismartMsg.IsStaff,
 		Building:                           building,
@@ -1168,7 +1328,82 @@ func (s *AuthService) saveIsmartAccount(ctx context.Context, tx *gorm.DB, userID
 	return tx.WithContext(ctx).Where("user_id = ?", userID).Assign(account).FirstOrCreate(&account).Error
 }
 
-// 39. syncProfileIsmartBindings stores POS building and unit bindings on the local profile.
+// 41. saveIsmartCredential syncs POS login credentials to local password login.
+func (s *AuthService) saveIsmartCredential(ctx context.Context, tx *gorm.DB, userID int64, ismartMsg *IsmartMessage, password string) error {
+	username := normalizeUsername(ismartMsg.Username)
+	email := normalizeEmail(ismartMsg.Email)
+	passwordValue := strings.TrimSpace(password)
+	if !isValidUsername(username) || passwordValue == "" {
+		return nil
+	}
+
+	passwordHash, err := utils.HashPassword(passwordValue)
+	if err != nil {
+		return err
+	}
+	passwordEncrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, passwordValue)
+	if err != nil {
+		return err
+	}
+
+	usernamePtr := &username
+	var emailPtr *string
+	if isValidEmail(email) {
+		emailPtr = &email
+	}
+
+	var credential model.UserCredential
+	findErr := tx.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return findErr
+	}
+	if credential.UserID == 0 {
+		credential = model.UserCredential{UserID: userID}
+	}
+
+	if err := s.ensureCredentialOwner(ctx, tx, "username", username, userID); err == nil {
+		credential.Username = usernamePtr
+	}
+	if emailPtr != nil {
+		if err := s.ensureCredentialOwner(ctx, tx, "email", email, userID); err == nil {
+			credential.Email = emailPtr
+		}
+	}
+	credential.PasswordHash = passwordHash
+	credential.PasswordEncrypted = passwordEncrypted
+	credential.IsVerified = true
+
+	return tx.WithContext(ctx).Save(&credential).Error
+}
+
+// 42. ensureCredentialOwner checks whether a local credential value is free or owned by this user.
+func (s *AuthService) ensureCredentialOwner(ctx context.Context, tx *gorm.DB, column string, value string, userID int64) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	var credential model.UserCredential
+	query := tx.WithContext(ctx)
+	switch column {
+	case "username":
+		query = query.Where("username = ?", value)
+	case "email":
+		query = query.Where("email = ?", value)
+	default:
+		return errcode.New(errcode.CodeValidationError, "invalid credential column")
+	}
+	err := query.First(&credential).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && credential.UserID == userID) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	return errcode.New(errcode.CodeValidationError, column+" is already registered")
+}
+
+// 43. syncProfileIsmartBindings stores POS building and unit bindings on the local profile.
 func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB, userID int64, ismartMsg *IsmartMessage) (*model.UserProfile, error) {
 	boundBuildingIDs := resolveIsmartBoundBuildings(ismartMsg)
 	boundFlatUnitIDs := resolveIsmartBoundUnits(ismartMsg)
@@ -1225,7 +1460,7 @@ func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB
 	return &profile, nil
 }
 
-// 40. resolveIsmartBoundBuildings returns the building list allowed by POS.
+// 44. resolveIsmartBoundBuildings returns the building list allowed by POS.
 func resolveIsmartBoundBuildings(message *IsmartMessage) []string {
 	if message == nil {
 		return []string{}
@@ -1242,7 +1477,7 @@ func resolveIsmartBoundBuildings(message *IsmartMessage) []string {
 	return normalizeStringSlice(message.ClientBuildingPermissions)
 }
 
-// 41. resolveIsmartBoundUnits returns client flat unit bindings.
+// 45. resolveIsmartBoundUnits returns client flat unit bindings.
 func resolveIsmartBoundUnits(message *IsmartMessage) []string {
 	if message == nil {
 		return []string{}
@@ -1251,7 +1486,7 @@ func resolveIsmartBoundUnits(message *IsmartMessage) []string {
 	return normalizeStringSlice(message.ClientBuildingFlatUnitsPermissions)
 }
 
-// 42. splitPOSFlatUnitID derives floor and unit from a POS flat unit id.
+// 46. splitPOSFlatUnitID derives floor and unit from a POS flat unit id.
 func splitPOSFlatUnitID(unitID string) (string, string) {
 	value := strings.TrimSpace(unitID)
 	if len(value) <= 7 {
@@ -1268,7 +1503,7 @@ func splitPOSFlatUnitID(unitID string) (string, string) {
 	return suffix[:len(suffix)-2], suffix[len(suffix)-2:]
 }
 
-// 43. isProfileCompleted checks whether account profile has payment-ready bindings.
+// 47. isProfileCompleted checks whether account profile has payment-ready bindings.
 func isProfileCompleted(profile *model.UserProfile) bool {
 	if profile == nil {
 		return false
@@ -1280,43 +1515,13 @@ func isProfileCompleted(profile *model.UserProfile) bool {
 	return profile.PrimaryCommunityID != nil
 }
 
-// 44. isPlaceholderPhone checks locally generated non-phone login placeholders.
+// 48. isPlaceholderPhone checks locally generated non-phone login placeholders.
 func isPlaceholderPhone(countryCode string) bool {
 	value := strings.ToLower(strings.TrimSpace(countryCode))
 	return value == "" || value == "email" || value == "ismart"
 }
 
-// 45. saveEmailCredential binds an optional verified email to an existing local account.
-func (s *AuthService) saveEmailCredential(ctx context.Context, tx *gorm.DB, userID int64, email string, passwordHash string) error {
-	var credential model.UserCredential
-	findErr := tx.WithContext(ctx).Where("email = ?", email).First(&credential).Error
-	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
-		return findErr
-	}
-	if credential.UserID > 0 && credential.UserID != userID {
-		return errcode.New(errcode.CodeValidationError, "email is already registered")
-	}
-
-	values := model.UserCredential{
-		UserID:       userID,
-		Email:        &email,
-		PasswordHash: passwordHash,
-		IsVerified:   true,
-	}
-	if credential.UserID == userID {
-		updates := map[string]any{
-			"is_verified": true,
-		}
-		if passwordHash != "" {
-			updates["password_hash"] = passwordHash
-		}
-		return tx.WithContext(ctx).Model(&credential).Updates(updates).Error
-	}
-
-	return tx.WithContext(ctx).Create(&values).Error
-}
-
-// 46. ensurePhoneAvailableForIsmart keeps ismart identity authoritative when rebinding a phone.
+// 49. ensurePhoneAvailableForIsmart keeps ismart identity authoritative when rebinding a phone.
 func (s *AuthService) ensurePhoneAvailableForIsmart(ctx context.Context, tx *gorm.DB, userID int64, countryCode string, phoneNumber string) error {
 	var count int64
 	if err := tx.WithContext(ctx).Model(&model.User{}).
@@ -1331,7 +1536,7 @@ func (s *AuthService) ensurePhoneAvailableForIsmart(ctx context.Context, tx *gor
 	return nil
 }
 
-// 47. resolveRegistrationCommunity loads or mirrors a POS building as local community.
+// 50. resolveRegistrationCommunity loads or mirrors a POS building as local community.
 func (s *AuthService) resolveRegistrationCommunity(ctx context.Context, tx *gorm.DB, publicID string, name string) (*model.Community, error) {
 	community, err := s.findCommunityByPublicID(ctx, tx, publicID)
 	if err == nil {
@@ -1370,7 +1575,7 @@ func (s *AuthService) resolveRegistrationCommunity(ctx context.Context, tx *gorm
 	return community, nil
 }
 
-// 48. findCommunityByPublicID loads a community for registration profile binding.
+// 51. findCommunityByPublicID loads a community for registration profile binding.
 func (s *AuthService) findCommunityByPublicID(ctx context.Context, tx *gorm.DB, publicID string) (*model.Community, error) {
 	var community model.Community
 	if err := tx.WithContext(ctx).Where("public_id = ?", publicID).First(&community).Error; err != nil {
@@ -1383,7 +1588,7 @@ func (s *AuthService) findCommunityByPublicID(ctx context.Context, tx *gorm.DB, 
 	return &community, nil
 }
 
-// 49. loadIsmartMessage returns the linked POS Web payload for auth responses.
+// 52. loadIsmartMessage returns the linked POS Web payload for auth responses.
 func (s *AuthService) loadIsmartMessage(ctx context.Context, userID int64) *IsmartMessage {
 	var account model.UserIsmartAccount
 	result := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).Limit(1).Find(&account)
@@ -1394,6 +1599,7 @@ func (s *AuthService) loadIsmartMessage(ctx context.Context, userID int64) *Isma
 	return &IsmartMessage{
 		UserID:                             account.IsmartUserID,
 		Username:                           account.Username,
+		Email:                              account.Email,
 		Phone:                              account.Phone,
 		Password:                           s.loadIsmartPassword(account.PasswordEncrypted),
 		IsStaff:                            account.IsStaff,
@@ -1404,7 +1610,7 @@ func (s *AuthService) loadIsmartMessage(ctx context.Context, userID int64) *Isma
 	}
 }
 
-// 50. loadIsmartPassword returns the stored POS password when available.
+// 53. loadIsmartPassword returns the stored POS password when available.
 func (s *AuthService) loadIsmartPassword(encrypted string) string {
 	if strings.TrimSpace(encrypted) == "" {
 		return ""
@@ -1418,13 +1624,14 @@ func (s *AuthService) loadIsmartPassword(encrypted string) string {
 	return password
 }
 
-// 51. normalizeIsmartMessage keeps POS Web array fields non-null.
+// 54. normalizeIsmartMessage keeps POS Web array fields non-null.
 func normalizeIsmartMessage(message *IsmartMessage) *IsmartMessage {
 	if message == nil {
 		return nil
 	}
 
 	message.Username = strings.TrimSpace(message.Username)
+	message.Email = normalizeEmail(message.Email)
 	message.Phone = strings.TrimSpace(message.Phone)
 	message.Building = normalizeStringSlice(message.Building)
 	message.StaffBuildingPermissions = normalizeStringSlice(message.StaffBuildingPermissions)
@@ -1434,7 +1641,7 @@ func normalizeIsmartMessage(message *IsmartMessage) *IsmartMessage {
 	return message
 }
 
-// 52. resolveIsmartStaffAccess derives local staff access from POS staff fields.
+// 55. resolveIsmartStaffAccess derives local staff access from POS staff fields.
 func resolveIsmartStaffAccess(message *IsmartMessage) bool {
 	if message == nil {
 		return false
@@ -1446,7 +1653,7 @@ func resolveIsmartStaffAccess(message *IsmartMessage) bool {
 	return len(normalizeStringSlice(message.StaffBuildingPermissions)) > 0
 }
 
-// 53. normalizeStringSlice splits, trims, deduplicates, and keeps empty arrays stable.
+// 56. normalizeStringSlice splits, trims, deduplicates, and keeps empty arrays stable.
 func normalizeStringSlice(values []string) []string {
 	result := make([]string, 0, len(values))
 	seen := map[string]struct{}{}
@@ -1469,7 +1676,7 @@ func normalizeStringSlice(values []string) []string {
 	return result
 }
 
-// 54. normalizeOptionalIsmartPhone parses an optional phone string for local account linking.
+// 57. normalizeOptionalIsmartPhone parses an optional phone string for local account linking.
 func normalizeOptionalIsmartPhone(phone string) (string, string) {
 	value := strings.TrimSpace(phone)
 	if value == "" {
@@ -1497,7 +1704,7 @@ func normalizeOptionalIsmartPhone(phone string) (string, string) {
 	return "", ""
 }
 
-// 55. normalizeHongKongMobileAccount normalizes likely Hong Kong mobile input to 8 local digits.
+// 58. normalizeHongKongMobileAccount normalizes likely Hong Kong mobile input to 8 local digits.
 func normalizeHongKongMobileAccount(account string) (string, bool) {
 	value := strings.TrimSpace(account)
 	if value == "" {
@@ -1530,13 +1737,13 @@ func normalizeHongKongMobileAccount(account string) (string, bool) {
 	return phoneNumber, true
 }
 
-// 56. looksLikePhoneAccount checks whether an ismart account input is a Hong Kong mobile number.
+// 59. looksLikePhoneAccount checks whether an ismart account input is a Hong Kong mobile number.
 func looksLikePhoneAccount(account string) bool {
 	_, ok := normalizeHongKongMobileAccount(account)
 	return ok
 }
 
-// 57. joinPhone formats a normalized phone pair for ismart payload storage.
+// 60. joinPhone formats a normalized phone pair for ismart payload storage.
 func joinPhone(countryCode string, phoneNumber string) string {
 	if countryCode == "" || phoneNumber == "" {
 		return ""
@@ -1545,7 +1752,7 @@ func joinPhone(countryCode string, phoneNumber string) string {
 	return countryCode + phoneNumber
 }
 
-// 58. isBootstrapStaffPhone checks whether the verified phone should become staff.
+// 61. isBootstrapStaffPhone checks whether the verified phone should become staff.
 func (s *AuthService) isBootstrapStaffPhone(countryCode string, phoneNumber string) bool {
 	target := strings.TrimSpace(countryCode) + strings.TrimSpace(phoneNumber)
 	if target == "" {
@@ -1561,17 +1768,27 @@ func (s *AuthService) isBootstrapStaffPhone(countryCode string, phoneNumber stri
 	return false
 }
 
-// 59. normalizeEmail prepares email lookup input.
+// 62. normalizeUsername prepares username lookup input.
+func normalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
+}
+
+// 63. isValidUsername checks the minimum username shape needed for password auth.
+func isValidUsername(username string) bool {
+	return len(username) >= 2 && len(username) <= 120 && !strings.ContainsAny(username, " \t\r\n")
+}
+
+// 64. normalizeEmail prepares email lookup input.
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// 60. isValidEmail checks the minimum email shape needed for auth flows.
+// 65. isValidEmail checks the minimum email shape needed for auth flows.
 func isValidEmail(email string) bool {
 	return strings.Contains(email, "@") && strings.Contains(email, ".") && len(email) <= 255
 }
 
-// 61. normalizePhoneCountryCode prepares a phone country code for lookup.
+// 66. normalizePhoneCountryCode prepares a phone country code for lookup.
 func normalizePhoneCountryCode(countryCode string) string {
 	value := strings.TrimSpace(countryCode)
 	if value == "" {
@@ -1583,14 +1800,14 @@ func normalizePhoneCountryCode(countryCode string) string {
 	return "+" + value
 }
 
-// 62. normalizePhoneNumber prepares a phone number for lookup.
+// 67. normalizePhoneNumber prepares a phone number for lookup.
 func normalizePhoneNumber(phoneNumber string) string {
 	value := strings.TrimSpace(phoneNumber)
 	value = strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(value)
 	return value
 }
 
-// 63. isValidPhone checks the minimum phone shape needed for password auth.
+// 68. isValidPhone checks the minimum phone shape needed for password auth.
 func isValidPhone(countryCode string, phoneNumber string) bool {
 	if !strings.HasPrefix(countryCode, "+") || len(countryCode) > 8 || len(phoneNumber) < 4 || len(phoneNumber) > 32 {
 		return false
@@ -1603,7 +1820,7 @@ func isValidPhone(countryCode string, phoneNumber string) bool {
 	return true
 }
 
-// 64. normalizeAuthScene returns a stable verification scene.
+// 69. normalizeAuthScene returns a stable verification scene.
 func normalizeAuthScene(scene string) string {
 	value := strings.TrimSpace(scene)
 	if value == "" {
@@ -1613,8 +1830,12 @@ func normalizeAuthScene(scene string) string {
 	return value
 }
 
-// 65. buildEmailOTPContent returns the email verification message.
+// 70. buildEmailOTPContent returns the email verification message.
 func buildEmailOTPContent(code string, scene string) (string, string) {
+	if normalizeAuthScene(scene) == passwordResetEmailScene {
+		return "AJO Living password reset code", fmt.Sprintf("Your AJO Living password reset code is %s. It expires in 5 minutes.", code)
+	}
+
 	subject := "AJO Living email verification code"
 	body := fmt.Sprintf("Your AJO Living verification code is %s. It expires in 5 minutes.", code)
 	if normalizeAuthScene(scene) != "login" {
@@ -1624,12 +1845,12 @@ func buildEmailOTPContent(code string, scene string) (string, string) {
 	return subject, body
 }
 
-// 66. otpKey builds the in-memory OTP lookup key.
+// 71. otpKey builds the in-memory OTP lookup key.
 func otpKey(countryCode string, phoneNumber string, scene string) string {
 	return strings.TrimSpace(countryCode) + ":" + strings.TrimSpace(phoneNumber) + ":" + normalizeAuthScene(scene)
 }
 
-// 60. emailOTPKey builds the in-memory email OTP lookup key.
+// 72. emailOTPKey builds the in-memory email OTP lookup key.
 func emailOTPKey(email string, scene string) string {
 	return "email:" + normalizeEmail(email) + ":" + normalizeAuthScene(scene)
 }

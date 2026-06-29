@@ -1,6 +1,6 @@
 /*
  * Authentication route registration.
- * 1. Register OTP, email, phone, ismart login, and logout routes.
+ * 1. Register OTP, email, phone, ismart login, password reset, and logout routes.
  * 2. Keep authentication limiter rules colocated with authentication routes.
  */
 package router
@@ -33,12 +33,21 @@ func registerAuthRoutes(
 	api.POST("/auth/email/otp/verify", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
 		return "email_otp_verify:" + c.ClientIP()
 	}), authHandler.VerifyEmailOTP)
+	api.POST("/auth/password/email/request", limiter.Limit(5, 10*time.Minute, func(c *gin.Context) string {
+		return "email_password_reset_request:" + c.ClientIP()
+	}), authHandler.RequestEmailPasswordReset)
+	api.POST("/auth/password/email/reset", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
+		return "email_password_reset:" + c.ClientIP()
+	}), authHandler.ResetPasswordWithEmail)
 	api.POST("/auth/email/register", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
 		return "email_register:" + c.ClientIP()
 	}), authHandler.RegisterEmail)
 	api.POST("/auth/email/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
 		return "email_login:" + c.ClientIP()
 	}), authHandler.LoginEmail)
+	api.POST("/auth/username/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
+		return "username_login:" + c.ClientIP()
+	}), authHandler.LoginUsername)
 	api.POST("/auth/phone/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
 		return "phone_login:" + c.ClientIP()
 	}), authHandler.LoginPhone)
