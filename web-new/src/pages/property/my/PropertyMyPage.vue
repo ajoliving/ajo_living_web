@@ -2,13 +2,21 @@
  * 我的物業發布頁。
  * 1. 根據頻道讀取我的樓盤或服務式住宅列表。
  * 2. 支援發布、重發、成交與下架等狀態操作。
+ * 3. 在會員中心內以彈窗承載新增與編輯發布流程。
 -->
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
+import {
+  getPropertyOptionLabel,
+  propertyAdPackageOptions,
+  propertyTransactionTypeOptions,
+  propertyTypeOptions,
+  servicedAdPackageOptions,
+} from '@/constants/property';
 import {
   deactivatePropertySale,
   deactivateServicedApartment,
@@ -20,6 +28,7 @@ import {
   republishPropertySale,
   republishServicedApartment,
 } from '@/httpapis/properties';
+import type { PaginationMeta } from '@/model/api';
 import type {
   PropertyChannel,
   PropertyListParams,
@@ -29,17 +38,22 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
-import { formatDate, formatPrice } from '@/utils/format';
+import { formatDate } from '@/utils/format';
 import {
+  resolvePropertyArea,
   resolvePropertyCommunityName,
   resolvePropertyCoverImage,
   resolvePropertyDetailPath,
-  resolvePropertyPrice,
+  resolvePropertyDistrict,
+  resolvePropertyPriceText,
+  resolvePropertyRooms,
   resolvePropertyStatus,
   resolvePropertySummary,
   resolvePropertyTitle,
 } from '@/utils/property';
 import { formatAjoPoints, resolveWalletChargeCost } from '@/utils/wallet';
+
+import PropertyEditorPage from '../editor/PropertyEditorPage.vue';
 
 const props = defineProps<{
   channel: PropertyChannel;
@@ -48,6 +62,9 @@ const props = defineProps<{
 
 type MyPropertyTab = 'all' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
 type MyPropertyAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+type PropertyEditorDialogInstance = InstanceType<typeof PropertyEditorPage> & {
+  requestCloseEditor: () => Promise<void>;
+};
 
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
@@ -58,6 +75,14 @@ const loading = ref(false);
 const activeTab = ref<MyPropertyTab>('all');
 const searchQuery = ref('');
 const items = ref<PropertyListingSummaryResponse[]>([]);
+const pagination = ref<PaginationMeta>({
+  page: 1,
+  page_size: 10,
+  total: 0,
+});
+const isEditorOpen = ref(false);
+const editorListingId = ref('');
+const propertyEditorDialog = ref<PropertyEditorDialogInstance | null>(null);
 
 const pageTitle = computed(() =>
   props.channel === 'sale' ? t('property.sale.myTitle') : t('property.serviced.myTitle'),
@@ -67,10 +92,20 @@ const currentBasePath = computed(() =>
     props.channel === 'sale' ? '/properties/my' : '/serviced-residences/my'
   ),
 );
-const publishPath = computed(() => `${currentBasePath.value}/new`);
-const editorBasePath = computed(() => `${currentBasePath.value}/editor`);
 const chargeCost = computed(() =>
   resolveWalletChargeCost(props.channel === 'sale' ? 'property_sale' : 'serviced_apartment'),
+);
+const editorDialogTitle = computed(() => {
+  if (editorListingId.value) {
+    return t('property.mine.editListingTitle');
+  }
+
+  return props.channel === 'sale'
+    ? t('property.sale.publishTitle')
+    : t('property.serviced.publishTitle');
+});
+const editorDialogKey = computed(() =>
+  `${props.channel}-${editorListingId.value || 'new'}-${isEditorOpen.value ? 'open' : 'closed'}`,
 );
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
@@ -83,31 +118,34 @@ const tabOptions = computed<Array<{ label: string; value: MyPropertyTab }>>(() =
   { label: t('property.mine.sold'), value: 'sold' },
 ]);
 const filteredItems = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  if (!keyword) {
-    return items.value;
+  return items.value;
+});
+const hasPrevious = computed(() => pagination.value.page > 1);
+const hasNext = computed(() => pagination.value.page * pagination.value.page_size < pagination.value.total);
+const paginationText = computed(() => {
+  if (pagination.value.total <= 0) {
+    return t('property.mine.paginationEmpty');
   }
 
-  return items.value.filter((listing) =>
-    [
-      resolvePropertyTitle(listing),
-      resolvePropertySummary(listing),
-      resolvePropertyCommunityName(listing),
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(keyword),
-  );
+  const start = (pagination.value.page - 1) * pagination.value.page_size + 1;
+  const end = Math.min(pagination.value.page * pagination.value.page_size, pagination.value.total);
+
+  return t('property.mine.paginationRange', {
+    start,
+    end,
+    total: pagination.value.total,
+  });
 });
 
 // 1. 讀取我的發布
-const loadMyListings = async (): Promise<void> => {
+const loadMyListings = async (targetPage = pagination.value.page): Promise<void> => {
   loading.value = true;
 
   try {
     const params: PropertyListParams = {
-      page: 1,
-      page_size: 50,
+      page: targetPage,
+      page_size: pagination.value.page_size,
+      keyword: searchQuery.value.trim() || undefined,
       status: activeTab.value === 'all' ? '' : activeTab.value,
     };
     const response = props.channel === 'sale'
@@ -115,6 +153,7 @@ const loadMyListings = async (): Promise<void> => {
       : await fetchMyServicedApartmentListings(params);
 
     items.value = response.data.data.items;
+    pagination.value = response.data.data.pagination;
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
@@ -122,12 +161,146 @@ const loadMyListings = async (): Promise<void> => {
         : t('property.mine.loadError'),
       'error',
     );
+    items.value = [];
+    pagination.value = {
+      ...pagination.value,
+      page: targetPage,
+      total: 0,
+    };
   } finally {
     loading.value = false;
   }
 };
 
-// 2. 執行狀態操作
+// 2. 切換列表狀態
+const setActiveTab = async (tab: MyPropertyTab): Promise<void> => {
+  if (activeTab.value === tab) {
+    return;
+  }
+
+  activeTab.value = tab;
+  await loadMyListings(1);
+};
+
+// 3. 搜尋我的發布
+const searchListings = async (): Promise<void> => {
+  await loadMyListings(1);
+};
+
+// 4. 讀取上一頁
+const loadPreviousPage = async (): Promise<void> => {
+  if (!hasPrevious.value || loading.value) {
+    return;
+  }
+
+  await loadMyListings(pagination.value.page - 1);
+};
+
+// 5. 讀取下一頁
+const loadNextPage = async (): Promise<void> => {
+  if (!hasNext.value || loading.value) {
+    return;
+  }
+
+  await loadMyListings(pagination.value.page + 1);
+};
+
+// 6. 開啟新增發布彈窗
+const openCreateEditor = (): void => {
+  editorListingId.value = '';
+  isEditorOpen.value = true;
+};
+
+// 7. 開啟編輯發布彈窗
+const openEditEditor = (listingId: string): void => {
+  editorListingId.value = listingId;
+  isEditorOpen.value = true;
+};
+
+// 8. 關閉發布彈窗
+const closeEditor = (): void => {
+  isEditorOpen.value = false;
+  editorListingId.value = '';
+};
+
+// 9. 請求關閉發布彈窗
+const requestCloseEditor = (): void => {
+  void propertyEditorDialog.value?.requestCloseEditor();
+};
+
+// 10. 處理草稿儲存完成
+const handleEditorSaved = async (): Promise<void> => {
+  const isNewListing = editorListingId.value.trim() === '';
+  closeEditor();
+  if (isNewListing) {
+    activeTab.value = 'draft';
+    await loadMyListings(1);
+    return;
+  }
+
+  await loadMyListings(pagination.value.page);
+};
+
+// 11. 處理發布完成
+const handleEditorPublished = async (): Promise<void> => {
+  closeEditor();
+  activeTab.value = 'active';
+  await loadMyListings(1);
+};
+
+// 12. 輸出可顯示日期
+const formatOptionalDate = (value?: string | null): string =>
+  value ? formatDate(value, preferenceStore.locale) : '-';
+
+// 13. 輸出表格價格
+const resolvePriceText = (listing: PropertyListingSummaryResponse): string =>
+  resolvePropertyPriceText(listing, preferenceStore.locale);
+
+// 14. 輸出地區及位置
+const resolveLocationText = (listing: PropertyListingSummaryResponse): string =>
+  `${resolvePropertyCommunityName(listing)} · ${resolvePropertyDistrict(listing, preferenceStore.locale)}`;
+
+// 15. 輸出面積及房型
+const resolveSpecText = (listing: PropertyListingSummaryResponse): string => {
+  const area = resolvePropertyArea(listing);
+  const areaText = area > 0 ? t('common.unit.sqft', { value: area }) : '-';
+  return `${areaText} · ${resolvePropertyRooms(listing)}`;
+};
+
+// 16. 輸出類型
+const resolveTypeText = (listing: PropertyListingSummaryResponse): string => {
+  if (listing.property_sale) {
+    const transaction = propertyTransactionTypeOptions.find(
+      (option) => option.value === listing.property_sale?.transaction_type,
+    );
+    const propertyType = propertyTypeOptions.find(
+      (option) => option.value === listing.property_sale?.property_type,
+    );
+
+    return [
+      transaction ? getPropertyOptionLabel(transaction, preferenceStore.locale) : '',
+      propertyType ? getPropertyOptionLabel(propertyType, preferenceStore.locale) : '',
+    ].filter(Boolean).join(' · ') || '-';
+  }
+
+  return props.channel === 'serviced'
+    ? t('property.serviced.title')
+    : '-';
+};
+
+// 17. 輸出推廣方案
+const resolveAdPackageText = (listing: PropertyListingSummaryResponse): string => {
+  const packageCode =
+    listing.property_sale?.ad_package_code ||
+    listing.serviced_apartment?.ad_package_code ||
+    'basic';
+  const options = listing.serviced_apartment ? servicedAdPackageOptions : propertyAdPackageOptions;
+  const matched = options.find((option) => option.value === packageCode);
+
+  return matched ? getPropertyOptionLabel(matched, preferenceStore.locale) : packageCode;
+};
+
+// 18. 執行狀態操作
 const runAction = async (action: MyPropertyAction, listingId: string): Promise<void> => {
   if ((action === 'publish' || action === 'republish') &&
     !window.confirm(`${t(action === 'publish' ? 'property.mine.confirmPublishCharge' : 'property.mine.confirmRepublishCharge')} ${formatPoints(chargeCost.value)}`)) {
@@ -170,7 +343,13 @@ const runAction = async (action: MyPropertyAction, listingId: string): Promise<v
     if (action === 'publish' || action === 'republish') {
       await sessionStore.loadCurrentUser();
     }
-    await loadMyListings();
+    if (action === 'publish' || action === 'republish') {
+      activeTab.value = 'active';
+      await loadMyListings(1);
+      return;
+    }
+
+    await loadMyListings(pagination.value.page);
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
@@ -181,16 +360,12 @@ const runAction = async (action: MyPropertyAction, listingId: string): Promise<v
   }
 };
 
-// 3. 輸出狀態顯示
+// 19. 輸出狀態顯示
 const resolveStatusLabel = (listing: PropertyListingSummaryResponse): string =>
   t(`property.mine.${resolvePropertyStatus(listing)}`);
 
-watch(activeTab, () => {
-  void loadMyListings();
-});
-
 onMounted(() => {
-  void loadMyListings();
+  void loadMyListings(1);
 });
 </script>
 
@@ -203,30 +378,43 @@ onMounted(() => {
         </p>
         <h1>{{ pageTitle }}</h1>
       </div>
-      <RouterLink
-        :to="publishPath"
+      <button
+        type="button"
         class="property-button property-button--primary"
+        @click="openCreateEditor"
       >
         <AppIcon
           name="plus-square"
           :size="17"
         />
         {{ t('property.list.publish') }}
-      </RouterLink>
+      </button>
     </section>
 
-    <section class="property-my-toolbar">
-      <label class="property-search-input">
-        <AppIcon
-          name="search"
-          :size="17"
-        />
-        <input
-          v-model="searchQuery"
-          type="search"
-          :placeholder="t('property.list.keywordPlaceholder')"
-        />
-      </label>
+    <form
+      class="property-my-toolbar"
+      @submit.prevent="searchListings"
+    >
+      <div class="property-search-row">
+        <label class="property-search-input">
+          <AppIcon
+            name="search"
+            :size="17"
+          />
+          <input
+            v-model="searchQuery"
+            type="search"
+            :placeholder="t('property.list.keywordPlaceholder')"
+          />
+        </label>
+        <button
+          type="submit"
+          class="property-button property-button--secondary"
+          :disabled="loading"
+        >
+          {{ t('property.mine.search') }}
+        </button>
+      </div>
       <div class="property-tab-row">
         <button
           v-for="tab in tabOptions"
@@ -234,12 +422,12 @@ onMounted(() => {
           type="button"
           class="property-tab"
           :class="activeTab === tab.value ? 'property-tab--active' : ''"
-          @click="activeTab = tab.value"
+          @click="setActiveTab(tab.value)"
         >
           {{ tab.label }}
         </button>
       </div>
-    </section>
+    </form>
 
     <section
       v-if="loading"
@@ -252,7 +440,18 @@ onMounted(() => {
       v-else-if="filteredItems.length === 0"
       class="property-empty"
     >
-      {{ t('property.list.noListings') }}
+      <p>{{ t('property.list.noListings') }}</p>
+      <button
+        type="button"
+        class="property-button property-button--primary"
+        @click="openCreateEditor"
+      >
+        <AppIcon
+          name="plus-square"
+          :size="17"
+        />
+        {{ t('property.list.publish') }}
+      </button>
     </section>
 
     <section
@@ -267,12 +466,17 @@ onMounted(() => {
         <table class="property-table">
           <thead>
             <tr>
-              <th>樓盤</th>
-              <th>屋苑 / 地區</th>
-              <th>價格</th>
-              <th>狀態</th>
-              <th>更新時間</th>
-              <th>操作</th>
+              <th>{{ t('property.mine.columnListing') }}</th>
+              <th>{{ t('property.mine.columnType') }}</th>
+              <th>{{ t('property.mine.columnLocation') }}</th>
+              <th>{{ t('property.mine.columnSpec') }}</th>
+              <th>{{ t('property.mine.columnPrice') }}</th>
+              <th>{{ t('property.mine.columnAdPackage') }}</th>
+              <th>{{ t('property.mine.columnStatus') }}</th>
+              <th>{{ t('property.mine.columnPublishedAt') }}</th>
+              <th>{{ t('property.mine.columnExpiresAt') }}</th>
+              <th>{{ t('property.mine.columnUpdatedAt') }}</th>
+              <th>{{ t('property.mine.columnActions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -305,20 +509,26 @@ onMounted(() => {
                   </div>
                 </div>
               </td>
-              <td>{{ resolvePropertyCommunityName(listing) }}</td>
-              <td>{{ formatPrice(resolvePropertyPrice(listing), preferenceStore.locale) }}</td>
+              <td>{{ resolveTypeText(listing) }}</td>
+              <td>{{ resolveLocationText(listing) }}</td>
+              <td>{{ resolveSpecText(listing) }}</td>
+              <td>{{ resolvePriceText(listing) }}</td>
+              <td>{{ resolveAdPackageText(listing) }}</td>
               <td>
                 <span class="property-status-pill">{{ resolveStatusLabel(listing) }}</span>
               </td>
-              <td>{{ formatDate(listing.published_at || listing.updated_at, preferenceStore.locale) }}</td>
+              <td>{{ formatOptionalDate(listing.published_at) }}</td>
+              <td>{{ formatOptionalDate(listing.expire_at) }}</td>
+              <td>{{ formatOptionalDate(listing.updated_at) }}</td>
               <td>
                 <div class="property-table-actions">
-                  <RouterLink
-                    :to="`${editorBasePath}/${listing.listing_id}`"
-                    class="property-button property-button--secondary"
+                  <button
+                    type="button"
+                    class="property-button property-button--primary"
+                    @click="openEditEditor(listing.listing_id)"
                   >
                     {{ t('property.mine.edit') }}
-                  </RouterLink>
+                  </button>
                   <RouterLink
                     :to="resolvePropertyDetailPath(listing)"
                     class="property-button property-button--secondary"
@@ -331,15 +541,15 @@ onMounted(() => {
                     class="property-button property-button--primary"
                     @click="runAction('publish', listing.listing_id)"
                   >
-                    {{ t('property.mine.publish') }}
+                    {{ t('property.mine.publish') }} · {{ formatPoints(chargeCost) }}
                   </button>
                   <button
-                    v-if="listing.publication_status === 'expired'"
+                    v-if="listing.publication_status === 'expired' || listing.publication_status === 'hidden'"
                     type="button"
                     class="property-button property-button--primary"
                     @click="runAction('republish', listing.listing_id)"
                   >
-                    {{ t('property.mine.republish') }}
+                    {{ t('property.mine.republish') }} · {{ formatPoints(chargeCost) }}
                   </button>
                   <button
                     v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
@@ -363,16 +573,87 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+
+      <div class="property-pagination">
+        <p>{{ paginationText }}</p>
+        <div>
+          <button
+            type="button"
+            class="property-button property-button--secondary"
+            :disabled="!hasPrevious || loading"
+            @click="loadPreviousPage"
+          >
+            {{ t('property.mine.previous') }}
+          </button>
+          <button
+            type="button"
+            class="property-button property-button--secondary"
+            :disabled="!hasNext || loading"
+            @click="loadNextPage"
+          >
+            {{ t('property.mine.next') }}
+          </button>
+        </div>
+      </div>
     </section>
+
+    <Teleport to="body">
+      <Transition name="property-editor-dialog">
+        <div
+          v-if="isEditorOpen"
+          class="property-editor-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="editorDialogTitle"
+          @click.self="requestCloseEditor"
+        >
+          <section class="property-editor-dialog__panel">
+            <header class="property-editor-dialog__header">
+              <div>
+                <p class="property-kicker">
+                  {{ editorListingId ? 'Edit' : 'Publish' }}
+                </p>
+                <h2>{{ editorDialogTitle }}</h2>
+              </div>
+              <button
+                type="button"
+                class="property-editor-dialog__close"
+                :aria-label="t('common.action.close')"
+                @click="requestCloseEditor"
+              >
+                <AppIcon
+                  name="close"
+                  :size="18"
+                />
+              </button>
+            </header>
+
+            <div class="property-editor-dialog__body">
+              <PropertyEditorPage
+                ref="propertyEditorDialog"
+                :key="editorDialogKey"
+                :channel="channel"
+                :listing-id="editorListingId"
+                :return-path="currentBasePath"
+                embedded
+                hide-header
+                @cancel="closeEditor"
+                @saved="handleEditorSaved"
+                @published="handleEditorPublished"
+              />
+            </div>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </main>
 </template>
 
 <style scoped>
 .property-my-page {
+  display: grid;
+  gap: 1rem;
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  margin: 0 auto;
-  padding: 3rem var(--layout-page-padding-inline) 5rem;
   color: rgb(var(--color-text));
 }
 
@@ -412,6 +693,12 @@ onMounted(() => {
   padding: 0 0.9rem;
   font-size: 0.86rem;
   font-weight: 900;
+  cursor: pointer;
+}
+
+.property-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .property-button--primary {
@@ -431,6 +718,12 @@ onMounted(() => {
   border-radius: 0.75rem;
   background: rgb(var(--color-surface));
   padding: 1rem;
+}
+
+.property-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
 }
 
 .property-search-input {
@@ -516,7 +809,7 @@ onMounted(() => {
 
 .property-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1360px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -596,7 +889,33 @@ onMounted(() => {
   gap: 8px;
 }
 
+.property-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgb(var(--color-border));
+  padding-top: 12px;
+}
+
+.property-pagination p {
+  margin: 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.property-pagination div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .property-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
   margin-top: 1rem;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
@@ -604,6 +923,95 @@ onMounted(() => {
   padding: 2rem;
   color: rgb(var(--color-text-muted));
   text-align: center;
+}
+
+.property-empty p {
+  margin: 0;
+}
+
+.property-editor-dialog {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
+  display: grid;
+  background: rgb(15 23 42 / 0.28);
+  padding: 18px;
+}
+
+.property-editor-dialog__panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(100%, 1180px);
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 3px;
+  background: rgb(var(--color-surface));
+  box-shadow: 0 20px 60px rgb(15 23 42 / 0.18);
+  justify-self: center;
+}
+
+.property-editor-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding: 14px 16px;
+}
+
+.property-editor-dialog__header h2 {
+  margin: 4px 0 0;
+  color: rgb(var(--color-primary));
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.property-editor-dialog__close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  cursor: pointer;
+}
+
+.property-editor-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.property-editor-dialog__body :deep(.property-editor-page) {
+  max-width: none;
+  padding: 0 0 12px;
+}
+
+.property-editor-dialog-enter-active,
+.property-editor-dialog-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.property-editor-dialog-enter-active .property-editor-dialog__panel,
+.property-editor-dialog-leave-active .property-editor-dialog__panel {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.property-editor-dialog-enter-from,
+.property-editor-dialog-leave-to {
+  opacity: 0;
+}
+
+.property-editor-dialog-enter-from .property-editor-dialog__panel,
+.property-editor-dialog-leave-to .property-editor-dialog__panel {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 @media (min-width: 760px) {
@@ -684,6 +1092,43 @@ onMounted(() => {
 @media (max-width: 767px) {
   .property-my-page {
     padding-bottom: 96px;
+  }
+
+  .property-search-row,
+  .property-pagination {
+    grid-template-columns: 1fr;
+  }
+
+  .property-search-row {
+    display: grid;
+  }
+
+  .property-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .property-pagination div {
+    justify-content: flex-start;
+  }
+
+  .property-editor-dialog {
+    padding: 0;
+  }
+
+  .property-editor-dialog__panel {
+    width: 100%;
+    max-height: 100vh;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .property-editor-dialog__header {
+    padding: 12px;
+  }
+
+  .property-editor-dialog__body {
+    padding: 10px;
   }
 }
 </style>

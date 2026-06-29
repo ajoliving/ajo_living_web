@@ -43,6 +43,7 @@ func registerPublicRoutes(
 
 	// 1.5 Public property and serviced residence routes.
 	api.GET("/property-sales", optionalAuth, propertyHandler.ListPropertySales)
+	api.GET("/property-sales/:listingId/similar", propertyHandler.SimilarPropertySales)
 	api.GET("/property-sales/:listingId", optionalAuth, propertyHandler.GetPropertySale)
 	api.GET("/property-addresses/search", propertyHandler.SearchPropertyAddresses)
 	api.GET("/serviced-apartments", optionalAuth, propertyHandler.ListServicedApartments)

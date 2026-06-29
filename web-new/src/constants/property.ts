@@ -213,6 +213,11 @@ export const propertyFeatureTagOptions: MarketplaceLabelledOption[] = [
   { value: 'commercial_use', label_zh_hk: '工商專用', label_en: 'Commercial use' },
 ];
 
+export const propertyAutoTagOptions: MarketplaceLabelledOption[] = [
+  { value: 'vr_video', label_zh_hk: '有 VR 或影片', label_en: 'VR or video' },
+  { value: 'prepay_discount', label_zh_hk: '預繳全年租金優惠', label_en: 'Annual prepay discount' },
+];
+
 export const servicedFacilityTagOptions: MarketplaceLabelledOption[] = [
   { value: 'gym', label_zh_hk: '健身室', label_en: 'Gym' },
   { value: 'laundry', label_zh_hk: '洗衣房', label_en: 'Laundry' },
@@ -243,7 +248,20 @@ export const getPropertyTypeLabel = (value: string, locale: AppLocale) => {
   return option ? getPropertyOptionLabel(option, locale) : value;
 };
 
-// 3. 取得地區標籤
+// 3. 取得樓盤標籤
+export const getPropertyTagLabel = (value: string, locale: AppLocale) => {
+  const options = [
+    ...propertyFeatureTagOptions,
+    ...propertyAutoTagOptions,
+    ...servicedFacilityTagOptions,
+    ...servicedServiceTagOptions,
+  ];
+  const option = options.find((item) => item.value === value);
+
+  return option ? getPropertyOptionLabel(option, locale) : value;
+};
+
+// 4. 取得地區標籤
 export const getPropertyDistrictLabel = (value: string, locale: AppLocale) => {
   const regionOption = propertyRegionDisplayOptions.find((item) => item.value === value) ||
     marketplaceRegions.find((item) => item.value === value);

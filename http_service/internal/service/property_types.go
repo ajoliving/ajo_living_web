@@ -26,6 +26,7 @@ type PropertyListFilters struct {
 	TransactionType       string
 	PropertyType          string
 	RentalType            string
+	RenovationType        string
 	AreaMode              string
 	BedroomCount          *int
 	MinPriceHKD           *float64
@@ -72,12 +73,16 @@ type UpsertPropertySaleParams struct {
 	MultiUnitProject      bool
 	PropertyType          string
 	RentalType            string
+	RenovationType        string
+	AgencyCompanyName     string
 	EstateName            string
 	AddressText           string
 	AddressTextEn         string
 	BlockName             string
 	UnitName              string
 	ShowUnit              bool
+	Latitude              *float64
+	Longitude             *float64
 	AskingPriceHKD        float64
 	MonthlyRentHKD        float64
 	PriceReferenceOnly    bool
@@ -98,6 +103,9 @@ type UpsertPropertySaleParams struct {
 	TotalFloors           int
 	Direction             string
 	BuildingAge           string
+	CompletionYear        int
+	BuildingTotalFloors   int
+	ManagementCompany     string
 	KitchenType           string
 	CookingMode           string
 	ManagementFeeHKD      float64
@@ -182,12 +190,16 @@ type PropertySalePayload struct {
 	MultiUnitProject     bool     `json:"multi_unit_project"`
 	PropertyType         string   `json:"property_type"`
 	RentalType           string   `json:"rental_type"`
+	RenovationType       string   `json:"renovation_type"`
+	AgencyCompanyName    string   `json:"agency_company_name"`
 	EstateName           string   `json:"estate_name"`
 	AddressText          string   `json:"address_text"`
 	AddressTextEn        string   `json:"address_text_en"`
 	BlockName            string   `json:"block_name"`
 	UnitName             string   `json:"unit_name,omitempty"`
 	ShowUnit             bool     `json:"show_unit"`
+	Latitude             *float64 `json:"latitude,omitempty"`
+	Longitude            *float64 `json:"longitude,omitempty"`
 	AskingPriceHKD       float64  `json:"asking_price_hkd"`
 	MonthlyRentHKD       float64  `json:"monthly_rent_hkd"`
 	PriceReferenceOnly   bool     `json:"price_reference_only"`
@@ -210,6 +222,9 @@ type PropertySalePayload struct {
 	PublicLocationText   string   `json:"public_location_text"`
 	Direction            string   `json:"direction"`
 	BuildingAge          string   `json:"building_age"`
+	CompletionYear       int      `json:"completion_year"`
+	BuildingTotalFloors  int      `json:"building_total_floors"`
+	ManagementCompany    string   `json:"management_company"`
 	KitchenType          string   `json:"kitchen_type"`
 	CookingMode          string   `json:"cooking_mode"`
 	ManagementFeeHKD     float64  `json:"management_fee_hkd"`
@@ -227,6 +242,8 @@ type PropertySalePayload struct {
 	FeatureTags          []string `json:"feature_tags"`
 	ContactMethod        string   `json:"contact_method"`
 	PublisherRoleLabel   string   `json:"publisher_role_label"`
+	ViewCount            int64    `json:"view_count"`
+	InquiryCount         int64    `json:"inquiry_count"`
 }
 
 // 10. PropertyAddressSuggestion defines one building address autocomplete result.
@@ -300,6 +317,7 @@ type PropertyListingSummary struct {
 	CoverImage            *ListingImageResponse     `json:"cover_image,omitempty"`
 	PropertySale          *PropertySalePayload      `json:"property_sale,omitempty"`
 	ServicedApartment     *ServicedApartmentPayload `json:"serviced_apartment,omitempty"`
+	IsFavorite            bool                      `json:"is_favorite"`
 }
 
 // 13. PropertyListingDetail defines detail payload for property channels.
@@ -311,4 +329,43 @@ type PropertyListingDetail struct {
 	PointsCharged       int64                  `json:"points_charged,omitempty"`
 	PointsBalanceAfter  *int64                 `json:"points_balance_after,omitempty"`
 	PointsTransactionID string                 `json:"points_transaction_id,omitempty"`
+}
+
+// 14. PropertyActionResult defines simple listing action state.
+type PropertyActionResult struct {
+	ListingID  string `json:"listing_id"`
+	IsFavorite bool   `json:"is_favorite,omitempty"`
+}
+
+// 15. PropertyAppointmentParams defines viewing appointment input.
+type PropertyAppointmentParams struct {
+	UserID          int64
+	ListingPublicID string
+	ContactName     string
+	ContactPhone    string
+	PreferredTime   string
+	Message         string
+	AppointmentType string
+}
+
+// 16. PropertyAppointmentResponse defines viewing appointment output.
+type PropertyAppointmentResponse struct {
+	AppointmentID string `json:"appointment_id"`
+	ListingID     string `json:"listing_id"`
+	Status        string `json:"status"`
+}
+
+// 17. PropertyReportParams defines public report input.
+type PropertyReportParams struct {
+	UserID          int64
+	ListingPublicID string
+	Reason          string
+	Message         string
+}
+
+// 18. PropertyReportResponse defines public report output.
+type PropertyReportResponse struct {
+	ReportID     string `json:"report_id"`
+	ListingID    string `json:"listing_id"`
+	ReviewStatus string `json:"review_status"`
 }

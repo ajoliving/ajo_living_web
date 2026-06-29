@@ -174,6 +174,24 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if publicSale.PublicLocationText != "仁英大廈高層(21-25|40/F)" {
 		t.Fatalf("unexpected public location text: %q", publicSale.PublicLocationText)
 	}
+
+	if err := propertyService.DeactivateProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID); err != nil {
+		t.Fatalf("deactivate property sale: %v", err)
+	}
+	hiddenDetail, err := propertyService.GetPropertyDetail(context.Background(), PropertyChannelSale, detail.ListingID, &owner.ID)
+	if err != nil {
+		t.Fatalf("load hidden property sale: %v", err)
+	}
+	if hiddenDetail.PublicationStatus != "hidden" {
+		t.Fatalf("expected hidden property sale, got %#v", hiddenDetail)
+	}
+	republished, err := propertyService.RepublishProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID)
+	if err != nil {
+		t.Fatalf("republish hidden property sale: %v", err)
+	}
+	if republished.PublicationStatus != "active" || republished.BusinessStatus != "available" || republished.PointsCharged != 1500 {
+		t.Fatalf("unexpected republished detail: %#v", republished)
+	}
 }
 
 // 2. ptrInt returns an int pointer for optional area fields.

@@ -38,12 +38,16 @@ type propertyListingRow struct {
 	SaleMultiUnitProject         bool
 	SalePropertyType             string
 	SaleRentalType               string
+	SaleRenovationType           string
+	SaleAgencyCompanyName        string
 	SaleEstateName               string
 	SaleAddressText              string
 	SaleAddressTextEn            string
 	SaleBlockName                string
 	SaleUnitName                 string
 	SaleShowUnit                 bool
+	SaleLatitude                 *float64
+	SaleLongitude                *float64
 	SaleAskingPriceHKD           float64
 	SaleMonthlyRentHKD           float64
 	SalePriceReferenceOnly       bool
@@ -66,6 +70,9 @@ type propertyListingRow struct {
 	SalePublicLocationText       string
 	SaleDirection                string
 	SaleBuildingAge              string
+	SaleCompletionYear           int
+	SaleBuildingTotalFloors      int
+	SaleManagementCompany        string
 	SaleKitchenType              string
 	SaleCookingMode              string
 	SaleManagementFeeHKD         float64
@@ -83,6 +90,8 @@ type propertyListingRow struct {
 	SaleFeatureTags              []byte
 	SaleContactMethod            string
 	SalePublisherRoleLabel       string
+	SaleViewCount                int64
+	SaleInquiryCount             int64
 	ServicedProjectName          string
 	ServicedProjectNameEn        string
 	ServicedAddressText          string
@@ -178,7 +187,7 @@ func (s *PropertyService) PublishProperty(ctx context.Context, channel PropertyC
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionPublish)
 }
 
-// 9. RepublishProperty republishes an expired property listing.
+// 9. RepublishProperty republishes an expired or hidden property listing.
 func (s *PropertyService) RepublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionRepublish)
 }
@@ -287,6 +296,9 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
 			return nil, errcode.New(errcode.CodeNotFound, "listing not found")
 		}
+		if channel == PropertyChannelSale {
+			_ = s.incrementPropertySaleCounter(ctx, listing.ID, "view_count")
+		}
 	}
 
 	rows, err := s.loadPropertyRowsByIDs(ctx, channel, []int64{listing.ID})
@@ -305,6 +317,9 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
 		summaries[0].PropertySale.FloorRaw = rows[0].SaleFloorRaw
 		summaries[0].PropertySale.PrivateNote = rows[0].SalePrivateNote
+	}
+	if channel == PropertyChannelSale && viewerUserID != nil && len(summaries) > 0 {
+		summaries[0].IsFavorite = s.isFavoriteProperty(ctx, *viewerUserID, listing.ID)
 	}
 
 	images, err := s.loadListingImages(ctx, []int64{listing.ID})
@@ -337,8 +352,8 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 		if action == WalletActionPublish && listing.PublicationStatus != "draft" {
 			return errcode.New(errcode.CodeValidationError, "only draft listings can be published")
 		}
-		if action == WalletActionRepublish && listing.PublicationStatus != "expired" {
-			return errcode.New(errcode.CodeValidationError, "only expired listings can be republished")
+		if action == WalletActionRepublish && listing.PublicationStatus != "expired" && listing.PublicationStatus != "hidden" {
+			return errcode.New(errcode.CodeValidationError, "only expired or hidden listings can be republished")
 		}
 		if err := s.validatePropertyReadyWithTx(ctx, tx, listing.ID); err != nil {
 			return err
@@ -510,6 +525,9 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 		UserAgent:       userAgent,
 	}).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to store contact access log")
+	}
+	if channel == PropertyChannelSale {
+		_ = s.incrementPropertySaleCounter(ctx, listing.ID, "inquiry_count")
 	}
 
 	return &ContactAccessResult{

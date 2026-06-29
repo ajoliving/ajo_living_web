@@ -69,6 +69,8 @@ func Migrate(db *gorm.DB) error {
 		&model.SecondhandListing{},
 		&model.PropertySaleListing{},
 		&model.PropertyAddress{},
+		&model.PropertyViewingAppointment{},
+		&model.PropertyReport{},
 		&model.ServicedApartmentProject{},
 		&model.SupermarketFavorite{},
 		&model.SupermarketPriceAlert{},

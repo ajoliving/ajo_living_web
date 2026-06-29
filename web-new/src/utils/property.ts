@@ -5,7 +5,8 @@
  */
 import type { PropertyChannel, PropertyListingSummaryResponse } from '@/model/property';
 import type { AppLocale } from '@/stores/preferences';
-import { getPropertyDistrictLabel, getPropertyTypeLabel } from '@/constants/property';
+import { getPropertyDistrictLabel, getPropertyTagLabel, getPropertyTypeLabel } from '@/constants/property';
+import { formatPrice } from '@/utils/format';
 import { humanizeCodeLabel } from '@/utils/marketplace';
 
 interface PropertyListingWithImages extends PropertyListingSummaryResponse {
@@ -16,52 +17,118 @@ interface PropertyListingWithImages extends PropertyListingSummaryResponse {
   }>;
 }
 
-// 1. 取得物業頻道
+interface PropertyAutoTagSource {
+  video_url?: string;
+  vr_url?: string;
+  annual_prepay_discount?: boolean;
+  annual_prepay_option?: string;
+}
+
+// 1. 取得樓盤自動標籤
+export const resolvePropertyAutoTags = (sale?: PropertyAutoTagSource | null): string[] => {
+  if (!sale) {
+    return [];
+  }
+
+  return [
+    sale.video_url?.trim() || sale.vr_url?.trim() ? 'vr_video' : '',
+    sale.annual_prepay_option && sale.annual_prepay_option !== 'none' || sale.annual_prepay_discount ? 'prepay_discount' : '',
+  ].filter(Boolean);
+};
+
+// 2. 合併人工與自動標籤
+export const mergePropertyFeatureTags = (
+  tags: string[],
+  sale?: PropertyAutoTagSource | null,
+): string[] => {
+  const manualTags = tags.filter((tag) => tag !== 'vr_video' && tag !== 'prepay_discount');
+  return [...new Set([...manualTags, ...resolvePropertyAutoTags(sale)])];
+};
+
+// 3. 取得物業頻道
 export const resolvePropertyChannel = (
   listing: PropertyListingSummaryResponse,
 ): PropertyChannel => (listing.module === 'serviced_apartment' ? 'serviced' : 'sale');
 
-// 2. 取得物業詳情路徑
+// 4. 取得物業詳情路徑
 export const resolvePropertyDetailPath = (
   listing: PropertyListingSummaryResponse,
 ) => `${resolvePropertyChannel(listing) === 'serviced' ? '/serviced-residences' : '/properties'}/${listing.listing_id}`;
 
-// 3. 取得物業標題
+// 5. 取得物業標題
 export const resolvePropertyTitle = (listing: PropertyListingSummaryResponse) => listing.title;
 
-// 4. 取得物業摘要
+// 6. 取得物業摘要
 export const resolvePropertySummary = (listing: PropertyListingSummaryResponse) => listing.summary;
 
-// 5. 取得物業價格
-export const resolvePropertyPrice = (listing: PropertyListingSummaryResponse) =>
-  listing.serviced_apartment?.lowest_monthly_rent_hkd ||
+// 7. 取得樓盤交易類型
+export const resolvePropertyTransactionType = (listing: PropertyListingSummaryResponse) =>
+  listing.property_sale?.transaction_type === 'rent' ? 'rent' : 'sale';
+
+// 8. 取得物業價格
+export const resolvePropertyPrice = (
+  listing: PropertyListingSummaryResponse,
+  priceMode: 'monthly' | 'daily' = 'monthly',
+) =>
+  (priceMode === 'daily'
+    ? listing.serviced_apartment?.lowest_daily_rent_hkd
+    : listing.serviced_apartment?.lowest_monthly_rent_hkd) ||
+  (listing.property_sale?.transaction_type === 'rent' ? listing.property_sale.monthly_rent_hkd : 0) ||
   listing.property_sale?.asking_price_hkd ||
   0;
 
-// 6. 取得物業面積
+// 9. 取得物業價格展示標記
+export const resolvePropertyPriceFlags = (listing: PropertyListingSummaryResponse) => ({
+  referenceOnly: listing.serviced_apartment?.price_reference_only ?? listing.property_sale?.price_reference_only ?? false,
+  negotiable: listing.serviced_apartment?.price_negotiable ?? listing.property_sale?.price_negotiable ?? false,
+});
+
+// 10. 取得物業價格文案
+export const resolvePropertyPriceText = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale,
+  priceMode: 'monthly' | 'daily' = 'monthly',
+): string => {
+  const flags = resolvePropertyPriceFlags(listing);
+  if (flags.negotiable) {
+    return locale === 'en' ? 'Negotiable' : '面議';
+  }
+
+  const price = resolvePropertyPrice(listing, priceMode);
+  if (flags.referenceOnly && price <= 1) {
+    return locale === 'en' ? 'Reference price' : '價格僅供參考';
+  }
+
+  const priceText = formatPrice(price, locale);
+  return flags.referenceOnly ? `${priceText}${locale === 'en' ? ' from' : ' 起'}` : priceText;
+};
+
+// 11. 取得物業面積
 export const resolvePropertyArea = (listing: PropertyListingSummaryResponse) =>
+  listing.serviced_apartment?.min_usable_area_sqft ||
   listing.serviced_apartment?.room_types?.[0]?.usable_area_sqft ||
   listing.property_sale?.usable_area_sqft ||
   0;
 
-// 7. 取得物業房間摘要
+// 12. 取得物業房間摘要
 export const resolvePropertyRooms = (listing: PropertyListingSummaryResponse) => {
   const sale = listing.property_sale;
   if (sale) {
-    return `${sale.bedroom_count}房 ${sale.living_room_count}廳 ${sale.bathroom_count}廁`;
+    const location = sale.public_location_text ? `${sale.public_location_text} · ` : '';
+    return `${location}${sale.bedroom_count}房 ${sale.living_room_count}廳 ${sale.bathroom_count}廁`;
   }
 
   const roomCount = listing.serviced_apartment?.room_types.length ?? 0;
   return roomCount > 0 ? `${roomCount} 種房型` : '-';
 };
 
-// 8. 取得地區標籤
+// 13. 取得地區標籤
 export const resolvePropertyDistrict = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale,
 ) => getPropertyDistrictLabel(listing.district_code, locale);
 
-// 9. 取得物業類型或項目類型
+// 14. 取得物業類型或項目類型
 export const resolvePropertyTypeLabel = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale,
@@ -69,7 +136,7 @@ export const resolvePropertyTypeLabel = (
   ? getPropertyTypeLabel(listing.property_sale.property_type, locale)
   : locale === 'zh-HK' ? '服務式住宅' : 'Serviced residence';
 
-// 10. 取得物業封面
+// 15. 取得物業封面
 export const resolvePropertyCoverImage = (listing: PropertyListingSummaryResponse) => {
   const listingWithImages = listing as PropertyListingWithImages;
   const cover = listing.cover_image ?? listingWithImages.images?.[0];
@@ -85,7 +152,7 @@ export const resolvePropertyCoverImage = (listing: PropertyListingSummaryRespons
   };
 };
 
-// 11. 取得物業全部圖片
+// 16. 取得物業全部圖片
 export const resolvePropertyImages = (listing: PropertyListingSummaryResponse) => {
   const listingWithImages = listing as PropertyListingWithImages;
   if (Array.isArray(listingWithImages.images)) {
@@ -101,7 +168,7 @@ export const resolvePropertyImages = (listing: PropertyListingSummaryResponse) =
   return cover ? [cover] : [];
 };
 
-// 12. 取得屋苑或項目名稱
+// 17. 取得屋苑或項目名稱
 export const resolvePropertyCommunityName = (listing: PropertyListingSummaryResponse) => {
   if (listing.serviced_apartment?.project_name) {
     return listing.serviced_apartment.project_name;
@@ -120,7 +187,7 @@ export const resolvePropertyCommunityName = (listing: PropertyListingSummaryResp
   return humanizeCodeLabel(listing.district_code);
 };
 
-// 13. 取得狀態標籤
+// 18. 取得狀態標籤
 export const resolvePropertyStatus = (listing: PropertyListingSummaryResponse) => {
   if (listing.business_status === 'sold') {
     return 'sold';
@@ -132,13 +199,23 @@ export const resolvePropertyStatus = (listing: PropertyListingSummaryResponse) =
   return listing.publication_status || 'draft';
 };
 
-// 14. 取得聯絡角色
+// 19. 取得聯絡角色
 export const resolvePropertyPublisherRole = (listing: PropertyListingSummaryResponse) =>
   listing.property_sale?.publisher_role_label ||
   listing.serviced_apartment?.publisher_role_label ||
   resolvePublisherRoleLabel(listing.publisher_identity_type);
 
-// 15. 取得發布身份標籤
+// 20. 取得樓盤特色標籤文案
+export const resolvePropertyTagLabels = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale,
+  limit = 5,
+) => mergePropertyFeatureTags(listing.property_sale?.feature_tags ?? [], listing.property_sale)
+  .concat(listing.serviced_apartment?.facility_tags ?? [], listing.serviced_apartment?.service_tags ?? [])
+  .slice(0, limit)
+  .map((tag) => getPropertyTagLabel(tag, locale));
+
+// 21. 取得發布身份標籤
 const resolvePublisherRoleLabel = (identityType: string) => {
   const labels: Record<string, string> = {
     agent: '代理人',

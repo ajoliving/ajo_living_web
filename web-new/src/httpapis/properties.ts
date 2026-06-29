@@ -7,10 +7,15 @@ import httpClient from '@/httpapis';
 import type { ApiResponse, PaginatedResult } from '@/model/api';
 import type {
   ContactAccessResult,
+  PropertyActionResult,
   PropertyAddressSuggestion,
+  PropertyAppointmentPayload,
+  PropertyAppointmentResponse,
   PropertyListParams,
   PropertyListingDetailResponse,
   PropertyListingSummaryResponse,
+  PropertyReportPayload,
+  PropertyReportResponse,
   UpsertPropertySalePayload,
   UpsertServicedApartmentPayload,
 } from '@/model/property';
@@ -25,6 +30,13 @@ export const fetchPropertySaleListings = (params: PropertyListParams = {}) =>
 // 2. 取得樓盤放售詳情
 export const fetchPropertySaleDetail = (listingId: string) =>
   httpClient.get<ApiResponse<PropertyListingDetailResponse>>(`/property-sales/${listingId}`);
+
+// 2.1 查詢相似樓盤
+export const fetchSimilarPropertySales = (listingId: string, params: { limit?: number } = {}) =>
+  httpClient.get<ApiResponse<{ items: PropertyListingSummaryResponse[] }>>(
+    `/property-sales/${listingId}/similar`,
+    { params },
+  );
 
 // 3. 建立樓盤放售草稿
 export const createPropertySale = (payload: UpsertPropertySalePayload) =>
@@ -61,10 +73,49 @@ export const deactivatePropertySale = (listingId: string) =>
     `/property-sales/${listingId}/deactivate`,
   );
 
+// 8.1 收藏樓盤放售
+export const favoritePropertySale = (listingId: string) =>
+  httpClient.post<ApiResponse<PropertyActionResult>>(
+    `/property-sales/${listingId}/favorite`,
+  );
+
+// 8.2 取消收藏樓盤放售
+export const unfavoritePropertySale = (listingId: string) =>
+  httpClient.delete<ApiResponse<PropertyActionResult>>(
+    `/property-sales/${listingId}/favorite`,
+  );
+
+// 8.3 預約睇樓
+export const createPropertyAppointment = (
+  listingId: string,
+  payload: PropertyAppointmentPayload,
+) =>
+  httpClient.post<ApiResponse<PropertyAppointmentResponse>>(
+    `/property-sales/${listingId}/appointments`,
+    payload,
+  );
+
+// 8.4 舉報樓盤
+export const reportPropertySale = (
+  listingId: string,
+  payload: PropertyReportPayload,
+) =>
+  httpClient.post<ApiResponse<PropertyReportResponse>>(
+    `/property-sales/${listingId}/reports`,
+    payload,
+  );
+
 // 9. 取得我的樓盤放售
 export const fetchMyPropertySaleListings = (params: PropertyListParams = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<PropertyListingSummaryResponse>>>(
     '/me/property-sales',
+    { params },
+  );
+
+// 9.1 取得我的樓盤收藏
+export const fetchMyFavoritePropertySales = (params: PropertyListParams = {}) =>
+  httpClient.get<ApiResponse<PaginatedResult<PropertyListingSummaryResponse>>>(
+    '/me/property-sales/favorites',
     { params },
   );
 

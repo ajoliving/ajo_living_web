@@ -63,12 +63,16 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			MultiUnitProject:     params.MultiUnitProject,
 			PropertyType:         strings.TrimSpace(params.PropertyType),
 			RentalType:           strings.TrimSpace(params.RentalType),
+			RenovationType:       normalizePropertyRenovationType(params.RenovationType, params.FeatureTags),
+			AgencyCompanyName:    strings.TrimSpace(params.AgencyCompanyName),
 			EstateName:           strings.TrimSpace(params.EstateName),
 			AddressText:          strings.TrimSpace(params.AddressText),
 			AddressTextEn:        strings.TrimSpace(firstNonBlank(params.AddressTextEn, params.AddressText)),
 			BlockName:            strings.TrimSpace(params.BlockName),
 			UnitName:             strings.TrimSpace(params.UnitName),
 			ShowUnit:             params.ShowUnit,
+			Latitude:             normalizeCoordinate(params.Latitude, -90, 90),
+			Longitude:            normalizeCoordinate(params.Longitude, -180, 180),
 			AskingPriceHKD:       params.AskingPriceHKD,
 			MonthlyRentHKD:       params.MonthlyRentHKD,
 			PriceReferenceOnly:   params.PriceReferenceOnly,
@@ -91,6 +95,9 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			PublicLocationText:   buildPublicLocationText(params.BlockName, params.UnitName, params.ShowUnit, params.FloorRaw, params.FloorZone, params.TotalFloors),
 			Direction:            strings.TrimSpace(params.Direction),
 			BuildingAge:          strings.TrimSpace(params.BuildingAge),
+			CompletionYear:       params.CompletionYear,
+			BuildingTotalFloors:  params.BuildingTotalFloors,
+			ManagementCompany:    strings.TrimSpace(params.ManagementCompany),
 			KitchenType:          strings.TrimSpace(params.KitchenType),
 			CookingMode:          strings.TrimSpace(params.CookingMode),
 			ManagementFeeHKD:     params.ManagementFeeHKD,
@@ -190,12 +197,16 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 			MultiUnitProject:     params.MultiUnitProject,
 			PropertyType:         strings.TrimSpace(params.PropertyType),
 			RentalType:           strings.TrimSpace(params.RentalType),
+			RenovationType:       normalizePropertyRenovationType(params.RenovationType, params.FeatureTags),
+			AgencyCompanyName:    strings.TrimSpace(params.AgencyCompanyName),
 			EstateName:           strings.TrimSpace(params.EstateName),
 			AddressText:          strings.TrimSpace(params.AddressText),
 			AddressTextEn:        strings.TrimSpace(firstNonBlank(params.AddressTextEn, params.AddressText)),
 			BlockName:            strings.TrimSpace(params.BlockName),
 			UnitName:             strings.TrimSpace(params.UnitName),
 			ShowUnit:             params.ShowUnit,
+			Latitude:             normalizeCoordinate(params.Latitude, -90, 90),
+			Longitude:            normalizeCoordinate(params.Longitude, -180, 180),
 			AskingPriceHKD:       params.AskingPriceHKD,
 			MonthlyRentHKD:       params.MonthlyRentHKD,
 			PriceReferenceOnly:   params.PriceReferenceOnly,
@@ -218,6 +229,9 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 			PublicLocationText:   buildPublicLocationText(params.BlockName, params.UnitName, params.ShowUnit, params.FloorRaw, params.FloorZone, params.TotalFloors),
 			Direction:            strings.TrimSpace(params.Direction),
 			BuildingAge:          strings.TrimSpace(params.BuildingAge),
+			CompletionYear:       params.CompletionYear,
+			BuildingTotalFloors:  params.BuildingTotalFloors,
+			ManagementCompany:    strings.TrimSpace(params.ManagementCompany),
 			KitchenType:          strings.TrimSpace(params.KitchenType),
 			CookingMode:          strings.TrimSpace(params.CookingMode),
 			ManagementFeeHKD:     params.ManagementFeeHKD,
@@ -658,12 +672,16 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 				property_sale_listings.multi_unit_project AS sale_multi_unit_project,
 				property_sale_listings.property_type AS sale_property_type,
 				property_sale_listings.rental_type AS sale_rental_type,
+				property_sale_listings.renovation_type AS sale_renovation_type,
+				property_sale_listings.agency_company_name AS sale_agency_company_name,
 				property_sale_listings.estate_name AS sale_estate_name,
 				property_sale_listings.address_text AS sale_address_text,
 				property_sale_listings.address_text_en AS sale_address_text_en,
 				property_sale_listings.block_name AS sale_block_name,
 				property_sale_listings.unit_name AS sale_unit_name,
 				property_sale_listings.show_unit AS sale_show_unit,
+				property_sale_listings.latitude AS sale_latitude,
+				property_sale_listings.longitude AS sale_longitude,
 				property_sale_listings.asking_price_hkd AS sale_asking_price_hkd,
 				property_sale_listings.monthly_rent_hkd AS sale_monthly_rent_hkd,
 				property_sale_listings.price_reference_only AS sale_price_reference_only,
@@ -686,6 +704,9 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 				property_sale_listings.public_location_text AS sale_public_location_text,
 				property_sale_listings.direction AS sale_direction,
 				property_sale_listings.building_age AS sale_building_age,
+				property_sale_listings.completion_year AS sale_completion_year,
+				property_sale_listings.building_total_floors AS sale_building_total_floors,
+				property_sale_listings.management_company AS sale_management_company,
 				property_sale_listings.kitchen_type AS sale_kitchen_type,
 				property_sale_listings.cooking_mode AS sale_cooking_mode,
 				property_sale_listings.management_fee_hkd AS sale_management_fee_hkd,
@@ -702,7 +723,9 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 				property_sale_listings.ad_expires_at AS sale_ad_expires_at,
 				property_sale_listings.feature_tags AS sale_feature_tags,
 				property_sale_listings.contact_method AS sale_contact_method,
-				property_sale_listings.publisher_role_label AS sale_publisher_role_label`).
+				property_sale_listings.publisher_role_label AS sale_publisher_role_label,
+				property_sale_listings.view_count AS sale_view_count,
+				property_sale_listings.inquiry_count AS sale_inquiry_count`).
 			Joins("JOIN property_sale_listings ON property_sale_listings.listing_id = listings.id")
 	}
 
@@ -781,6 +804,9 @@ func (s *PropertyService) applyPropertyFilters(query *gorm.DB, channel PropertyC
 		}
 		if filters.RentalType != "" {
 			query = query.Where("property_sale_listings.rental_type = ?", filters.RentalType)
+		}
+		if filters.RenovationType != "" {
+			query = query.Where("(property_sale_listings.renovation_type = ? OR property_sale_listings.feature_tags @> ?)", filters.RenovationType, fmt.Sprintf(`["%s"]`, strings.ReplaceAll(filters.RenovationType, `"`, `\"`)))
 		}
 		if filters.BedroomCount != nil {
 			if *filters.BedroomCount >= 4 {
@@ -945,12 +971,16 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 			MultiUnitProject:     item.SaleMultiUnitProject,
 			PropertyType:         item.SalePropertyType,
 			RentalType:           item.SaleRentalType,
+			RenovationType:       item.SaleRenovationType,
+			AgencyCompanyName:    item.SaleAgencyCompanyName,
 			EstateName:           item.SaleEstateName,
 			AddressText:          item.SaleAddressText,
 			AddressTextEn:        item.SaleAddressTextEn,
 			BlockName:            item.SaleBlockName,
 			UnitName:             publicUnitName(item.SaleUnitName, item.SaleShowUnit),
 			ShowUnit:             item.SaleShowUnit,
+			Latitude:             item.SaleLatitude,
+			Longitude:            item.SaleLongitude,
 			AskingPriceHKD:       item.SaleAskingPriceHKD,
 			MonthlyRentHKD:       item.SaleMonthlyRentHKD,
 			PriceReferenceOnly:   item.SalePriceReferenceOnly,
@@ -972,6 +1002,9 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 			PublicLocationText:   item.SalePublicLocationText,
 			Direction:            item.SaleDirection,
 			BuildingAge:          item.SaleBuildingAge,
+			CompletionYear:       item.SaleCompletionYear,
+			BuildingTotalFloors:  item.SaleBuildingTotalFloors,
+			ManagementCompany:    item.SaleManagementCompany,
 			KitchenType:          item.SaleKitchenType,
 			CookingMode:          item.SaleCookingMode,
 			ManagementFeeHKD:     item.SaleManagementFeeHKD,
@@ -988,6 +1021,8 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 			FeatureTags:          decodeStringSliceBytes(item.SaleFeatureTags),
 			ContactMethod:        item.SaleContactMethod,
 			PublisherRoleLabel:   item.SalePublisherRoleLabel,
+			ViewCount:            item.SaleViewCount,
+			InquiryCount:         item.SaleInquiryCount,
 		}
 		return summary
 	}

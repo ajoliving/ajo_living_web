@@ -2,13 +2,21 @@
  * 物業發布編輯頁。
  * 1. 根據頻道建立或更新樓盤放售與服務式住宅草稿。
  * 2. 支援圖片上傳、草稿保存與發布。
+ * 3. 支援會員中心內嵌彈窗使用，處理未儲存離開確認。
 -->
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
+import { fetchCommunities } from '@/httpapis/communities';
+import {
+  fetchStaffPropertySaleDetail,
+  fetchStaffServicedApartmentDetail,
+  updateStaffPropertySale,
+  updateStaffServicedApartment,
+} from '@/httpapis/staff';
 import {
   createPropertySale,
   createServicedApartment,
@@ -36,6 +44,7 @@ import {
   propertyListingCategoryOptions,
   propertyLocationScopeOptions,
   propertyPublisherFilterOptions,
+  propertyRenovationFilterOptions,
   propertyTransactionTypeOptions,
   propertyTypeOptions,
   servicedAdPackageOptions,
@@ -43,22 +52,26 @@ import {
   servicedServiceTagOptions,
   servicedStayUnitOptions,
 } from '@/constants/property';
+import type { MetaCommunity } from '@/model/community';
 import type { MediaAssetResponse } from '@/model/marketplace';
 import type {
   PropertyChannel,
   PropertyAddressSuggestion,
   PropertyImagePayload,
   PropertyListingDetailResponse,
+  ServicedApartmentRoomType,
   UpsertPropertySalePayload,
   UpsertServicedApartmentPayload,
 } from '@/model/property';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppUnsavedChangesDialog from '@/shared/components/base/AppUnsavedChangesDialog.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
 import { formatAjoPoints } from '@/utils/wallet';
+import { mergePropertyFeatureTags } from '@/utils/property';
 
 void propertyAnnualPrepayOptions;
 void propertyAreaModeOptions;
@@ -71,10 +84,28 @@ void propertyTransactionTypeOptions;
 void servicedAdPackageOptions;
 void servicedStayUnitOptions;
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   channel: PropertyChannel;
   returnPath?: string;
+  listingId?: string;
+  embedded?: boolean;
+  hideHeader?: boolean;
+  staffMode?: boolean;
+}>(), {
+  returnPath: '',
+  listingId: '',
+  embedded: false,
+  hideHeader: false,
+  staffMode: false,
+});
+
+const emit = defineEmits<{
+  (event: 'saved', listingId: string): void;
+  (event: 'published', listingId: string): void;
+  (event: 'cancel'): void;
 }>();
+
+type PropertyEditorLeaveDecision = 'save' | 'discard' | 'stay';
 
 interface PropertyEditorImage {
   id: string;
@@ -111,12 +142,16 @@ interface PropertyEditorForm {
   multiUnitProject: boolean;
   propertyType: string;
   rentalType: string;
+  renovationType: string;
+  agencyCompanyName: string;
   estateName: string;
   addressText: string;
   addressTextEn: string;
   blockName: string;
   unitName: string;
   showUnit: boolean;
+  latitude: number;
+  longitude: number;
   askingPriceHKD: number;
   monthlyRentHKD: number;
   priceReferenceOnly: boolean;
@@ -137,11 +172,15 @@ interface PropertyEditorForm {
   totalFloors: number;
   direction: string;
   buildingAge: string;
+  completionYear: number;
+  buildingTotalFloors: number;
+  managementCompany: string;
   kitchenType: string;
   cookingMode: string;
   managementFeeHKD: number;
   videoURL: string;
   vrURL: string;
+  privateNote: string;
   featureTags: string[];
   projectName: string;
   projectNameEn: string;
@@ -161,22 +200,29 @@ interface PropertyEditorForm {
   minStayUnit: 'month' | 'day';
   facilityTags: string[];
   serviceTags: string[];
-  roomName: string;
-  roomCategory: string;
-  roomAreaSqft: number;
-  roomMonthlyRentHKD: number;
-  roomMonthlyRentMaxHKD: number;
-  roomDailyRentMinHKD: number;
-  roomDailyRentMaxHKD: number;
-  roomIncludedFees: boolean;
-  roomIncludedFeeItems: string;
-  roomMinLeaseMonths: number;
-  roomMinStayValue: number;
-  roomMinStayUnit: 'month' | 'day';
+  roomTypes: ServicedApartmentRoomType[];
 }
 
 const maxImages = 40;
 const maxImageSize = 10 * 1024 * 1024;
+
+// 1. 建立服務式住宅房型
+const createServicedRoomType = (): ServicedApartmentRoomType => ({
+  name: 'Studio',
+  room_category: '',
+  usable_area_sqft: 0,
+  monthly_rent_hkd: 0,
+  monthly_rent_min_hkd: 0,
+  monthly_rent_max_hkd: 0,
+  daily_rent_min_hkd: 0,
+  daily_rent_max_hkd: 0,
+  included_fees: true,
+  included_fee_items: [],
+  min_lease_months: 1,
+  min_stay_value: 1,
+  min_stay_unit: 'month',
+  feature_tags: [],
+});
 
 const route = useRoute();
 const router = useRouter();
@@ -185,14 +231,19 @@ const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 
-const listingId = ref(String(route.params.listingId ?? ''));
+const listingId = ref(props.listingId || String(route.params.listingId ?? ''));
 const loading = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
+const isLeavePromptOpen = ref(false);
+const savedSnapshot = ref('');
+const isProgrammaticNavigation = ref(false);
 const addressSuggestions = ref<PropertyAddressSuggestion[]>([]);
 const loadingAddressSuggestions = ref(false);
 const addressSearchTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
 const images = ref<PropertyEditorImage[]>([]);
+const communities = ref<MetaCommunity[]>([]);
+let resolveLeavePrompt: ((decision: PropertyEditorLeaveDecision) => void) | null = null;
 
 const form = reactive<PropertyEditorForm>({
   title: '',
@@ -201,7 +252,7 @@ const form = reactive<PropertyEditorForm>({
   description: '',
   descriptionEn: '',
   districtCode: sessionStore.me?.district_code || 'kwun_tong',
-  communityId: '',
+  communityId: sessionStore.me?.primary_community?.public_id || '',
   publisherIdentityType: sessionStore.me?.publisher_identity_type || 'owner',
   businessStatus: 'available',
   contactMethod: 'both',
@@ -219,12 +270,16 @@ const form = reactive<PropertyEditorForm>({
   multiUnitProject: false,
   propertyType: 'private_flat',
   rentalType: '',
+  renovationType: '',
+  agencyCompanyName: '',
   estateName: '',
   addressText: '',
   addressTextEn: '',
   blockName: '',
   unitName: '',
   showUnit: false,
+  latitude: 0,
+  longitude: 0,
   askingPriceHKD: 0,
   monthlyRentHKD: 0,
   priceReferenceOnly: false,
@@ -245,11 +300,15 @@ const form = reactive<PropertyEditorForm>({
   totalFloors: 0,
   direction: '',
   buildingAge: '',
+  completionYear: 0,
+  buildingTotalFloors: 0,
+  managementCompany: '',
   kitchenType: '',
   cookingMode: '',
   managementFeeHKD: 0,
   videoURL: '',
   vrURL: '',
+  privateNote: '',
   featureTags: [],
   projectName: '',
   projectNameEn: '',
@@ -269,18 +328,7 @@ const form = reactive<PropertyEditorForm>({
   minStayUnit: 'month',
   facilityTags: [],
   serviceTags: [],
-  roomName: 'Studio',
-  roomCategory: '',
-  roomAreaSqft: 0,
-  roomMonthlyRentHKD: 0,
-  roomMonthlyRentMaxHKD: 0,
-  roomDailyRentMinHKD: 0,
-  roomDailyRentMaxHKD: 0,
-  roomIncludedFees: true,
-  roomIncludedFeeItems: '',
-  roomMinLeaseMonths: 1,
-  roomMinStayValue: 1,
-  roomMinStayUnit: 'month',
+  roomTypes: [createServicedRoomType()],
 });
 
 const isSale = computed(() => props.channel === 'sale');
@@ -310,8 +358,9 @@ const servicedPriceReady = computed(() =>
   form.priceNegotiableServiced ||
   form.lowestMonthlyRentHKD > 0 ||
   form.lowestDailyRentHKD > 0 ||
-  form.roomMonthlyRentHKD > 0 ||
-  form.roomDailyRentMinHKD > 0,
+  form.roomTypes.some((room) =>
+    Number(room.monthly_rent_min_hkd || room.monthly_rent_hkd || room.daily_rent_min_hkd || 0) > 0,
+  ),
 );
 const contactReady = computed(() => form.allowPhone || form.allowWhatsapp || form.allowChat);
 const canSave = computed(() =>
@@ -329,8 +378,11 @@ const canSave = computed(() =>
     : form.projectName.trim() !== '' &&
       servicedPriceReady.value &&
       form.minLeaseMonths > 0 &&
-      form.roomAreaSqft > 0 &&
-      form.roomName.trim() !== ''),
+      form.roomTypes.length > 0 &&
+      form.roomTypes.every((room) =>
+        room.name.trim() !== '' &&
+        Number(room.usable_area_sqft || 0) > 0,
+      )),
 );
 const previewPrice = computed(() => {
   if ((isSale.value && form.priceNegotiable) || (!isSale.value && form.priceNegotiableServiced)) {
@@ -338,7 +390,14 @@ const previewPrice = computed(() => {
   }
   const value = isSale.value
     ? (form.transactionType === 'rent' ? form.monthlyRentHKD : form.askingPriceHKD)
-    : (form.lowestMonthlyRentHKD || form.roomMonthlyRentHKD || form.lowestDailyRentHKD);
+    : (
+        form.lowestMonthlyRentHKD ||
+        form.roomTypes[0]?.monthly_rent_min_hkd ||
+        form.roomTypes[0]?.monthly_rent_hkd ||
+        form.lowestDailyRentHKD ||
+        form.roomTypes[0]?.daily_rent_min_hkd ||
+        0
+      );
 
   return value > 0 ? formatPrice(value, preferenceStore.locale) : t('property.common.pendingPrice');
 });
@@ -350,14 +409,120 @@ const formatAdPackagePrice = (value: number): string =>
 const chargeHint = computed(() =>
   `${t('property.editor.chargeHint')} ${formatPoints(chargeCost.value)} · ${t('property.editor.walletBalance')} ${formatPoints(sessionStore.me?.ajo_balance ?? 0)}`,
 );
+const formatCommunityName = (community: MetaCommunity): string => {
+  const primaryName = preferenceStore.locale === 'en'
+    ? community.name_en || community.name_zh
+    : community.name_zh || community.name_en;
 
-// 1. 讀取錯誤訊息
+  return primaryName || community.address_text || community.public_id;
+};
+const currentSnapshot = computed(() => createEditorSnapshot());
+const hasUnsavedChanges = computed(() =>
+  savedSnapshot.value.length > 0 && currentSnapshot.value !== savedSnapshot.value,
+);
+
+// 1. 建立表單異動比對快照
+function createEditorSnapshot(): string {
+  return JSON.stringify({
+    form: {
+      ...form,
+      title: form.title.trim(),
+      titleEn: form.titleEn.trim(),
+      summary: form.summary.trim(),
+      description: form.description.trim(),
+      descriptionEn: form.descriptionEn.trim(),
+      privateNote: form.privateNote.trim(),
+      featureTags: [...form.featureTags].sort(),
+      facilityTags: [...form.facilityTags].sort(),
+      serviceTags: [...form.serviceTags].sort(),
+    },
+    images: images.value
+      .filter((image) => Boolean(image.mediaAssetId || image.file))
+      .map((image) => ({
+        mediaAssetId: image.mediaAssetId ?? '',
+        fileName: image.file?.name ?? '',
+        fileSize: image.file?.size ?? 0,
+        fileType: image.file?.type ?? '',
+        isCover: image.isCover,
+      })),
+  });
+}
+
+// 2. 更新離開提示基準
+const markCurrentStateSaved = (): void => {
+  savedSnapshot.value = currentSnapshot.value;
+};
+
+// 3. 打開離開確認彈窗
+const requestLeaveDecision = (): Promise<PropertyEditorLeaveDecision> => {
+  isLeavePromptOpen.value = true;
+
+  return new Promise((resolve) => {
+    resolveLeavePrompt = resolve;
+  });
+};
+
+// 4. 回應離開確認彈窗
+const handleLeavePromptDecision = (decision: PropertyEditorLeaveDecision): void => {
+  isLeavePromptOpen.value = false;
+  resolveLeavePrompt?.(decision);
+  resolveLeavePrompt = null;
+};
+
+// 5. 確認是否允許離開編輯頁
+const confirmLeaveEditor = async (): Promise<boolean> => {
+  if (isProgrammaticNavigation.value || !hasUnsavedChanges.value) {
+    return true;
+  }
+  if (saving.value || publishing.value) {
+    return false;
+  }
+
+  const decision = await requestLeaveDecision();
+  if (decision === 'stay') {
+    return false;
+  }
+  if (decision === 'discard') {
+    return true;
+  }
+
+  const savedListingId = await saveDraft();
+  if (savedListingId && props.embedded) {
+    emit('saved', savedListingId);
+    return false;
+  }
+
+  return savedListingId.length > 0;
+};
+
+// 6. 處理瀏覽器關閉或重新整理
+const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+  if (!hasUnsavedChanges.value) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = '';
+};
+
+// 7. 由外層彈窗要求關閉編輯器
+const requestCloseEditor = async (): Promise<void> => {
+  if (await confirmLeaveEditor()) {
+    emit('cancel');
+  }
+};
+
+defineExpose({
+  requestCloseEditor,
+});
+
+// 8. 讀取錯誤訊息
 const readErrorMessage = (error: unknown, fallback: string): string =>
   axios.isAxiosError<{ message?: string }>(error)
     ? error.response?.data?.message ?? fallback
     : fallback;
 
-// 2. 切換標籤
+// 9. 切換標籤
 const toggleTag = (target: string[], value: string): void => {
   const index = target.indexOf(value);
   if (index >= 0) {
@@ -368,20 +533,20 @@ const toggleTag = (target: string[], value: string): void => {
   target.push(value);
 };
 
-// 3. 建立上傳目錄
+// 10. 建立上傳目錄
 const buildObjectPrefix = (targetListingId: string): string =>
   targetListingId.trim()
     ? `ajo_living/listings/${targetListingId.trim()}/`
     : 'ajo_living/listings/';
 
-// 4. 釋放本地圖片預覽
+// 11. 釋放本地圖片預覽
 const revokeImagePreview = (image: PropertyEditorImage): void => {
   if (image.objectUrl) {
     URL.revokeObjectURL(image.objectUrl);
   }
 };
 
-// 5. 選擇圖片
+// 12. 選擇圖片
 const handleImageFilesChange = (event: Event): void => {
   const input = event.target as HTMLInputElement;
   const files = Array.from(input.files ?? []);
@@ -408,7 +573,7 @@ const handleImageFilesChange = (event: Event): void => {
   }
 };
 
-// 6. 移除圖片
+// 13. 移除圖片
 const removeImage = (imageId: string): void => {
   const target = images.value.find((image) => image.id === imageId);
   if (target) {
@@ -421,7 +586,7 @@ const removeImage = (imageId: string): void => {
   }
 };
 
-// 7. 選擇封面
+// 14. 選擇封面
 const selectCover = (imageId: string): void => {
   images.value = images.value.map((image) => ({
     ...image,
@@ -429,7 +594,7 @@ const selectCover = (imageId: string): void => {
   }));
 };
 
-// 8. 更新圖片上傳結果
+// 15. 更新圖片上傳結果
 const updateImageAsset = (imageId: string, mediaAsset: MediaAssetResponse): void => {
   images.value = images.value.map((image) => {
     if (image.id !== imageId) {
@@ -449,7 +614,7 @@ const updateImageAsset = (imageId: string, mediaAsset: MediaAssetResponse): void
   });
 };
 
-// 9. 上傳單張圖片
+// 16. 上傳單張圖片
 const uploadImage = async (image: PropertyEditorImage, targetListingId: string): Promise<void> => {
   if (!image.file) {
     return;
@@ -480,7 +645,7 @@ const uploadImage = async (image: PropertyEditorImage, targetListingId: string):
   updateImageAsset(image.id, completeResponse.data.data);
 };
 
-// 10. 上傳待處理圖片
+// 17. 上傳待處理圖片
 const uploadPendingImages = async (targetListingId: string): Promise<void> => {
   const pendingImages = images.value.filter((image) => image.file);
   for (const image of pendingImages) {
@@ -488,7 +653,7 @@ const uploadPendingImages = async (targetListingId: string): Promise<void> => {
   }
 };
 
-// 11. 建立圖片 payload
+// 18. 建立圖片 payload
 const buildImagePayload = (): PropertyImagePayload[] =>
   images.value
     .filter((image) => image.mediaAssetId)
@@ -498,14 +663,103 @@ const buildImagePayload = (): PropertyImagePayload[] =>
       is_cover: image.isCover || index === 0,
     }));
 
-// 12. 分割文字清單
+// 19. 分割文字清單
 const splitTextList = (value: string): string[] =>
   value
     .split(/[,，、\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
 
-// 13. 建立樓盤 payload
+// 20. 更新服務式住宅房型包含項目
+const updateRoomIncludedFeeItems = (room: ServicedApartmentRoomType, event: Event): void => {
+  room.included_fee_items = splitTextList((event.target as HTMLInputElement).value);
+};
+
+// 21. 整理服務式住宅房型
+const normalizeServicedRoomType = (room: ServicedApartmentRoomType): ServicedApartmentRoomType => {
+  const stayUnit = room.min_stay_unit === 'day' ? 'day' : 'month';
+  const fallbackRent = form.priceReferenceOnlyServiced || form.priceNegotiableServiced ? 1 : 0;
+  const monthlyMin = stayUnit === 'day'
+    ? 0
+    : Number(room.monthly_rent_min_hkd || room.monthly_rent_hkd || fallbackRent);
+  const monthlyMax = stayUnit === 'day'
+    ? 0
+    : Number(room.monthly_rent_max_hkd || monthlyMin || 0);
+  const dailyMin = stayUnit === 'day'
+    ? Number(room.daily_rent_min_hkd || fallbackRent)
+    : Number(room.daily_rent_min_hkd || 0);
+  const dailyMax = stayUnit === 'day'
+    ? Number(room.daily_rent_max_hkd || dailyMin || 0)
+    : Number(room.daily_rent_max_hkd || 0);
+
+  return {
+    ...room,
+    name: room.name.trim() || 'Studio',
+    room_category: room.room_category?.trim() || undefined,
+    usable_area_sqft: Number(room.usable_area_sqft || 0),
+    monthly_rent_hkd: monthlyMin,
+    monthly_rent_min_hkd: monthlyMin,
+    monthly_rent_max_hkd: monthlyMax > 0 ? monthlyMax : undefined,
+    daily_rent_min_hkd: dailyMin > 0 ? dailyMin : undefined,
+    daily_rent_max_hkd: dailyMax > 0 ? dailyMax : undefined,
+    included_fees: Boolean(room.included_fees),
+    included_fee_items: Array.isArray(room.included_fee_items) ? room.included_fee_items : [],
+    min_lease_months: Number(room.min_lease_months || form.minLeaseMonths || 1),
+    min_stay_value: Number(room.min_stay_value || room.min_lease_months || form.minStayValue || 1),
+    min_stay_unit: stayUnit,
+    feature_tags: room.feature_tags ?? [],
+  };
+};
+
+// 22. 推導服務式住宅項目最短入住
+const deriveServicedProjectMinStay = (roomTypes: ServicedApartmentRoomType[]) => {
+  const normalizedRooms = roomTypes.length > 0 ? roomTypes : [createServicedRoomType()];
+  const dayRooms = normalizedRooms.filter((room) => room.min_stay_unit === 'day');
+  if (dayRooms.length > 0) {
+    const minStayValue = Math.min(...dayRooms.map((room) => Number(room.min_stay_value || 1)));
+    return {
+      minLeaseMonths: Math.max(1, Math.ceil(minStayValue / 30)),
+      minStayValue,
+      minStayUnit: 'day' as const,
+    };
+  }
+
+  const minStayValue = Math.min(...normalizedRooms.map((room) =>
+    Number(room.min_stay_value || room.min_lease_months || form.minStayValue || 1),
+  ));
+
+  return {
+    minLeaseMonths: minStayValue,
+    minStayValue,
+    minStayUnit: 'month' as const,
+  };
+};
+
+// 23. 新增服務式住宅房型
+const addServicedRoomType = (): void => {
+  form.roomTypes.push(createServicedRoomType());
+};
+
+// 24. 移除服務式住宅房型
+const removeServicedRoomType = (roomIndex: number): void => {
+  if (form.roomTypes.length <= 1) {
+    return;
+  }
+
+  form.roomTypes.splice(roomIndex, 1);
+};
+
+// 25. 讀取屋苑及大廈清單
+const loadCommunities = async (): Promise<void> => {
+  try {
+    const response = await fetchCommunities();
+    communities.value = response.data.data.items;
+  } catch {
+    communities.value = [];
+  }
+};
+
+// 26. 建立樓盤 payload
 const buildSalePayload = (): UpsertPropertySalePayload => ({
   title: form.title.trim(),
   title_en: form.titleEn.trim() || undefined,
@@ -522,12 +776,16 @@ const buildSalePayload = (): UpsertPropertySalePayload => ({
   multi_unit_project: form.multiUnitProject,
   property_type: form.propertyType,
   rental_type: form.rentalType.trim() || undefined,
+  renovation_type: form.renovationType || undefined,
+  agency_company_name: form.agencyCompanyName.trim() || undefined,
   estate_name: form.estateName.trim(),
   address_text: form.addressText.trim(),
   address_text_en: form.addressTextEn.trim() || undefined,
   block_name: form.blockName.trim() || undefined,
   unit_name: form.unitName.trim() || undefined,
   show_unit: form.showUnit,
+  latitude: form.latitude ? Number(form.latitude) : undefined,
+  longitude: form.longitude ? Number(form.longitude) : undefined,
   asking_price_hkd: form.transactionType === 'rent' ? 0 : Number(form.askingPriceHKD),
   monthly_rent_hkd: form.transactionType === 'rent' ? Number(form.monthlyRentHKD) : undefined,
   price_reference_only: form.priceReferenceOnly,
@@ -550,13 +808,24 @@ const buildSalePayload = (): UpsertPropertySalePayload => ({
   total_floors: form.totalFloors > 0 ? Number(form.totalFloors) : undefined,
   direction: form.direction.trim(),
   building_age: form.buildingAge.trim(),
+  completion_year: form.completionYear > 0 ? Number(form.completionYear) : undefined,
+  building_total_floors: form.buildingTotalFloors > 0 ? Number(form.buildingTotalFloors) : undefined,
+  management_company: form.managementCompany.trim() || undefined,
   kitchen_type: form.kitchenType || undefined,
   cooking_mode: form.cookingMode || undefined,
   management_fee_hkd: form.managementFeeHKD > 0 ? Number(form.managementFeeHKD) : undefined,
   video_url: form.videoURL.trim() || undefined,
   vr_url: form.vrURL.trim() || undefined,
+  private_note: form.privateNote.trim() || undefined,
   ad_package_code: form.adPackageCode,
-  feature_tags: form.featureTags,
+  feature_tags: mergePropertyFeatureTags(form.featureTags, {
+    video_url: form.videoURL.trim(),
+    vr_url: form.vrURL.trim(),
+    annual_prepay_discount: form.transactionType === 'rent' ? form.annualPrepayDiscount : false,
+    annual_prepay_option: form.transactionType === 'rent' && form.annualPrepayDiscount
+      ? form.annualPrepayOption
+      : 'none',
+  }),
   contact_method: form.contactMethod,
   business_status: form.businessStatus,
   images: buildImagePayload(),
@@ -571,79 +840,76 @@ const buildSalePayload = (): UpsertPropertySalePayload => ({
   },
 });
 
-// 14. 建立服務式住宅 payload
-const buildServicedPayload = (): UpsertServicedApartmentPayload => ({
-  title: form.title.trim(),
-  title_en: form.titleEn.trim() || undefined,
-  summary: form.summary.trim(),
-  description: form.description.trim(),
-  description_en: form.descriptionEn.trim() || undefined,
-  district_code: form.districtCode,
-  community_id: form.communityId,
-  publisher_identity_type: form.publisherIdentityType || 'owner',
-  project_name: form.projectName.trim(),
-  project_name_en: form.projectNameEn.trim() || undefined,
-  address_text: form.addressText.trim(),
-  address_text_en: form.addressTextEn.trim() || undefined,
-  website_url: form.websiteURL.trim() || undefined,
-  whatsapp: form.serviceWhatsApp.trim() || undefined,
-  fax: form.fax.trim() || undefined,
-  service_intro: form.serviceIntro.trim() || undefined,
-  benefits_text: form.benefitsText.trim() || undefined,
-  extra_charges_text: form.extraChargesText.trim() || undefined,
-  lowest_monthly_rent_hkd: Number(form.lowestMonthlyRentHKD),
-  lowest_daily_rent_hkd: form.lowestDailyRentHKD > 0 ? Number(form.lowestDailyRentHKD) : undefined,
-  price_reference_only: form.priceReferenceOnlyServiced,
-  price_negotiable: form.priceNegotiableServiced,
-  min_usable_area_sqft: form.minUsableAreaSqft > 0 ? Number(form.minUsableAreaSqft) : undefined,
-  min_lease_months: Number(form.minLeaseMonths),
-  min_stay_value: form.minStayValue > 0 ? Number(form.minStayValue) : undefined,
-  min_stay_unit: form.minStayUnit,
-  location_scope: form.locationScope,
-  listing_category: form.listingCategory,
-  multi_unit_project: form.multiUnitProject,
-  ad_package_code: form.adPackageCode,
-  facility_tags: form.facilityTags,
-  service_tags: form.serviceTags,
-  room_types: [
-    {
-      name: form.roomName.trim() || 'Studio',
-      room_category: form.roomCategory.trim() || undefined,
-      usable_area_sqft: Number(form.roomAreaSqft || form.usableAreaSqft),
-      monthly_rent_hkd: Number(form.roomMonthlyRentHKD || form.lowestMonthlyRentHKD),
-      monthly_rent_min_hkd: Number(form.roomMonthlyRentHKD || form.lowestMonthlyRentHKD),
-      monthly_rent_max_hkd: form.roomMonthlyRentMaxHKD > 0
-        ? Number(form.roomMonthlyRentMaxHKD)
-        : undefined,
-      daily_rent_min_hkd: form.roomDailyRentMinHKD > 0
-        ? Number(form.roomDailyRentMinHKD)
-        : undefined,
-      daily_rent_max_hkd: form.roomDailyRentMaxHKD > 0
-        ? Number(form.roomDailyRentMaxHKD)
-        : undefined,
-      included_fees: form.roomIncludedFees,
-      included_fee_items: splitTextList(form.roomIncludedFeeItems),
-      min_lease_months: Number(form.roomMinLeaseMonths || form.minLeaseMonths),
-      min_stay_value: Number(form.roomMinStayValue || form.minStayValue || form.roomMinLeaseMonths),
-      min_stay_unit: form.roomMinStayUnit,
-      feature_tags: [],
+// 27. 建立服務式住宅 payload
+const buildServicedPayload = (): UpsertServicedApartmentPayload => {
+  const roomTypes = form.roomTypes.map(normalizeServicedRoomType);
+  const monthlyPrices = roomTypes
+    .map((room) => Number(room.monthly_rent_min_hkd || room.monthly_rent_hkd || 0))
+    .filter((value) => value > 0);
+  const dailyPrices = roomTypes
+    .map((room) => Number(room.daily_rent_min_hkd || 0))
+    .filter((value) => value > 0);
+  const areas = roomTypes
+    .map((room) => Number(room.usable_area_sqft || 0))
+    .filter((value) => value > 0);
+  const projectMinStay = deriveServicedProjectMinStay(roomTypes);
+
+  return {
+    title: form.title.trim(),
+    title_en: form.titleEn.trim() || undefined,
+    summary: form.summary.trim(),
+    description: form.description.trim(),
+    description_en: form.descriptionEn.trim() || undefined,
+    district_code: form.districtCode,
+    community_id: form.communityId,
+    publisher_identity_type: form.publisherIdentityType || 'owner',
+    project_name: form.projectName.trim(),
+    project_name_en: form.projectNameEn.trim() || undefined,
+    address_text: form.addressText.trim(),
+    address_text_en: form.addressTextEn.trim() || undefined,
+    website_url: form.websiteURL.trim() || undefined,
+    whatsapp: form.serviceWhatsApp.trim() || undefined,
+    fax: form.fax.trim() || undefined,
+    service_intro: form.serviceIntro.trim() || undefined,
+    benefits_text: form.benefitsText.trim() || undefined,
+    extra_charges_text: form.extraChargesText.trim() || undefined,
+    lowest_monthly_rent_hkd: monthlyPrices.length
+      ? Math.min(...monthlyPrices)
+      : Number(form.lowestMonthlyRentHKD || 0),
+    lowest_daily_rent_hkd: dailyPrices.length
+      ? Math.min(...dailyPrices)
+      : form.lowestDailyRentHKD > 0 ? Number(form.lowestDailyRentHKD) : undefined,
+    price_reference_only: form.priceReferenceOnlyServiced,
+    price_negotiable: form.priceNegotiableServiced,
+    min_usable_area_sqft: areas.length
+      ? Math.min(...areas)
+      : form.minUsableAreaSqft > 0 ? Number(form.minUsableAreaSqft) : undefined,
+    min_lease_months: projectMinStay.minLeaseMonths,
+    min_stay_value: projectMinStay.minStayValue,
+    min_stay_unit: projectMinStay.minStayUnit,
+    location_scope: form.locationScope,
+    listing_category: form.listingCategory,
+    multi_unit_project: form.multiUnitProject,
+    ad_package_code: form.adPackageCode,
+    facility_tags: form.facilityTags,
+    service_tags: form.serviceTags,
+    room_types: roomTypes,
+    contact_method: form.contactMethod,
+    business_status: form.businessStatus,
+    images: buildImagePayload(),
+    contact: {
+      phone: form.phone.trim(),
+      whatsapp: form.whatsapp.trim(),
+      email: form.email.trim(),
+      show_phone: form.allowPhone,
+      show_whatsapp: form.allowWhatsapp,
+      show_chat: form.allowChat,
+      show_inquiry_form: false,
     },
-  ],
-  contact_method: form.contactMethod,
-  business_status: form.businessStatus,
-  images: buildImagePayload(),
-  contact: {
-    phone: form.phone.trim(),
-    whatsapp: form.whatsapp.trim(),
-    email: form.email.trim(),
-    show_phone: form.allowPhone,
-    show_whatsapp: form.allowWhatsapp,
-    show_chat: form.allowChat,
-    show_inquiry_form: false,
-  },
-});
+  };
+};
 
-// 15. 清除地址聯想計時器
+// 28. 清除地址聯想計時器
 const clearAddressSearchTimer = (): void => {
   if (addressSearchTimer.value) {
     window.clearTimeout(addressSearchTimer.value);
@@ -651,7 +917,7 @@ const clearAddressSearchTimer = (): void => {
   }
 };
 
-// 16. 取得地址聯想標題
+// 29. 取得地址聯想標題
 const resolveAddressSuggestionTitle = (suggestion: PropertyAddressSuggestion): string =>
   suggestion.display_name ||
   [
@@ -662,7 +928,7 @@ const resolveAddressSuggestionTitle = (suggestion: PropertyAddressSuggestion): s
     suggestion.district_label ? `(${suggestion.district_label})` : '',
   ].filter(Boolean).join(' ');
 
-// 17. 讀取屋苑或住宅地址聯想
+// 30. 讀取屋苑或住宅地址聯想
 const loadAddressSuggestions = async (): Promise<void> => {
   const keyword = isSale.value ? form.estateName.trim() : form.projectName.trim();
   if (!keyword) {
@@ -686,7 +952,7 @@ const loadAddressSuggestions = async (): Promise<void> => {
   }
 };
 
-// 18. 延遲讀取地址聯想
+// 31. 延遲讀取地址聯想
 const scheduleAddressSuggestions = (): void => {
   clearAddressSearchTimer();
   addressSearchTimer.value = window.setTimeout(() => {
@@ -694,7 +960,7 @@ const scheduleAddressSuggestions = (): void => {
   }, 220);
 };
 
-// 19. 套用地址聯想
+// 32. 套用地址聯想
 const applyAddressSuggestion = (suggestion: PropertyAddressSuggestion): void => {
   const currentYear = new Date().getFullYear();
 
@@ -717,7 +983,7 @@ const applyAddressSuggestion = (suggestion: PropertyAddressSuggestion): void => 
   addressSuggestions.value = [];
 };
 
-// 20. 回填詳情
+// 33. 回填詳情
 const applyDetail = (detail: PropertyListingDetailResponse): void => {
   form.title = detail.title;
   form.titleEn = detail.property_sale?.title_en || '';
@@ -743,12 +1009,16 @@ const applyDetail = (detail: PropertyListingDetailResponse): void => {
     form.multiUnitProject = Boolean(detail.property_sale.multi_unit_project);
     form.propertyType = detail.property_sale.property_type;
     form.rentalType = detail.property_sale.rental_type || '';
+    form.renovationType = detail.property_sale.renovation_type || '';
+    form.agencyCompanyName = detail.property_sale.agency_company_name || '';
     form.estateName = detail.property_sale.estate_name;
     form.addressText = detail.property_sale.address_text;
     form.addressTextEn = detail.property_sale.address_text_en || '';
     form.blockName = detail.property_sale.block_name || '';
     form.unitName = detail.property_sale.unit_name || '';
     form.showUnit = Boolean(detail.property_sale.show_unit);
+    form.latitude = detail.property_sale.latitude ?? 0;
+    form.longitude = detail.property_sale.longitude ?? 0;
     form.askingPriceHKD = detail.property_sale.asking_price_hkd;
     form.monthlyRentHKD = detail.property_sale.monthly_rent_hkd ?? 0;
     form.priceReferenceOnly = Boolean(detail.property_sale.price_reference_only);
@@ -769,18 +1039,21 @@ const applyDetail = (detail: PropertyListingDetailResponse): void => {
     form.totalFloors = detail.property_sale.total_floors ?? 0;
     form.direction = detail.property_sale.direction;
     form.buildingAge = detail.property_sale.building_age;
+    form.completionYear = detail.property_sale.completion_year ?? 0;
+    form.buildingTotalFloors = detail.property_sale.building_total_floors ?? 0;
+    form.managementCompany = detail.property_sale.management_company || '';
     form.kitchenType = detail.property_sale.kitchen_type || '';
     form.cookingMode = detail.property_sale.cooking_mode || '';
     form.managementFeeHKD = detail.property_sale.management_fee_hkd ?? 0;
     form.videoURL = detail.property_sale.video_url || '';
     form.vrURL = detail.property_sale.vr_url || '';
+    form.privateNote = detail.property_sale.private_note || '';
     form.adPackageCode = detail.property_sale.ad_package_code || 'basic';
     form.featureTags = [...detail.property_sale.feature_tags];
     form.contactMethod = detail.property_sale.contact_method as PropertyEditorForm['contactMethod'];
   }
 
   if (detail.serviced_apartment) {
-    const room = detail.serviced_apartment.room_types[0];
     form.projectName = detail.serviced_apartment.project_name;
     form.projectNameEn = detail.serviced_apartment.project_name_en || '';
     form.addressText = detail.serviced_apartment.address_text;
@@ -806,20 +1079,18 @@ const applyDetail = (detail: PropertyListingDetailResponse): void => {
     form.facilityTags = [...detail.serviced_apartment.facility_tags];
     form.serviceTags = [...detail.serviced_apartment.service_tags];
     form.contactMethod = detail.serviced_apartment.contact_method as PropertyEditorForm['contactMethod'];
-    if (room) {
-      form.roomName = room.name;
-      form.roomCategory = room.room_category || '';
-      form.roomAreaSqft = room.usable_area_sqft;
-      form.roomMonthlyRentHKD = room.monthly_rent_min_hkd || room.monthly_rent_hkd;
-      form.roomMonthlyRentMaxHKD = room.monthly_rent_max_hkd ?? 0;
-      form.roomDailyRentMinHKD = room.daily_rent_min_hkd ?? 0;
-      form.roomDailyRentMaxHKD = room.daily_rent_max_hkd ?? 0;
-      form.roomIncludedFees = room.included_fees;
-      form.roomIncludedFeeItems = room.included_fee_items?.join('、') || '';
-      form.roomMinLeaseMonths = room.min_lease_months;
-      form.roomMinStayValue = room.min_stay_value || room.min_lease_months;
-      form.roomMinStayUnit = room.min_stay_unit === 'day' ? 'day' : 'month';
-    }
+    form.roomTypes = detail.serviced_apartment.room_types.length > 0
+      ? detail.serviced_apartment.room_types.map((item) => ({
+          ...createServicedRoomType(),
+          ...item,
+          monthly_rent_min_hkd: item.monthly_rent_min_hkd || item.monthly_rent_hkd,
+          monthly_rent_max_hkd: item.monthly_rent_max_hkd || item.monthly_rent_min_hkd || item.monthly_rent_hkd,
+          daily_rent_max_hkd: item.daily_rent_max_hkd || item.daily_rent_min_hkd || 0,
+          min_stay_value: item.min_stay_value || item.min_lease_months || 1,
+          min_stay_unit: item.min_stay_unit === 'day' ? 'day' : 'month',
+        }))
+      : [createServicedRoomType()];
+
   }
 
   images.value.forEach(revokeImagePreview);
@@ -832,7 +1103,7 @@ const applyDetail = (detail: PropertyListingDetailResponse): void => {
   }));
 };
 
-// 17. 載入編輯資料
+// 34. 載入編輯資料
 const loadDetail = async (): Promise<void> => {
   if (!isEditing.value) {
     return;
@@ -840,11 +1111,16 @@ const loadDetail = async (): Promise<void> => {
 
   loading.value = true;
   try {
-    const response = isSale.value
-      ? await fetchPropertySaleDetail(listingId.value)
-      : await fetchServicedApartmentDetail(listingId.value);
+    const response = props.staffMode
+      ? isSale.value
+        ? await fetchStaffPropertySaleDetail(listingId.value)
+        : await fetchStaffServicedApartmentDetail(listingId.value)
+      : isSale.value
+        ? await fetchPropertySaleDetail(listingId.value)
+        : await fetchServicedApartmentDetail(listingId.value);
 
     applyDetail(response.data.data);
+    markCurrentStateSaved();
   } catch (error: unknown) {
     feedbackStore.pushToast(readErrorMessage(error, t('property.detail.loadError')), 'error');
   } finally {
@@ -852,7 +1128,7 @@ const loadDetail = async (): Promise<void> => {
   }
 };
 
-// 18. 儲存草稿
+// 35. 儲存草稿
 const saveDraft = async (): Promise<string> => {
   if (!canSave.value) {
     feedbackStore.pushToast(t('property.editor.requiredFields'), 'error');
@@ -862,6 +1138,11 @@ const saveDraft = async (): Promise<string> => {
   saving.value = true;
   try {
     if (!listingId.value) {
+      if (props.staffMode) {
+        feedbackStore.pushToast(t('property.editor.staffCreateDisabled'), 'error');
+        return '';
+      }
+
       const response = isSale.value
         ? await createPropertySale({ ...buildSalePayload(), images: [] })
         : await createServicedApartment({ ...buildServicedPayload(), images: [] });
@@ -872,11 +1153,22 @@ const saveDraft = async (): Promise<string> => {
     await uploadPendingImages(listingId.value);
 
     if (isSale.value) {
-      await updatePropertySale(listingId.value, buildSalePayload());
+      if (props.staffMode) {
+        await updateStaffPropertySale(listingId.value, buildSalePayload());
+      } else {
+        await updatePropertySale(listingId.value, buildSalePayload());
+      }
     } else {
-      await updateServicedApartment(listingId.value, buildServicedPayload());
+      if (props.staffMode) {
+        await updateStaffServicedApartment(listingId.value, buildServicedPayload());
+      } else {
+        await updateServicedApartment(listingId.value, buildServicedPayload());
+      }
     }
-    await sessionStore.loadCurrentUser();
+    if (!props.staffMode) {
+      await sessionStore.loadCurrentUser();
+    }
+    markCurrentStateSaved();
 
     feedbackStore.pushToast(t('property.editor.saveSuccess'), 'success');
     return listingId.value;
@@ -888,8 +1180,16 @@ const saveDraft = async (): Promise<string> => {
   }
 };
 
-// 19. 儲存並發布
+// 36. 儲存並發布
 const saveAndPublish = async (): Promise<void> => {
+  if (props.staffMode) {
+    const savedListingId = await saveDraft();
+    if (savedListingId) {
+      emit('saved', savedListingId);
+    }
+    return;
+  }
+
   if (!hasImage.value) {
     feedbackStore.pushToast(t('property.editor.imageRequired'), 'error');
     return;
@@ -910,6 +1210,12 @@ const saveAndPublish = async (): Promise<void> => {
     await sessionStore.loadCurrentUser();
 
     feedbackStore.pushToast(t('property.editor.publishSuccess'), 'success');
+    if (props.embedded) {
+      emit('published', savedListingId);
+      return;
+    }
+
+    isProgrammaticNavigation.value = true;
     await router.push(myPath.value);
   } catch (error: unknown) {
     feedbackStore.pushToast(readErrorMessage(error, t('property.editor.publishError')), 'error');
@@ -918,19 +1224,32 @@ const saveAndPublish = async (): Promise<void> => {
   }
 };
 
-// 20. 儲存並返回列表
+// 37. 儲存並返回列表
 const saveAndReturn = async (): Promise<void> => {
   const savedListingId = await saveDraft();
   if (savedListingId) {
+    if (props.embedded) {
+      emit('saved', savedListingId);
+      return;
+    }
+
+    isProgrammaticNavigation.value = true;
     await router.push(myPath.value);
   }
 };
 
+onBeforeRouteLeave(() => confirmLeaveEditor());
+
 onMounted(async () => {
-  await loadDetail();
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  await Promise.all([loadCommunities(), loadDetail()]);
+  if (!isEditing.value) {
+    markCurrentStateSaved();
+  }
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
   clearAddressSearchTimer();
   images.value.forEach(revokeImagePreview);
 });
@@ -938,7 +1257,10 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="property-editor-page">
-    <section class="property-editor-heading">
+    <section
+      v-if="!props.hideHeader"
+      class="property-editor-heading"
+    >
       <div>
         <p class="property-kicker">
           {{ isEditing ? 'Edit' : 'Publish' }}
@@ -1080,6 +1402,21 @@ onBeforeUnmount(() => {
               </select>
             </label>
             <label class="property-input">
+              <span>{{ t('property.editor.communityField') }}</span>
+              <select v-model="form.communityId">
+                <option value="">
+                  {{ t('property.editor.noCommunity') }}
+                </option>
+                <option
+                  v-for="community in communities"
+                  :key="community.public_id"
+                  :value="community.public_id"
+                >
+                  {{ formatCommunityName(community) }}
+                </option>
+              </select>
+            </label>
+            <label class="property-input">
               <span>{{ t('common.label.status') }}</span>
               <select v-model="form.businessStatus">
                 <option
@@ -1134,6 +1471,25 @@ onBeforeUnmount(() => {
                 </option>
               </select>
             </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.renovationField') }}</span>
+              <select v-model="form.renovationType">
+                <option value="">
+                  {{ t('property.editor.notSpecified') }}
+                </option>
+                <option
+                  v-for="option in propertyRenovationFilterOptions.filter((item) => item.value)"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.agencyCompanyField') }}</span>
+              <input v-model="form.agencyCompanyName" />
+            </label>
             <label class="property-input property-input--wide">
               <span>{{ t('property.editor.estateNameField') }}</span>
               <span class="property-address-input">
@@ -1184,6 +1540,22 @@ onBeforeUnmount(() => {
             <label class="property-input property-input--wide">
               <span>{{ t('property.editor.addressEnField') }}</span>
               <input v-model="form.addressTextEn" />
+            </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.latitudeField') }}</span>
+              <input
+                v-model.number="form.latitude"
+                type="number"
+                step="0.000001"
+              />
+            </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.longitudeField') }}</span>
+              <input
+                v-model.number="form.longitude"
+                type="number"
+                step="0.000001"
+              />
             </label>
             <label
               v-if="form.transactionType === 'sale'"
@@ -1295,6 +1667,26 @@ onBeforeUnmount(() => {
               <input v-model="form.buildingAge" />
             </label>
             <label class="property-input">
+              <span>{{ t('property.editor.completionYearField') }}</span>
+              <input
+                v-model.number="form.completionYear"
+                type="number"
+                min="0"
+              />
+            </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.buildingTotalFloorsField') }}</span>
+              <input
+                v-model.number="form.buildingTotalFloors"
+                type="number"
+                min="0"
+              />
+            </label>
+            <label class="property-input">
+              <span>{{ t('property.editor.managementCompanyField') }}</span>
+              <input v-model="form.managementCompany" />
+            </label>
+            <label class="property-input">
               <span>{{ t('property.editor.kitchenTypeField') }}</span>
               <select v-model="form.kitchenType">
                 <option value="">
@@ -1339,6 +1731,13 @@ onBeforeUnmount(() => {
             <label class="property-input">
               <span>{{ t('property.editor.vrUrlField') }}</span>
               <input v-model="form.vrURL" />
+            </label>
+            <label class="property-input property-input--wide">
+              <span>{{ t('property.editor.privateNoteField') }}</span>
+              <textarea
+                v-model="form.privateNote"
+                rows="3"
+              />
             </label>
           </div>
           <div class="property-checkbox-row">
@@ -1524,22 +1923,6 @@ onBeforeUnmount(() => {
               </select>
             </label>
             <label class="property-input">
-              <span>{{ t('property.editor.roomTypeName') }}</span>
-              <input v-model="form.roomName" />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomCategoryField') }}</span>
-              <input v-model="form.roomCategory" />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomTypeArea') }}</span>
-              <input
-                v-model.number="form.roomAreaSqft"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="property-input">
               <span>{{ t('property.editor.minUsableAreaField') }}</span>
               <input
                 v-model.number="form.minUsableAreaSqft"
@@ -1547,66 +1930,127 @@ onBeforeUnmount(() => {
                 min="0"
               />
             </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomTypeRent') }}</span>
-              <input
-                v-model.number="form.roomMonthlyRentHKD"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomMonthlyRentMaxField') }}</span>
-              <input
-                v-model.number="form.roomMonthlyRentMaxHKD"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomDailyRentMinField') }}</span>
-              <input
-                v-model.number="form.roomDailyRentMinHKD"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomDailyRentMaxField') }}</span>
-              <input
-                v-model.number="form.roomDailyRentMaxHKD"
-                type="number"
-                min="0"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomMinLeaseField') }}</span>
-              <input
-                v-model.number="form.roomMinLeaseMonths"
-                type="number"
-                min="1"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomMinStayValueField') }}</span>
-              <input
-                v-model.number="form.roomMinStayValue"
-                type="number"
-                min="1"
-              />
-            </label>
-            <label class="property-input">
-              <span>{{ t('property.editor.roomMinStayUnitField') }}</span>
-              <select v-model="form.roomMinStayUnit">
-                <option
-                  v-for="unit in servicedStayUnitOptions"
-                  :key="unit.value"
-                  :value="unit.value"
+            <section class="property-room-types property-input--wide">
+              <header class="property-room-types__header">
+                <h3>{{ t('property.editor.roomTypesSection') }}</h3>
+                <button
+                  type="button"
+                  class="property-mini-button"
+                  @click="addServicedRoomType"
                 >
-                  {{ getPropertyOptionLabel(unit, preferenceStore.locale) }}
-                </option>
-              </select>
-            </label>
+                  {{ t('property.editor.addRoomType') }}
+                </button>
+              </header>
+              <article
+                v-for="(room, roomIndex) in form.roomTypes"
+                :key="roomIndex"
+                class="property-room-type"
+              >
+                <div class="property-room-type__title">
+                  <strong>{{ t('property.editor.roomTypeName') }} {{ roomIndex + 1 }}</strong>
+                  <button
+                    type="button"
+                    class="property-mini-button property-mini-button--secondary"
+                    :disabled="form.roomTypes.length <= 1"
+                    @click="removeServicedRoomType(roomIndex)"
+                  >
+                    {{ t('property.editor.removeRoomType') }}
+                  </button>
+                </div>
+                <div class="property-editor-grid property-editor-grid--nested">
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomTypeName') }}</span>
+                    <input v-model="room.name" />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomCategoryField') }}</span>
+                    <input v-model="room.room_category" />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomTypeArea') }}</span>
+                    <input
+                      v-model.number="room.usable_area_sqft"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomTypeRent') }}</span>
+                    <input
+                      v-model.number="room.monthly_rent_min_hkd"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomMonthlyRentMaxField') }}</span>
+                    <input
+                      v-model.number="room.monthly_rent_max_hkd"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomDailyRentMinField') }}</span>
+                    <input
+                      v-model.number="room.daily_rent_min_hkd"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomDailyRentMaxField') }}</span>
+                    <input
+                      v-model.number="room.daily_rent_max_hkd"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomMinLeaseField') }}</span>
+                    <input
+                      v-model.number="room.min_lease_months"
+                      type="number"
+                      min="1"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomMinStayValueField') }}</span>
+                    <input
+                      v-model.number="room.min_stay_value"
+                      type="number"
+                      min="1"
+                    />
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.roomMinStayUnitField') }}</span>
+                    <select v-model="room.min_stay_unit">
+                      <option
+                        v-for="unit in servicedStayUnitOptions"
+                        :key="unit.value"
+                        :value="unit.value"
+                      >
+                        {{ getPropertyOptionLabel(unit, preferenceStore.locale) }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="property-input">
+                    <span>{{ t('property.editor.includedFeeItemsField') }}</span>
+                    <input
+                      :value="room.included_fee_items?.join('、') || ''"
+                      @input="updateRoomIncludedFeeItems(room, $event)"
+                    />
+                  </label>
+                  <label class="property-inline-checkbox">
+                    <input
+                      v-model="room.included_fees"
+                      type="checkbox"
+                    />
+                    {{ t('property.editor.includedFees') }}
+                  </label>
+                </div>
+              </article>
+            </section>
             <label class="property-input property-input--wide">
               <span>{{ t('property.editor.serviceIntroField') }}</span>
               <textarea
@@ -1644,18 +2088,7 @@ onBeforeUnmount(() => {
               />
               {{ t('property.editor.priceNegotiable') }}
             </label>
-            <label>
-              <input
-                v-model="form.roomIncludedFees"
-                type="checkbox"
-              />
-              {{ t('property.editor.includedFees') }}
-            </label>
           </div>
-          <label class="property-input property-input--wide property-input--compact">
-            <span>{{ t('property.editor.includedFeeItemsField') }}</span>
-            <input v-model="form.roomIncludedFeeItems" />
-          </label>
 
           <div class="property-checkbox-row">
             <label
@@ -1820,11 +2253,24 @@ onBeforeUnmount(() => {
             :disabled="saving || publishing"
             @click="saveAndPublish"
           >
-            {{ publishing ? t('common.status.loading') : t('property.editor.publishNow') }}
+            {{ publishing ? t('common.status.loading') : props.staffMode ? t('property.editor.saveDraft') : t('property.editor.publishNow') }}
           </button>
         </section>
       </aside>
     </section>
+
+    <AppUnsavedChangesDialog
+      :open="isLeavePromptOpen"
+      :title="t('property.editor.unsavedLeaveTitle')"
+      :description="t('property.editor.unsavedLeaveDescription')"
+      :save-label="saving ? t('property.editor.savingDraft') : t('property.editor.unsavedLeaveSave')"
+      :discard-label="t('property.editor.unsavedLeaveDiscard')"
+      :stay-label="t('property.editor.unsavedLeaveStay')"
+      :saving="saving"
+      @save="handleLeavePromptDecision('save')"
+      @discard="handleLeavePromptDecision('discard')"
+      @stay="handleLeavePromptDecision('stay')"
+    />
   </main>
 </template>
 
@@ -2110,6 +2556,68 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.property-room-types {
+  display: grid;
+  gap: 10px;
+}
+
+.property-room-types__header,
+.property-room-type__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-room-types__header h3 {
+  margin: 0;
+  color: rgb(var(--color-primary));
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.property-room-type {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 3px;
+  background: rgb(var(--color-surface-muted));
+  padding: 10px;
+}
+
+.property-room-type__title strong {
+  margin: 0;
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.property-mini-button {
+  min-height: 30px;
+  border: 1px solid rgb(var(--color-primary));
+  border-radius: 2px;
+  background: rgb(var(--color-primary));
+  padding: 0 10px;
+  color: rgb(var(--color-primary-contrast));
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.property-mini-button--secondary {
+  border-color: rgb(var(--color-border));
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+.property-mini-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .property-upload-button,

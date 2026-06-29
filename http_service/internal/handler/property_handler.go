@@ -48,12 +48,16 @@ type propertySaleRequest struct {
 	MultiUnitProject      bool                        `json:"multi_unit_project"`
 	PropertyType          string                      `json:"property_type" binding:"required"`
 	RentalType            string                      `json:"rental_type"`
+	RenovationType        string                      `json:"renovation_type"`
+	AgencyCompanyName     string                      `json:"agency_company_name"`
 	EstateName            string                      `json:"estate_name"`
 	AddressText           string                      `json:"address_text" binding:"required"`
 	AddressTextEn         string                      `json:"address_text_en"`
 	BlockName             string                      `json:"block_name"`
 	UnitName              string                      `json:"unit_name"`
 	ShowUnit              *bool                       `json:"show_unit"`
+	Latitude              *float64                    `json:"latitude"`
+	Longitude             *float64                    `json:"longitude"`
 	AskingPriceHKD        float64                     `json:"asking_price_hkd"`
 	MonthlyRentHKD        float64                     `json:"monthly_rent_hkd"`
 	PriceReferenceOnly    bool                        `json:"price_reference_only"`
@@ -74,6 +78,9 @@ type propertySaleRequest struct {
 	TotalFloors           int                         `json:"total_floors"`
 	Direction             string                      `json:"direction"`
 	BuildingAge           string                      `json:"building_age"`
+	CompletionYear        int                         `json:"completion_year"`
+	BuildingTotalFloors   int                         `json:"building_total_floors"`
+	ManagementCompany     string                      `json:"management_company"`
 	KitchenType           string                      `json:"kitchen_type"`
 	CookingMode           string                      `json:"cooking_mode"`
 	ManagementFeeHKD      float64                     `json:"management_fee_hkd"`
@@ -88,7 +95,22 @@ type propertySaleRequest struct {
 	Contact               propertyContactRequest      `json:"contact"`
 }
 
-// 4. servicedApartmentRequest defines serviced apartment create and update payload.
+// 4. propertyAppointmentRequest defines viewing appointment payload.
+type propertyAppointmentRequest struct {
+	ContactName     string `json:"contact_name" binding:"required"`
+	ContactPhone    string `json:"contact_phone" binding:"required"`
+	PreferredTime   string `json:"preferred_time"`
+	Message         string `json:"message"`
+	AppointmentType string `json:"appointment_type"`
+}
+
+// 5. propertyReportRequest defines public report payload.
+type propertyReportRequest struct {
+	Reason  string `json:"reason" binding:"required"`
+	Message string `json:"message"`
+}
+
+// 6. servicedApartmentRequest defines serviced apartment create and update payload.
 type servicedApartmentRequest struct {
 	Title                 string                                   `json:"title" binding:"required"`
 	TitleEn               string                                   `json:"title_en"`
@@ -129,22 +151,22 @@ type servicedApartmentRequest struct {
 	Contact               propertyContactRequest                   `json:"contact"`
 }
 
-// 5. NewPropertyHandler creates a property handler instance.
+// 7. NewPropertyHandler creates a property handler instance.
 func NewPropertyHandler(propertyService *service.PropertyService) *PropertyHandler {
 	return &PropertyHandler{propertyService: propertyService}
 }
 
-// 6. ListPropertySales returns public sale listings.
+// 8. ListPropertySales returns public sale listings.
 func (h *PropertyHandler) ListPropertySales(c *gin.Context) {
 	h.listPublic(c, service.PropertyChannelSale)
 }
 
-// 7. GetPropertySale returns one sale listing detail.
+// 9. GetPropertySale returns one sale listing detail.
 func (h *PropertyHandler) GetPropertySale(c *gin.Context) {
 	h.getDetail(c, service.PropertyChannelSale)
 }
 
-// 8. CreatePropertySale creates a sale draft.
+// 10. CreatePropertySale creates a sale draft.
 func (h *PropertyHandler) CreatePropertySale(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -166,7 +188,7 @@ func (h *PropertyHandler) CreatePropertySale(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 9. UpdatePropertySale updates an owned sale listing.
+// 11. UpdatePropertySale updates an owned sale listing.
 func (h *PropertyHandler) UpdatePropertySale(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -188,22 +210,41 @@ func (h *PropertyHandler) UpdatePropertySale(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 10. MyPropertySales returns listings owned by the current user.
+// 12. MyPropertySales returns listings owned by the current user.
 func (h *PropertyHandler) MyPropertySales(c *gin.Context) {
 	h.myListings(c, service.PropertyChannelSale)
 }
 
-// 11. ListServicedApartments returns public serviced apartment listings.
+// 13. MyFavoritePropertySales returns saved property sale listings.
+func (h *PropertyHandler) MyFavoritePropertySales(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	page, pageSize := parsePagination(c)
+	items, pagination, err := h.propertyService.ListFavoriteProperties(c.Request.Context(), user.UserID, service.PropertyListFilters{
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+}
+
+// 14. ListServicedApartments returns public serviced apartment listings.
 func (h *PropertyHandler) ListServicedApartments(c *gin.Context) {
 	h.listPublic(c, service.PropertyChannelServiced)
 }
 
-// 12. GetServicedApartment returns one serviced apartment detail.
+// 15. GetServicedApartment returns one serviced apartment detail.
 func (h *PropertyHandler) GetServicedApartment(c *gin.Context) {
 	h.getDetail(c, service.PropertyChannelServiced)
 }
 
-// 13. CreateServicedApartment creates a serviced apartment draft.
+// 16. CreateServicedApartment creates a serviced apartment draft.
 func (h *PropertyHandler) CreateServicedApartment(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -225,7 +266,7 @@ func (h *PropertyHandler) CreateServicedApartment(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 14. UpdateServicedApartment updates an owned serviced apartment listing.
+// 17. UpdateServicedApartment updates an owned serviced apartment listing.
 func (h *PropertyHandler) UpdateServicedApartment(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -247,22 +288,22 @@ func (h *PropertyHandler) UpdateServicedApartment(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 15. MyServicedApartments returns serviced apartment listings owned by the current user.
+// 18. MyServicedApartments returns serviced apartment listings owned by the current user.
 func (h *PropertyHandler) MyServicedApartments(c *gin.Context) {
 	h.myListings(c, service.PropertyChannelServiced)
 }
 
-// 16. PublishPropertySale publishes a sale draft.
+// 19. PublishPropertySale publishes a sale draft.
 func (h *PropertyHandler) PublishPropertySale(c *gin.Context) {
 	h.publish(c, service.PropertyChannelSale)
 }
 
-// 17. RepublishPropertySale republishes an expired sale listing.
+// 20. RepublishPropertySale republishes an expired sale listing.
 func (h *PropertyHandler) RepublishPropertySale(c *gin.Context) {
 	h.republish(c, service.PropertyChannelSale)
 }
 
-// 18. MarkPropertySaleSold marks a sale listing as sold.
+// 21. MarkPropertySaleSold marks a sale listing as sold.
 func (h *PropertyHandler) MarkPropertySaleSold(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -277,17 +318,111 @@ func (h *PropertyHandler) MarkPropertySaleSold(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": listingID, "business_status": "sold"})
 }
 
-// 19. DeactivatePropertySale hides a sale listing.
+// 22. DeactivatePropertySale hides a sale listing.
 func (h *PropertyHandler) DeactivatePropertySale(c *gin.Context) {
 	h.deactivate(c, service.PropertyChannelSale)
 }
 
-// 20. ContactAccessPropertySale grants sale contact access.
+// 23. ContactAccessPropertySale grants sale contact access.
 func (h *PropertyHandler) ContactAccessPropertySale(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelSale)
 }
 
-// 21. SearchPropertyAddresses returns building address autocomplete suggestions.
+// 24. FavoritePropertySale saves one property sale listing.
+func (h *PropertyHandler) FavoritePropertySale(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	result, err := h.propertyService.AddFavoriteProperty(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 25. UnfavoritePropertySale removes one property sale listing from favorites.
+func (h *PropertyHandler) UnfavoritePropertySale(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	result, err := h.propertyService.RemoveFavoriteProperty(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 26. SimilarPropertySales returns related public sale listings.
+func (h *PropertyHandler) SimilarPropertySales(c *gin.Context) {
+	limit, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("limit", "8")))
+	items, err := h.propertyService.ListSimilarProperties(c.Request.Context(), strings.TrimSpace(c.Param("listingId")), limit)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, gin.H{"items": items})
+}
+
+// 27. CreatePropertyAppointment creates a viewing request.
+func (h *PropertyHandler) CreatePropertyAppointment(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request propertyAppointmentRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+	result, err := h.propertyService.CreatePropertyAppointment(c.Request.Context(), service.PropertyAppointmentParams{
+		UserID:          user.UserID,
+		ListingPublicID: strings.TrimSpace(c.Param("listingId")),
+		ContactName:     strings.TrimSpace(request.ContactName),
+		ContactPhone:    strings.TrimSpace(request.ContactPhone),
+		PreferredTime:   strings.TrimSpace(request.PreferredTime),
+		Message:         strings.TrimSpace(request.Message),
+		AppointmentType: strings.TrimSpace(request.AppointmentType),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 28. ReportPropertySale creates a public report.
+func (h *PropertyHandler) ReportPropertySale(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request propertyReportRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+	result, err := h.propertyService.ReportProperty(c.Request.Context(), service.PropertyReportParams{
+		UserID:          user.UserID,
+		ListingPublicID: strings.TrimSpace(c.Param("listingId")),
+		Reason:          strings.TrimSpace(request.Reason),
+		Message:         strings.TrimSpace(request.Message),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 29. SearchPropertyAddresses returns building address autocomplete suggestions.
 func (h *PropertyHandler) SearchPropertyAddresses(c *gin.Context) {
 	limit, _ := strconv.Atoi(strings.TrimSpace(c.Query("limit")))
 	result, err := h.propertyService.SearchPropertyAddresses(
@@ -303,22 +438,22 @@ func (h *PropertyHandler) SearchPropertyAddresses(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 22. PublishServicedApartment publishes a serviced apartment draft.
+// 30. PublishServicedApartment publishes a serviced apartment draft.
 func (h *PropertyHandler) PublishServicedApartment(c *gin.Context) {
 	h.publish(c, service.PropertyChannelServiced)
 }
 
-// 23. RepublishServicedApartment republishes an expired serviced apartment listing.
+// 31. RepublishServicedApartment republishes an expired serviced apartment listing.
 func (h *PropertyHandler) RepublishServicedApartment(c *gin.Context) {
 	h.republish(c, service.PropertyChannelServiced)
 }
 
-// 24. DeactivateServicedApartment hides a serviced apartment listing.
+// 32. DeactivateServicedApartment hides a serviced apartment listing.
 func (h *PropertyHandler) DeactivateServicedApartment(c *gin.Context) {
 	h.deactivate(c, service.PropertyChannelServiced)
 }
 
-// 25. ContactAccessServicedApartment grants serviced apartment contact access.
+// 33. ContactAccessServicedApartment grants serviced apartment contact access.
 func (h *PropertyHandler) ContactAccessServicedApartment(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelServiced)
 }

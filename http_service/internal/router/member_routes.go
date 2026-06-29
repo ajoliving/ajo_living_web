@@ -26,6 +26,7 @@ func registerMemberRoutes(
 	api.GET("/me/secondhand/listings", requireAuth, secondhandHandler.MyListings)
 	api.GET("/me/secondhand/favorites", requireAuth, secondhandHandler.MyFavorites)
 	api.GET("/me/property-sales", requireAuth, propertyHandler.MyPropertySales)
+	api.GET("/me/property-sales/favorites", requireAuth, propertyHandler.MyFavoritePropertySales)
 	api.GET("/me/serviced-apartments", requireAuth, propertyHandler.MyServicedApartments)
 	api.GET("/me/orders", requireAuth, orderHandler.MyOrders)
 }

@@ -1,137 +1,371 @@
 <!--
- * 物業頻道詳情頁。
- * 1. 高保真還原 HTML 設計稿樓盤詳情頁雙欄布局。
- * 2. 左側：標題、價格、統計、設施、描述與大廈資料。
- * 3. 右側：圖集、地圖、代理聯絡卡與相似物件推薦。
- * 4. 全部使用靜態 mock 資料，不呼叫 API。
+ * 物業頻道樓盤詳情頁。
+ * 1. 高保真還原 HTML 設計稿 #page-detail 雙欄布局。
+ * 2. 左欄：標籤、標題、地址、價格、統計、設施、描述與大廈資料。
+ * 3. 右欄：圖集、物業位置地圖、代理聯絡卡與其他樓盤推薦。
+ * 4. CSS 變數全部使用 HTML 設計稿原生變量名（--brand、--ink、--sur、--bdr 等）。
+ * 5. 使用後端樓盤接口展示公開詳情、圖片、聯絡、收藏與相似樓盤。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import AppBreadcrumb from '@/shared/components/navigation/AppBreadcrumb.vue';
+import { readStoredAccessToken } from '@/httpapis/auth-session';
+import {
+  createPropertyAppointment,
+  favoritePropertySale,
+  fetchPropertySaleContactAccess,
+  fetchPropertySaleDetail,
+  fetchSimilarPropertySales,
+  reportPropertySale,
+  unfavoritePropertySale,
+} from '@/httpapis/properties';
+import type { ContactAccessResult, PropertyListingDetailResponse, PropertyListingSummaryResponse } from '@/model/property';
+import {
+  resolvePropertyArea,
+  resolvePropertyCommunityName,
+  resolvePropertyCoverImage,
+  resolvePropertyDistrict,
+  resolvePropertyImages,
+  resolvePropertyPrice,
+  resolvePropertyPriceText,
+  resolvePropertyRooms,
+  resolvePropertyTagLabels,
+  resolvePropertyTitle,
+  resolvePropertyTransactionType,
+  resolvePropertyTypeLabel,
+} from '@/utils/property';
 
 // 1. 路由
-const route = useRoute();
 const router = useRouter();
+const route = useRoute();
+const listingId = computed(() => String(route.params.listingId ?? ''));
+const listing = ref<PropertyListingDetailResponse | null>(null);
+const similarItems = ref<PropertyListingSummaryResponse[]>([]);
+const contactAccess = ref<ContactAccessResult | null>(null);
+const loading = ref(false);
+const actionMessage = ref('');
+const errorMessage = ref('');
+const appointmentOpen = ref(route.query.action === 'appointment');
+const reportOpen = ref(false);
 
-// 2. 麵包屑項目
-const breadcrumbItems = [
-  { label: '首頁', to: '/' },
-  { label: '樓盤租售', to: '/properties' },
-  { label: '佐敦 高級住宅' },
-];
+// 2. 物件標籤
+interface PropertyTag {
+  label: string;
+  dark?: boolean;
+}
+const tags = computed<PropertyTag[]>(() => {
+  if (!listing.value) {
+    return [];
+  }
+  const role = listing.value.publisher_identity_type === 'agent' ? '代理盤' : '業主盤';
+  return [
+    { label: role, dark: true },
+    { label: resolvePropertyDistrict(listing.value, 'zh-HK') },
+    { label: resolvePropertyTypeLabel(listing.value, 'zh-HK') },
+  ];
+});
 
-// 3. 物件標籤
-const tags = ['代理盤', '九龍', '住宅'];
-
-// 4. 物件統計資料
+// 3. 物件統計資料
 interface DetailStat {
   value: string;
   label: string;
 }
-const stats: DetailStat[] = [
-  { value: '200', label: '實用呎數' },
-  { value: '1', label: '睡房' },
-  { value: '1', label: '浴室' },
-  { value: '高層', label: '樓層' },
-];
+const stats = computed<DetailStat[]>(() => {
+  const sale = listing.value?.property_sale;
+  return [
+    { value: resolvePropertyArea(listing.value as PropertyListingSummaryResponse || emptyListing()).toLocaleString('zh-HK'), label: '實用呎數' },
+    { value: String(sale?.bedroom_count ?? 0), label: '睡房' },
+    { value: String(sale?.bathroom_count ?? 0), label: '浴室' },
+    { value: sale?.floor_level || '-', label: '樓層' },
+  ];
+});
 
-// 5. 設施配套
-const facilities = ['全新裝修', '冷氣', '熱水爐', '電視', '雪櫃', '洗衣機', '寬頻', '升降機'];
+// 4. 設施配套
+const facilities = computed(() => listing.value ? resolvePropertyTagLabels(listing.value, 'zh-HK', 12) : []);
 
-// 6. 大廈資料
+// 5. 大廈資料
 interface BuildingInfo {
   label: string;
   value: string;
 }
-const buildingInfo: BuildingInfo[] = [
-  { label: '落成年份', value: '2018年' },
-  { label: '樓層數目', value: '38層' },
-  { label: '管理公司', value: '第一太平' },
-  { label: '管理費', value: 'HK$2,800/月' },
-];
+const buildingInfo = computed<BuildingInfo[]>(() => {
+  const sale = listing.value?.property_sale;
+  return [
+    { label: '落成年份', value: sale?.completion_year ? `${sale.completion_year}年` : '-' },
+    { label: '樓層數目', value: sale?.building_total_floors ? `${sale.building_total_floors}層` : sale?.total_floors ? `${sale.total_floors}層` : '-' },
+    { label: '管理公司', value: sale?.management_company || '-' },
+    { label: '管理費', value: sale?.management_fee_hkd ? `${formatHKD(sale.management_fee_hkd)}/月` : '-' },
+    { label: '瀏覽', value: String(sale?.view_count ?? 0) },
+    { label: '查詢', value: String(sale?.inquiry_count ?? 0) },
+  ];
+});
 
-// 7. 圖集資料
+// 6. 圖集資料
 interface GalleryImage {
-  id: number;
+  id: string;
   background: string;
+  url?: string;
 }
-const galleryImages: GalleryImage[] = [
-  { id: 1, background: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)' },
-  { id: 2, background: 'linear-gradient(160deg,#e0e4e8,#c8d0d8)' },
-  { id: 3, background: 'linear-gradient(160deg,#e8e4e0,#d0c8c0)' },
-  { id: 4, background: 'linear-gradient(160deg,#e0e8e0,#c8d8c8)' },
-  { id: 5, background: 'linear-gradient(160deg,#e8e0e8,#d0c0d0)' },
-];
+const galleryImages = computed<GalleryImage[]>(() => {
+  if (!listing.value) {
+    return [{ id: 'placeholder', background: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)' }];
+  }
+  const images = resolvePropertyImages(listing.value);
+  if (images.length === 0) {
+    return [{ id: 'placeholder', background: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)' }];
+  }
+  return images.map((image) => ({ id: image.id, background: '#f3f3f3', url: image.url }));
+});
 const selectedImageIndex = ref(0);
-const extraImageCount = 8;
+const extraImageCount = computed(() => Math.max(0, galleryImages.value.length - 4));
 
-// 8. 相似推薦物件
+// 7. 其他樓盤推薦
 interface SimilarListing {
-  id: number;
+  id: string;
   name: string;
   price: string;
   meta: string;
   background: string;
+  imageUrl?: string;
 }
-const similarListings: SimilarListing[] = [
-  { id: 1, name: '沙田第一城 3房', price: 'HK$18,500/月', meta: '新界 · 650呎', background: 'linear-gradient(135deg,#e4dcd8,#ccc0bc)' },
-  { id: 2, name: '旺角商業中心', price: 'HK$28,000/月', meta: '九龍 · 320呎', background: 'linear-gradient(135deg,#d8e0e0,#c0cccc)' },
-  { id: 3, name: '銅鑼灣精裝1房', price: 'HK$22,000/月', meta: '香港島 · 280呎', background: 'linear-gradient(135deg,#e0e8e0,#c8d8c8)' },
-  { id: 4, name: '尖沙咀海景套房', price: 'HK$32,000/月', meta: '九龍 · 420呎', background: 'linear-gradient(135deg,#e8e0e8,#d0c8d0)' },
-  { id: 5, name: '將軍澳新盤2房', price: 'HK$16,500/月', meta: '新界 · 540呎', background: 'linear-gradient(135deg,#e8e8d8,#d0d0b8)' },
-];
+const similarListings = computed<SimilarListing[]>(() =>
+  similarItems.value.map((item) => ({
+    id: item.listing_id,
+    name: resolvePropertyTitle(item),
+    price: resolvePropertyPriceText(item, 'zh-HK'),
+    meta: `${resolvePropertyDistrict(item, 'zh-HK')} · ${resolvePropertyArea(item).toLocaleString('zh-HK')}呎`,
+    background: 'linear-gradient(135deg,#e4dcd8,#ccc0bc)',
+    imageUrl: resolvePropertyCoverImage(item)?.url,
+  })),
+);
 
-// 9. 選擇圖片
+const title = computed(() => listing.value ? resolvePropertyTitle(listing.value) : '');
+const address = computed(() => listing.value?.property_sale?.address_text || '');
+const priceText = computed(() => listing.value ? resolvePropertyPriceText(listing.value, 'zh-HK') : '-');
+const priceSuffix = computed(() => resolvePropertyTransactionType(listing.value || emptyListing()) === 'rent' ? ' / 月' : '');
+const unitPriceText = computed(() => {
+  if (!listing.value) {
+    return '-';
+  }
+  const area = resolvePropertyArea(listing.value);
+  const price = resolvePropertyPrice(listing.value);
+  return area > 0 && price > 0 ? `約 ${formatHKD(Math.round(price / area))} / 呎` : '-';
+});
+const mapSrc = computed(() => {
+  const sale = listing.value?.property_sale;
+  if (sale?.latitude && sale?.longitude) {
+    return `https://www.google.com/maps?q=${sale.latitude},${sale.longitude}&output=embed`;
+  }
+  return `https://www.google.com/maps?q=${encodeURIComponent(address.value || resolvePropertyCommunityName(listing.value || emptyListing()))}&output=embed`;
+});
+const ownerName = computed(() =>
+  listing.value?.property_sale?.agency_company_name ||
+  listing.value?.owner?.display_name ||
+  listing.value?.property_sale?.publisher_role_label ||
+  '發布者',
+);
+const contactPhone = computed(() => contactAccess.value?.contact_payload?.phone || '');
+const whatsappURL = computed(() => contactAccess.value?.contact_payload?.whatsapp_url || '');
+const appointmentForm = reactive({
+  contactName: '',
+  contactPhone: '',
+  preferredTime: '',
+  message: '',
+});
+const reportForm = reactive({
+  reason: 'incorrect_info',
+  message: '',
+});
+
+// 8. 選擇圖片
 const selectImage = (index: number): void => {
   selectedImageIndex.value = index;
 };
 
-// 10. 跳轉相似物件
-const goSimilar = (id: number): void => {
+// 9. 跳轉其他樓盤
+const goSimilar = (id: string): void => {
   void router.push(`/properties/${id}`);
 };
 
-// 11. 跳轉站內聊天
-const goChat = (): void => {
+// 10. 跳轉站內聊天
+const goChat = async (): Promise<void> => {
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } });
+    return;
+  }
   void router.push('/account/chat');
 };
 
-// 12. 取得 listing id（保留路由參數參考）
-void route.params.listingId;
+// 11. 載入詳情
+const loadDetail = async (): Promise<void> => {
+  loading.value = true;
+  errorMessage.value = '';
+  try {
+    const { data } = await fetchPropertySaleDetail(listingId.value);
+    listing.value = data.data;
+    selectedImageIndex.value = 0;
+    const similar = await fetchSimilarPropertySales(listingId.value, { limit: 8 });
+    similarItems.value = similar.data.data.items;
+  } catch {
+    errorMessage.value = '暫時無法讀取樓盤詳情。';
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 12. 切換收藏
+const toggleFavorite = async (): Promise<void> => {
+  if (!listing.value) return;
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } });
+    return;
+  }
+  if (listing.value.is_favorite) {
+    await unfavoritePropertySale(listing.value.listing_id);
+    listing.value = { ...listing.value, is_favorite: false };
+    return;
+  }
+  await favoritePropertySale(listing.value.listing_id);
+  listing.value = { ...listing.value, is_favorite: true };
+};
+
+// 13. 讀取聯絡方式
+const revealContact = async (): Promise<void> => {
+  if (!listing.value) return;
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } });
+    return;
+  }
+  try {
+    const { data } = await fetchPropertySaleContactAccess(listing.value.listing_id);
+    contactAccess.value = data.data;
+    actionMessage.value = '已顯示聯絡方式。';
+  } catch {
+    actionMessage.value = '暫時無法讀取聯絡方式。';
+  }
+};
+
+// 14. 提交睇樓預約
+const submitAppointment = async (): Promise<void> => {
+  if (!listing.value) return;
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } });
+    return;
+  }
+  try {
+    await createPropertyAppointment(listing.value.listing_id, {
+      contact_name: appointmentForm.contactName.trim(),
+      contact_phone: appointmentForm.contactPhone.trim(),
+      preferred_time: appointmentForm.preferredTime.trim() || undefined,
+      message: appointmentForm.message.trim() || undefined,
+      appointment_type: 'viewing',
+    });
+    appointmentOpen.value = false;
+    actionMessage.value = '睇樓預約已提交。';
+  } catch {
+    actionMessage.value = '睇樓預約提交失敗。';
+  }
+};
+
+// 15. 提交舉報
+const submitReport = async (): Promise<void> => {
+  if (!listing.value) return;
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } });
+    return;
+  }
+  try {
+    await reportPropertySale(listing.value.listing_id, {
+      reason: reportForm.reason,
+      message: reportForm.message.trim() || undefined,
+    });
+    reportOpen.value = false;
+    actionMessage.value = '舉報已提交。';
+  } catch {
+    actionMessage.value = '舉報提交失敗。';
+  }
+};
+
+// 16. 格式化港幣
+const formatHKD = (value: number): string =>
+  `HK$${value.toLocaleString('zh-HK')}`;
+
+// 17. 空資料 fallback
+const emptyListing = (): PropertyListingSummaryResponse => ({
+  listing_id: '',
+  module: 'property_sale',
+  title: '',
+  summary: '',
+  district_code: '',
+  publisher_identity_type: 'owner',
+  publication_status: 'draft',
+  business_status: 'available',
+  updated_at: '',
+});
+
+onMounted(() => {
+  void loadDetail();
+});
 </script>
 
 <template>
   <main class="detail-page">
-    <div class="detail-wrap">
-      <div class="detail-main">
-        <!-- 1. 麵包屑 -->
-        <AppBreadcrumb :items="breadcrumbItems" />
+    <!-- 1. 麵包屑 -->
+    <div class="breadcrumb">
+      <router-link class="bc-link" to="/">首頁</router-link>
+      <span class="bc-sep">›</span>
+      <router-link class="bc-link" to="/properties">樓盤租售</router-link>
+      <span class="bc-sep">›</span>
+      <span class="bc-current">{{ title || '樓盤詳情' }}</span>
+    </div>
 
-        <!-- 2. 雙欄布局 -->
-        <div class="detail-layout">
+    <div class="detail-wrap">
+      <p
+        v-if="errorMessage"
+        class="detail-state detail-state-error"
+      >
+        {{ errorMessage }}
+      </p>
+      <p
+        v-else-if="loading && !listing"
+        class="detail-state"
+      >
+        正在讀取樓盤詳情。
+      </p>
+      <p
+        v-if="actionMessage"
+        class="detail-state"
+      >
+        {{ actionMessage }}
+      </p>
+      <div class="detail-main">
+      <!-- 2. 雙欄布局 -->
+      <div
+        v-if="listing"
+        class="detail-layout"
+      >
           <!-- 2.1 左欄：物件資訊 -->
           <div class="detail-left">
-            <div class="detail-tags">
+            <div class="gtags">
               <span
-                v-for="(tag, index) in tags"
-                :key="tag"
-                :class="{ 'detail-tag--dark': index === 0 }"
-                class="detail-tag"
+                v-for="tag in tags"
+                :key="tag.label"
+                class="gtag"
+                :class="{ dark: tag.dark }"
               >
-                {{ tag }}
+                {{ tag.label }}
               </span>
             </div>
 
-            <h2 class="detail-title">佐敦 高級住宅</h2>
-            <div class="detail-address">油尖旺區 佐敦道 38 號</div>
+            <h2 class="detail-title">{{ title }}</h2>
+            <div class="detail-address">{{ address }}</div>
 
             <div class="detail-price-row">
               <div class="detail-price-main">
-                HK$36,000<span class="detail-price-suffix"> / 月</span>
+                {{ priceText }}<span class="detail-price-suffix">{{ priceSuffix }}</span>
               </div>
-              <div class="detail-price-unit">約 HK$180 / 呎</div>
+              <div class="detail-price-unit">{{ unitPriceText }}</div>
             </div>
 
             <div class="detail-stats">
@@ -147,21 +381,27 @@ void route.params.listingId;
 
             <section class="detail-section">
               <div class="detail-section-title">設施配套</div>
-              <div class="detail-pills">
+              <div class="gpills">
                 <span
                   v-for="item in facilities"
                   :key="item"
-                  class="detail-pill"
+                  class="gpill"
                 >
                   {{ item }}
+                </span>
+                <span
+                  v-if="facilities.length === 0"
+                  class="gpill"
+                >
+                  未提供
                 </span>
               </div>
             </section>
 
             <section class="detail-section">
               <div class="detail-section-title">物業描述</div>
-              <p class="detail-body-text">
-                位於佐敦黃金地段，步行3分鐘到佐敦地鐵站，交通四通八達。單位採光充足，全新裝修，廚衛設施齊備，適合單身或情侶入住。大廈管理完善，24小時閉路電視。
+              <p class="body-text">
+                {{ listing.description || listing.summary || '未提供物業描述。' }}
               </p>
             </section>
 
@@ -188,10 +428,16 @@ void route.params.listingId;
             <div class="detail-right-card">
               <div class="detail-gallery">
                 <div
-                  class="detail-main-img"
+                  class="detail-main-img pat"
                   :style="{ background: galleryImages[selectedImageIndex].background }"
                 >
+                  <img
+                    v-if="galleryImages[selectedImageIndex].url"
+                    :src="galleryImages[selectedImageIndex].url"
+                    :alt="title"
+                  >
                   <svg
+                    v-else
                     width="120"
                     height="80"
                     viewBox="0 0 120 80"
@@ -247,16 +493,16 @@ void route.params.listingId;
                 </div>
                 <div class="detail-thumb-row">
                   <div
-                    v-for="(image, index) in galleryImages.slice(0, 3)"
+                    v-for="(image, index) in galleryImages.slice(1, 4)"
                     :key="image.id"
-                    class="detail-thumb"
-                    :class="{ 'detail-thumb--active': selectedImageIndex === index }"
+                    class="detail-thumb pat"
                     :style="{ background: image.background }"
-                    @click="selectImage(index)"
+                    @click="selectImage(index + 1)"
                   />
                   <div
-                    class="detail-thumb detail-thumb-more"
-                    :style="{ background: galleryImages[4].background }"
+                    v-if="extraImageCount > 0"
+                    class="detail-thumb detail-thumb-more pat"
+                    :style="{ background: galleryImages[4]?.background || '#f3f3f3' }"
                     @click="selectImage(4)"
                   >
                     +{{ extraImageCount }}
@@ -265,15 +511,15 @@ void route.params.listingId;
               </div>
             </div>
 
-            <!-- 2.2.2 地圖 -->
+            <!-- 2.2.2 物業位置 -->
             <div class="detail-right-card">
-              <div class="detail-section-title detail-section-title--label">
+              <div class="label-text" style="margin-bottom: 10px;">
                 物業位置
               </div>
               <iframe
                 class="building-map-frame"
                 title="樓盤地圖位置"
-                src="https://www.google.com/maps?q=Jordan%20Hong%20Kong&output=embed"
+                :src="mapSrc"
                 allowfullscreen
                 loading="lazy"
                 referrerpolicy="no-referrer-when-downgrade"
@@ -283,22 +529,23 @@ void route.params.listingId;
             <!-- 2.2.3 代理聯絡卡 -->
             <div class="detail-agent-card">
               <div class="detail-agent-profile">
-                <div class="detail-agent-avatar">陳</div>
+                <div class="detail-agent-avatar">{{ ownerName.slice(0, 1) }}</div>
                 <div class="detail-agent-copy">
-                  <div class="detail-agent-kicker">代理人</div>
-                  <div class="detail-agent-name">陳大文</div>
-                  <div class="detail-agent-sub">AJO 認證代理 · 立即致電或發送訊息</div>
+                  <div class="detail-agent-kicker">{{ listing.publisher_identity_type === 'agent' ? '代理人' : '發布者' }}</div>
+                  <div class="detail-agent-name">{{ ownerName }}</div>
+                  <div class="detail-agent-sub">查看聯絡方式、預約睇樓或發送站內訊息</div>
                 </div>
               </div>
               <div class="detail-agent-time">
-                <div class="detail-agent-label">預約時間</div>
-                <div class="detail-agent-value">今天 14:00 - 18:00</div>
-                <div class="detail-agent-note">可另約平日晚上或週末睇樓</div>
+                <div class="detail-agent-label">發布資料</div>
+                <div class="detail-agent-value">{{ resolvePropertyCommunityName(listing) }}</div>
+                <div class="detail-agent-note">{{ resolvePropertyRooms(listing) }}</div>
               </div>
               <div class="detail-agent-actions">
                 <a
+                  v-if="contactPhone"
                   class="detail-agent-contact"
-                  href="tel:+85261234567"
+                  :href="`tel:${contactPhone}`"
                   aria-label="代理電話"
                 >
                   <svg
@@ -313,11 +560,20 @@ void route.params.listingId;
                       stroke-linejoin="round"
                     />
                   </svg>
-                  +852 6123 4567
+                  致電查詢
                 </a>
+                <button
+                  v-else
+                  class="detail-agent-contact"
+                  type="button"
+                  @click="revealContact"
+                >
+                  查看電話
+                </button>
                 <a
-                  class="detail-agent-contact detail-agent-contact--primary"
-                  href="https://wa.me/85261234567"
+                  v-if="whatsappURL"
+                  class="detail-agent-contact primary"
+                  :href="whatsappURL"
                   target="_blank"
                   rel="noopener"
                 >
@@ -342,6 +598,14 @@ void route.params.listingId;
                   WhatsApp
                 </a>
                 <button
+                  v-else
+                  class="detail-agent-contact primary"
+                  type="button"
+                  @click="revealContact"
+                >
+                  查看 WhatsApp
+                </button>
+                <button
                   class="detail-agent-contact"
                   type="button"
                   @click="goChat"
@@ -364,15 +628,63 @@ void route.params.listingId;
                       stroke-linejoin="round"
                     />
                   </svg>
-                  站內聊天
+                  留言查詢
                 </button>
               </div>
+              <div class="detail-agent-actions">
+                <button
+                  class="detail-agent-contact"
+                  type="button"
+                  @click="toggleFavorite"
+                >
+                  {{ listing.is_favorite ? '已收藏' : '收藏' }}
+                </button>
+                <button
+                  class="detail-agent-contact"
+                  type="button"
+                  @click="appointmentOpen = !appointmentOpen"
+                >
+                  預約睇樓
+                </button>
+                <button
+                  class="detail-agent-contact"
+                  type="button"
+                  @click="reportOpen = !reportOpen"
+                >
+                  舉報
+                </button>
+              </div>
+              <form
+                v-if="appointmentOpen"
+                class="detail-form"
+                @submit.prevent="submitAppointment"
+              >
+                <input v-model="appointmentForm.contactName" placeholder="聯絡人" required>
+                <input v-model="appointmentForm.contactPhone" placeholder="電話" required>
+                <input v-model="appointmentForm.preferredTime" placeholder="希望睇樓時間">
+                <textarea v-model="appointmentForm.message" placeholder="補充資料" rows="3" />
+                <button type="submit">提交預約</button>
+              </form>
+              <form
+                v-if="reportOpen"
+                class="detail-form"
+                @submit.prevent="submitReport"
+              >
+                <select v-model="reportForm.reason">
+                  <option value="incorrect_info">資料不準確</option>
+                  <option value="unavailable">樓盤已不可用</option>
+                  <option value="suspicious">可疑內容</option>
+                  <option value="other">其他</option>
+                </select>
+                <textarea v-model="reportForm.message" placeholder="補充說明" rows="3" />
+                <button type="submit">提交舉報</button>
+              </form>
             </div>
 
-            <!-- 2.2.4 相似推薦 -->
+            <!-- 2.2.4 其他樓盤推薦 -->
             <div class="similar-section">
-              <div class="detail-section-title detail-section-title--label">
-                相似物件推薦
+              <div class="label-text" style="margin-bottom: 12px;">
+                其他樓盤
               </div>
               <div class="similar-scroll">
                 <div
@@ -382,9 +694,15 @@ void route.params.listingId;
                   @click="goSimilar(item.id)"
                 >
                   <div
-                    class="sim-img"
+                    class="sim-img pat"
                     :style="{ background: item.background }"
-                  />
+                  >
+                    <img
+                      v-if="item.imageUrl"
+                      :src="item.imageUrl"
+                      :alt="item.name"
+                    >
+                  </div>
                   <div class="sim-body">
                     <div class="sim-name">{{ item.name }}</div>
                     <div class="sim-price">{{ item.price }}</div>
@@ -403,8 +721,8 @@ void route.params.listingId;
 <style scoped>
 /*
  * 樓盤詳情頁樣式。
- * 1. 對齊 HTML 設計稿 #page-detail 結構。
- * 2. CSS 變數映射至專案 token（rgb(var(--color-xxx))）。
+ * 1. 嚴格對齊 HTML 設計稿 #page-detail 結構與數值。
+ * 2. CSS 變數全部使用 HTML 設計稿原生變量名（--brand、--ink、--sur、--bdr、--sur-2 等）。
  * 3. 雙欄響應式：桌面雙欄、行動單欄。
  */
 
@@ -412,42 +730,44 @@ void route.params.listingId;
   display: block;
   width: 100%;
   min-height: calc(100vh - var(--nav-h));
-  background: rgb(var(--color-surface-2));
+  background: var(--sur-2);
 }
 
+/* 1. 容器布局 */
 .detail-wrap {
   display: block;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   min-height: auto;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--sp-5);
 }
 
 .detail-main {
   max-width: 100%;
-  background: rgb(var(--color-surface-2));
+  border-right: 0;
+  background: var(--sur-2);
   padding: 0;
   overflow: visible;
 }
 
-/* 1. 雙欄布局 */
+/* 2. 雙欄布局 */
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--sp-4);
   align-items: start;
-  margin-top: 16px;
+  margin-top: var(--sp-4);
 }
 
-/* 2. 卡片共用樣式 */
+/* 3. 卡片共用樣式 */
 .detail-left,
 .detail-right-card,
 .detail-agent-card,
 .similar-section {
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-  padding: 16px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
+  background: #fff;
+  padding: var(--sp-4);
 }
 
 .detail-right-card,
@@ -465,50 +785,100 @@ void route.params.listingId;
   top: 72px;
 }
 
-/* 3. 標籤 */
-.detail-tags {
+/* 4. 麵包屑 */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 12px max(24px, calc((100vw - 1180px) / 2 + 24px));
+  border: 1px solid var(--bdr);
+  border-right: 0;
+  border-left: 0;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bc-link {
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 0;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bc-link:hover {
+  color: var(--brand);
+}
+
+.bc-sep {
+  color: var(--ink-4);
+}
+
+.bc-current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 5. 共用花紋佔位 */
+.pat {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 6. 標籤 */
+.gtags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
   margin-bottom: 10px;
 }
 
-.detail-tag {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 999px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-ink-3));
+.gtag {
   font-size: 11px;
-  line-height: 1.4;
+  letter-spacing: 0.8px;
+  color: var(--ink-3);
+  border: 1px solid var(--bdr);
   padding: 3px 7px;
+  border-radius: 1px;
 }
 
-.detail-tag--dark {
-  border-color: rgb(var(--color-text));
-  background: rgb(var(--color-text));
-  color: rgb(var(--color-surface));
+.gtag.dark {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-weight: 500;
 }
 
-/* 4. 標題與地址 */
+/* 7. 標題與地址 */
 .detail-title {
   margin: 0 0 6px;
-  font-family: var(--font-display);
+  font-family: var(--font);
   font-size: 28px;
   font-weight: 500;
   line-height: 1.25;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .detail-address {
   margin-bottom: 16px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 14px;
   line-height: 1.6;
 }
 
-/* 5. 價格列 */
+/* 8. 價格列 */
 .detail-price-row {
   display: flex;
   align-items: baseline;
@@ -516,59 +886,61 @@ void route.params.listingId;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--g2);
 }
 
 .detail-price-main {
   font-size: 34px;
   font-weight: 400;
   letter-spacing: 0;
-  color: rgb(var(--color-text));
+  color: var(--ink);
   line-height: 1.2;
 }
 
 .detail-price-suffix {
   font-size: 13px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-weight: 400;
 }
 
 .detail-price-unit {
   font-size: 14px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
 }
 
-/* 6. 統計區 */
+/* 9. 統計區 */
 .detail-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .detail-stat {
-  min-width: 0;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 8px;
-  background: rgb(var(--color-surface-2));
-  padding: 12px 8px;
   text-align: center;
+  padding: 12px 8px;
+  background: var(--sur-2);
+  border-radius: 2px;
 }
 
 .detail-stat-val {
   font-size: 21px;
   font-weight: 600;
   line-height: 1.15;
-  color: rgb(var(--color-text));
+  margin-bottom: 2px;
+  color: var(--ink);
 }
 
 .detail-stat-label {
   margin-top: 5px;
   font-size: 12px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
 }
 
-/* 7. 區段 */
+/* 10. 區段 */
 .detail-section {
-  border-top: 1px solid rgb(var(--color-border));
+  border-top: 1px solid var(--g2);
   padding-top: 16px;
   margin-top: 16px;
 }
@@ -577,86 +949,102 @@ void route.params.listingId;
   font-size: 16px;
   font-weight: 700;
   margin-bottom: 12px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .detail-section-title--label {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
 }
 
-/* 8. 設施標籤 */
-.detail-pills {
+/* 10.1 右欄 label-text 小標題（全域樣式，未被 detail-section 覆蓋） */
+.label-text {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* 11. 設施標籤 */
+.gpills {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 6px;
 }
 
-.detail-pill {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 999px;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-text));
+.gpill {
   font-size: 12px;
-  line-height: 1.4;
   padding: 5px 9px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  border-radius: 2px;
 }
 
-/* 9. 描述文字 */
-.detail-body-text {
+/* 12. 描述文字 */
+.body-text {
   margin: 0;
   font-size: 15px;
   line-height: 1.85;
-  color: rgb(var(--color-text));
+  color: var(--ink-2);
 }
 
-/* 10. 大廈資料網格 */
+/* 13. 大廈資料網格 */
 .binfo-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-top: 12px;
 }
 
 .binfo-card {
-  min-width: 0;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 8px;
-  background: rgb(var(--color-surface-2));
-  padding: 12px;
+  border: 1px solid var(--g2);
+  border-radius: 3px;
+  padding: 12px 14px;
+  background: var(--sur-2);
 }
 
 .binfo-label {
   font-size: 12px;
-  color: rgb(var(--color-ink-3));
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 4px;
 }
 
 .binfo-val {
-  margin-top: 4px;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.45;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
-/* 11. 圖集 */
+/* 14. 圖集 */
 .detail-gallery {
   display: grid;
   gap: 8px;
 }
 
 .detail-main-img {
-  display: flex;
+  width: 100%;
   height: 300px;
   border-radius: 7px;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
-  background: rgb(var(--color-surface-2));
+  margin-bottom: 8px;
+  background: #f3f3f3;
+}
+
+.detail-main-img img,
+.detail-thumb img,
+.sim-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .detail-thumb-row {
@@ -669,39 +1057,26 @@ void route.params.listingId;
   height: 86px;
   border-radius: 6px;
   cursor: pointer;
-  border: 2px solid transparent;
-  transition: border-color 0.15s ease;
-  background: rgb(var(--color-surface-2));
-}
-
-.detail-thumb:hover {
-  border-color: rgb(var(--color-brand-mid));
-}
-
-.detail-thumb--active {
-  border-color: rgb(var(--color-primary));
+  background: #f3f3f3;
 }
 
 .detail-thumb-more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 16px;
   font-weight: 700;
 }
 
-/* 12. 地圖 */
+/* 15. 地圖 */
 .building-map-frame {
   display: block;
   width: 100%;
   height: 230px;
   border: 0;
-  border-radius: 8px;
-  background: rgb(var(--color-surface-2));
+  border-radius: var(--r-md);
+  background: var(--sur-2);
 }
 
-/* 13. 代理卡片 */
+/* 16. 代理聯絡卡 */
 .detail-agent-card {
   display: grid;
   grid-template-columns: 1fr;
@@ -715,7 +1090,7 @@ void route.params.listingId;
   gap: 12px;
   min-width: 0;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgb(var(--color-surface-3));
+  border-bottom: 1px solid var(--sur-3);
 }
 
 .detail-agent-avatar {
@@ -725,8 +1100,8 @@ void route.params.listingId;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgb(var(--color-primary-soft));
-  color: rgb(var(--color-primary));
+  background: var(--brand-light);
+  color: var(--brand);
   font-size: 15px;
   font-weight: 800;
   flex: 0 0 auto;
@@ -738,7 +1113,7 @@ void route.params.listingId;
 
 .detail-agent-kicker {
   margin-bottom: 3px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -746,7 +1121,7 @@ void route.params.listingId;
 }
 
 .detail-agent-name {
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 16px;
   font-weight: 700;
   line-height: 1.25;
@@ -754,7 +1129,7 @@ void route.params.listingId;
 
 .detail-agent-sub {
   margin-top: 4px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;
@@ -763,28 +1138,28 @@ void route.params.listingId;
 .detail-agent-time {
   display: grid;
   gap: 4px;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 7px;
-  background: rgb(var(--color-surface-2));
+  background: var(--sur-2);
   padding: 12px;
 }
 
 .detail-agent-label {
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.8px;
 }
 
 .detail-agent-value {
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.35;
 }
 
 .detail-agent-note {
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -802,10 +1177,10 @@ void route.params.listingId;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 7px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: #fff;
+  color: var(--ink);
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -821,27 +1196,74 @@ void route.params.listingId;
   height: 15px;
   flex: 0 0 auto;
   stroke: currentColor;
-  fill: none;
 }
 
 .detail-agent-contact:hover {
-  border-color: rgb(var(--color-brand-mid));
-  color: rgb(var(--color-primary));
+  border-color: var(--brand-mid);
+  color: var(--brand);
 }
 
-.detail-agent-contact--primary {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
+.detail-agent-contact.primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
 }
 
-.detail-agent-contact--primary:hover {
-  border-color: rgb(var(--color-brand-dark));
-  background: rgb(var(--color-brand-dark));
-  color: rgb(var(--color-primary-contrast));
+.detail-agent-contact.primary:hover {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+  color: #fff;
 }
 
-/* 14. 相似推薦 */
+.detail-form {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--sur-3);
+  padding-top: 12px;
+}
+
+.detail-form input,
+.detail-form select,
+.detail-form textarea {
+  width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 10px;
+  outline: none;
+}
+
+.detail-form button {
+  min-height: 38px;
+  border: 1px solid var(--brand);
+  border-radius: 6px;
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.detail-state {
+  margin: 0 0 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: 13px;
+  padding: 12px 14px;
+}
+
+.detail-state-error {
+  border-color: rgba(186, 26, 26, 0.24);
+  color: #ba1a1a;
+}
+
+/* 17. 其他樓盤推薦 */
 .similar-section {
   padding: 14px;
 }
@@ -863,33 +1285,23 @@ void route.params.listingId;
 
 .similar-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgb(var(--color-border-2));
+  background: var(--bdr-2);
 }
 
 .sim-card {
   flex: 0 0 138px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-
-.sim-card:hover {
-  border-color: rgb(var(--color-primary));
 }
 
 .sim-img {
   height: 76px;
   border-radius: 7px 7px 0 0;
-  background: rgb(var(--color-surface-2));
+  background: #f3f3f3;
 }
 
 .sim-body {
   min-width: 0;
-  padding: 8px 10px 10px;
 }
 
 .sim-name,
@@ -901,29 +1313,32 @@ void route.params.listingId;
 }
 
 .sim-name {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: rgb(var(--color-text));
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 3px;
 }
 
 .sim-price {
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgb(var(--color-primary));
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand);
 }
 
 .sim-meta {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 10px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
 }
 
-/* 15. 響應式 */
-@media (max-width: 1023px) {
+/* 18. 響應式 */
+@media (max-width: 900px) {
+  .breadcrumb {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+
   .detail-wrap {
-    padding: 16px;
+    padding: var(--sp-4);
   }
 
   .detail-layout {
@@ -943,7 +1358,12 @@ void route.params.listingId;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 560px) {
+  .breadcrumb {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
   .detail-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

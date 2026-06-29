@@ -60,6 +60,8 @@ export interface PropertySalePayload {
   multi_unit_project?: boolean;
   rental_type?: string;
   property_type: string;
+  renovation_type?: string;
+  agency_company_name?: string;
   estate_name: string;
   address_text: string;
   address_text_en?: string;
@@ -67,6 +69,8 @@ export interface PropertySalePayload {
   unit_name?: string;
   show_unit?: boolean;
   public_location_text?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   asking_price_hkd: number;
   monthly_rent_hkd?: number;
   price_reference_only?: boolean;
@@ -88,6 +92,9 @@ export interface PropertySalePayload {
   total_floors?: number;
   direction: string;
   building_age: string;
+  completion_year?: number;
+  building_total_floors?: number;
+  management_company?: string;
   kitchen_type?: string;
   cooking_mode?: string;
   management_fee_hkd?: number;
@@ -105,6 +112,8 @@ export interface PropertySalePayload {
   feature_tags: string[];
   contact_method: string;
   publisher_role_label: string;
+  view_count?: number;
+  inquiry_count?: number;
 }
 
 // 4. 定義樓盤地址聯想結果
@@ -197,6 +206,7 @@ export interface PropertyListingSummaryResponse {
   cover_image?: ListingImageResponse | null;
   property_sale?: PropertySalePayload | null;
   serviced_apartment?: ServicedApartmentPayload | null;
+  is_favorite?: boolean;
 }
 
 // 8. 定義物業詳情
@@ -244,12 +254,16 @@ export interface UpsertPropertySalePayload {
   multi_unit_project?: boolean;
   property_type: string;
   rental_type?: string;
+  renovation_type?: string;
+  agency_company_name?: string;
   estate_name: string;
   address_text: string;
   address_text_en?: string;
   block_name?: string;
   unit_name?: string;
   show_unit?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
   asking_price_hkd: number;
   monthly_rent_hkd?: number;
   price_reference_only?: boolean;
@@ -270,17 +284,51 @@ export interface UpsertPropertySalePayload {
   total_floors?: number;
   direction: string;
   building_age: string;
+  completion_year?: number;
+  building_total_floors?: number;
+  management_company?: string;
   kitchen_type?: string;
   cooking_mode?: string;
   management_fee_hkd?: number;
   video_url?: string;
   vr_url?: string;
+  private_note?: string;
   ad_package_code?: string;
   feature_tags: string[];
   contact_method: string;
   business_status?: 'available' | 'sold';
   images: PropertyImagePayload[];
   contact: PropertyContactPayload;
+}
+
+export interface PropertyActionResult {
+  listing_id: string;
+  is_favorite?: boolean;
+}
+
+export interface PropertyAppointmentPayload {
+  contact_name: string;
+  contact_phone: string;
+  preferred_time?: string;
+  message?: string;
+  appointment_type?: string;
+}
+
+export interface PropertyAppointmentResponse {
+  appointment_id: string;
+  listing_id: string;
+  status: string;
+}
+
+export interface PropertyReportPayload {
+  reason: string;
+  message?: string;
+}
+
+export interface PropertyReportResponse {
+  report_id: string;
+  listing_id: string;
+  review_status: string;
 }
 
 // 12. 定義服務式住宅儲存請求

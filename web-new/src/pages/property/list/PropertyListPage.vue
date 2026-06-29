@@ -1,21 +1,50 @@
 <!--
  * 樓盤租售列表頁。
- * 1. 三欄布局：左側篩選欄 + 中間列表區 + 右側廣告欄。
- * 2. 左側含搜尋框與 6 組篩選標籤（地區、性質、售價、面積、房間、裝修）。
- * 3. 中間含排序欄、4 個樓盤卡片（懸停顯示操作按鈕）與分頁。
- * 4. 右側含 3 個 banner 廣告與 1 個 vertical 廣告。
- * 5. 全部使用靜態 mock 資料，不呼叫 API。
+ * 1. 三欄布局：左側篩選欄 + 中間自適應列表區 + 右側廣告欄。
+ * 2. 左側含搜尋框（含自動補全下拉）與 6 組篩選標籤（地區、性質、售價、面積、房間、裝修）。
+ * 3. 中間含排序欄、後端樓盤卡片與分頁。
+ * 4. 卡片含類型堆疊、售/租標識、代理公司、呎價、位置。
+ * 5. 右側接入 3 個 16:9 短廣告與 2 個 9:16 長廣告。
+ * 6. 使用後端樓盤接口與收藏接口。
+ * 7. CSS 變量與 class 名稱嚴格對齊 HTML 設計稿。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { favoritePropertySale, fetchPropertySaleListings, unfavoritePropertySale } from '@/httpapis/properties';
+import { readStoredAccessToken } from '@/httpapis/auth-session';
+import {
+  propertyAreaRangeFilterOptions,
+  propertyBedroomFilterOptions,
+  propertyPriceRangeFilterOptions,
+  propertyPublisherFilterOptions,
+  propertyRegionFilterOptions,
+  propertyRenovationFilterOptions,
+  propertyTransactionTypeFilterOptions,
+  propertyTypeFilterOptions,
+} from '@/constants/property';
+import type { PaginationMeta } from '@/model/api';
+import type { PropertyListParams, PropertyListingSummaryResponse } from '@/model/property';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
-import PaginationBar from '@/shared/components/navigation/PaginationBar.vue';
-import AdCard from '@/shared/components/marketplace/AdCard.vue';
+import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+import {
+  resolvePropertyArea,
+  resolvePropertyCommunityName,
+  resolvePropertyCoverImage,
+  resolvePropertyDistrict,
+  resolvePropertyPrice,
+  resolvePropertyPriceText,
+  resolvePropertyRooms,
+  resolvePropertyTagLabels,
+  resolvePropertyTitle,
+  resolvePropertyTransactionType,
+  resolvePropertyTypeLabel,
+} from '@/utils/property';
 
 // 1. 路由
 const router = useRouter();
+const pageSize = 12;
 
 // 2. 搜尋關鍵字
 const keyword = ref('');
@@ -23,7 +52,34 @@ const keyword = ref('');
 // 3. 排序選項
 const sortBy = ref('latest');
 
-// 4. 篩選群組資料
+// 4. 自動補全下拉顯示
+const showAutocomplete = ref(false);
+const loading = ref(false);
+const errorMessage = ref('');
+const currentPage = ref(1);
+const items = ref<PropertyListingSummaryResponse[]>([]);
+const pagination = ref<PaginationMeta>({ page: 1, page_size: pageSize, total: 0 });
+
+// 5. 自動補全項目
+interface AutocompleteItem {
+  value: string;
+  prefix: string;
+  suffix: string;
+  icon: 'building' | 'home' | 'pin';
+}
+const autocompleteItems = computed<AutocompleteItem[]>(() =>
+  items.value.slice(0, 6).map((listing) => {
+    const value = resolvePropertyCommunityName(listing);
+    return {
+      value,
+      prefix: value.slice(0, 1),
+      suffix: value.slice(1) || resolvePropertyTitle(listing),
+      icon: listing.property_sale?.property_type === 'house' ? 'home' : 'building',
+    };
+  }),
+);
+
+// 6. 篩選群組資料
 interface FilterOption {
   label: string;
   value: string;
@@ -38,208 +94,374 @@ const filterGroups = ref<FilterGroup[]>([
   {
     key: 'region',
     title: '地區',
-    options: [
-      { label: '全港', value: 'all' },
-      { label: '香港島', value: 'hk_island' },
-      { label: '九龍', value: 'kowloon' },
-      { label: '新界', value: 'nt' },
-      { label: '離島', value: 'islands' },
-    ],
-    activeValue: 'all',
+    options: propertyRegionFilterOptions,
+    activeValue: '',
   },
   {
     key: 'transaction',
     title: '性質',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '出售', value: 'sale' },
-      { label: '出租', value: 'rent' },
-    ],
-    activeValue: 'all',
+    options: propertyTransactionTypeFilterOptions,
+    activeValue: '',
+  },
+  {
+    key: 'property_type',
+    title: '物業類型',
+    options: propertyTypeFilterOptions,
+    activeValue: '',
   },
   {
     key: 'price',
     title: '售價範圍',
-    options: [
-      { label: '不限', value: 'any' },
-      { label: '400萬以下', value: 'under_400w' },
-      { label: '400–800萬', value: '400_800w' },
-      { label: '800–1200萬', value: '800_1200w' },
-      { label: '2000萬+', value: 'over_2000w' },
-    ],
-    activeValue: 'any',
+    options: propertyPriceRangeFilterOptions,
+    activeValue: '',
   },
   {
     key: 'area',
     title: '實用面積',
-    options: [
-      { label: '不限', value: 'any' },
-      { label: '300呎以下', value: 'under_300' },
-      { label: '300–500呎', value: '300_500' },
-      { label: '500–1000呎', value: '500_1000' },
-      { label: '1000呎+', value: 'over_1000' },
-    ],
-    activeValue: 'any',
+    options: propertyAreaRangeFilterOptions,
+    activeValue: '',
   },
   {
     key: 'bedroom',
     title: '房間',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '開放式', value: 'studio' },
-      { label: '1房', value: '1' },
-      { label: '2房', value: '2' },
-      { label: '3房', value: '3' },
-      { label: '4房+', value: '4plus' },
-    ],
-    activeValue: 'all',
+    options: propertyBedroomFilterOptions,
+    activeValue: '',
   },
   {
     key: 'renovation',
     title: '裝修',
-    options: [
-      { label: '全部', value: 'all' },
-      { label: '全新', value: 'new' },
-      { label: '有裝修', value: 'renovated' },
-      { label: '簡潔', value: 'simple' },
-      { label: '特色', value: 'special' },
-    ],
-    activeValue: 'all',
+    options: propertyRenovationFilterOptions,
+    activeValue: '',
+  },
+  {
+    key: 'publisher',
+    title: '發布者',
+    options: propertyPublisherFilterOptions,
+    activeValue: '',
   },
 ]);
 
-// 5. 頂部快速篩選（多選，不互斥）
-const topFilterTypes = ref([
-  { label: '住宅', active: false },
-  { label: '車位', active: false },
-  { label: '工業', active: false },
-  { label: '商廈', active: false },
-]);
-const topFilterPublishers = ref([
-  { label: '業主', active: false },
-  { label: '代理', active: false },
-]);
-
-// 6. 樓盤卡片 mock 資料
+// 7. 樓盤卡片資料
 interface PropertyCard {
-  id: number;
+  id: string;
+  listing: PropertyListingSummaryResponse;
   typeStack: string[];
-  imageClass: 'tall' | 'short';
-  imageBg: string;
+  imageUrl?: string;
   tags: { label: string; dark?: boolean }[];
   title: string;
+  location: string;
   sub: string;
+  agent?: string;
+  priceKind: 'sale' | 'rent';
   price: string;
   priceUnit: string;
   area: string;
+  areaPrice: string;
   pills: string[];
+  favorite: boolean;
 }
-const cards = ref<PropertyCard[]>([
-  {
-    id: 1,
-    typeStack: ['住宅', '代理'],
-    imageClass: 'tall',
-    imageBg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
-    tags: [{ label: '九龍' }, { label: '住宅' }],
-    title: '佐敦 高級住宅',
-    sub: '佐敦站步行3分鐘 · 全新裝修 · 海景',
-    price: 'HK$36,000',
-    priceUnit: '/ 月',
-    area: '實用面積 200呎',
-    pills: ['全新', '基本裝修', '廚房'],
-  },
-  {
-    id: 2,
-    typeStack: ['住宅', '業主'],
-    imageClass: 'short',
-    imageBg: 'linear-gradient(160deg,#d8e0e0,#c0cccc)',
-    tags: [{ label: '九龍' }, { label: '住宅' }],
-    title: '佐敦婚 38 窗 套房',
-    sub: '佐敦站步行5分鐘 · 獨立廚房',
-    price: 'HK$6,500',
-    priceUnit: '/ 月',
-    area: '實用面積 100呎',
-    pills: [],
-  },
-  {
-    id: 3,
-    typeStack: ['商廈', '代理'],
-    imageClass: 'tall',
-    imageBg: 'linear-gradient(160deg,#e0e0e8,#c8c8d8)',
-    tags: [{ label: '香港島' }, { label: '商廈', dark: true }],
-    title: '中環甲級寫字樓',
-    sub: '中環站步行2分鐘 · 海景 · 全新裝修',
-    price: 'HK$120,000',
-    priceUnit: '/ 月',
-    area: '實用面積 2,400呎',
-    pills: ['海景', '全新裝修', '有冷氣'],
-  },
-  {
-    id: 4,
-    typeStack: ['住宅', '業主'],
-    imageClass: 'short',
-    imageBg: 'linear-gradient(160deg,#e4dcd8,#ccc0bc)',
-    tags: [{ label: '新界' }],
-    title: '沙田第一城 3房',
-    sub: '沙田站步行8分鐘 · 會所設施',
-    price: 'HK$18,500',
-    priceUnit: '/ 月',
-    area: '實用面積 650呎',
-    pills: [],
-  },
-]);
+const cards = computed<PropertyCard[]>(() => items.value.map((listing) => toPropertyCard(listing)));
 
-// 7. 分頁資料
-const paginationPages = ref([
-  { label: '上一頁', key: 'prev' },
-  { label: 1, active: true, key: 1 },
-  { label: 2, key: 2 },
-  { label: 3, key: 3 },
-  { label: '下一頁', key: 'next' },
-]);
+// 8. 分頁資料
+interface PaginationPage {
+  label: string | number;
+  active?: boolean;
+  disabled?: boolean;
+  key: string | number;
+  page: number;
+}
+const totalPages = computed(() => Math.max(1, Math.ceil(pagination.value.total / pageSize)));
+const paginationPages = computed<PaginationPage[]>(() => {
+  const pages = new Set<number>([1, currentPage.value, totalPages.value]);
+  if (currentPage.value > 1) pages.add(currentPage.value - 1);
+  if (currentPage.value < totalPages.value) pages.add(currentPage.value + 1);
+  const numericPages = [...pages].filter((page) => page >= 1 && page <= totalPages.value).sort((a, b) => a - b);
 
-// 8. 切換篩選標籤（同組互斥）
+  return [
+    { label: '上一頁', key: 'prev', page: Math.max(1, currentPage.value - 1), disabled: currentPage.value <= 1 },
+    ...numericPages.map((page) => ({ label: page, key: page, page, active: page === currentPage.value })),
+    { label: '下一頁', key: 'next', page: Math.min(totalPages.value, currentPage.value + 1), disabled: currentPage.value >= totalPages.value },
+  ];
+});
+
+const resultRangeText = computed(() => {
+  if (pagination.value.total === 0) {
+    return '暫無樓盤';
+  }
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(currentPage.value * pageSize, pagination.value.total);
+  return `第 ${start}-${end} 筆，共 ${pagination.value.total} 筆`;
+});
+
+// 9. 載入樓盤列表
+const loadListings = async (): Promise<void> => {
+  loading.value = true;
+  errorMessage.value = '';
+  try {
+    const { data } = await fetchPropertySaleListings(buildListParams());
+    items.value = data.data.items;
+    pagination.value = data.data.pagination;
+  } catch {
+    errorMessage.value = '暫時無法讀取樓盤列表。';
+    items.value = [];
+    pagination.value = { page: currentPage.value, page_size: pageSize, total: 0 };
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 10. 建立查詢參數
+const buildListParams = (): PropertyListParams => {
+  const params: PropertyListParams = {
+    page: currentPage.value,
+    page_size: pageSize,
+    keyword: keyword.value.trim() || undefined,
+    sort_by: sortBy.value as PropertyListParams['sort_by'],
+    has_media: false,
+  };
+  const region = activeValue('region');
+  const transaction = activeValue('transaction');
+  const propertyType = activeValue('property_type');
+  const price = propertyPriceRangeFilterOptions.find((item) => item.value === activeValue('price'));
+  const area = propertyAreaRangeFilterOptions.find((item) => item.value === activeValue('area'));
+  const bedroom = activeValue('bedroom');
+  const renovation = activeValue('renovation');
+  const publisher = activeValue('publisher');
+
+  if (region) params.region_code = region;
+  if (transaction === 'sale' || transaction === 'rent') params.transaction_type = transaction;
+  if (propertyType) params.property_type = propertyType;
+  if (price?.min) params.min_price_hkd = price.min;
+  if (price?.max) params.max_price_hkd = price.max;
+  if (area?.min) params.min_area_sqft = area.min;
+  if (area?.max) params.max_area_sqft = area.max;
+  if (bedroom) params.bedroom_count = Number(bedroom);
+  if (renovation) params.feature_tags = renovation;
+  if (publisher) params.publisher_identity_type = publisher;
+
+  return params;
+};
+
+// 11. 取得目前篩選值
+const activeValue = (groupKey: string): string =>
+  filterGroups.value.find((group) => group.key === groupKey)?.activeValue ?? '';
+
+// 12. 切換篩選標籤（同組互斥）
 const handleFilterToggle = (groupKey: string, optionValue: string) => {
   const group = filterGroups.value.find((g) => g.key === groupKey);
   if (group) {
     group.activeValue = optionValue;
   }
+  currentPage.value = 1;
+  void loadListings();
 };
 
-// 9. 切換頂部快速篩選（多選）
-const toggleTopFilter = (item: { active: boolean }) => {
-  item.active = !item.active;
-};
-
-// 10. 點擊卡片跳轉詳情
-const handleCardClick = (id: number) => {
+// 13. 點擊卡片跳轉詳情
+const handleCardClick = (id: string) => {
   void router.push(`/properties/${id}`);
 };
 
-// 11. 點擊分頁
-const handlePageSelect = () => {
-  // mock：不實作實際分頁邏輯
+// 14. 點擊分頁
+const handlePageSelect = (page: PaginationPage) => {
+  if (page.disabled || page.page === currentPage.value) {
+    return;
+  }
+  currentPage.value = page.page;
+  void loadListings();
 };
+
+// 15. 提交搜尋
+const submitSearch = (): void => {
+  currentPage.value = 1;
+  showAutocomplete.value = false;
+  void loadListings();
+};
+
+// 16. 切換排序
+const handleSortChange = (): void => {
+  currentPage.value = 1;
+  void loadListings();
+};
+
+// 17. 切換收藏
+const toggleFavorite = async (card: PropertyCard): Promise<void> => {
+  if (!readStoredAccessToken()) {
+    await router.push({ path: '/login', query: { redirect: '/properties' } });
+    return;
+  }
+  try {
+    if (card.favorite) {
+      await unfavoritePropertySale(card.id);
+      patchFavorite(card.id, false);
+      return;
+    }
+    await favoritePropertySale(card.id);
+    patchFavorite(card.id, true);
+  } catch {
+    errorMessage.value = '收藏操作失敗。';
+  }
+};
+
+// 18. 預約睇樓
+const openAppointment = (card: PropertyCard): void => {
+  void router.push({ path: `/properties/${card.id}`, query: { action: 'appointment' } });
+};
+
+// 19. 更新收藏狀態
+const patchFavorite = (listingId: string, isFavorite: boolean): void => {
+  items.value = items.value.map((listing) =>
+    listing.listing_id === listingId ? { ...listing, is_favorite: isFavorite } : listing,
+  );
+};
+
+// 20. 轉換卡片資料
+const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard => {
+  const sale = listing.property_sale;
+  const priceKind = resolvePropertyTransactionType(listing);
+  const area = resolvePropertyArea(listing);
+  const price = resolvePropertyPrice(listing);
+  const unitPrice = area > 0 && price > 0 ? `@${formatHKD(Math.round(price / area))}/呎` : '';
+  const cover = resolvePropertyCoverImage(listing);
+  const district = resolvePropertyDistrict(listing, 'zh-HK');
+  const community = resolvePropertyCommunityName(listing);
+  const role = listing.publisher_identity_type === 'agent' ? '代理盤' : '業主盤';
+  const typeLabel = resolvePropertyTypeLabel(listing, 'zh-HK');
+  const agent = sale?.agency_company_name?.trim() || (role === '代理盤' ? sale?.publisher_role_label || role : '業主自讓');
+
+  return {
+    id: listing.listing_id,
+    listing,
+    typeStack: [typeLabel, role],
+    imageUrl: cover?.url,
+    tags: [{ label: district }, { label: typeLabel, dark: priceKind === 'rent' }],
+    title: resolvePropertyTitle(listing),
+    location: `${district} · ${community}`,
+    sub: [
+      sale?.public_location_text,
+      resolvePropertyRooms(listing),
+      sale?.direction,
+    ].filter(Boolean).join(' · '),
+    agent,
+    priceKind,
+    price: resolvePropertyPriceText(listing, 'zh-HK'),
+    priceUnit: priceKind === 'rent' ? '/ 月' : '',
+    area: `實用面積 ${area.toLocaleString('zh-HK')}呎`,
+    areaPrice: unitPrice,
+    pills: resolvePropertyTagLabels(listing, 'zh-HK', 4),
+    favorite: Boolean(listing.is_favorite),
+  };
+};
+
+// 21. 格式化港幣
+const formatHKD = (value: number): string =>
+  `HK$${value.toLocaleString('zh-HK')}`;
+
+// 22. 顯示自動補全
+const showAC = () => {
+  showAutocomplete.value = keyword.value.length > 0;
+};
+
+// 23. 隱藏自動補全
+const hideAC = () => {
+  setTimeout(() => {
+    showAutocomplete.value = false;
+  }, 200);
+};
+
+// 24. 選擇自動補全項目
+const selectAC = (value: string) => {
+  keyword.value = value;
+  showAutocomplete.value = false;
+  submitSearch();
+};
+
+onMounted(() => {
+  void loadListings();
+});
 </script>
 
 <template>
   <div class="page">
     <div class="lp">
-      <!-- 左側篩選欄 -->
+      <!-- 1. 左側篩選欄 -->
       <aside class="lf">
+        <!-- 1.1 搜尋欄（含自動補全） -->
         <div class="sbar">
-          <input
-            v-model="keyword"
-            class="sinput"
-            placeholder="搜尋樓盤…"
-            autocomplete="off"
-          />
+          <form
+            class="autocomplete-wrap"
+            @submit.prevent="submitSearch"
+          >
+            <input
+              v-model="keyword"
+              class="sinput"
+              placeholder="搜尋樓盤…"
+              autocomplete="off"
+              @input="showAC"
+              @blur="hideAC"
+            />
+            <div
+              v-if="showAutocomplete"
+              class="autocomplete-drop"
+            >
+              <div
+                v-for="item in autocompleteItems"
+                :key="item.value"
+                class="ac-item"
+                @mousedown="selectAC(item.value)"
+              >
+                <span class="ac-icon">
+                  <svg
+                    v-if="item.icon === 'building'"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <rect x="4" y="3" width="16" height="18" rx="1" />
+                    <line x1="9" y1="7" x2="9" y2="9" />
+                    <line x1="15" y1="7" x2="15" y2="9" />
+                    <line x1="9" y1="12" x2="9" y2="14" />
+                    <line x1="15" y1="12" x2="15" y2="14" />
+                  </svg>
+                  <svg
+                    v-else-if="item.icon === 'home'"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M3 12l9-9 9 9" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M5 10v10h14V10" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <svg
+                    v-else
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                </span>
+                <span><span class="ac-highlight">{{ item.prefix }}</span>{{ item.suffix }}</span>
+              </div>
+            </div>
+          </form>
           <button
             type="button"
             class="sbtn"
+            @click="submitSearch"
           >搜</button>
         </div>
 
+        <!-- 1.2 篩選群組 -->
         <section
           v-for="group in filterGroups"
           :key="group.key"
@@ -258,39 +480,50 @@ const handlePageSelect = () => {
         </section>
       </aside>
 
-      <!-- 中間列表區 -->
+      <!-- 2. 中間列表區 -->
       <main class="lr">
+        <!-- 2.1 排序欄 -->
         <div class="sort-row listing-sort-row">
           <div class="listing-result-tools">
-            <div class="listing-top-filters">
-              <span
-                v-for="(item, idx) in topFilterTypes"
-                :key="`type-${idx}`"
-                class="ft"
-                :class="item.active ? 'on' : ''"
-                @click="toggleTopFilter(item)"
-              >{{ item.label }}</span>
-              <span class="listing-filter-divider">｜</span>
-              <span
-                v-for="(item, idx) in topFilterPublishers"
-                :key="`pub-${idx}`"
-                class="ft"
-                :class="item.active ? 'on' : ''"
-                @click="toggleTopFilter(item)"
-              >{{ item.label }}</span>
+            <div class="listing-top-filters" aria-label="樓盤快速篩選">
+              <span class="ft">住宅</span><span class="ft">車位</span><span class="ft">工業</span><span class="ft">商廈</span>
+              <span class="listing-filter-divider" aria-hidden="true">｜</span>
+              <span class="ft">業主</span><span class="ft">代理</span>
             </div>
-            <span class="rn">4 個結果</span>
+            <span class="rn">{{ loading ? '讀取中' : `${pagination.total} 個結果` }}</span>
           </div>
           <select
             v-model="sortBy"
             class="ssel"
+            @change="handleSortChange"
           >
-            <option value="latest">最新發現</option>
+            <option value="latest">最新更新</option>
             <option value="price_asc">價格低至高</option>
-            <option value="area_desc">面積大至小</option>
+            <option value="price_desc">價格高至低</option>
+            <option value="usable_area_desc">面積大至小</option>
           </select>
         </div>
 
+        <p
+          v-if="errorMessage"
+          class="listing-state listing-state-error"
+        >
+          {{ errorMessage }}
+        </p>
+        <p
+          v-else-if="loading && cards.length === 0"
+          class="listing-state"
+        >
+          正在讀取樓盤。
+        </p>
+        <p
+          v-else-if="!loading && cards.length === 0"
+          class="listing-state"
+        >
+          暫時未有符合條件的樓盤。
+        </p>
+
+        <!-- 2.2 列表視圖 -->
         <div class="list-view">
           <div class="grid">
             <div
@@ -299,17 +532,37 @@ const handlePageSelect = () => {
               class="gc"
               @click="handleCardClick(card.id)"
             >
+              <!-- 2.2.1 類型堆疊 -->
               <div class="listing-card-type-stack">
                 <span
                   v-for="(label, idx) in card.typeStack"
                   :key="idx"
                 >{{ label }}</span>
               </div>
+              <!-- 2.2.3 圖片區 -->
               <div
                 class="gi pat"
-                :class="card.imageClass"
-                :style="{ background: card.imageBg }"
-              ></div>
+              >
+                <img
+                  v-if="card.imageUrl"
+                  :src="card.imageUrl"
+                  :alt="card.title"
+                >
+                <svg
+                  v-else
+                  width="80"
+                  height="60"
+                  viewBox="0 0 80 60"
+                  opacity=".2"
+                >
+                  <rect x="5" y="15" width="70" height="40" rx="1" stroke="#000" stroke-width="1.2" fill="none" />
+                  <rect x="10" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
+                  <rect x="31" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
+                  <rect x="52" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
+                  <rect x="28" y="37" width="24" height="18" rx="1" stroke="#000" fill="none" />
+                </svg>
+              </div>
+              <!-- 2.2.4 卡片內容 -->
               <div class="gb">
                 <div class="gtags">
                   <span
@@ -320,11 +573,40 @@ const handlePageSelect = () => {
                   >{{ tag.label }}</span>
                 </div>
                 <div class="gtitle">{{ card.title }}</div>
+                <div class="g-location">{{ card.location }}</div>
                 <div class="gsub">{{ card.sub }}</div>
-                <div class="gprice">
-                  {{ card.price }} <span>{{ card.priceUnit }}</span>
+                <div
+                  v-if="card.agent"
+                  class="listing-agent"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 21V7l8-4 8 4v14"
+                      stroke-width="1.8"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M9 21v-7h6v7M8 9h.01M12 9h.01M16 9h.01"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  {{ card.agent }}
                 </div>
-                <div class="garea">{{ card.area }}</div>
+                <div class="gprice">
+                  <span
+                    class="listing-price-kind"
+                    :class="card.priceKind"
+                  >{{ card.priceKind === 'sale' ? '售' : '租' }}</span>{{ card.price }}<span v-if="card.priceUnit"> {{ card.priceUnit }}</span>
+                </div>
+                <div class="garea">
+                  {{ card.area }} <span class="garea-price">{{ card.areaPrice }}</span>
+                </div>
                 <div
                   v-if="card.pills.length > 0"
                   class="gpills"
@@ -336,17 +618,18 @@ const handlePageSelect = () => {
                   >{{ pill }}</span>
                 </div>
               </div>
+              <!-- 2.2.5 懸停操作按鈕 -->
               <div class="gc-actions">
                 <button
                   type="button"
                   class="gc-action-btn"
-                  @click.stop
-                >收藏</button>
+                  @click.stop="toggleFavorite(card)"
+                >{{ card.favorite ? '已收藏' : '收藏' }}</button>
                 <button
                   type="button"
                   class="gc-action-btn"
-                  @click.stop
-                >比較</button>
+                  @click.stop="openAppointment(card)"
+                >睇樓</button>
                 <button
                   type="button"
                   class="gc-action-btn primary"
@@ -354,51 +637,36 @@ const handlePageSelect = () => {
                 >查看</button>
               </div>
             </div>
+
           </div>
         </div>
 
-        <PaginationBar
-          info="第 1-4 筆，共 24 筆"
-          :pages="paginationPages"
-          aria-label="樓盤分頁"
-          @select="handlePageSelect"
-        />
+        <!-- 2.3 分頁 -->
+        <div
+          class="listing-pagination"
+          aria-label="樓盤租售分頁"
+        >
+          <span class="listing-pagination-info">{{ resultRangeText }}</span>
+          <div class="listing-pagination-actions">
+            <button
+              v-for="page in paginationPages"
+              :key="page.key"
+              type="button"
+              class="listing-page-btn"
+              :class="page.active ? 'on' : ''"
+              :disabled="page.disabled"
+              @click="handlePageSelect(page)"
+            >{{ page.label }}</button>
+          </div>
+        </div>
       </main>
 
-      <!-- 右側廣告欄 -->
-      <aside class="listing-ad-aside">
-        <div class="ad-side-panel">
-          <AdCard
-            variant="banner"
-            visual="office"
-            label="16:9"
-            title="新盤代理服務"
-            desc="樓盤發布、預約睇樓與租售查詢。"
-          />
-          <AdCard
-            variant="banner"
-            visual="home"
-            label="16:9"
-            title="住宅按揭諮詢"
-            desc="按揭預批、估價與成交支援。"
-          />
-          <AdCard
-            variant="banner"
-            visual="service"
-            label="16:9"
-            title="搬遷及驗樓服務"
-            desc="入住前檢查、清潔及交收安排。"
-          />
-          <div class="ad-vertical-grid">
-            <AdCard
-              variant="vertical"
-              visual="market"
-              label="9:16"
-              title="室內設計"
-              desc="住宅與商用空間方案。"
-            />
-          </div>
-        </div>
+      <!-- 3. 右側廣告欄 -->
+      <aside
+        class="listing-ad-aside"
+        aria-label="樓盤租售展示廣告"
+      >
+        <ListingSideAds channel="property_sale" />
       </aside>
     </div>
   </div>
@@ -408,71 +676,101 @@ const handlePageSelect = () => {
 /* 1. 頁面容器 */
 .page {
   width: 100%;
+  min-height: calc(100vh - var(--nav-h, 52px));
+  background: var(--sur-2);
 }
 
-/* 2. 三欄布局 */
+/* 2. 三欄布局：對齊全局頁面寬度與左右留白 */
 .lp {
   display: grid;
-  grid-template-columns: 240px minmax(0, 760px) 340px;
-  max-width: 1440px;
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  justify-content: center;
+  width: min(100%, var(--layout-page-max-width));
   margin: 0 auto;
-  background: rgb(var(--color-surface-2));
+  padding: 0 var(--layout-page-padding-inline);
+  background: var(--sur-2);
   min-height: calc(100vh - var(--nav-h, 52px));
+  align-items: stretch;
 }
 
 /* 3. 左側篩選欄 */
 .lf {
-  background: rgb(var(--color-surface));
-  border-right: 1px solid rgb(var(--color-border));
+  background: var(--sur);
+  border-right: 1px solid var(--bdr);
   padding: 18px 18px;
-  position: sticky;
-  top: var(--nav-h, 52px);
-  height: calc(100vh - var(--nav-h, 52px));
-  overflow-y: auto;
+  height: auto;
   min-height: calc(100vh - var(--nav-h, 52px));
+  overflow: visible;
+  scrollbar-width: none;
+}
+
+.lf::-webkit-scrollbar {
+  display: none;
+}
+
+/* 4. 搜尋欄（左側欄內嵌，負邊距撐滿） */
+.lf .sbar {
+  min-width: 0;
+  margin-left: -14px;
+  margin-right: -14px;
+  margin-top: -18px;
+  margin-bottom: 18px;
+  padding: 18px 0 14px;
+  background: var(--sur);
+}
+
+.lf .autocomplete-wrap,
+.lf .sinput {
+  min-width: 0;
+  width: 100%;
 }
 
 .sbar {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   margin-bottom: 14px;
 }
 
 .sinput {
   flex: 1;
-  border: 1px solid rgb(var(--color-border));
-  padding: 7px 9px;
-  font-size: 11px;
-  font-family: inherit;
+  border: 1px solid var(--bdr);
+  padding: 8px 10px;
+  font-size: var(--text-sm);
+  font-family: var(--font);
   outline: none;
   border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
 }
 
 .sinput:focus {
-  border-color: rgb(var(--color-primary));
+  border-color: var(--brand);
 }
 
 .sbtn {
-  background: rgb(var(--color-primary));
+  background: var(--brand);
   color: #fff;
   border: none;
-  padding: 7px 12px;
-  font-size: 11px;
+  padding: 8px 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
   border-radius: 2px;
-  font-family: inherit;
+  font-family: var(--font);
 }
 
+.sbtn:hover {
+  background: var(--brand-dark);
+}
+
+/* 5. 篩選群組 */
 .fs {
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-4);
 }
 
 .ft-title {
   font-size: 9px;
   letter-spacing: 2px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   text-transform: uppercase;
   margin-bottom: 6px;
 }
@@ -481,21 +779,27 @@ const handlePageSelect = () => {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
-/* 4. 中間列表區 */
+/* 6. 中間列表區 */
 .lr {
-  background: rgb(var(--color-surface-2));
+  background: var(--sur-2);
   padding: 14px 14px 36px;
   min-width: 0;
   min-height: calc(100vh - var(--nav-h, 52px));
 }
 
+/* 7. 排序欄 */
 .sort-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .listing-result-tools {
@@ -506,295 +810,119 @@ const handlePageSelect = () => {
   flex-wrap: wrap;
 }
 
-.listing-top-filters {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.listing-top-filters .ft {
-  font-size: 11px;
-  padding: 4px 9px;
-  border: 1px solid rgb(var(--color-border));
-  color: rgb(var(--color-ink-3));
-  cursor: pointer;
-  background: rgb(var(--color-surface));
-  border-radius: 2px;
-  font-family: inherit;
-}
-
-.listing-top-filters .ft:hover {
-  border-color: rgb(var(--color-primary));
-  color: rgb(var(--color-brand-dark));
-}
-
-.listing-top-filters .ft.on {
-  background: rgb(var(--color-primary));
-  color: #fff;
-  border-color: rgb(var(--color-primary));
-}
-
-.listing-filter-divider {
-  color: rgb(var(--color-ink-4));
-  font-size: 12px;
-  margin: 0 5px;
-}
-
 .rn {
-  font-size: 11px;
-  color: rgb(var(--color-ink-3));
+  font-size: var(--text-sm);
+  color: var(--ink-3);
 }
 
 .ssel {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   padding: 5px 8px;
-  font-size: 11px;
-  font-family: inherit;
+  font-size: var(--text-sm);
+  font-family: var(--font);
   outline: none;
   border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
 }
 
-/* 5. 列表卡片 */
+.listing-state {
+  margin: 0 0 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  padding: 12px 14px;
+}
+
+.listing-state-error {
+  border-color: rgba(186, 26, 26, 0.24);
+  color: #ba1a1a;
+}
+
+/* 8. 頂部快速篩選（隱藏） */
+.listing-top-filters {
+  display: none;
+}
+
+/* 9. 列表視圖 */
+.list-view {
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .list-view > .grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
 
+/* 10. 樓盤卡片 */
 .list-view .gc {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(260px, 42%) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 42%) minmax(0, 1fr);
   align-items: stretch;
-  margin-bottom: 0;
-  border-radius: 8px;
-  border: 1px solid rgb(var(--color-border));
+  min-height: 246px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
   overflow: hidden;
   cursor: pointer;
-  background: rgb(var(--color-surface));
+  background: var(--sur);
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .list-view .gc:hover {
-  box-shadow: var(--shadow-raised);
-  border-color: rgb(var(--color-brand-mid));
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-mid);
 }
 
+/* 11. 卡片圖片區 */
 .list-view .gc .gi {
   grid-column: 1;
   grid-row: 1 / span 2;
   width: 100%;
   height: auto !important;
   min-height: 0;
-  aspect-ratio: 600 / 450;
+  aspect-ratio: 600 / 360;
 }
 
-.list-view .gc .gb {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  padding: 16px 18px 12px;
-}
-
-.list-view .gc .gtitle {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.list-view .gc .gsub {
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.list-view .gc .gprice {
-  margin-top: 6px;
-  font-size: 20px;
-}
-
-.list-view .gc .gpills {
-  margin-top: 9px;
-}
-
-.list-view .gc .gc-actions {
-  grid-column: 2;
-  grid-row: 2;
+.list-view .gc .gi :deep(svg) {
+  position: relative;
+  z-index: 1;
+  width: 36%;
+  height: auto;
 }
 
 .gi {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f3f3;
+}
+
+.gi img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
 .gi.tall {
-  height: 150px;
+  min-height: 150px;
 }
 
 .gi.short {
-  height: 90px;
+  min-height: 90px;
 }
 
-.gb {
-  padding: 11px 13px;
-}
-
-.gtags {
-  display: flex;
-  gap: 5px;
-  margin-bottom: 10px;
-}
-
-.gtag {
-  font-size: 11px;
-  padding: 3px 7px;
-  letter-spacing: 0.8px;
-  color: rgb(var(--color-ink-3));
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 1px;
-}
-
-.gtag.dark {
-  background: rgb(var(--color-primary));
-  color: #fff;
-  border-color: rgb(var(--color-primary));
-  font-weight: 500;
-}
-
-.gtitle {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-  margin-bottom: 3px;
-  color: rgb(var(--color-text));
-}
-
-.gsub {
-  font-size: 12px;
-  color: rgb(var(--color-ink-3));
-  margin-bottom: 7px;
-  line-height: 1.55;
-}
-
-.gprice {
-  font-size: 20px;
-  font-weight: 300;
-  letter-spacing: -0.3px;
-  margin-top: 6px;
-  color: rgb(var(--color-text));
-}
-
-.gprice span {
-  font-size: 11px;
-  color: rgb(var(--color-ink-3));
-  font-weight: 400;
-}
-
-.garea {
-  margin-top: 6px;
-  font-size: 10px;
-  color: rgb(var(--color-ink-3));
-  line-height: 1.4;
-}
-
-.gpills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 9px;
-}
-
-.gpill {
-  font-size: 9px;
-  padding: 2px 6px;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-ink-2));
-  border-radius: 2px;
-}
-
-/* 6. 懸停操作按鈕 */
-.gc-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  height: auto;
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-2px);
-  padding: 0 12px;
-  transition: max-height 0.18s ease, opacity 0.15s ease, transform 0.15s ease, padding 0.18s ease;
-}
-
-.gc:hover .gc-actions {
-  max-height: 54px;
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-  padding: 0 18px 14px;
-}
-
-.gc-action-btn {
-  min-height: 34px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: #fff;
-  color: rgb(var(--color-ink-2));
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.gc-action-btn:hover {
-  border-color: rgb(var(--color-brand-mid));
-  color: rgb(var(--color-primary));
-}
-
-.gc-action-btn.primary {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
-  color: #fff;
-}
-
-.gc-action-btn.primary:hover {
-  background: rgb(var(--color-brand-dark));
-  color: #fff;
-}
-
-/* 7. 類型標籤堆疊 */
-.listing-card-type-stack {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  z-index: 2;
-}
-
-.listing-card-type-stack span {
-  font-size: 9px;
-  padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.92);
-  color: rgb(var(--color-ink-2));
-  border-radius: 2px;
-  letter-spacing: 0.3px;
-}
-
-/* 8. 斜紋圖案 */
+/* 12. 斜紋底圖 */
 .pat {
   position: relative;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .pat::after {
@@ -811,40 +939,393 @@ const handlePageSelect = () => {
   pointer-events: none;
 }
 
-/* 9. 右側廣告欄 */
+/* 13. 卡片內容區 */
+.list-view .gc .gb {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 28px 18px 10px;
+}
+
+.gb {
+  padding: 11px 13px;
+}
+
+/* 14. 卡片標籤 */
+.gtags {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.gtag {
+  font-size: var(--text-sm);
+  padding: 3px 7px;
+  letter-spacing: 0.8px;
+  color: var(--ink-3);
+  border: 1px solid var(--bdr);
+  border-radius: 1px;
+}
+
+.gtag.dark {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-weight: 500;
+}
+
+/* 15. 卡片標題 */
+.gtitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 3px;
+  color: var(--ink);
+}
+
+.list-view .gc .gtitle {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* 16. 位置 */
+.g-location {
+  margin: 2px 0 5px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* 17. 副標題 */
+.gsub {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  margin-bottom: 7px;
+  line-height: 1.55;
+}
+
+.list-view .gc .gsub {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+/* 18. 代理公司 */
+.listing-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.listing-agent svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* 19. 價格 */
+.gprice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  letter-spacing: 0;
+  margin-top: 6px;
+  font-size: var(--text-lg);
+  font-weight: 300;
+  color: var(--ink);
+}
+
+.list-view .gc .gprice {
+  margin-top: 6px;
+  font-size: 20px;
+}
+
+.gprice span {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+/* 20. 售/租標識 */
+.gprice .listing-price-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--brand);
+  color: #fff;
+  font-size: var(--text-base);
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(240, 90, 0, 0.22);
+}
+
+.gprice .listing-price-kind.rent {
+  background: #29B6E8;
+  box-shadow: 0 2px 6px rgba(41, 182, 232, 0.22);
+}
+
+/* 21. 面積與呎價 */
+.garea {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
+.garea .garea-price {
+  display: inline;
+  margin: 0 0 0 8px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* 22. 標籤藥丸 */
+.gpills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 9px;
+}
+
+.list-view .gc .gpills {
+  margin-top: 9px;
+}
+
+.gpill {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  border-radius: 2px;
+}
+
+/* 23. 類型堆疊標籤 */
+.listing-card-type-stack {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+}
+
+.listing-card-type-stack span {
+  display: inline-flex;
+  width: max-content;
+  max-width: 90px;
+  align-items: center;
+  border-radius: 4px;
+  background: rgba(26, 26, 26, 0.82);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 7px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.listing-card-type-stack span + span {
+  background: var(--brand);
+}
+
+/* 24. 懸停操作按鈕 */
+.gc-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  height: auto;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  padding: 0 12px;
+  transition: max-height 0.18s ease, opacity 0.15s ease, transform 0.15s ease, padding 0.18s ease;
+}
+
+.list-view .gc .gc-actions {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+}
+
+.gc:hover .gc-actions {
+  max-height: 54px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  padding: 0 12px 12px;
+}
+
+.list-view .gc:hover .gc-actions {
+  padding: 0 18px 14px;
+}
+
+.gc-action-btn {
+  min-height: 34px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.gc-action-btn:hover {
+  border-color: var(--brand-mid);
+  color: var(--brand);
+}
+
+.gc-action-btn.primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.gc-action-btn.primary:hover {
+  background: var(--brand-dark);
+  color: #fff;
+}
+
+/* 26. 自動補全下拉 */
+.autocomplete-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.autocomplete-drop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+  z-index: 20;
+  box-shadow: var(--shadow-md);
+}
+
+.ac-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.ac-item:last-child {
+  border-bottom: none;
+}
+
+.ac-item:hover {
+  background: var(--sur-2);
+}
+
+.ac-icon {
+  display: flex;
+  align-items: center;
+  color: var(--ink-3);
+}
+
+.ac-highlight {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+/* 28. 分頁 */
+.listing-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
+  background: var(--sur);
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.listing-pagination-info {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+}
+
+.listing-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.listing-page-btn {
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-3);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: var(--text-sm);
+  padding: 7px 11px;
+}
+
+.listing-page-btn.on {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.listing-page-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 29. 右側廣告欄 */
 .listing-ad-aside {
   position: sticky;
   top: var(--nav-h, 52px);
   align-self: start;
   overflow: visible;
-  border-left: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface-2));
+  border-left: 1px solid var(--bdr);
+  background: var(--sur-2);
   padding: 18px 18px 40px;
 }
 
-.ad-side-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.ad-vertical-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-/* 10. 響應式 */
-@media (max-width: 1100px) {
+/* 34. 響應式 */
+@media (max-width: 1200px) {
   .lp {
-    grid-template-columns: 210px 1fr;
-  }
-
-  .listing-ad-aside {
-    display: none;
+    grid-template-columns: 220px minmax(0, 1fr) 300px;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1100px) {
   .lp {
     grid-template-columns: 1fr;
   }
@@ -852,25 +1333,62 @@ const handlePageSelect = () => {
   .lf {
     position: static;
     height: auto;
+    padding: 14px;
+  }
+
+  .lf .sbar {
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    padding: 0 0 14px;
+  }
+
+  .listing-ad-aside {
+    position: static;
+    height: auto;
+    border-left: 0;
+    border-top: 1px solid var(--bdr);
+    padding: 14px;
+  }
+
+  .list-view,
+  .listing-pagination,
+  .sort-row {
+    max-width: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .listing-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sort-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .listing-result-tools {
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .list-view .gc {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
 
-  .list-view .gc .gi {
-    grid-row: auto;
-    aspect-ratio: 600 / 450;
-  }
-
-  .list-view .gc .gb {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
+  .list-view .gc .gi,
+  .list-view .gc .gb,
   .list-view .gc .gc-actions {
     grid-column: 1;
     grid-row: auto;
   }
+
+  .list-view .gc .gb {
+    padding: 14px;
+  }
+
 }
 </style>

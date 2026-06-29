@@ -137,12 +137,16 @@ type PropertySaleListing struct {
 	MultiUnitProject     bool           `gorm:"not null;default:false" json:"multi_unit_project"`
 	PropertyType         string         `gorm:"type:varchar(64);not null" json:"property_type"`
 	RentalType           string         `gorm:"type:varchar(64)" json:"rental_type"`
+	RenovationType       string         `gorm:"type:varchar(64);index" json:"renovation_type"`
+	AgencyCompanyName    string         `gorm:"type:varchar(200)" json:"agency_company_name"`
 	EstateName           string         `gorm:"type:varchar(200)" json:"estate_name"`
 	AddressText          string         `gorm:"type:varchar(500);not null" json:"address_text"`
 	AddressTextEn        string         `gorm:"type:varchar(500)" json:"address_text_en"`
 	BlockName            string         `gorm:"type:varchar(120)" json:"block_name"`
 	UnitName             string         `gorm:"type:varchar(80)" json:"unit_name"`
 	ShowUnit             bool           `gorm:"not null;default:true" json:"show_unit"`
+	Latitude             *float64       `gorm:"type:numeric(10,7)" json:"latitude"`
+	Longitude            *float64       `gorm:"type:numeric(10,7)" json:"longitude"`
 	AskingPriceHKD       float64        `gorm:"type:numeric(14,2);not null" json:"asking_price_hkd"`
 	MonthlyRentHKD       float64        `gorm:"type:numeric(12,2);not null;default:0" json:"monthly_rent_hkd"`
 	PriceReferenceOnly   bool           `gorm:"not null;default:false" json:"price_reference_only"`
@@ -165,6 +169,9 @@ type PropertySaleListing struct {
 	PublicLocationText   string         `gorm:"type:varchar(300)" json:"public_location_text"`
 	Direction            string         `gorm:"type:varchar(64)" json:"direction"`
 	BuildingAge          string         `gorm:"type:varchar(64)" json:"building_age"`
+	CompletionYear       int            `gorm:"not null;default:0" json:"completion_year"`
+	BuildingTotalFloors  int            `gorm:"not null;default:0" json:"building_total_floors"`
+	ManagementCompany    string         `gorm:"type:varchar(200)" json:"management_company"`
 	KitchenType          string         `gorm:"type:varchar(64)" json:"kitchen_type"`
 	CookingMode          string         `gorm:"type:varchar(64)" json:"cooking_mode"`
 	ManagementFeeHKD     float64        `gorm:"type:numeric(12,2);not null;default:0" json:"management_fee_hkd"`
@@ -182,6 +189,8 @@ type PropertySaleListing struct {
 	FeatureTags          datatypes.JSON `gorm:"type:jsonb" json:"feature_tags"`
 	ContactMethod        string         `gorm:"type:varchar(32);not null" json:"contact_method"`
 	PublisherRoleLabel   string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
+	ViewCount            int64          `gorm:"not null;default:0" json:"view_count"`
+	InquiryCount         int64          `gorm:"not null;default:0" json:"inquiry_count"`
 }
 
 // 10. PropertyAddress stores searchable building and address reference data.
@@ -240,4 +249,38 @@ type ServicedApartmentProject struct {
 	AdExpiresAt          *time.Time     `json:"ad_expires_at"`
 	ContactMethod        string         `gorm:"type:varchar(32);not null" json:"contact_method"`
 	PublisherRoleLabel   string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
+}
+
+// 12. PropertyViewingAppointment stores member viewing requests.
+type PropertyViewingAppointment struct {
+	ID              int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID        string `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	ListingID       int64  `gorm:"not null;index" json:"listing_id"`
+	RequestUserID   int64  `gorm:"not null;index" json:"request_user_id"`
+	ContactName     string `gorm:"type:varchar(120);not null" json:"contact_name"`
+	ContactPhone    string `gorm:"type:varchar(80);not null" json:"contact_phone"`
+	PreferredTime   string `gorm:"type:varchar(120)" json:"preferred_time"`
+	Message         string `gorm:"type:varchar(1000)" json:"message"`
+	AppointmentType string `gorm:"type:varchar(32);not null;default:'viewing'" json:"appointment_type"`
+	Status          string `gorm:"type:varchar(32);not null;default:'pending';index" json:"status"`
+	TimestampModel
+	Listing *Listing `gorm:"foreignKey:ListingID" json:"listing,omitempty"`
+	User    *User    `gorm:"foreignKey:RequestUserID" json:"user,omitempty"`
+}
+
+// 13. PropertyReport stores member reports for public property listings.
+type PropertyReport struct {
+	ID           int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID     string     `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	ListingID    int64      `gorm:"not null;index" json:"listing_id"`
+	ReporterID   int64      `gorm:"not null;index" json:"reporter_id"`
+	Reason       string     `gorm:"type:varchar(80);not null" json:"reason"`
+	Message      string     `gorm:"type:varchar(1000)" json:"message"`
+	ReviewStatus string     `gorm:"type:varchar(32);not null;default:'pending';index" json:"review_status"`
+	ReviewNote   string     `gorm:"type:varchar(500)" json:"review_note"`
+	ReviewedBy   *int64     `gorm:"index" json:"reviewed_by"`
+	ReviewedAt   *time.Time `json:"reviewed_at"`
+	TimestampModel
+	Listing *Listing `gorm:"foreignKey:ListingID" json:"listing,omitempty"`
+	User    *User    `gorm:"foreignKey:ReporterID" json:"user,omitempty"`
 }

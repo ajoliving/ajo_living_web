@@ -8,6 +8,8 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
+
 const router = useRouter();
 
 // 1. 面板索引類型
@@ -160,37 +162,31 @@ const chatMessages = [
   ] },
 ];
 
-// 10. 樓盤 mock 資料
-const propertyListings = [
-  { title: '佐敦 高臨 代理盤', area: '高臨', price: 'HK$0', status: '上架中', chipType: 'good' },
-  { title: '佐敦道38號 唐三樓 套房', area: 'Kowloon', price: 'HK$0', status: '草稿', chipType: '' },
-];
-
-// 11. 住宅 mock 資料
+// 10. 住宅 mock 資料
 const homeListings = [
   { name: '康睦庭園第二座 / 02 / D', identity: 'staff', status: '已綁定', chipType: 'good', updatedAt: '2026年6月5日' },
   { name: 'Harbour Residence', identity: '申請人', status: '待確認', chipType: 'warn', updatedAt: '2026年5月22日' },
 ];
 
-// 12. 家具 mock 資料
+// 11. 家具 mock 資料
 const furnitureListings = [
   { name: '北歐實木餐桌', category: '家居傢俱', price: 'HK$2,400', status: '公開', chipType: 'good' },
   { name: 'LG 洗衣機 8kg', category: '家庭電器', price: 'HK$1,800', status: '草稿', chipType: '' },
 ];
 
-// 13. 收藏 mock 資料
+// 12. 收藏 mock 資料
 const savedItems = [
   { name: '佐敦高級住宅', category: '樓盤', price: 'HK$36,000/月', savedAt: '今天 12:30' },
   { name: '纖柔牙刷 精巧頭 3支裝', category: '綜合優惠', price: 'HK$14.50', savedAt: '昨天 17:20' },
 ];
 
-// 14. 訂單 mock 資料
+// 13. 訂單 mock 資料
 const orderListings = [
   { id: 'AJO-20260605-01', type: '管理費', amount: 'HK$2,850', status: '待繳', chipType: 'warn' },
   { id: 'AJO-20260522-03', type: '樓盤發布', amount: 'HK$1,000', status: '已完成', chipType: 'good' },
 ];
 
-// 15. 退出登入
+// 14. 退出登入
 const handleLogout = () => {
   router.push('/');
 };
@@ -607,38 +603,11 @@ const handleLogout = () => {
 
         <!-- 2.6 我的樓盤 -->
         <div v-show="activePanel === 'profile-properties'" class="work-panel on">
-          <section class="work-hero">
-            <div>
-              <div class="work-kicker">Properties</div>
-              <h2 class="work-title">我的樓盤</h2>
-              <p class="work-desc">管理已發布、草稿、上架中和已下架樓盤。</p>
-            </div>
-            <button type="button" class="work-action">新增發布</button>
-          </section>
-          <section class="work-card">
-            <div class="work-toolbar">
-              <input class="work-search" placeholder="搜尋標題、屋苑、地點">
-              <button type="button" class="work-mini-btn primary">搜尋</button>
-            </div>
-            <table class="work-table">
-              <thead><tr><th>樓盤</th><th>地區</th><th>價格</th><th>狀態</th><th>操作</th></tr></thead>
-              <tbody>
-                <tr v-for="(item, idx) in propertyListings" :key="idx">
-                  <td>{{ item.title }}</td>
-                  <td>{{ item.area }}</td>
-                  <td>{{ item.price }}</td>
-                  <td><span class="work-chip" :class="item.chipType">{{ item.status }}</span></td>
-                  <td>
-                    <div class="work-table-actions">
-                      <button type="button" class="work-mini-btn">編輯</button>
-                      <button type="button" class="work-mini-btn">公開頁</button>
-                      <button v-if="item.chipType === 'good'" type="button" class="work-mini-btn">下架</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          <PropertyMyPage
+            v-if="activePanel === 'profile-properties'"
+            channel="sale"
+            base-path="/account/properties/sale"
+          />
         </div>
 
         <!-- 2.7 我的住宅 -->
