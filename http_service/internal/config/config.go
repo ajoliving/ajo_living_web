@@ -38,6 +38,9 @@ type Config struct {
 	POSLoginPasswordField       string
 	POSLoginTimeout             time.Duration
 	POSPaymentServiceURL        string
+	IsmartExternalAppBaseURL    string
+	IsmartExternalAppAPIBaseURL string
+	IsmartExternalAppTimeout    time.Duration
 	POSTerminalProxyEnabled     bool
 	POSTerminalType             string
 	POSTerminalURL              string
@@ -125,6 +128,9 @@ func Load() *Config {
 		POSLoginPasswordField:       getEnv("POS_LOGIN_PASSWORD_FIELD", "password"),
 		POSLoginTimeout:             getDurationEnv("POS_LOGIN_TIMEOUT", 10*time.Second),
 		POSPaymentServiceURL:        getEnv("POS_PAYMENT_SERVICE_URL", defaultPOSPaymentServiceURL()),
+		IsmartExternalAppBaseURL:    getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()),
+		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
+		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
 		POSTerminalProxyEnabled:     getBoolEnv("POS_TERMINAL_PROXY_ENABLED", false),
 		GoodPriceAPIBaseURL:         getEnv("GOOD_PRICE_API_BASE_URL", "https://good.price.skylinedances.com/api"),
 		GoodPriceRequestTimeout:     getDurationEnv("GOOD_PRICE_REQUEST_TIMEOUT", 10*time.Second),
@@ -474,4 +480,14 @@ func defaultPOSLoginURL(baseURL string) string {
 // 24. defaultPOSPaymentServiceURL returns the deployed POS H5 payment API base URL.
 func defaultPOSPaymentServiceURL() string {
 	return "https://easy.payment.skylinedances.com/api/payments"
+}
+
+// 25. defaultIsmartExternalAppBaseURL returns the deployed iSmart external app base URL.
+func defaultIsmartExternalAppBaseURL() string {
+	return "https://ismart.ajoliving.com"
+}
+
+// 26. defaultIsmartExternalAppAPIBaseURL returns the deployed iSmart external app API base URL.
+func defaultIsmartExternalAppAPIBaseURL() string {
+	return strings.TrimRight(getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()), "/") + "/api/v1/external"
 }

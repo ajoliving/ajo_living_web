@@ -1,13 +1,21 @@
 <!--
  * 我的大廈頁。
  * 1. 高保真還原 HTML 設計稿 page-affairs 雙欄布局（左側大廈導航 + 右側面板）。
- * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供、智能門禁、視像監控、設備監測九個面板。
- * 3. 全部使用靜態 mock 資料，不接入任何 API。
+ * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控、設備監測九個面板。
+ * 3. 意見提供面板包含最近記錄（可展開內容）、入口卡片、引導式四步提交流程。
+ * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
+import {
+  fetchMemberIsmartBuildingInfo,
+  type IsmartBuildingDocument,
+  type IsmartBuildingInfoResponse,
+} from '@/httpapis/building';
+
+// 1. 型別定義
 type AffairsTab =
   | 'affairs-notices'
   | 'affairs-building'
@@ -18,6 +26,10 @@ type AffairsTab =
   | 'affairs-access'
   | 'affairs-icctv'
   | 'affairs-equipment';
+
+type FinanceSubTab = 'acct-overview' | 'acct-finance' | 'acct-audit';
+type AffairsMode = 'repair' | 'feedback';
+type PayStatus = 'paid' | 'due';
 
 interface NavItem {
   target: AffairsTab;
@@ -48,6 +60,15 @@ interface FloorPlanRow {
   title: string;
   date: string;
   month: string;
+  url: string;
+}
+
+interface BuildingFileRow {
+  key: string;
+  title: string;
+  date: string;
+  month: string;
+  url: string;
 }
 
 interface FinanceOverRow {
@@ -56,10 +77,10 @@ interface FinanceOverRow {
   m10: string;
   m09: string;
   mBefore: string;
-  m11Status: 'paid' | 'due';
-  m10Status: 'paid' | 'due';
-  m09Status: 'paid' | 'due';
-  mBeforeStatus: 'paid' | 'due';
+  m11Status: PayStatus;
+  m10Status: PayStatus;
+  m09Status: PayStatus;
+  mBeforeStatus: PayStatus;
 }
 
 interface FinanceReportRow {
@@ -72,16 +93,15 @@ interface AuditRow {
   item: string;
 }
 
-interface FormRow {
-  title: string;
-}
-
 interface FeedbackRecord {
+  type: string;
+  building: string;
   subject: string;
   category: string;
-  status: 'processing' | 'done';
+  status: 'warn' | 'good' | '';
   statusText: string;
   updatedAt: string;
+  content: string;
 }
 
 interface EquipmentRow {
@@ -92,29 +112,44 @@ interface EquipmentRow {
   updatedAt: string;
 }
 
+// 2. 路由
 const router = useRouter();
 
-// 1. 左側導航項目
+// 3. 主面板與子面板狀態
+const activeTab = ref<AffairsTab>('affairs-feedback');
+const financeSubTab = ref<FinanceSubTab>('acct-overview');
+const buildingInfoLoading = ref(false);
+const buildingInfoError = ref('');
+const selectedBuildingID = ref('');
+const ismartBuildingProfile = ref<IsmartBuildingInfoResponse | null>(null);
+
+// 4. 意見提供引導式表單狀態
+const affairsMode = ref<AffairsMode>('repair');
+const affairsStep = ref(1);
+const expandedRecord = ref<number | null>(null);
+const selectedFeedbackBuilding = ref('協和大廈');
+const repairCategory = ref('');
+const repairSubcategory = ref('');
+const feedbackCategory = ref('');
+const feedbackSubcategory = ref('');
+const repairContent = ref('');
+const feedbackContent = ref('');
+const mediaFileName = ref('');
+
+// 5. 左側導航項目
 const navItems: NavItem[] = [
   { target: 'affairs-notices', label: '最新通告' },
   { target: 'affairs-building', label: '大廈資料' },
   { target: 'affairs-finance', label: '大廈財務' },
   { target: 'affairs-owner-account', label: '業戶帳目' },
   { target: 'affairs-forms', label: '申請表格' },
-  { target: 'affairs-feedback', label: '意見提供' },
+  { target: 'affairs-feedback', label: '意見提供/維修報修' },
   { target: 'affairs-access', label: '智能門禁' },
   { target: 'affairs-icctv', label: '視像監控' },
   { target: 'affairs-equipment', label: '設備監測' },
 ];
 
-// 2. 當前啟用面板
-const activeTab = ref<AffairsTab>('affairs-notices');
-
-// 3. 大廈財務子面板
-type FinanceSubTab = 'acct-overview' | 'acct-finance' | 'acct-audit' | 'acct-payment-records';
-const financeSubTab = ref<FinanceSubTab>('acct-overview');
-
-// 4. 最新通告 mock 資料
+// 6. 最新通告 mock 資料
 const noticeBuildings = ['仁美大廈', '康睦庭園第二座'];
 const selectedNoticeBuilding = ref('仁美大廈');
 const notices: NoticeRow[] = [
@@ -125,67 +160,97 @@ const notices: NoticeRow[] = [
     publishDate: 'Jan. 24, 2025',
     expireDate: 'Jan. 31, 2025',
   },
-  {
-    code: 'bulk/0145100_91b2451f21e950ce8d70',
-    title: '大廈外牆維修工程通知',
-    type: '工程',
-    publishDate: 'Jun. 10, 2026',
-    expireDate: 'Jul. 10, 2026',
-  },
-  {
-    code: 'bulk/0145100_92c3562f32fa61fa9e81',
-    title: '管理費季度繳款提醒',
-    type: '財務',
-    publishDate: 'Jun. 15, 2026',
-    expireDate: 'Jul. 15, 2026',
-  },
 ];
 
-// 5. 大廈資料 mock 資料
-const buildingFields: BuildingField[] = [
-  { label: '落成年份', value: '1991' },
-  { label: '樓層總數', value: '15' },
-  { label: '單位總數', value: '32' },
-  { label: '車位總數', value: '0' },
-  { label: '法團名稱', value: '時安大廈(洋松街)業主立案法團' },
-  { label: '管理處電話', value: '2393 4230' },
-  { label: '管理公司名稱', value: '顯安居物業管理股份有限公司' },
-  { label: '管理公司電話', value: '2384 2251' },
-  { label: '管理公司電郵', value: 'info@showsecurity.com.hk' },
-  { label: '管理公司傳真', value: '2384 2243' },
-  { label: '民政事務處電話', value: '油尖旺: 2399 2111' },
-  { label: '資料來源', value: 'iSmart 基本資料' },
-];
+// 7. 大廈資料
+const textValue = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined) return '-';
+  const text = String(value).trim();
+  return text || '-';
+};
 
-const buildingDocCards: BuildingDocCard[] = [
+const fileRows = (rows: IsmartBuildingDocument[] | undefined): BuildingFileRow[] =>
+  (rows ?? []).map((item, index) => ({
+    key: String(item.id ?? `${item.title ?? 'file'}-${index}`),
+    title: textValue(item.title),
+    date: textValue(item.file_date),
+    month: textValue(item.file_month),
+    url: String(item.file_url ?? '').trim(),
+  }));
+
+const normalizeMapEmbedURL = (value: string | null | undefined): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
+  const url = iframeMatch?.[1] ?? raw;
+  if (!/^https?:\/\//i.test(url)) return '';
+  if (url.includes('/maps/embed')) return url;
+  if (url.includes('google.com/maps')) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}output=embed`;
+  }
+  return '';
+};
+
+const currentBuilding = computed(() => ismartBuildingProfile.value?.building ?? {});
+const currentBuildingInfo = computed(() => ismartBuildingProfile.value?.building_info ?? {});
+const buildingName = computed(() => textValue(currentBuilding.value.buildname_chi || currentBuilding.value.buildname || selectedBuildingID.value));
+const organizationName = computed(() => textValue(currentBuildingInfo.value.owners_corporation_name));
+const buildingForms = computed(() => fileRows(ismartBuildingProfile.value?.documents?.forms));
+const buildingInfoFiles = computed(() => fileRows(ismartBuildingProfile.value?.documents?.building_info_files));
+const floorPlans = computed<FloorPlanRow[]>(() => fileRows(ismartBuildingProfile.value?.documents?.floorplan));
+const buildingMapURL = computed(() => String(currentBuildingInfo.value.google_map_url ?? '').trim());
+const buildingMapEmbedURL = computed(() => normalizeMapEmbedURL(currentBuildingInfo.value.google_map_url));
+const buildingFileCount = computed(() => buildingForms.value.length + buildingInfoFiles.value.length + floorPlans.value.length);
+const buildingStatusText = computed(() => {
+  if (buildingInfoLoading.value) return '載入中';
+  if (buildingInfoError.value) return '未能載入';
+  return ismartBuildingProfile.value ? '已有資料記錄' : '未有資料記錄';
+});
+const buildingStatusDetail = computed(() => {
+  if (buildingInfoLoading.value) return '正在讀取已綁定大廈資料';
+  if (buildingInfoError.value) return buildingInfoError.value;
+  return ismartBuildingProfile.value ? '資料由 iSmart 同步顯示' : '目前未有可顯示的大廈資料';
+});
+const buildingStatusClass = computed(() => (buildingInfoError.value ? 'warn' : 'good'));
+
+const buildingFields = computed<BuildingField[]>(() => [
+  { label: '落成年份', value: textValue(currentBuildingInfo.value.year_built) },
+  { label: '樓層總數', value: textValue(currentBuildingInfo.value.total_floor) },
+  { label: '單位總數', value: textValue(currentBuildingInfo.value.total_unit) },
+  { label: '車位總數', value: textValue(currentBuildingInfo.value.total_carpark) },
+  { label: '法團名稱', value: textValue(currentBuildingInfo.value.owners_corporation_name) },
+  { label: '管理處電話', value: textValue(currentBuildingInfo.value.management_office_phone) },
+  { label: '管理公司名稱', value: textValue(currentBuildingInfo.value.management_company_name) },
+  { label: '管理公司電話', value: textValue(currentBuildingInfo.value.management_company_phone) },
+  { label: '管理公司電郵', value: textValue(currentBuildingInfo.value.management_company_email) },
+  { label: '管理公司傳真', value: textValue(currentBuildingInfo.value.management_company_fax) },
+  { label: '民政事務處電話', value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
+  { label: '資料來源', value: ismartBuildingProfile.value ? 'iSmart 基本資料' : '-' },
+]);
+
+const buildingDocCards = computed<BuildingDocCard[]>(() => [
   {
     title: '表格',
     desc: '住戶常用或職員常用的基本表格文件。',
-    count: '0 份',
-    empty: '目前未有表格，可按右上角按鈕新增。',
+    count: `${buildingForms.value.length} 份`,
+    empty: buildingForms.value.length > 0 ? '已有可下載表格。' : '目前未有表格。',
   },
   {
     title: '大廈資訊',
     desc: '對外發佈或內部參考的大廈介紹與基本資訊附件。',
-    count: '0 份',
-    empty: '目前未有大廈資訊，可按右上角按鈕新增。',
+    count: `${buildingInfoFiles.value.length} 份`,
+    empty: buildingInfoFiles.value.length > 0 ? '已有大廈資訊文件。' : '目前未有大廈資訊。',
   },
   {
     title: '平面圖',
     desc: '平面圖、設施位置圖及相關圖則文件。',
-    count: '4 份',
-    empty: '已匯入舊系統平面圖資料。',
+    count: `${floorPlans.value.length} 份`,
+    empty: floorPlans.value.length > 0 ? '已有平面圖資料。' : '目前未有平面圖。',
   },
-];
+]);
 
-const floorPlans: FloorPlanRow[] = [
-  { title: '15TH.FL.PLAN', date: '-', month: '-' },
-  { title: '2ND-14TH,FL.PLAN', date: '-', month: '-' },
-  { title: '1ST.FLOOR PLAN', date: '-', month: '-' },
-  { title: 'GROUND FL.PLAN', date: '-', month: '-' },
-];
-
-// 6. 大廈財務 mock 資料
+// 8. 大廈財務 mock 資料（管理費總覽）
 const financeOverview: FinanceOverRow[] = [
   { unit: 'G樓 01', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
   { unit: 'G樓 02', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
@@ -199,15 +264,28 @@ const financeOverview: FinanceOverRow[] = [
   { unit: '02樓 B', m11: '-476.0', m10: '-476.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
   { unit: '02樓 E', m11: '-1427.0', m10: '-1427.0', m09: '-1427.0', mBefore: '-1427.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
   { unit: '03樓 A', m11: '-619.0', m10: '-619.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
+  { unit: '04樓 A', m11: '-1162.0', m10: '-1162.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
+  { unit: '05樓 D', m11: '-1006.0', m10: '-1006.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
+  { unit: '06樓 A', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'paid' },
   { unit: '07樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-5030.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '09樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-2012.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '10樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-6038.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '11樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-6036.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '13樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-7042.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '14樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-7042.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
   { unit: '15樓 B', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-1006.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '18樓 A', m11: '-1006.0', m10: '-1006.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
+  { unit: '20樓 B', m11: '-697.0', m10: '-697.0', m09: '-697.0', mBefore: '-3485.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
+  { unit: '21樓 C', m11: '-619.0', m10: '-619.0', m09: '-619.0', mBefore: '-16713.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
   { unit: '22樓 B', m11: '-1006.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
 ];
 
 const financeReports: FinanceReportRow[] = [
   { date: '2027-07', title: 'YIG 財務報告 2022-07' },
   { date: '2023-03', title: 'YIG 財務報告 2023-03' },
+  { date: '2023-03', title: 'YIG 財務報告 2023-03' },
   { date: '2023-02', title: 'YIG 財務報告 2023-02' },
+  { date: '2023-02', title: 'YIG 財務報告 2023-01' },
   { date: '2022-12', title: 'YIG 財務報告 2022-12' },
   { date: '2022-11', title: 'YIG 財務報告 2022-11' },
 ];
@@ -220,68 +298,231 @@ const auditReports: AuditRow[] = [
   { date: '2015', item: '仁英大廈核數報告 2015' },
 ];
 
-// 7. 申請表格 mock 資料
-const formBuildings = ['時安大廈', '康睦庭園第二座'];
-const selectedFormBuilding = ref('時安大廈');
-const forms: FormRow[] = [
-  { title: '單位裝修申請表' },
-  { title: '暫停食水、沖廁水申請表' },
-  { title: '申請增設電錶、加大配電資料記錄跟進表' },
-];
+// 9. 申請表格 mock 資料
+const selectedFormOrg = computed(() => organizationName.value);
+const selectedFormBuilding = computed(() => buildingName.value);
+const forms = computed(() => buildingForms.value);
 
-// 8. 意見提供 mock 資料
+// 10. 意見提供 mock 資料
 const feedbackBuildings = [
-  '仁英大廈', '協和大廈', '華興大廈(269號)', '華興大廈(271號)', '豐富大廈',
-  '得運大廈', '天富大廈', '新萬利大廈', '萬高大廈B座', '時安大廈',
-  '東昇樓', '華園', '榮森工業第二大廈', '康睦庭園第二座', '南昌苑',
-];
-const feedbackTitles = [
-  '門卡報失', '冷氣滴水', '噪音滋擾', '樓梯雜物', '水質問題',
-  '渠務問題', '保安事宜', '清潔衛生', '增加服務', '電力問題', '其他事宜',
-];
-const selectedFeedbackBuilding = ref('協和大廈');
-const selectedFeedbackTitle = ref('');
-const feedbackContent = ref('');
-const feedbackRecords: FeedbackRecord[] = [
-  { subject: '公共走廊照明檢查', category: '維修', status: 'processing', statusText: '處理中', updatedAt: '今天 10:20' },
-  { subject: '大堂清潔建議', category: '清潔', status: 'done', statusText: '已完成', updatedAt: '昨天 16:45' },
+  '仁英大廈', '協和大廈', '華興大廈(269號)', '華興大廈(271號)',
+  '豐富大廈', '得運大廈', '天富大廈', '新萬利大廈', '萬高大廈B座',
+  '時安大廈', '東昇樓', '華園', '榮森工業第二大廈', '康睦庭園第二座',
+  '南昌苑', '東南大樓(77號)', '東南大樓(75號)', '測試1大廈',
+  '利來大廈', '仁文大廈', '榮昇閣', '仁利大廈', '麗麗大廈',
+  '玉桂園(1座)', '玉桂園(2座)', '玉桂園(3座)', '玉桂園(4座)',
+  '玉桂園(5座)', '玉桂園(6座)', '玉桂園(7座)', '玉桂園(8座)',
+  '玉桂園(9座)', '玉桂園(10座)', '玉桂園(11座)',
 ];
 
-// 9. 設備監測 mock 資料
+const repairCategoryMap: Record<string, string[]> = {
+  '電力與燈光': ['走廊照明', '大堂照明', '電制故障', '其他燈光'],
+  '結構與門窗': ['門鎖', '窗戶', '牆身', '天花板', '其他結構'],
+  '環境與衛生': ['清潔', '積水', '蟲鼠', '其他衛生'],
+  '升降機': ['升降機故障', '升降機清潔', '其他升降機'],
+  '水務': ['食水', '沖廁水', '漏水', '其他水務'],
+  '其他維修': ['其他'],
+};
+
+const feedbackCategoryMap: Record<string, string[]> = {
+  '環境與衛生': ['清潔建議', '環境改善', '其他衛生'],
+  '公共設施': ['設施建議', '設施損壞', '其他設施'],
+  '管理服務': ['管理服務建議', '職員表現', '其他管理'],
+  '系統與平台功能': ['平台功能', '系統問題', '其他系統'],
+  '其他意見': ['其他'],
+};
+
+const repairCategories = Object.keys(repairCategoryMap);
+const feedbackCategories = Object.keys(feedbackCategoryMap);
+const repairSubcategories = computed(() => {
+  if (!repairCategory.value) return [];
+  return repairCategoryMap[repairCategory.value] || [];
+});
+const feedbackSubcategories = computed(() => {
+  if (!feedbackCategory.value) return [];
+  return feedbackCategoryMap[feedbackCategory.value] || [];
+});
+
+const feedbackRecords: FeedbackRecord[] = [
+  {
+    type: '維修報修',
+    building: '協和大廈',
+    subject: '公共走廊照明檢查',
+    category: '電力與燈光',
+    status: 'warn',
+    statusText: '處理中',
+    updatedAt: '今天 10:20',
+    content: '12樓公共走廊近升降機位置照明不穩，晚間出現閃爍，請安排檢查燈泡及電制。',
+  },
+  {
+    type: '維修報修',
+    building: '協和大廈',
+    subject: '地下門鎖檢查',
+    category: '結構與門窗',
+    status: '',
+    statusText: '待跟進',
+    updatedAt: '昨天 09:30',
+    content: '地下大門門鎖開合不順，住戶進出時需要多次嘗試，請安排師傅檢查。',
+  },
+  {
+    type: '意見反映',
+    building: '協和大廈',
+    subject: '大堂清潔建議',
+    category: '環境與衛生',
+    status: 'good',
+    statusText: '已完成',
+    updatedAt: '昨天 16:45',
+    content: '大堂入口雨天較易積水，建議加密清潔及放置防滑提示牌，管理處已完成跟進。',
+  },
+  {
+    type: '意見反映',
+    building: '時安大廈',
+    subject: '平台功能建議',
+    category: '系統與平台功能',
+    status: 'warn',
+    statusText: '處理中',
+    updatedAt: '2026年6月4日',
+    content: '希望日後可在平台查看管理處回覆進度及補充相片，方便住戶追蹤事項。',
+  },
+];
+
+// 11. 設備監測 mock 資料
 const equipmentRows: EquipmentRow[] = [
   { device: '升降機 1 號', location: '大堂', status: 'good', statusText: '正常', updatedAt: '今天 10:20' },
   { device: '水泵房', location: '地庫', status: 'warn', statusText: '需檢查', updatedAt: '今天 09:40' },
   { device: '照明系統', location: '公共走廊', status: 'good', statusText: '正常', updatedAt: '昨天 18:10' },
 ];
 
-// 10. 切換主面板
+// 12. 切換主面板
 const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
 };
 
-// 11. 切換財務子面板
+// 12.1 讀取目前會員綁定大廈資料
+const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
+  buildingInfoLoading.value = true;
+  buildingInfoError.value = '';
+  try {
+    const result = await fetchMemberIsmartBuildingInfo(buildingID || undefined);
+    ismartBuildingProfile.value = result;
+    selectedBuildingID.value = result.selected_building_id || result.building?.building_id || buildingID || '';
+  } catch (error) {
+    console.error(error);
+    buildingInfoError.value = '大廈資料載入失敗';
+  } finally {
+    buildingInfoLoading.value = false;
+  }
+};
+
+// 13. 切換財務子面板
 const switchFinanceSub = (target: FinanceSubTab) => {
   financeSubTab.value = target;
 };
 
-// 12. 提交意見回饋
-const submitFeedback = () => {
-  feedbackContent.value = '';
+// 14. 切換意見提供模式
+const setAffairsMode = (mode: AffairsMode) => {
+  affairsMode.value = mode;
+  affairsStep.value = 1;
 };
 
-// 13. 重新整理通告
+// 15. 切換意見提供步驟
+const setAffairsStep = (step: number) => {
+  if (step < 1) return;
+  if (step > 4) return;
+  affairsStep.value = step;
+};
+
+// 16. 下一步
+const nextAffairsStep = () => {
+  if (affairsStep.value < 4) {
+    affairsStep.value += 1;
+  }
+};
+
+// 17. 展開/收起最近記錄
+const toggleRecord = (index: number) => {
+  expandedRecord.value = expandedRecord.value === index ? null : index;
+};
+
+// 18. 選擇檔案
+const onMediaChange = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (!target.files || target.files.length === 0) {
+    mediaFileName.value = '';
+    return;
+  }
+  mediaFileName.value = Array.from(target.files)
+    .map((f) => f.name)
+    .join(', ');
+};
+
+// 19. 提交意見提供
+const submitAffairsFeedback = () => {
+  affairsMode.value = 'repair';
+  affairsStep.value = 1;
+  repairCategory.value = '';
+  repairSubcategory.value = '';
+  feedbackCategory.value = '';
+  feedbackSubcategory.value = '';
+  repairContent.value = '';
+  feedbackContent.value = '';
+  mediaFileName.value = '';
+};
+
+// 20. 確認提交摘要
+const reviewMode = computed(() => (affairsMode.value === 'repair' ? '維修報修' : '意見反映'));
+const reviewCategory = computed(() =>
+  affairsMode.value === 'repair'
+    ? repairCategory.value || '請選擇大類'
+    : feedbackCategory.value || '請選擇大類',
+);
+const reviewSubcategory = computed(() =>
+  affairsMode.value === 'repair'
+    ? repairSubcategory.value || '請選擇次分類'
+    : feedbackSubcategory.value || '請選擇次分類',
+);
+const reviewContent = computed(() =>
+  affairsMode.value === 'repair'
+    ? repairContent.value || '請填寫內容'
+    : feedbackContent.value || '請填寫內容',
+);
+const reviewMedia = computed(() => mediaFileName.value || '未選擇檔案');
+
+// 21. 重新整理通告
 const refreshNotices = () => {
   // 靜態 mock，無需操作
 };
 
-// 14. 跳轉至大廈詳情
-const goBuildingDetail = () => {
-  router.push('/building/detail');
+// 22. 重新載入視像監控
+const refreshIcctv = () => {
+  // 靜態 mock，無需操作
 };
+
+// 23. 開啟視像監控新窗口
+const openIcctvWindow = () => {
+  router.push('/building/icctv');
+};
+
+// 24. 重新整理設備監測
+const refreshEquipment = () => {
+  // 靜態 mock，無需操作
+};
+
+// 25. 跳轉至通告詳情
+const goNoticeDetail = () => {
+  router.push('/building/notices');
+};
+
+onMounted(() => {
+  void loadBuildingInfo();
+});
 </script>
 
 <template>
-  <div class="page-affairs">
+  <div
+    id="page-affairs"
+    class="page"
+  >
     <div class="work-shell">
       <!-- 左側大廈導航 -->
       <aside class="work-sidebar">
@@ -305,7 +546,9 @@ const goBuildingDetail = () => {
         <!-- 最新通告 -->
         <div
           v-show="activeTab === 'affairs-notices'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-notices' }"
+          data-work-panel="affairs-notices"
         >
           <section class="work-hero">
             <div>
@@ -368,6 +611,7 @@ const goBuildingDetail = () => {
                       <button
                         type="button"
                         class="notice-action-btn"
+                        @click="goNoticeDetail"
                       >
                         查閱
                       </button>
@@ -382,45 +626,54 @@ const goBuildingDetail = () => {
         <!-- 大廈資料 -->
         <div
           v-show="activeTab === 'affairs-building'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-building' }"
+          data-work-panel="affairs-building"
         >
           <section class="work-hero">
             <div>
               <div class="work-kicker">Building Profile</div>
-              <h2 class="work-title">大廈基本資料管理</h2>
-              <p class="work-desc">在此維護大廈基本欄位，並集中管理表格、大廈資訊附件及平面圖。</p>
+              <h2 class="work-title">大廈基本資料</h2>
+              <p class="work-desc">查看已綁定大廈的基本資料、常用表格、大廈資訊及平面圖。</p>
             </div>
             <button
               type="button"
               class="work-action"
+              :disabled="buildingInfoLoading"
+              @click="loadBuildingInfo()"
             >
-              儲存資料
+              重新整理
             </button>
           </section>
           <section class="building-summary-grid">
             <div class="work-card">
               <div class="work-card-title">機構</div>
-              <div class="work-card-sub">時安大廈(洋松街)業主立案法團</div>
+              <div class="work-card-sub">{{ organizationName }}</div>
             </div>
             <div class="work-card">
               <div class="work-card-title">目前大廈</div>
-              <div class="work-stat-label">時安大廈</div>
-              <div class="work-stat">4</div>
+              <div class="work-stat-label">{{ buildingName }}</div>
+              <div class="work-stat">{{ buildingFileCount }}</div>
               <div class="work-stat-label">基本資料文件</div>
             </div>
             <div class="work-card">
               <div class="work-card-title">資料狀態</div>
               <div class="work-row">
                 <div>
-                  <strong>已有資料記錄</strong>
-                  <span>可於下方同頁更新欄位與附件</span>
+                  <strong>{{ buildingStatusText }}</strong>
+                  <span>{{ buildingStatusDetail }}</span>
                 </div>
-                <span class="work-chip good">正常</span>
+                <span
+                  class="work-chip"
+                  :class="buildingStatusClass"
+                >
+                  {{ buildingInfoLoading ? '載入中' : buildingInfoError ? '異常' : '正常' }}
+                </span>
               </div>
             </div>
             <div class="work-card">
               <div class="work-card-title">大廈</div>
-              <div class="work-card-sub">時安大廈</div>
+              <div class="work-card-sub">{{ buildingName }}</div>
             </div>
           </section>
           <section class="work-card">
@@ -439,12 +692,32 @@ const goBuildingDetail = () => {
           <section class="work-card">
             <div class="work-card-title">地圖網址</div>
             <iframe
+              v-if="buildingMapEmbedURL"
               class="building-map-frame"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d14763.34557254608!2d114.1557081846111!3d22.32202646614546!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x340400b7741874d5%3A0x92522a6b0453ab64!2z5aSn6KeS5ZKA5rSL5p2-6KGXNDbomZ_mmYLlronlpKflu4g!5e0!3m2!1szh-TW!2shk!4v1664891445389!5m2!1szh-TW!2shk"
+              :src="buildingMapEmbedURL"
               allowfullscreen
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"
             />
+            <div
+              v-else-if="buildingMapURL"
+              class="building-map-fallback"
+            >
+              <a
+                class="building-link"
+                :href="buildingMapURL"
+                target="_blank"
+                rel="noopener"
+              >
+                查看地圖
+              </a>
+            </div>
+            <div
+              v-else
+              class="building-empty-row"
+            >
+              未提供地圖網址。
+            </div>
           </section>
           <section class="work-card">
             <div class="work-card-title">基本文件區</div>
@@ -464,28 +737,45 @@ const goBuildingDetail = () => {
           <section class="work-card">
             <div class="building-section-head">
               <div class="work-card-title">表格</div>
-              <button
-                type="button"
-                class="work-mini-btn primary"
-              >
-                新增
-              </button>
             </div>
-            <table class="work-table">
+            <table class="work-table building-file-table">
+              <colgroup>
+                <col class="building-file-title-col">
+                <col class="building-file-date-col">
+                <col class="building-file-month-col">
+                <col class="building-file-action-col">
+              </colgroup>
               <thead>
                 <tr>
                   <th>標題</th>
                   <th>日期</th>
                   <th>月份</th>
                   <th>下載</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr
+                  v-for="file in buildingForms"
+                  :key="file.key"
+                >
+                  <td class="building-file-title-cell">{{ file.title }}</td>
+                  <td class="building-file-meta-cell">{{ file.date }}</td>
+                  <td class="building-file-meta-cell">{{ file.month }}</td>
+                  <td class="building-file-action-cell">
+                    <a
+                      v-if="file.url"
+                      class="building-link"
+                      :href="file.url"
+                      target="_blank"
+                      rel="noopener"
+                    >查看</a>
+                    <span v-else>-</span>
+                  </td>
+                </tr>
+                <tr v-if="buildingForms.length === 0">
                   <td
                     class="building-empty-row"
-                    colspan="5"
+                    colspan="4"
                   >
                     目前未有表格。
                   </td>
@@ -496,28 +786,45 @@ const goBuildingDetail = () => {
           <section class="work-card">
             <div class="building-section-head">
               <div class="work-card-title">大廈資訊</div>
-              <button
-                type="button"
-                class="work-mini-btn primary"
-              >
-                新增
-              </button>
             </div>
-            <table class="work-table">
+            <table class="work-table building-file-table">
+              <colgroup>
+                <col class="building-file-title-col">
+                <col class="building-file-date-col">
+                <col class="building-file-month-col">
+                <col class="building-file-action-col">
+              </colgroup>
               <thead>
                 <tr>
                   <th>標題</th>
                   <th>日期</th>
                   <th>月份</th>
                   <th>下載</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr
+                  v-for="file in buildingInfoFiles"
+                  :key="file.key"
+                >
+                  <td class="building-file-title-cell">{{ file.title }}</td>
+                  <td class="building-file-meta-cell">{{ file.date }}</td>
+                  <td class="building-file-meta-cell">{{ file.month }}</td>
+                  <td class="building-file-action-cell">
+                    <a
+                      v-if="file.url"
+                      class="building-link"
+                      :href="file.url"
+                      target="_blank"
+                      rel="noopener"
+                    >查看</a>
+                    <span v-else>-</span>
+                  </td>
+                </tr>
+                <tr v-if="buildingInfoFiles.length === 0">
                   <td
                     class="building-empty-row"
-                    colspan="5"
+                    colspan="4"
                   >
                     目前未有大廈資訊。
                   </td>
@@ -528,21 +835,20 @@ const goBuildingDetail = () => {
           <section class="work-card">
             <div class="building-section-head">
               <div class="work-card-title">平面圖</div>
-              <button
-                type="button"
-                class="work-mini-btn primary"
-              >
-                新增
-              </button>
             </div>
-            <table class="work-table">
+            <table class="work-table building-file-table">
+              <colgroup>
+                <col class="building-file-title-col">
+                <col class="building-file-date-col">
+                <col class="building-file-month-col">
+                <col class="building-file-action-col">
+              </colgroup>
               <thead>
                 <tr>
                   <th>標題</th>
                   <th>日期</th>
                   <th>月份</th>
                   <th>下載</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -550,23 +856,26 @@ const goBuildingDetail = () => {
                   v-for="p in floorPlans"
                   :key="p.title"
                 >
-                  <td>{{ p.title }}</td>
-                  <td>{{ p.date }}</td>
-                  <td>{{ p.month }}</td>
-                  <td>
+                  <td class="building-file-title-cell">{{ p.title }}</td>
+                  <td class="building-file-meta-cell">{{ p.date }}</td>
+                  <td class="building-file-meta-cell">{{ p.month }}</td>
+                  <td class="building-file-action-cell">
                     <a
+                      v-if="p.url"
                       class="building-link"
-                      href="#"
-                      @click.prevent="goBuildingDetail"
+                      :href="p.url"
+                      target="_blank"
+                      rel="noopener"
                     >查看</a>
+                    <span v-else>-</span>
                   </td>
-                  <td>
-                    <button
-                      type="button"
-                      class="work-mini-btn"
-                    >
-                      更新
-                    </button>
+                </tr>
+                <tr v-if="floorPlans.length === 0">
+                  <td
+                    class="building-empty-row"
+                    colspan="4"
+                  >
+                    目前未有平面圖。
                   </td>
                 </tr>
               </tbody>
@@ -577,13 +886,15 @@ const goBuildingDetail = () => {
         <!-- 大廈財務 -->
         <div
           v-show="activeTab === 'affairs-finance'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-finance' }"
+          data-work-panel="affairs-finance"
         >
           <section class="work-hero">
             <div>
               <div class="work-kicker">Building Finance</div>
               <h2 class="work-title">大廈財務</h2>
-              <p class="work-desc">按大廈查看管理費、財務報表、核數報告及繳款記錄。</p>
+              <p class="work-desc">按大廈查看管理費、財務報表及核數報告。</p>
             </div>
           </section>
           <section class="work-card acct-card-wrap">
@@ -612,20 +923,13 @@ const goBuildingDetail = () => {
               >
                 核數報告
               </button>
-              <button
-                type="button"
-                class="acct-tab"
-                :class="{ on: financeSubTab === 'acct-payment-records' }"
-                @click="switchFinanceSub('acct-payment-records')"
-              >
-                管理費繳款記錄
-              </button>
             </div>
             <div class="acct-body">
               <!-- 管理費總覽 -->
               <div
                 v-show="financeSubTab === 'acct-overview'"
-                class="acct-subpanel on"
+                class="acct-subpanel"
+                :class="{ on: financeSubTab === 'acct-overview' }"
               >
                 <div class="acct-note">選用「電子付款」繳交管理費住戶，於3小時內即可結算，其他支付方式由於核對需時未能即時更新，敬請見諒。</div>
                 <div class="acct-toolbar">
@@ -672,7 +976,8 @@ const goBuildingDetail = () => {
               <!-- 財務報表 -->
               <div
                 v-show="financeSubTab === 'acct-finance'"
-                class="acct-subpanel on"
+                class="acct-subpanel"
+                :class="{ on: financeSubTab === 'acct-finance' }"
               >
                 <div class="acct-toolbar">
                   <div class="work-card-title acct-toolbar-title">法團財務報表</div>
@@ -713,7 +1018,8 @@ const goBuildingDetail = () => {
               <!-- 核數報告 -->
               <div
                 v-show="financeSubTab === 'acct-audit'"
-                class="acct-subpanel on"
+                class="acct-subpanel"
+                :class="{ on: financeSubTab === 'acct-audit' }"
               >
                 <div class="acct-toolbar">
                   <div class="work-card-title acct-toolbar-title">核數報告</div>
@@ -751,13 +1057,6 @@ const goBuildingDetail = () => {
                   </table>
                 </div>
               </div>
-              <!-- 管理費繳款記錄 -->
-              <div
-                v-show="financeSubTab === 'acct-payment-records'"
-                class="acct-subpanel on"
-              >
-                <div class="acct-dev">正在開發</div>
-              </div>
             </div>
           </section>
         </div>
@@ -765,22 +1064,40 @@ const goBuildingDetail = () => {
         <!-- 業戶帳目 -->
         <div
           v-show="activeTab === 'affairs-owner-account'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-owner-account' }"
+          data-work-panel="affairs-owner-account"
         >
           <section class="work-hero">
             <div>
               <div class="work-kicker">Owner Account</div>
               <h2 class="work-title">業戶帳目</h2>
-              <p class="work-desc">業戶帳目資料將於後續版本提供。</p>
+              <p class="work-desc">查看業戶管理費繳款記錄。</p>
             </div>
           </section>
-          <div class="acct-dev">正在開發</div>
+          <section class="work-card acct-card-wrap">
+            <div class="acct-tabs">
+              <button
+                type="button"
+                class="acct-tab on"
+              >
+                管理費繳款記錄
+              </button>
+            </div>
+            <div class="acct-body">
+              <div class="acct-subpanel on">
+                <div class="acct-dev">正在開發</div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <!-- 申請表格 -->
         <div
           v-show="activeTab === 'affairs-forms'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-forms' }"
+          data-work-panel="affairs-forms"
         >
           <section class="work-hero">
             <div>
@@ -792,38 +1109,16 @@ const goBuildingDetail = () => {
           <section class="notice-admin-grid">
             <div class="notice-admin-card">
               <h3>機構</h3>
-              <label class="notice-admin-label">選擇機構:</label>
-              <select class="notice-select">
-                <option>時安大廈(洋松街)業主立案法團</option>
-              </select>
+              <div class="notice-admin-label">目前機構</div>
+              <div class="notice-select building-readonly-select">{{ selectedFormOrg }}</div>
             </div>
             <div class="notice-admin-card">
               <h3>大廈</h3>
-              <label class="notice-admin-label">選擇大廈:</label>
-              <select
-                v-model="selectedFormBuilding"
-                class="notice-select"
-              >
-                <option
-                  v-for="b in formBuildings"
-                  :key="b"
-                  :value="b"
-                >
-                  {{ b }}
-                </option>
-              </select>
+              <div class="notice-admin-label">目前大廈</div>
+              <div class="notice-select building-readonly-select">{{ selectedFormBuilding }}</div>
             </div>
           </section>
           <section class="work-card">
-            <div class="building-section-head">
-              <div class="work-card-title">表格下載</div>
-              <button
-                type="button"
-                class="work-mini-btn primary"
-              >
-                新增表格
-              </button>
-            </div>
             <table class="work-table">
               <thead>
                 <tr>
@@ -834,15 +1129,26 @@ const goBuildingDetail = () => {
               <tbody>
                 <tr
                   v-for="f in forms"
-                  :key="f.title"
+                  :key="f.key"
                 >
                   <td>{{ f.title }}</td>
                   <td>
                     <a
+                      v-if="f.url"
                       class="building-link"
-                      href="#"
-                      @click.prevent
+                      :href="f.url"
+                      target="_blank"
+                      rel="noopener"
                     >填寫表格</a>
+                    <span v-else>-</span>
+                  </td>
+                </tr>
+                <tr v-if="forms.length === 0">
+                  <td
+                    class="building-empty-row"
+                    colspan="2"
+                  >
+                    目前未有申請表格。
                   </td>
                 </tr>
               </tbody>
@@ -850,23 +1156,151 @@ const goBuildingDetail = () => {
           </section>
         </div>
 
-        <!-- 意見提供 -->
+        <!-- 意見提供/維修報修 -->
         <div
           v-show="activeTab === 'affairs-feedback'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-feedback' }"
+          data-work-panel="affairs-feedback"
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Feedback</div>
-              <h2 class="work-title">意見提供</h2>
-              <p class="work-desc">選擇大廈、事項標題並填寫內容，提交後由管理處跟進。</p>
+              <div class="work-kicker">Feedback & Maintenance</div>
+              <h2 class="work-title">意見提供/維修報修</h2>
+              <p class="work-desc">選擇大廈及事項分類，提交後由管理處跟進。</p>
             </div>
           </section>
+          <section class="work-card">
+            <div class="work-card-title">最近記錄</div>
+            <table class="work-table">
+              <thead>
+                <tr>
+                  <th>類型</th>
+                  <th>大廈</th>
+                  <th>事項</th>
+                  <th>分類</th>
+                  <th>狀態</th>
+                  <th>更新時間</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+              <template
+                v-for="(r, i) in feedbackRecords"
+                :key="i"
+              >
+                <tr>
+                  <td>{{ r.type }}</td>
+                  <td>{{ r.building }}</td>
+                  <td>{{ r.subject }}</td>
+                  <td>{{ r.category }}</td>
+                  <td>
+                    <span
+                      class="work-chip"
+                      :class="r.status"
+                    >{{ r.statusText }}</span>
+                  </td>
+                  <td>{{ r.updatedAt }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      class="work-mini-btn"
+                      @click="toggleRecord(i)"
+                    >
+                      查看內容
+                    </button>
+                  </td>
+                </tr>
+                <tr
+                  v-show="expandedRecord === i"
+                  class="affairs-record-detail"
+                >
+                  <td colspan="7">
+                    <div class="affairs-record-card">
+                      <strong>內容</strong>
+                      {{ r.content }}
+                    </div>
+                  </td>
+                </tr>
+              </template>
+              </tbody>
+            </table>
+          </section>
+          <section
+            class="affairs-entry-grid"
+            aria-label="意見提供與維修報修入口"
+          >
+            <button
+              type="button"
+              class="affairs-entry-card"
+              :class="{ on: affairsMode === 'repair' }"
+              @click="setAffairsMode('repair')"
+            >
+              <span
+                class="affairs-entry-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="m14.7 6.3 3-3a4 4 0 0 1 2.7 5.1l-4.7 4.7-4.8 4.8-3.3 3.3a2 2 0 0 1-2.8-2.8l3.3-3.3 4.8-4.8 4.7-4.7"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="m8.1 15.1 2.8 2.8"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>
+                <strong>提交維修報修</strong>
+                <span>提交水務、電力、門窗、升降機及設施維修事項。</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="affairs-entry-card"
+              :class="{ on: affairsMode === 'feedback' }"
+              @click="setAffairsMode('feedback')"
+            >
+              <span
+                class="affairs-entry-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.8-.9L3 20l1.1-4.6a8.4 8.4 0 1 1 16.9-3.9Z"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M8 10h8M8 13h5"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>
+                <strong>意見反映</strong>
+                <span>提交環境、管理服務、公共設施及平台功能意見。</span>
+              </span>
+            </button>
+          </section>
           <section class="work-card affairs-feedback-form">
+            <div class="work-card-title">選擇大廈</div>
             <div class="affairs-field">
-              <label for="affairs-feedback-building">大廈</label>
+              <label for="affairs-building">大廈</label>
               <select
-                id="affairs-feedback-building"
+                id="affairs-building"
                 v-model="selectedFeedbackBuilding"
                 class="affairs-select"
               >
@@ -880,77 +1314,270 @@ const goBuildingDetail = () => {
                 </option>
               </select>
             </div>
-            <div class="affairs-field">
-              <label for="affairs-feedback-title">標題</label>
-              <select
-                id="affairs-feedback-title"
-                v-model="selectedFeedbackTitle"
-                class="affairs-select"
+          </section>
+          <section class="work-card affairs-guided-shell">
+            <div
+              class="affairs-stepper"
+              aria-label="意見及維修提交流程"
+            >
+              <span
+                class="affairs-step-indicator"
+                :class="{ on: affairsStep === 1 }"
               >
-                <option value="">---------</option>
-                <option
-                  v-for="t in feedbackTitles"
-                  :key="t"
-                  :value="t"
+                <b>1</b>選擇分類
+              </span>
+              <span
+                class="affairs-step-indicator"
+                :class="{ on: affairsStep === 2 }"
+              >
+                <b>2</b>填寫內容
+              </span>
+              <span
+                class="affairs-step-indicator"
+                :class="{ on: affairsStep === 3 }"
+              >
+                <b>3</b>上載圖片/影片
+              </span>
+              <span
+                class="affairs-step-indicator"
+                :class="{ on: affairsStep === 4 }"
+              >
+                <b>4</b>確認提交
+              </span>
+            </div>
+
+            <!-- 步驟 1：選擇分類 -->
+            <div
+              v-show="affairsStep === 1"
+              class="affairs-guided-step"
+            >
+              <div class="work-card-title">選擇分類</div>
+              <div
+                v-if="affairsMode === 'repair'"
+                class="affairs-step-hint"
+              >
+                請選擇維修大類及次分類，方便管理處安排合適人員跟進。
+              </div>
+              <div
+                v-else
+                class="affairs-step-hint"
+              >
+                請選擇意見大類及次分類，方便管理處按事項性質處理。
+              </div>
+              <div
+                v-if="affairsMode === 'repair'"
+                class="affairs-field-grid"
+              >
+                <div class="affairs-field">
+                  <label for="affairs-repair-category">維修大類</label>
+                  <select
+                    id="affairs-repair-category"
+                    v-model="repairCategory"
+                    class="affairs-select"
+                  >
+                    <option value="">---------</option>
+                    <option
+                      v-for="c in repairCategories"
+                      :key="c"
+                      :value="c"
+                    >
+                      {{ c }}
+                    </option>
+                  </select>
+                </div>
+                <div class="affairs-field">
+                  <label for="affairs-repair-subcategory">維修次分類</label>
+                  <select
+                    id="affairs-repair-subcategory"
+                    v-model="repairSubcategory"
+                    class="affairs-select"
+                  >
+                    <option value="">---------</option>
+                    <option
+                      v-for="s in repairSubcategories"
+                      :key="s"
+                      :value="s"
+                    >
+                      {{ s }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <div
+                v-else
+                class="affairs-field-grid"
+              >
+                <div class="affairs-field">
+                  <label for="affairs-feedback-category">意見大類</label>
+                  <select
+                    id="affairs-feedback-category"
+                    v-model="feedbackCategory"
+                    class="affairs-select"
+                  >
+                    <option value="">---------</option>
+                    <option
+                      v-for="c in feedbackCategories"
+                      :key="c"
+                      :value="c"
+                    >
+                      {{ c }}
+                    </option>
+                  </select>
+                </div>
+                <div class="affairs-field">
+                  <label for="affairs-feedback-subcategory">意見次分類</label>
+                  <select
+                    id="affairs-feedback-subcategory"
+                    v-model="feedbackSubcategory"
+                    class="affairs-select"
+                  >
+                    <option value="">---------</option>
+                    <option
+                      v-for="s in feedbackSubcategories"
+                      :key="s"
+                      :value="s"
+                    >
+                      {{ s }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 步驟 2：填寫內容 -->
+            <div
+              v-show="affairsStep === 2"
+              class="affairs-guided-step"
+            >
+              <div class="work-card-title">填寫內容</div>
+              <div
+                v-if="affairsMode === 'repair'"
+                class="affairs-field"
+              >
+                <label for="affairs-repair-content">內容</label>
+                <textarea
+                  id="affairs-repair-content"
+                  v-model="repairContent"
+                  class="affairs-textarea"
+                  placeholder="請描述維修位置、故障情況及需要跟進的內容"
+                />
+              </div>
+              <div
+                v-else
+                class="affairs-field"
+              >
+                <label for="affairs-feedback-content">內容</label>
+                <textarea
+                  id="affairs-feedback-content"
+                  v-model="feedbackContent"
+                  class="affairs-textarea"
+                  placeholder="請描述事項位置、情況及需要跟進的內容"
+                />
+              </div>
+            </div>
+
+            <!-- 步驟 3：上載圖片/影片 -->
+            <div
+              v-show="affairsStep === 3"
+              class="affairs-guided-step"
+            >
+              <div class="work-card-title">上載圖片/影片</div>
+              <div class="affairs-step-hint">
+                如有相關相片或影片，可一併提交予管理處參考。
+              </div>
+              <div class="affairs-upload-box">
+                <strong>提交圖片/影片</strong>
+                <span>支援選擇多個圖片或影片檔案，實際上載限制可按後台設定調整。</span>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  @change="onMediaChange"
                 >
-                  {{ t }}
-                </option>
-              </select>
+              </div>
             </div>
-            <div class="affairs-field">
-              <label for="affairs-feedback-content">內容</label>
-              <textarea
-                id="affairs-feedback-content"
-                v-model="feedbackContent"
-                class="affairs-textarea"
-              />
+
+            <!-- 步驟 4：確認提交 -->
+            <div
+              v-show="affairsStep === 4"
+              class="affairs-guided-step"
+            >
+              <div class="work-card-title">確認提交</div>
+              <div
+                v-if="affairsMode === 'repair'"
+                class="affairs-step-hint"
+              >
+                請確認資料無誤。提交後由管理處安排跟進。
+              </div>
+              <div
+                v-else
+                class="affairs-step-hint"
+              >
+                閣下提供之意見將絕對保密。
+              </div>
+              <div class="affairs-review-list">
+                <div class="affairs-review-row">
+                  <span>類型</span>
+                  <strong>{{ reviewMode }}</strong>
+                </div>
+                <div class="affairs-review-row">
+                  <span>大廈</span>
+                  <strong>{{ selectedFeedbackBuilding || '---------' }}</strong>
+                </div>
+                <div class="affairs-review-row">
+                  <span>大類</span>
+                  <strong>{{ reviewCategory }}</strong>
+                </div>
+                <div class="affairs-review-row">
+                  <span>次分類</span>
+                  <strong>{{ reviewSubcategory }}</strong>
+                </div>
+                <div class="affairs-review-row">
+                  <span>內容</span>
+                  <strong>{{ reviewContent }}</strong>
+                </div>
+                <div class="affairs-review-row">
+                  <span>附件</span>
+                  <strong>{{ reviewMedia }}</strong>
+                </div>
+              </div>
             </div>
-            <div class="affairs-submit-row">
+
+            <div class="affairs-guided-actions">
               <button
                 type="button"
+                class="work-action secondary"
+                :disabled="affairsStep === 1"
+                @click="setAffairsStep(affairsStep - 1)"
+              >
+                上一步
+              </button>
+              <button
+                v-if="affairsStep < 4"
+                type="button"
                 class="work-action"
-                @click="submitFeedback"
+                @click="nextAffairsStep"
+              >
+                下一步
+              </button>
+              <button
+                v-else
+                type="button"
+                class="work-action"
+                @click="submitAffairsFeedback"
               >
                 提交
               </button>
-              <span class="work-card-sub">閣下提供之意見將絕對保密。</span>
             </div>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">最近記錄</div>
-            <table class="work-table">
-              <thead>
-                <tr>
-                  <th>事項</th>
-                  <th>分類</th>
-                  <th>狀態</th>
-                  <th>更新時間</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(r, i) in feedbackRecords"
-                  :key="i"
-                >
-                  <td>{{ r.subject }}</td>
-                  <td>{{ r.category }}</td>
-                  <td>
-                    <span
-                      class="work-chip"
-                      :class="r.status === 'processing' ? 'warn' : 'good'"
-                    >{{ r.statusText }}</span>
-                  </td>
-                  <td>{{ r.updatedAt }}</td>
-                </tr>
-              </tbody>
-            </table>
           </section>
         </div>
 
         <!-- 智能門禁 -->
         <div
           v-show="activeTab === 'affairs-access'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-access' }"
+          data-work-panel="affairs-access"
         >
           <section class="work-hero">
             <div>
@@ -968,7 +1595,9 @@ const goBuildingDetail = () => {
         <!-- 視像監控 -->
         <div
           v-show="activeTab === 'affairs-icctv'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-icctv' }"
+          data-work-panel="affairs-icctv"
         >
           <section class="work-hero">
             <div>
@@ -979,28 +1608,27 @@ const goBuildingDetail = () => {
             <button
               type="button"
               class="work-action"
+              @click="openIcctvWindow"
             >
               新窗口
             </button>
           </section>
           <section class="work-card icctv-panel-wide">
             <div class="icctv-building-select">
-              <select class="staff-select">
-                <option>請選擇大廈</option>
-              </select>
+              <select class="staff-select" />
               <button
                 type="button"
                 class="work-mini-btn"
+                @click="refreshIcctv"
               >
                 重新載入
               </button>
             </div>
+            <div class="icctv-summary" />
             <div class="icctv-layout">
               <div>
-                <div class="icctv-building-meta">尚未選擇大廈</div>
-                <div class="icctv-camera-list">
-                  <div class="icctv-empty-camera">尚未提供鏡頭</div>
-                </div>
+                <div class="icctv-building-meta" />
+                <div class="icctv-camera-list" />
                 <p class="icctv-note">來源頁如限制嵌入，可使用新窗口開啟。</p>
               </div>
               <div>
@@ -1010,12 +1638,17 @@ const goBuildingDetail = () => {
                     <button
                       type="button"
                       class="work-mini-btn"
+                      @click="openIcctvWindow"
                     >
                       新窗口
                     </button>
                   </div>
                 </div>
                 <div class="icctv-viewer">
+                  <iframe
+                    title="ICCTV 即時監控"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  />
                   <div class="icctv-empty">
                     <strong>未選擇鏡頭</strong>
                     <span>選擇大廈與鏡頭後，監控畫面會顯示在此處。</span>
@@ -1029,7 +1662,9 @@ const goBuildingDetail = () => {
         <!-- 設備監測 -->
         <div
           v-show="activeTab === 'affairs-equipment'"
-          class="work-panel on"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-equipment' }"
+          data-work-panel="affairs-equipment"
         >
           <section class="work-hero">
             <div>
@@ -1040,6 +1675,7 @@ const goBuildingDetail = () => {
             <button
               type="button"
               class="work-action secondary"
+              @click="refreshEquipment"
             >
               重新整理
             </button>
@@ -1080,37 +1716,37 @@ const goBuildingDetail = () => {
 </template>
 
 <style scoped>
-/* Layout shell */
-.page-affairs {
+/* 1. 頁面容器與雙欄布局 */
+#page-affairs {
   min-height: calc(100vh - var(--nav-h, 52px));
-  background: rgb(var(--color-surface-2));
+  background: var(--sur-2);
 }
 
 .work-shell {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 16px;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   margin: 0 auto;
-  padding: 12px 16px 16px;
-  color: rgb(var(--color-text));
+  padding: 12px 24px 16px;
+  color: var(--ink);
 }
 
-/* Sidebar */
+/* 2. 左側大廈導航 */
 .work-sidebar {
   position: sticky;
-  top: calc(var(--nav-h, 52px) + 12px);
+  top: 72px;
   align-self: start;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: rgb(var(--color-surface));
+  background: var(--sur);
   padding: 16px;
 }
 
 .work-sidebar h1 {
   margin: 0;
-  color: rgb(var(--color-primary));
-  font-family: var(--font-display);
+  color: var(--accent);
+  font-family: var(--font-serif);
   font-size: 26px;
   font-weight: 400;
   line-height: 1.2;
@@ -1131,7 +1767,7 @@ const goBuildingDetail = () => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: rgb(var(--color-ink-2));
+  color: var(--ink-2);
   cursor: pointer;
   font-family: inherit;
   font-size: 13px;
@@ -1148,38 +1784,42 @@ const goBuildingDetail = () => {
   right: 0;
   bottom: 0;
   height: 2px;
-  background: rgb(var(--color-primary));
+  background: var(--brand);
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 0.24s ease;
 }
 
 .work-nav-item:hover {
-  background: rgb(var(--color-primary-soft));
-  color: rgb(var(--color-text));
+  background: var(--brand-light);
+  color: var(--ink);
 }
 
 .work-nav-item.on {
   background: transparent;
-  color: rgb(var(--color-primary));
+  color: var(--brand);
   font-weight: 700;
   outline: none;
 }
 
 .work-nav-item.on:hover {
-  background: rgb(var(--color-primary-soft));
+  background: var(--brand-light);
 }
 
 .work-nav-item.on::after {
   transform: scaleX(1);
 }
 
-/* Main area */
+/* 3. 右側主內容 */
 .work-main {
   display: grid;
   gap: 12px;
   min-width: 0;
   align-content: start;
+}
+
+.work-panel {
+  display: none;
 }
 
 .work-panel.on {
@@ -1188,14 +1828,14 @@ const goBuildingDetail = () => {
   align-content: start;
 }
 
-/* Hero */
+/* 4. Hero 區 */
 .work-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
   border: 0;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--bdr);
   border-radius: 0;
   background: transparent;
   margin: 0;
@@ -1204,7 +1844,7 @@ const goBuildingDetail = () => {
 
 .work-kicker {
   margin-bottom: 4px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 9px;
   letter-spacing: 1.4px;
   text-transform: uppercase;
@@ -1212,7 +1852,7 @@ const goBuildingDetail = () => {
 
 .work-title {
   margin: 0;
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 20px;
   font-weight: 600;
   line-height: 1.25;
@@ -1221,7 +1861,7 @@ const goBuildingDetail = () => {
 .work-desc {
   max-width: 560px;
   margin: 5px 0 0;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1229,7 +1869,7 @@ const goBuildingDetail = () => {
 .work-action {
   border: 0;
   border-radius: 6px;
-  background: rgb(var(--color-primary));
+  background: var(--brand);
   color: #fff;
   cursor: pointer;
   font-family: inherit;
@@ -1240,34 +1880,39 @@ const goBuildingDetail = () => {
 }
 
 .work-action.secondary {
-  border: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  border: 1px solid var(--bdr);
+  background: var(--sur);
+  color: var(--ink);
 }
 
-/* Card */
+.work-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 5. Card */
 .work-card {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: rgb(var(--color-surface));
+  background: var(--sur);
   padding: 16px;
 }
 
 .work-card-title {
   margin-bottom: 10px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
 .work-card-sub {
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.7;
 }
 
 .work-stat {
-  color: rgb(var(--color-primary));
+  color: var(--brand);
   font-size: 24px;
   font-weight: 700;
   line-height: 1.1;
@@ -1275,7 +1920,7 @@ const goBuildingDetail = () => {
 
 .work-stat-label {
   margin-top: 6px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
 }
 
@@ -1284,7 +1929,7 @@ const goBuildingDetail = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid rgb(var(--color-surface-3));
+  border-top: 1px solid var(--sur-3);
   padding: 12px 0;
 }
 
@@ -1299,7 +1944,7 @@ const goBuildingDetail = () => {
 
 .work-row strong {
   display: block;
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1307,18 +1952,18 @@ const goBuildingDetail = () => {
 .work-row span {
   display: block;
   margin-top: 3px;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.5;
 }
 
-/* Chip */
+/* 6. Chip */
 .work-chip {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-ink-2));
+  background: var(--sur-2);
+  color: var(--ink-2);
   font-size: 11px;
   font-weight: 600;
   padding: 5px 9px;
@@ -1326,21 +1971,21 @@ const goBuildingDetail = () => {
 }
 
 .work-chip.good {
-  background: rgb(var(--color-success-bg));
-  color: rgb(var(--color-success));
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .work-chip.warn {
-  background: rgb(var(--color-warning-bg));
-  color: rgb(var(--color-warning));
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .work-chip.brand {
-  background: rgb(var(--color-primary-soft));
-  color: rgb(var(--color-primary));
+  background: var(--brand-light);
+  color: var(--accent);
 }
 
-/* Table */
+/* 7. Table */
 .work-table {
   width: 100%;
   border-collapse: collapse;
@@ -1348,34 +1993,34 @@ const goBuildingDetail = () => {
 }
 
 .work-table th {
-  border-bottom: 1px solid rgb(var(--color-border));
-  color: rgb(var(--color-ink-3));
+  border-bottom: 1px solid var(--bdr);
+  color: var(--ink-3);
   font-weight: 500;
   padding: 10px;
   text-align: left;
 }
 
 .work-table td {
-  border-bottom: 1px solid rgb(var(--color-surface-3));
+  border-bottom: 1px solid var(--sur-3);
   padding: 12px 10px;
-  color: rgb(var(--color-ink-2));
+  color: var(--ink-2);
 }
 
 .work-table tr:last-child td {
   border-bottom: 0;
 }
 
-.work-table-actions {
+.notice-table-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .work-mini-btn {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1384,49 +2029,59 @@ const goBuildingDetail = () => {
 }
 
 .work-mini-btn.primary {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary));
+  border-color: var(--brand);
+  background: var(--brand);
   color: #fff;
 }
 
-/* Notice admin */
+/* 8. Notice admin */
 .notice-admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .notice-admin-card {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: rgb(var(--color-surface));
-  padding: 14px 16px;
+  background: var(--sur);
+  padding: 14px;
 }
 
 .notice-admin-card h3 {
-  margin: 0 0 8px;
-  color: rgb(var(--color-text));
-  font-size: 13px;
-  font-weight: 600;
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .notice-admin-label {
   display: block;
   margin-bottom: 6px;
-  color: rgb(var(--color-ink-3));
-  font-size: 12px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .notice-select {
   width: 100%;
-  height: 34px;
-  border: 1px solid rgb(var(--color-border));
+  height: 36px;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 700;
   padding: 0 10px;
+}
+
+.building-readonly-select {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notice-current {
@@ -1434,82 +2089,107 @@ const goBuildingDetail = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
-  color: rgb(var(--color-ink-3));
+  margin-bottom: 10px;
+  color: var(--ink-3);
   font-size: 12px;
+  font-weight: 700;
 }
 
 .notice-action-btn {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-ink-2));
+  background: var(--sur);
+  color: var(--ink);
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 6px 10px;
 }
 
 .notice-action-btn:hover {
-  border-color: rgb(var(--color-brand-mid));
-  color: rgb(var(--color-primary));
+  border-color: var(--brand-mid);
+  color: var(--brand);
 }
 
 .notice-table {
-  table-layout: auto;
+  min-width: 780px;
 }
 
-/* Building profile */
+.notice-table td:first-child {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#page-affairs [data-work-panel="affairs-notices"] .work-card {
+  overflow: auto;
+}
+
+/* 9. Building profile */
 .building-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
 .building-field-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  overflow: hidden;
 }
 
 .building-field {
   display: grid;
-  gap: 4px;
-  border-top: 1px solid rgb(var(--color-surface-3));
-  padding: 10px 0;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  border-right: 1px solid var(--sur-3);
+  border-bottom: 1px solid var(--sur-3);
+  padding: 13px 14px;
 }
 
-.building-field span {
-  color: rgb(var(--color-ink-3));
+.building-field:nth-child(2n) {
+  border-right: 0;
+}
+
+.building-field span:first-child {
+  color: var(--ink-3);
   font-size: 12px;
+  font-weight: 700;
 }
 
 .building-field strong {
-  color: rgb(var(--color-text));
+  color: var(--ink);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.5;
   word-break: break-word;
 }
 
 .building-map-frame {
+  display: block;
   width: 100%;
-  height: 280px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface-2));
+  height: 260px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sur-2);
 }
 
 .building-doc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
 .building-doc-card {
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface-2));
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
   padding: 14px;
 }
 
@@ -1519,14 +2199,15 @@ const goBuildingDetail = () => {
 
 .building-doc-count {
   margin-top: 10px;
-  color: rgb(var(--color-primary));
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--brand);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .building-doc-empty {
-  margin-top: 6px;
-  color: rgb(var(--color-ink-3));
+  margin-top: 10px;
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1536,23 +2217,60 @@ const goBuildingDetail = () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .building-section-head .work-card-title {
   margin: 0;
 }
 
-.building-empty-row {
+.building-file-table {
+  table-layout: fixed;
+}
+
+.building-file-title-col {
+  width: auto;
+}
+
+.building-file-date-col,
+.building-file-month-col {
+  width: 128px;
+}
+
+.building-file-action-col {
+  width: 96px;
+}
+
+.building-file-table th:nth-child(2),
+.building-file-table th:nth-child(3),
+.building-file-meta-cell {
   text-align: center;
-  color: rgb(var(--color-ink-3));
-  padding: 24px 10px;
+}
+
+.building-file-table th:nth-child(4),
+.building-file-action-cell {
+  text-align: center;
+}
+
+.building-file-title-cell {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.building-file-action-cell {
+  white-space: nowrap;
+}
+
+.building-empty-row {
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .building-link {
-  color: rgb(var(--color-primary));
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--brand);
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -1560,45 +2278,45 @@ const goBuildingDetail = () => {
   text-decoration: underline;
 }
 
-/* Accounting */
+/* 10. Accounting */
 .acct-card-wrap {
   padding: 0;
   overflow: hidden;
 }
 
+/* 1. 帳目 tab 列 */
 .acct-tabs {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 0;
-  border-bottom: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface-2));
+  border-bottom: 1px solid var(--bdr);
+  background: #fff;
 }
 
 .acct-tab {
   border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: rgb(var(--color-ink-3));
+  border-right: 1px solid var(--bdr);
+  background: #fff;
+  color: var(--brand);
   cursor: pointer;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
-  padding: 12px 16px;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.acct-tab:hover {
-  color: rgb(var(--color-text));
+  font-weight: 800;
+  padding: 13px 22px;
 }
 
 .acct-tab.on {
-  color: rgb(var(--color-primary));
-  border-bottom-color: rgb(var(--color-primary));
-  font-weight: 600;
+  background: var(--sur);
+  color: var(--ink);
+  box-shadow: inset 0 3px 0 var(--brand);
 }
 
 .acct-body {
   padding: 16px;
+}
+
+.acct-subpanel {
+  display: none;
 }
 
 .acct-subpanel.on {
@@ -1606,14 +2324,17 @@ const goBuildingDetail = () => {
   gap: 12px;
 }
 
+/* 2. 帳目提示框 */
 .acct-note {
-  border: 1px solid rgb(var(--color-warning-bg));
+  border: 1px solid var(--bdr);
+  border-left: 3px solid var(--brand);
   border-radius: 6px;
-  background: rgb(var(--color-warning-bg));
-  color: rgb(var(--color-warning));
+  background: #fff;
+  color: var(--ink-2);
   font-size: 12px;
-  line-height: 1.6;
-  padding: 10px 12px;
+  font-weight: 600;
+  line-height: 1.7;
+  padding: 12px 14px;
 }
 
 .acct-toolbar {
@@ -1627,194 +2348,398 @@ const goBuildingDetail = () => {
   margin: 0;
 }
 
+/* 3. 帳目搜尋框 */
 .acct-search {
-  width: 220px;
-  max-width: 40%;
-  height: 32px;
-  border: 1px solid rgb(var(--color-border));
+  max-width: 320px;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: #fff;
+  color: var(--ink);
   font-family: inherit;
-  font-size: 12px;
-  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 12px;
 }
 
+/* 4. 帳目表格 */
 .acct-table-wrap {
   overflow: auto;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .acct-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .acct-table th {
-  border-bottom: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-ink-3));
-  font-weight: 600;
-  padding: 10px;
+  position: sticky;
+  top: 0;
+  background: #C7EAF0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 11px 12px;
   text-align: left;
-  white-space: nowrap;
+  z-index: 1;
 }
 
 .acct-table td {
-  border-bottom: 1px solid rgb(var(--color-surface-3));
-  color: rgb(var(--color-ink-2));
-  padding: 10px;
+  border-top: 1px solid var(--sur-3);
+  color: var(--ink-2);
+  font-weight: 700;
+  padding: 10px 12px;
   white-space: nowrap;
 }
 
-.acct-table tr:last-child td {
-  border-bottom: 0;
+.acct-table tr:nth-child(even) td {
+  background: #FAFAFA;
 }
 
+/* 5. 帳目狀態色 */
 .acct-paid {
-  color: rgb(var(--color-success));
-  font-weight: 600;
+  color: var(--success);
 }
 
 .acct-due {
-  color: rgb(var(--color-danger));
-  font-weight: 600;
+  color: var(--error);
 }
 
+/* 6. 帳目下載按鈕 */
 .acct-download {
-  border: 1px solid rgb(var(--color-border));
+  border: 0;
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-ink-2));
+  background: #18BFE0;
+  color: #041016;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
-  padding: 5px 10px;
+  font-weight: 900;
+  padding: 7px 12px;
 }
 
+/* 7. 開發中佔位 */
 .acct-dev {
-  border: 1px dashed rgb(var(--color-border-2));
+  display: flex;
+  min-height: 280px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--bdr-2);
   border-radius: 8px;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-ink-3));
-  font-size: 13px;
-  text-align: center;
-  padding: 32px 16px;
+  background: #fff;
+  color: var(--ink-3);
+  font-size: 16px;
+  font-weight: 800;
 }
 
-/* Feedback form */
+/* 11. 意見提供入口卡片 */
+.affairs-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.affairs-entry-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 16px;
+  text-align: left;
+}
+
+.affairs-entry-card:hover,
+.affairs-entry-card.on {
+  border-color: var(--brand);
+  background: var(--brand-light);
+}
+
+.affairs-entry-icon {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--sur-2);
+  color: var(--brand);
+}
+
+.affairs-entry-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+}
+
+.affairs-entry-card > span:last-child strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.affairs-entry-card > span:last-child span {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 12. 意見提供引導式表單 */
 .affairs-feedback-form {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .affairs-field {
   display: grid;
-  gap: 6px;
+  gap: 7px;
+  max-width: 560px;
 }
 
 .affairs-field label {
-  color: rgb(var(--color-ink-3));
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.affairs-select {
+.affairs-select,
+.affairs-textarea {
   width: 100%;
-  height: 36px;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: #fff;
+  color: var(--ink);
   font-family: inherit;
   font-size: 13px;
-  padding: 0 10px;
+  padding: 10px 12px;
 }
 
 .affairs-textarea {
-  width: 100%;
-  min-height: 120px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 10px 12px;
+  min-height: 160px;
   resize: vertical;
+  line-height: 1.6;
 }
 
-.affairs-submit-row {
+.affairs-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.affairs-guided-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.affairs-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.affairs-step-indicator {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 7px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur-2);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 10px;
 }
 
-/* ICCTV */
-.icctv-panel-wide {
+.affairs-step-indicator b {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.affairs-step-indicator.on {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.affairs-step-indicator.on b {
+  background: var(--brand);
+  color: #fff;
+}
+
+.affairs-guided-step {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  min-height: 220px;
+}
+
+.affairs-step-hint {
+  border-left: 3px solid var(--brand);
+  background: var(--brand-light);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 10px 12px;
+}
+
+.affairs-guided-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--sur-3);
+  padding-top: 12px;
+}
+
+.affairs-review-list {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.affairs-review-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+  border-bottom: 1px solid var(--sur-3);
+  padding-bottom: 8px;
+  color: var(--ink-2);
+}
+
+.affairs-review-row span:first-child {
+  color: var(--ink-3);
+  font-weight: 700;
+}
+
+.affairs-upload-box {
+  display: grid;
+  gap: 10px;
+  border: 1px dashed var(--bdr-2);
+  border-radius: 8px;
+  background: var(--sur-2);
+  padding: 16px;
+}
+
+.affairs-upload-box strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.affairs-upload-box span {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.affairs-upload-box input {
+  width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 9px;
+}
+
+.affairs-record-card {
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur-2);
+  padding: 12px 14px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.affairs-record-card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* 13. ICCTV */
+.icctv-panel-wide {
+  grid-column: 1 / -1;
 }
 
 .icctv-building-select {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .staff-select {
-  min-width: 200px;
-  height: 34px;
-  border: 1px solid rgb(var(--color-border));
+  height: 36px;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  background: var(--sur);
+  color: var(--ink);
   font-family: inherit;
-  font-size: 12px;
-  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.icctv-building-select .staff-select {
+  flex: 1;
+}
+
+.icctv-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .icctv-layout {
   display: grid;
-  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.icctv-layout > div {
+  width: 100%;
+  min-width: 0;
 }
 
 .icctv-building-meta {
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-ink-3));
-  font-size: 12px;
-  padding: 10px 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--bdr);
+  padding-top: 12px;
 }
 
 .icctv-camera-list {
-  margin-top: 8px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  min-height: 120px;
-  padding: 10px;
-}
-
-.icctv-empty-camera {
-  color: rgb(var(--color-ink-3));
-  font-size: 12px;
-  text-align: center;
-  padding: 32px 0;
+  display: block;
+  width: 100%;
+  margin-top: 12px;
 }
 
 .icctv-note {
-  margin: 8px 0 0;
-  color: rgb(var(--color-ink-3));
-  font-size: 11px;
+  margin-top: 12px;
+  color: var(--ink-3);
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -1822,50 +2747,67 @@ const goBuildingDetail = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border: 1px solid rgb(var(--color-border));
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
-  background: rgb(var(--color-surface-2));
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 12px 0 0;
 }
 
 .icctv-viewer-meta {
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
   font-size: 12px;
+  font-weight: 700;
 }
 
 .icctv-viewer-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .icctv-viewer {
   position: relative;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 0 0 6px 6px;
-  background: rgb(var(--color-surface-3));
-  min-height: 260px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 520px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #111827;
+  overflow: hidden;
+}
+
+.icctv-viewer iframe {
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: 0;
+  background: #111827;
 }
 
 .icctv-empty {
-  display: grid;
-  gap: 6px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  background: linear-gradient(160deg, rgba(17, 24, 39, 0.88), rgba(17, 24, 39, 0.65));
+  color: #E5E7EB;
   text-align: center;
-  color: rgb(var(--color-ink-3));
-  font-size: 12px;
+  padding: 20px;
 }
 
 .icctv-empty strong {
-  color: rgb(var(--color-ink-2));
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 800;
 }
 
-/* Responsive */
+.icctv-empty span {
+  font-size: 13px;
+  color: #94A3B8;
+  font-weight: 600;
+  max-width: 280px;
+  line-height: 1.6;
+}
+
+/* 14. 響應式設計 */
 @media (max-width: 1023px) {
   .work-shell {
     grid-template-columns: 1fr;
@@ -1880,8 +2822,33 @@ const goBuildingDetail = () => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .affairs-entry-grid,
+  .affairs-field-grid,
+  .affairs-stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .building-summary-grid,
+  .building-doc-grid,
+  .building-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .building-field {
+    grid-template-columns: 1fr;
+    border-right: 0;
+  }
+
   .icctv-layout {
     grid-template-columns: 1fr;
+  }
+
+  .acct-tabs {
+    overflow: auto;
+  }
+
+  .acct-tab {
+    white-space: nowrap;
   }
 }
 
@@ -1900,13 +2867,11 @@ const goBuildingDetail = () => {
     flex-direction: column;
   }
 
-  .work-title {
-    font-size: 18px;
+  .icctv-camera-list,
+  .icctv-summary {
+    grid-template-columns: 1fr;
   }
 
-  .building-summary-grid,
-  .building-field-grid,
-  .building-doc-grid,
   .notice-admin-grid {
     grid-template-columns: 1fr;
   }
@@ -1921,12 +2886,12 @@ const goBuildingDetail = () => {
     align-items: stretch;
   }
 
-  .affairs-submit-row {
-    flex-direction: column;
+  .affairs-guided-actions {
+    flex-direction: column-reverse;
     align-items: stretch;
   }
 
-  .affairs-submit-row .work-action {
+  .affairs-guided-actions .work-action {
     width: 100%;
   }
 }

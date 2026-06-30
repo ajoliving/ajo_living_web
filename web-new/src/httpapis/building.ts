@@ -1,7 +1,8 @@
 /*
- * POS 樓宇 API。
+ * 大廈與 POS 樓宇 API。
  * 1. 讀取 POS relay 樓宇清單。
  * 2. 依大廈讀取可選單位清單。
+ * 3. 讀取目前會員已綁定的 iSmart 大廈資料。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
@@ -9,6 +10,64 @@ import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 
 interface ApiListData<T> {
   items: T[];
+}
+
+export interface IsmartBuildingOptionResponse {
+  building_options: string[];
+  is_staff?: boolean;
+}
+
+export interface IsmartBuildingSummary {
+  building_id?: string;
+  buildname_chi?: string;
+  buildname?: string;
+  building_type?: string;
+  area?: string;
+  district?: string;
+  street?: string;
+  street_no?: string;
+  court?: string;
+  block?: string;
+}
+
+export interface IsmartBuildingInfo {
+  year_built?: number | string | null;
+  total_floor?: number | string | null;
+  total_unit?: number | string | null;
+  total_carpark?: number | string | null;
+  google_map_url?: string | null;
+  owners_corporation_name?: string | null;
+  management_office_phone?: string | null;
+  management_company_name?: string | null;
+  management_company_phone?: string | null;
+  management_company_email?: string | null;
+  management_company_fax?: string | null;
+  home_affairs_department_phone?: string | null;
+}
+
+export interface IsmartBuildingDocument {
+  id?: number | string;
+  title?: string;
+  type?: string;
+  file_url?: string;
+  file_date?: string | null;
+  file_month?: string | null;
+  created_date?: string | null;
+}
+
+export interface IsmartBuildingDocuments {
+  forms?: IsmartBuildingDocument[];
+  building_info_files?: IsmartBuildingDocument[];
+  floorplan?: IsmartBuildingDocument[];
+  auditreport?: IsmartBuildingDocument[];
+  mfinreport?: IsmartBuildingDocument[];
+}
+
+export interface IsmartBuildingInfoResponse extends IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  building?: IsmartBuildingSummary;
+  building_info?: IsmartBuildingInfo;
+  documents?: IsmartBuildingDocuments;
 }
 
 // 1. 取得 POS 樓宇清單
@@ -33,4 +92,17 @@ export const fetchMemberPosBuildings = async (): Promise<PosBuilding[]> => {
 export const fetchMemberPosBuildingUnits = async (buildingID: string): Promise<PosBuildingUnit[]> => {
   const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuildingUnit>>>(`/me/pos/buildings/${encodeURIComponent(buildingID)}/units`);
   return data.data.items;
+};
+
+// 5. 取得目前會員 iSmart 綁定大廈
+export const fetchMemberIsmartBuildings = async (): Promise<IsmartBuildingOptionResponse> => {
+  const { data } = await httpClient.get<ApiResponse<IsmartBuildingOptionResponse>>('/me/ismart/buildings');
+  return data.data;
+};
+
+// 6. 取得目前會員 iSmart 大廈資料
+export const fetchMemberIsmartBuildingInfo = async (buildingID?: string): Promise<IsmartBuildingInfoResponse> => {
+  const params = buildingID ? { building_id: buildingID } : undefined;
+  const { data } = await httpClient.get<ApiResponse<IsmartBuildingInfoResponse>>('/me/ismart/building-info', { params });
+  return data.data;
 };

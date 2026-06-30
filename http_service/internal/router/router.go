@@ -28,6 +28,7 @@ type Dependencies struct {
 	HomeContentService      *service.HomeContentService
 	POSBuildingService      *service.POSBuildingService
 	POSPaymentService       *service.POSPaymentService
+	IsmartExternalService   *service.IsmartExternalService
 	WalletService           *service.WalletService
 	SecondhandService       *service.SecondhandService
 	PropertyService         *service.PropertyService
@@ -58,6 +59,7 @@ func New(deps *Dependencies) *gin.Engine {
 	homeContentHandler := handler.NewHomeContentHandler(deps.HomeContentService)
 	posBuildingHandler := handler.NewPOSBuildingHandler(deps.POSBuildingService, deps.POSPaymentService)
 	posPaymentHandler := handler.NewPOSPaymentHandler(deps.POSPaymentService)
+	ismartHandler := handler.NewIsmartExternalHandler(deps.IsmartExternalService)
 	walletHandler := handler.NewWalletHandler(deps.WalletService)
 	staffWalletHandler := handler.NewStaffWalletHandler(deps.WalletService)
 	secondhandHandler := handler.NewSecondhandHandler(deps.SecondhandService)
@@ -74,6 +76,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerAuthRoutes(api, authHandler, requireAuth, limiter)
 	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth)
 	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireAuth)
+	registerIsmartRoutes(api, ismartHandler, requireAuth)
 	registerWalletRoutes(api, walletHandler, requireAuth)
 	registerUploadRoutes(api, uploadHandler, requireAuth)
 	registerSecondhandRoutes(api, secondhandHandler, requireAuth)

@@ -76,6 +76,7 @@ func main() {
 	homeContentService := service.NewHomeContentService(runtime)
 	posBuildingService := service.NewPOSBuildingService(runtime)
 	posPaymentService := service.NewPOSPaymentService(runtime)
+	ismartExternalService := service.NewIsmartExternalService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
 	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
@@ -110,6 +111,7 @@ func main() {
 		HomeContentService:      homeContentService,
 		POSBuildingService:      posBuildingService,
 		POSPaymentService:       posPaymentService,
+		IsmartExternalService:   ismartExternalService,
 		WalletService:           walletService,
 		SecondhandService:       secondhandService,
 		PropertyService:         propertyService,
