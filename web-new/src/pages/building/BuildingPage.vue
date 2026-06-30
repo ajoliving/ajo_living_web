@@ -9,10 +9,18 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
+import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import {
+  fetchMemberIsmartBuildingAccess,
   fetchMemberIsmartBuildingInfo,
+  generateMemberIsmartDoorQRCode,
+  openMemberIsmartDoor,
+  type IsmartAccessDoor,
+  type IsmartAccessRecord,
   type IsmartBuildingDocument,
+  type IsmartBuildingAccessResponse,
   type IsmartBuildingInfoResponse,
+  type IsmartRecentAccessGroup,
 } from '@/httpapis/building';
 
 // 1. 型別定義
@@ -112,6 +120,23 @@ interface EquipmentRow {
   updatedAt: string;
 }
 
+interface AccessQRPanel {
+  doorID: string;
+  doorTitle: string;
+  value: string;
+  expiresAt: string;
+  term: string;
+}
+
+interface AccessRecordRow {
+  key: string;
+  doorTitle: string;
+  openTime: string;
+  openType: string;
+  status: 'good' | 'warn';
+  statusText: string;
+}
+
 // 2. 路由
 const router = useRouter();
 
@@ -122,6 +147,14 @@ const buildingInfoLoading = ref(false);
 const buildingInfoError = ref('');
 const selectedBuildingID = ref('');
 const ismartBuildingProfile = ref<IsmartBuildingInfoResponse | null>(null);
+const accessLoading = ref(false);
+const accessError = ref('');
+const accessMessage = ref('');
+const ismartAccessProfile = ref<IsmartBuildingAccessResponse | null>(null);
+const visiblePasswordDoorIDs = ref<string[]>([]);
+const openingDoorID = ref('');
+const qrLoadingDoorID = ref('');
+const accessQRPanel = ref<AccessQRPanel | null>(null);
 
 // 4. 意見提供引導式表單狀態
 const affairsMode = ref<AffairsMode>('repair');
@@ -249,6 +282,68 @@ const buildingDocCards = computed<BuildingDocCard[]>(() => [
     empty: floorPlans.value.length > 0 ? '已有平面圖資料。' : '目前未有平面圖。',
   },
 ]);
+
+// 7.1 智能門禁資料
+const accessBuildingName = computed(() => textValue(
+  ismartAccessProfile.value?.building?.buildname_chi
+  || ismartAccessProfile.value?.building?.buildname
+  || buildingName.value,
+));
+const accessDoors = computed<IsmartAccessDoor[]>(() => ismartAccessProfile.value?.doors ?? []);
+const accessRecordGroups = computed<IsmartRecentAccessGroup[]>(() => ismartAccessProfile.value?.recent_records ?? []);
+const accessAllowedDoorCount = computed(() => accessDoors.value.filter((door) => door.has_permission).length);
+const accessQRCodeDoorCount = computed(() => accessDoors.value.filter((door) => door.is_qrcode_enabled && door.qrcode?.record_id).length);
+const accessStatusText = computed(() => {
+  if (accessLoading.value) return '載入中';
+  if (accessError.value) return '未能載入';
+  return ismartAccessProfile.value ? '已連接' : '未載入';
+});
+const accessStatusClass = computed(() => (accessError.value ? 'warn' : 'good'));
+
+// 7.2 取得門禁顯示值
+const accessDoorID = (door: IsmartAccessDoor): string => String(door.door_id ?? '').trim();
+const accessDoorNumber = (door: IsmartAccessDoor): number => Number(door.door_id ?? 0);
+const accessQRCodeRecordNumber = (door: IsmartAccessDoor): number => Number(door.qrcode?.record_id ?? 0);
+const accessDoorTitle = (door: IsmartAccessDoor): string => {
+  const doorID = accessDoorID(door);
+  return textValue(door.title || (doorID ? `門禁 ${doorID}` : '未命名門禁'));
+};
+const accessDoorPasswordVisible = (door: IsmartAccessDoor): boolean => visiblePasswordDoorIDs.value.includes(accessDoorID(door));
+const accessDoorPasswordText = (door: IsmartAccessDoor): string => {
+  if (!door.password?.value) return '-';
+  return accessDoorPasswordVisible(door) ? door.password.value : '******';
+};
+const accessTimeRange = (start: string | undefined, end: string | undefined): string => {
+  const startText = textValue(start);
+  const endText = textValue(end);
+  if (startText === '-' && endText === '-') return '-';
+  return `${startText} 至 ${endText}`;
+};
+const accessOpenTypeText = (value: string | undefined): string => {
+  const text = String(value ?? '').trim();
+  if (text === 'remote') return '遠端開門';
+  if (text === 'qrcode') return '二維碼';
+  return text || '-';
+};
+const accessRecordSuccess = (record: IsmartAccessRecord): boolean => {
+  const value = record.is_success;
+  return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+};
+const accessRecentRows = computed<AccessRecordRow[]>(() =>
+  accessRecordGroups.value.flatMap((group, groupIndex) =>
+    (group.records ?? []).map((record, recordIndex) => {
+      const success = accessRecordSuccess(record);
+      return {
+        key: `${group.door?.id ?? groupIndex}-${record.open_time ?? recordIndex}-${recordIndex}`,
+        doorTitle: textValue(group.door?.title),
+        openTime: textValue(record.open_time),
+        openType: accessOpenTypeText(record.open_type),
+        status: success ? 'good' : 'warn',
+        statusText: success ? '成功' : '未成功',
+      };
+    }),
+  ),
+);
 
 // 8. 大廈財務 mock 資料（管理費總覽）
 const financeOverview: FinanceOverRow[] = [
@@ -393,12 +488,7 @@ const equipmentRows: EquipmentRow[] = [
   { device: '照明系統', location: '公共走廊', status: 'good', statusText: '正常', updatedAt: '昨天 18:10' },
 ];
 
-// 12. 切換主面板
-const switchTab = (target: AffairsTab) => {
-  activeTab.value = target;
-};
-
-// 12.1 讀取目前會員綁定大廈資料
+// 12. 讀取目前會員綁定大廈資料
 const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
   buildingInfoLoading.value = true;
   buildingInfoError.value = '';
@@ -414,37 +504,147 @@ const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
   }
 };
 
-// 13. 切換財務子面板
+// 13. 讀取目前會員智能門禁資料
+const loadBuildingAccess = async (clearMessage = true) => {
+  accessLoading.value = true;
+  accessError.value = '';
+  if (clearMessage) {
+    accessMessage.value = '';
+  }
+  try {
+    const result = await fetchMemberIsmartBuildingAccess(selectedBuildingID.value || undefined);
+    ismartAccessProfile.value = result;
+    selectedBuildingID.value = result.selected_building_id
+      || result.building?.access_building_id
+      || result.building?.requested_building_id
+      || selectedBuildingID.value
+      || '';
+  } catch (error) {
+    console.error(error);
+    accessError.value = '門禁資料載入失敗';
+  } finally {
+    accessLoading.value = false;
+  }
+};
+
+// 14. 切換主面板
+const switchTab = (target: AffairsTab) => {
+  activeTab.value = target;
+  if (target === 'affairs-access' && !ismartAccessProfile.value && !accessLoading.value) {
+    void loadBuildingAccess();
+  }
+};
+
+// 15. 取得門禁操作用大廈 ID
+const accessPayloadBuildingID = (door?: IsmartAccessDoor): string | undefined => {
+  const buildingID = selectedBuildingID.value
+    || ismartAccessProfile.value?.selected_building_id
+    || door?.building_id
+    || '';
+  return buildingID || undefined;
+};
+
+// 16. 切換門禁密碼可見狀態
+const toggleAccessPassword = (door: IsmartAccessDoor) => {
+  const doorID = accessDoorID(door);
+  if (!doorID) return;
+  visiblePasswordDoorIDs.value = visiblePasswordDoorIDs.value.includes(doorID)
+    ? visiblePasswordDoorIDs.value.filter((id) => id !== doorID)
+    : [...visiblePasswordDoorIDs.value, doorID];
+};
+
+// 17. 發送開門指令
+const openAccessDoor = async (door: IsmartAccessDoor) => {
+  const doorID = accessDoorID(door);
+  const doorNumber = accessDoorNumber(door);
+  if (!door.has_permission || doorNumber <= 0) return;
+  if (!window.confirm(`確認開啟「${accessDoorTitle(door)}」？`)) return;
+
+  openingDoorID.value = doorID;
+  accessMessage.value = '';
+  accessError.value = '';
+  try {
+    const result = await openMemberIsmartDoor({
+      building_id: accessPayloadBuildingID(door),
+      door_id: doorNumber,
+    });
+    const resultMessage = result.is_success === false ? '開門指令未成功' : '已發送開門指令';
+    await loadBuildingAccess(false);
+    accessMessage.value = resultMessage;
+  } catch (error) {
+    console.error(error);
+    accessError.value = '開門指令發送失敗';
+  } finally {
+    openingDoorID.value = '';
+  }
+};
+
+// 18. 生成門禁二維碼
+const generateAccessQRCode = async (door: IsmartAccessDoor) => {
+  const doorID = accessDoorID(door);
+  const recordID = accessQRCodeRecordNumber(door);
+  if (!door.is_qrcode_enabled || recordID <= 0) return;
+
+  qrLoadingDoorID.value = doorID;
+  accessMessage.value = '';
+  accessError.value = '';
+  try {
+    const result = await generateMemberIsmartDoorQRCode({
+      building_id: accessPayloadBuildingID(door),
+      qrcode_record_id: recordID,
+      term: 'dynamic',
+    });
+    if (!result.qrcode_value) {
+      accessError.value = '二維碼內容為空';
+      accessQRPanel.value = null;
+      return;
+    }
+    accessQRPanel.value = {
+      doorID,
+      doorTitle: accessDoorTitle(door),
+      value: result.qrcode_value,
+      expiresAt: textValue(result.expires_at),
+      term: textValue(result.term || 'dynamic'),
+    };
+  } catch (error) {
+    console.error(error);
+    accessError.value = '二維碼生成失敗';
+  } finally {
+    qrLoadingDoorID.value = '';
+  }
+};
+
+// 19. 切換財務子面板
 const switchFinanceSub = (target: FinanceSubTab) => {
   financeSubTab.value = target;
 };
 
-// 14. 切換意見提供模式
+// 20. 切換意見提供模式
 const setAffairsMode = (mode: AffairsMode) => {
   affairsMode.value = mode;
   affairsStep.value = 1;
 };
 
-// 15. 切換意見提供步驟
+// 21. 切換意見提供步驟
 const setAffairsStep = (step: number) => {
   if (step < 1) return;
   if (step > 4) return;
   affairsStep.value = step;
 };
 
-// 16. 下一步
+// 22. 下一步
 const nextAffairsStep = () => {
   if (affairsStep.value < 4) {
     affairsStep.value += 1;
   }
 };
 
-// 17. 展開/收起最近記錄
+// 23. 展開/收起最近記錄
 const toggleRecord = (index: number) => {
   expandedRecord.value = expandedRecord.value === index ? null : index;
 };
 
-// 18. 選擇檔案
+// 24. 選擇檔案
 const onMediaChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (!target.files || target.files.length === 0) {
@@ -456,7 +656,7 @@ const onMediaChange = (e: Event) => {
     .join(', ');
 };
 
-// 19. 提交意見提供
+// 25. 提交意見提供
 const submitAffairsFeedback = () => {
   affairsMode.value = 'repair';
   affairsStep.value = 1;
@@ -469,7 +669,7 @@ const submitAffairsFeedback = () => {
   mediaFileName.value = '';
 };
 
-// 20. 確認提交摘要
+// 26. 確認提交摘要
 const reviewMode = computed(() => (affairsMode.value === 'repair' ? '維修報修' : '意見反映'));
 const reviewCategory = computed(() =>
   affairsMode.value === 'repair'
@@ -488,27 +688,27 @@ const reviewContent = computed(() =>
 );
 const reviewMedia = computed(() => mediaFileName.value || '未選擇檔案');
 
-// 21. 重新整理通告
+// 27. 重新整理通告
 const refreshNotices = () => {
   // 靜態 mock，無需操作
 };
 
-// 22. 重新載入視像監控
+// 28. 重新載入視像監控
 const refreshIcctv = () => {
   // 靜態 mock，無需操作
 };
 
-// 23. 開啟視像監控新窗口
+// 29. 開啟視像監控新窗口
 const openIcctvWindow = () => {
   router.push('/building/icctv');
 };
 
-// 24. 重新整理設備監測
+// 30. 重新整理設備監測
 const refreshEquipment = () => {
   // 靜態 mock，無需操作
 };
 
-// 25. 跳轉至通告詳情
+// 31. 跳轉至通告詳情
 const goNoticeDetail = () => {
   router.push('/building/notices');
 };
@@ -1583,12 +1783,228 @@ onMounted(() => {
             <div>
               <div class="work-kicker">Access</div>
               <h2 class="work-title">智能門禁</h2>
-              <p class="work-desc">此功能暫未開通。</p>
+              <p class="work-desc">查看已綁定大廈的門禁權限、通行密碼、二維碼及最近開門記錄。</p>
+            </div>
+            <button
+              type="button"
+              class="work-action"
+              :disabled="accessLoading"
+              @click="loadBuildingAccess()"
+            >
+              {{ accessLoading ? '載入中' : '重新整理' }}
+            </button>
+          </section>
+
+          <section class="access-summary-grid">
+            <div class="access-summary-card">
+              <div class="work-card-title">目前大廈</div>
+              <div class="access-stat-value">{{ accessBuildingName }}</div>
+              <div class="work-stat-label">依登入會員綁定資料顯示</div>
+            </div>
+            <div class="access-summary-card">
+              <div class="work-card-title">門禁數量</div>
+              <div class="work-stat">{{ accessDoors.length }}</div>
+              <div class="work-stat-label">目前可見門禁</div>
+            </div>
+            <div class="access-summary-card">
+              <div class="work-card-title">可開門</div>
+              <div class="work-stat">{{ accessAllowedDoorCount }}</div>
+              <div class="work-stat-label">已授權門禁</div>
+            </div>
+            <div class="access-summary-card">
+              <div class="work-card-title">資料狀態</div>
+              <span
+                class="work-chip"
+                :class="accessStatusClass"
+              >{{ accessStatusText }}</span>
+              <div class="work-stat-label">{{ accessQRCodeDoorCount }} 個門禁支援二維碼</div>
             </div>
           </section>
+
+          <div
+            v-if="accessError || accessMessage"
+            class="access-banner"
+            :class="{ warn: accessError, good: accessMessage && !accessError }"
+          >
+            {{ accessError || accessMessage }}
+          </div>
+
+          <section class="access-door-section">
+            <div class="building-section-head">
+              <div class="work-card-title">門禁列表</div>
+              <span class="work-chip">{{ accessLoading ? '載入中' : `${accessDoors.length} 個門禁` }}</span>
+            </div>
+
+            <div
+              v-if="accessLoading && accessDoors.length === 0"
+              class="access-empty"
+            >
+              正在讀取門禁資料。
+            </div>
+            <div
+              v-else-if="accessDoors.length === 0"
+              class="access-empty"
+            >
+              目前未有可顯示的門禁資料。
+            </div>
+            <div
+              v-else
+              class="access-table-wrap"
+            >
+              <table class="work-table access-door-table">
+                <thead>
+                  <tr>
+                    <th>門禁</th>
+                    <th>門號</th>
+                    <th>所屬大廈</th>
+                    <th>鏡頭</th>
+                    <th>權限</th>
+                    <th>通行密碼</th>
+                    <th>有效期</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="door in accessDoors"
+                    :key="accessDoorID(door) || accessDoorTitle(door)"
+                  >
+                    <td class="access-door-title-cell">
+                      <strong>{{ accessDoorTitle(door) }}</strong>
+                      <span>{{ textValue(door.serial) }}</span>
+                    </td>
+                    <td>{{ textValue(door.door_no) }}</td>
+                    <td>{{ textValue(door.building_id) }}</td>
+                    <td>{{ textValue(door.camera?.title) }}</td>
+                    <td>
+                      <div class="access-table-tags">
+                        <span
+                          class="work-chip"
+                          :class="door.has_permission ? 'good' : 'warn'"
+                        >{{ door.has_permission ? '可開門' : '未授權' }}</span>
+                        <span
+                          v-if="door.is_public"
+                          class="work-chip brand"
+                        >公共門</span>
+                        <span
+                          v-if="door.is_qrcode_enabled"
+                          class="work-chip"
+                        >二維碼</span>
+                      </div>
+                    </td>
+                    <td>{{ accessDoorPasswordText(door) }}</td>
+                    <td class="access-door-period-cell">
+                      <div>
+                        <span>密碼</span>
+                        <strong>{{ accessTimeRange(door.password?.start_time, door.password?.end_time) }}</strong>
+                      </div>
+                      <div>
+                        <span>二維碼</span>
+                        <strong>{{ accessTimeRange(door.qrcode?.start_time, door.qrcode?.end_time) }}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="access-table-actions">
+                        <button
+                          type="button"
+                          class="work-mini-btn primary"
+                          :disabled="!door.has_permission || openingDoorID === accessDoorID(door)"
+                          @click="openAccessDoor(door)"
+                        >
+                          {{ openingDoorID === accessDoorID(door) ? '處理中' : '開門' }}
+                        </button>
+                        <button
+                          v-if="door.password?.value"
+                          type="button"
+                          class="work-mini-btn"
+                          @click="toggleAccessPassword(door)"
+                        >
+                          {{ accessDoorPasswordVisible(door) ? '隱藏密碼' : '查看密碼' }}
+                        </button>
+                        <button
+                          v-if="door.is_qrcode_enabled && door.qrcode?.record_id"
+                          type="button"
+                          class="work-mini-btn"
+                          :disabled="qrLoadingDoorID === accessDoorID(door)"
+                          @click="generateAccessQRCode(door)"
+                        >
+                          {{ qrLoadingDoorID === accessDoorID(door) ? '生成中' : '二維碼' }}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section
+            v-if="accessQRPanel"
+            class="work-card access-qr-section"
+          >
+            <div class="access-qr-layout">
+              <div class="access-qr-image">
+                <QrCodeImage
+                  :text="accessQRPanel.value"
+                  :size="220"
+                  alt="Door access QR code"
+                />
+              </div>
+              <div>
+                <div class="work-card-title">{{ accessQRPanel.doorTitle }}</div>
+                <div class="work-card-sub">請於有效時間內使用此二維碼通行。</div>
+                <div class="access-qr-meta">
+                  <div>
+                    <span>類型</span>
+                    <strong>{{ accessQRPanel.term }}</strong>
+                  </div>
+                  <div>
+                    <span>有效期至</span>
+                    <strong>{{ accessQRPanel.expiresAt }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="work-card">
-            <div class="work-card-title">暫未開通</div>
-            <div class="work-card-sub">智能門禁、訪客通行與門鎖聯動功能目前尚未開放。</div>
+            <div class="building-section-head">
+              <div class="work-card-title">最近開門記錄</div>
+            </div>
+            <table class="work-table access-record-table">
+              <thead>
+                <tr>
+                  <th>門禁</th>
+                  <th>時間</th>
+                  <th>方式</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in accessRecentRows"
+                  :key="row.key"
+                >
+                  <td>{{ row.doorTitle }}</td>
+                  <td>{{ row.openTime }}</td>
+                  <td>{{ row.openType }}</td>
+                  <td>
+                    <span
+                      class="work-chip"
+                      :class="row.status"
+                    >{{ row.statusText }}</span>
+                  </td>
+                </tr>
+                <tr v-if="accessRecentRows.length === 0">
+                  <td
+                    class="building-empty-row"
+                    colspan="4"
+                  >
+                    目前未有最近開門記錄。
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </section>
         </div>
 
@@ -2034,6 +2450,15 @@ onMounted(() => {
   color: #fff;
 }
 
+.work-mini-btn:disabled,
+.work-mini-btn.primary:disabled {
+  border-color: var(--bdr);
+  background: var(--sur-3);
+  color: var(--ink-3);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 /* 8. Notice admin */
 .notice-admin-grid {
   display: grid;
@@ -2278,7 +2703,198 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-/* 10. Accounting */
+/* 10. 智能門禁 */
+.access-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.access-summary-card {
+  min-width: 0;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  padding: 14px;
+}
+
+.access-stat-value {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.access-banner {
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 14px;
+}
+
+.access-banner.warn {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.access-door-section {
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  padding: 16px;
+}
+
+.access-empty {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  border: 1px dashed var(--bdr-2);
+  border-radius: 8px;
+  background: var(--sur-2);
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.access-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.access-door-table {
+  min-width: 1040px;
+  table-layout: fixed;
+}
+
+.access-door-table th:nth-child(1) {
+  width: 180px;
+}
+
+.access-door-table th:nth-child(2) {
+  width: 74px;
+}
+
+.access-door-table th:nth-child(3),
+.access-door-table th:nth-child(4) {
+  width: 110px;
+}
+
+.access-door-table th:nth-child(5) {
+  width: 160px;
+}
+
+.access-door-table th:nth-child(6) {
+  width: 96px;
+}
+
+.access-door-table th:nth-child(7) {
+  width: 210px;
+}
+
+.access-door-table th:nth-child(8) {
+  width: 160px;
+}
+
+.access-door-title-cell strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.access-door-title-cell span {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.access-table-tags,
+.access-table-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.access-door-period-cell {
+  display: grid;
+  gap: 7px;
+}
+
+.access-door-period-cell span,
+.access-qr-meta span {
+  display: block;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.access-door-period-cell strong,
+.access-qr-meta strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.access-qr-section {
+  overflow: hidden;
+}
+
+.access-qr-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.access-qr-image {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.access-qr-image img {
+  display: block;
+  width: 220px;
+  height: 220px;
+}
+
+.access-qr-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.access-record-table {
+  table-layout: fixed;
+}
+
+.access-record-table th:nth-child(4),
+.access-record-table td:nth-child(4) {
+  width: 110px;
+  text-align: center;
+}
+
+/* 11. Accounting */
 .acct-card-wrap {
   padding: 0;
   overflow: hidden;
@@ -2436,7 +3052,7 @@ onMounted(() => {
   font-weight: 800;
 }
 
-/* 11. 意見提供入口卡片 */
+/* 12. 意見提供入口卡片 */
 .affairs-entry-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2496,7 +3112,7 @@ onMounted(() => {
   line-height: 1.5;
 }
 
-/* 12. 意見提供引導式表單 */
+/* 13. 意見提供引導式表單 */
 .affairs-feedback-form {
   display: grid;
   gap: 18px;
@@ -2678,7 +3294,7 @@ onMounted(() => {
   font-size: 13px;
 }
 
-/* 13. ICCTV */
+/* 14. ICCTV */
 .icctv-panel-wide {
   grid-column: 1 / -1;
 }
@@ -2807,7 +3423,7 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-/* 14. 響應式設計 */
+/* 15. 響應式設計 */
 @media (max-width: 1023px) {
   .work-shell {
     grid-template-columns: 1fr;
@@ -2830,6 +3446,7 @@ onMounted(() => {
 
   .building-summary-grid,
   .building-doc-grid,
+  .access-summary-grid,
   .building-field-grid {
     grid-template-columns: 1fr;
   }
@@ -2840,6 +3457,11 @@ onMounted(() => {
   }
 
   .icctv-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .access-qr-layout,
+  .access-qr-meta {
     grid-template-columns: 1fr;
   }
 
@@ -2868,7 +3490,8 @@ onMounted(() => {
   }
 
   .icctv-camera-list,
-  .icctv-summary {
+  .icctv-summary,
+  .access-summary-grid {
     grid-template-columns: 1fr;
   }
 

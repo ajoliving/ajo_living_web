@@ -7,14 +7,9 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -190,7 +185,7 @@ func (s *IsmartExternalService) SubmitPOSPayment(ctx context.Context, userID int
 	}
 
 	requestPayload := paymentCloneMap(payload)
-	buildingID, buildingOptions, err := s.selectVisibleBuilding(account, paymentStringValue(requestPayload["BLG_ID"]))
+	buildingID, buildingOptions, err := s.selectVisibleBuilding(ctx, account, paymentStringValue(requestPayload["BLG_ID"]))
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +206,7 @@ func (s *IsmartExternalService) resolveBuildingAccess(ctx context.Context, userI
 	if err != nil {
 		return nil, "", nil, err
 	}
-	buildingID, buildingOptions, err := s.selectVisibleBuilding(account, requestedBuildingID)
+	buildingID, buildingOptions, err := s.selectVisibleBuilding(ctx, account, requestedBuildingID)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -232,8 +227,8 @@ func (s *IsmartExternalService) loadIsmartAccount(ctx context.Context, userID in
 	return &account, nil
 }
 
-// 16. selectVisibleBuilding returns a requested or default visible building.
-func (s *IsmartExternalService) selectVisibleBuilding(account *model.UserIsmartAccount, requestedBuildingID string) (string, []string, error) {
+// 16. selectVisibleBuilding returns a requested or profile-default visible building.
+func (s *IsmartExternalService) selectVisibleBuilding(ctx context.Context, account *model.UserIsmartAccount, requestedBuildingID string) (string, []string, error) {
 	buildingOptions := s.visibleBuildingIDs(account)
 	if len(buildingOptions) == 0 {
 		return "", buildingOptions, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
@@ -241,6 +236,13 @@ func (s *IsmartExternalService) selectVisibleBuilding(account *model.UserIsmartA
 
 	buildingID := strings.TrimSpace(requestedBuildingID)
 	if buildingID == "" {
+		profileBuildingID, hasProfileBuilding := s.profileBuildingID(ctx, account.UserID, buildingOptions)
+		if profileBuildingID != "" {
+			return profileBuildingID, buildingOptions, nil
+		}
+		if hasProfileBuilding {
+			return "", buildingOptions, errcode.New(errcode.CodeAuthForbidden, "profile building is not visible")
+		}
 		return buildingOptions[0], buildingOptions, nil
 	}
 	if !containsString(buildingOptions, buildingID) {
@@ -250,7 +252,32 @@ func (s *IsmartExternalService) selectVisibleBuilding(account *model.UserIsmartA
 	return buildingID, buildingOptions, nil
 }
 
-// 17. visibleBuildingIDs resolves the iSmart building permission list.
+// 17. profileBuildingID returns the member center selected building when visible.
+func (s *IsmartExternalService) profileBuildingID(ctx context.Context, userID int64, buildingOptions []string) (string, bool) {
+	var profile model.UserProfile
+	if err := s.runtime.DB.WithContext(ctx).Preload("PrimaryCommunity").Where("user_id = ?", userID).First(&profile).Error; err != nil {
+		return "", false
+	}
+
+	hasProfileBuilding := false
+	if profile.PrimaryCommunity != nil {
+		value := strings.TrimSpace(profile.PrimaryCommunity.PublicID)
+		hasProfileBuilding = value != ""
+		if value != "" && containsString(buildingOptions, value) {
+			return value, true
+		}
+	}
+	for _, value := range normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)) {
+		hasProfileBuilding = true
+		if containsString(buildingOptions, value) {
+			return value, true
+		}
+	}
+
+	return "", hasProfileBuilding
+}
+
+// 18. visibleBuildingIDs resolves the iSmart building permission list.
 func (s *IsmartExternalService) visibleBuildingIDs(account *model.UserIsmartAccount) []string {
 	if account == nil {
 		return []string{}
@@ -265,137 +292,7 @@ func (s *IsmartExternalService) visibleBuildingIDs(account *model.UserIsmartAcco
 	return resolveIsmartBoundBuildings(message)
 }
 
-// 18. postExternal posts to the iSmart external app API base URL.
-func (s *IsmartExternalService) postExternal(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
-	return s.postJSON(ctx, s.externalURL(path), payload)
-}
-
-// 19. postRoot posts to an iSmart root API path outside the external app base path.
-func (s *IsmartExternalService) postRoot(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
-	return s.postJSON(ctx, s.rootURL(path), payload)
-}
-
-// 20. postJSON sends one JSON request to iSmart and decodes the response.
-func (s *IsmartExternalService) postJSON(ctx context.Context, requestURL string, payload map[string]any) (*ismartProxyResult, error) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
-	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(raw))
-	if err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
-	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Content-Type", "application/json")
-
-	response, err := s.httpClient().Do(request)
-	if err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to call ismart service")
-	}
-	defer response.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(response.Body, 8*1024*1024))
-	if err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to read ismart response")
-	}
-
-	return decodeIsmartProxyResponse(response.StatusCode, body)
-}
-
-// 21. externalURL builds an iSmart external app API URL.
-func (s *IsmartExternalService) externalURL(path string) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppAPIBaseURL), "/")
-	if baseURL == "" {
-		baseURL = "https://ismart.ajoliving.com/api/v1/external"
-	}
-
-	return baseURL + "/" + strings.TrimLeft(path, "/")
-}
-
-// 22. rootURL builds an iSmart root API URL.
-func (s *IsmartExternalService) rootURL(path string) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppBaseURL), "/")
-	if baseURL == "" {
-		baseURL = "https://ismart.ajoliving.com"
-	}
-
-	return baseURL + "/" + strings.TrimLeft(path, "/")
-}
-
-// 23. httpClient returns the iSmart HTTP client.
-func (s *IsmartExternalService) httpClient() *http.Client {
-	timeout := s.runtime.Config.IsmartExternalAppTimeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-
-	return &http.Client{Timeout: timeout}
-}
-
-// 24. ismartProxyResult stores a normalized iSmart response.
-type ismartProxyResult struct {
-	Payload map[string]any
-	Message string
-}
-
-// 25. decodeIsmartProxyResponse normalizes iSmart success and error payloads.
-func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult, error) {
-	payload := map[string]any{}
-	if len(strings.TrimSpace(string(body))) > 0 {
-		decoder := json.NewDecoder(bytes.NewReader(body))
-		decoder.UseNumber()
-		if err := decoder.Decode(&payload); err != nil {
-			return nil, errcode.New(errcode.CodeInternalError, "invalid ismart service response")
-		}
-	}
-
-	message := strings.TrimSpace(paymentStringValue(payload["message"]))
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		if message == "" {
-			message = "ismart service request failed"
-		}
-		return nil, errcode.New(ismartHTTPErrorCode(statusCode), message)
-	}
-
-	if strings.EqualFold(paymentStringValue(payload["status"]), "error") {
-		if message == "" {
-			message = "ismart service request failed"
-		}
-		return nil, errcode.New(errcode.CodeInternalError, message)
-	}
-	if code := strings.TrimSpace(paymentStringValue(payload["code"])); code != "" && code != "200" && !strings.EqualFold(code, errcode.CodeOK) {
-		if message == "" {
-			message = "ismart service request failed"
-		}
-		return nil, errcode.New(errcode.CodeInternalError, message)
-	}
-
-	if data, ok := payload["data"]; ok {
-		if dataMap := paymentMapValue(data); len(dataMap) > 0 {
-			return &ismartProxyResult{Payload: dataMap, Message: message}, nil
-		}
-		return &ismartProxyResult{Payload: map[string]any{"result": data}, Message: message}, nil
-	}
-
-	return &ismartProxyResult{Payload: payload, Message: message}, nil
-}
-
-// 26. ismartHTTPErrorCode maps upstream status into AJO error codes.
-func ismartHTTPErrorCode(statusCode int) string {
-	switch statusCode {
-	case http.StatusBadRequest:
-		return errcode.CodeValidationError
-	case http.StatusForbidden:
-		return errcode.CodeAuthForbidden
-	case http.StatusNotFound:
-		return errcode.CodeNotFound
-	default:
-		return errcode.CodeInternalError
-	}
-}
-
-// 27. decorateIsmartPayload adds AJO visibility metadata to upstream data.
+// 19. decorateIsmartPayload adds AJO visibility metadata to upstream data.
 func decorateIsmartPayload(payload map[string]any, buildingID string, buildingOptions []string, message string, isStaff bool) map[string]any {
 	result := paymentCloneMap(payload)
 	result["building_options"] = buildingOptions

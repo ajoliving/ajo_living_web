@@ -3,6 +3,7 @@
  * 1. 讀取 POS relay 樓宇清單。
  * 2. 依大廈讀取可選單位清單。
  * 3. 讀取目前會員已綁定的 iSmart 大廈資料。
+ * 4. 讀取目前會員已綁定大廈的 iSmart 智能門禁資料。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
@@ -70,6 +71,97 @@ export interface IsmartBuildingInfoResponse extends IsmartBuildingOptionResponse
   documents?: IsmartBuildingDocuments;
 }
 
+export interface IsmartAccessBuilding {
+  requested_building_id?: string;
+  access_building_id?: string;
+  buildname_chi?: string;
+  buildname?: string;
+}
+
+export interface IsmartAccessCamera {
+  id?: number | string;
+  title?: string;
+  url?: string;
+  source?: string;
+}
+
+export interface IsmartDoorPassword {
+  record_id?: number | string;
+  value?: string;
+  start_time?: string;
+  end_time?: string;
+}
+
+export interface IsmartDoorQRCode {
+  record_id?: number | string;
+  start_time?: string;
+  end_time?: string;
+}
+
+export interface IsmartAccessDoor {
+  door_id?: number | string;
+  title?: string;
+  serial?: string;
+  door_no?: number | string;
+  building_id?: string;
+  is_public?: boolean;
+  is_qrcode_enabled?: boolean;
+  has_permission?: boolean;
+  camera?: IsmartAccessCamera | null;
+  password?: IsmartDoorPassword | null;
+  qrcode?: IsmartDoorQRCode | null;
+}
+
+export interface IsmartAccessRecord {
+  open_time?: string;
+  open_type?: string;
+  is_success?: boolean | number | string;
+}
+
+export interface IsmartRecentAccessGroup {
+  door?: {
+    id?: number | string;
+    title?: string;
+  };
+  records?: IsmartAccessRecord[];
+}
+
+export interface IsmartBuildingAccessResponse extends IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  building?: IsmartAccessBuilding;
+  doors?: IsmartAccessDoor[];
+  recent_records?: IsmartRecentAccessGroup[];
+}
+
+export interface IsmartDoorOpenResponse extends IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  door_id?: number | string;
+  building_id?: string;
+  is_success?: boolean;
+  upstream_message?: string;
+}
+
+export interface IsmartQRCodeResponse extends IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  qrcode_record_id?: number | string;
+  door_id?: number | string;
+  term?: string;
+  qrcode_value?: string;
+  expires_at?: string;
+  upstream_message?: string;
+}
+
+export interface OpenIsmartDoorPayload {
+  building_id?: string;
+  door_id: number;
+}
+
+export interface GenerateIsmartQRCodePayload {
+  building_id?: string;
+  qrcode_record_id: number;
+  term?: string;
+}
+
 // 1. 取得 POS 樓宇清單
 export const fetchPosBuildings = async (): Promise<PosBuilding[]> => {
   const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuilding>>>('/pos/buildings');
@@ -104,5 +196,24 @@ export const fetchMemberIsmartBuildings = async (): Promise<IsmartBuildingOption
 export const fetchMemberIsmartBuildingInfo = async (buildingID?: string): Promise<IsmartBuildingInfoResponse> => {
   const params = buildingID ? { building_id: buildingID } : undefined;
   const { data } = await httpClient.get<ApiResponse<IsmartBuildingInfoResponse>>('/me/ismart/building-info', { params });
+  return data.data;
+};
+
+// 7. 取得目前會員 iSmart 智能門禁資料
+export const fetchMemberIsmartBuildingAccess = async (buildingID?: string): Promise<IsmartBuildingAccessResponse> => {
+  const params = buildingID ? { building_id: buildingID } : undefined;
+  const { data } = await httpClient.get<ApiResponse<IsmartBuildingAccessResponse>>('/me/ismart/building-access', { params });
+  return data.data;
+};
+
+// 8. 發送目前會員 iSmart 開門指令
+export const openMemberIsmartDoor = async (payload: OpenIsmartDoorPayload): Promise<IsmartDoorOpenResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartDoorOpenResponse>>('/me/ismart/building-access/open-door', payload);
+  return data.data;
+};
+
+// 9. 生成目前會員 iSmart 門禁二維碼
+export const generateMemberIsmartDoorQRCode = async (payload: GenerateIsmartQRCodePayload): Promise<IsmartQRCodeResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartQRCodeResponse>>('/me/ismart/building-access/qrcode', payload);
   return data.data;
 };
