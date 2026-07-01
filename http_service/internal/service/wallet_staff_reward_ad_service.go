@@ -35,6 +35,8 @@ func (s *WalletService) ListStaffRewardAds(ctx context.Context, filters StaffRew
 	if adType := normalizedRewardAdType(filters.AdType); adType != "" {
 		if adType == rewardAdTypeReward {
 			query = query.Where("(ad_type = ? OR ad_type = '')", rewardAdTypeReward)
+		} else if adType == rewardAdTypeDisplay {
+			query = query.Where("ad_type IN ?", displayAdTypes())
 		} else {
 			query = query.Where("ad_type = ?", adType)
 		}
@@ -121,7 +123,7 @@ func (s *WalletService) SaveDisplayAdSettings(ctx context.Context, operatorUserI
 		for _, input := range normalizedInputs {
 			for index, slotAd := range input.Ads {
 				ad := adMap[slotAd.AdTaskID]
-				if normalizedDisplayAdLayout(ad.DisplayLayout) != displayAdLayoutForSlot(input.SlotIndex) {
+				if !displayAdTypeMatchesSlot(ad.AdType, input.SlotIndex) || normalizedDisplayAdLayout(ad.DisplayLayout) != displayAdLayoutForSlot(input.SlotIndex) {
 					return errcode.New(errcode.CodeValidationError, "display ad layout does not match slot")
 				}
 				assignment := model.DisplayAdSlotAssignment{
@@ -180,7 +182,7 @@ func (s *WalletService) CreateStaffRewardAd(ctx context.Context, operatorUserID 
 		DisplayLayout:    normalizedDisplayAdLayout(params.DisplayLayout),
 		SortOrder:        params.SortOrder,
 		RewardPoints:     params.RewardPoints,
-		WatchSeconds:     normalizedWatchSeconds(params.WatchSeconds),
+		WatchSeconds:     normalizedRewardAdWatchSeconds(normalizedRewardAdType(params.AdType), params.WatchSeconds),
 		DailyUserLimit:   1,
 		TotalBudget:      0,
 		IsActive:         params.IsActive,
@@ -243,7 +245,7 @@ func validateRewardAdCreate(params RewardAdCreateParams) error {
 		DisplayPlacement: normalizedDisplayAdPlacement(params.DisplayPlacement),
 		DisplayLayout:    normalizedDisplayAdLayout(params.DisplayLayout),
 		RewardPoints:     params.RewardPoints,
-		WatchSeconds:     normalizedWatchSeconds(params.WatchSeconds),
+		WatchSeconds:     normalizedRewardAdWatchSeconds(normalizedRewardAdType(params.AdType), params.WatchSeconds),
 		StartsAt:         params.StartsAt,
 		EndsAt:           params.EndsAt,
 	}
@@ -282,9 +284,12 @@ func validateRewardAdState(ad model.RewardAd) error {
 	if normalizedRewardAdMediaType(ad.MediaType) == "" {
 		return errcode.New(errcode.CodeValidationError, "reward ad media type is invalid")
 	}
-	if adType == rewardAdTypeDisplay {
+	if normalizedDisplayAdType(adType) != "" {
 		if normalizedDisplayAdLayout(ad.DisplayLayout) == "" {
 			return errcode.New(errcode.CodeValidationError, "display ad layout is invalid")
+		}
+		if !displayAdTypeMatchesLayout(adType, ad.DisplayLayout) {
+			return errcode.New(errcode.CodeValidationError, "display ad layout does not match ad type")
 		}
 		if normalizedRewardAdMediaType(ad.MediaType) != rewardAdMediaTypeImage {
 			return errcode.New(errcode.CodeValidationError, "display ad media must be image")
@@ -338,7 +343,7 @@ func applyRewardAdUpdates(ad *model.RewardAd, params RewardAdUpdateParams, opera
 		ad.RewardPoints = *params.RewardPoints
 	}
 	if params.WatchSeconds != nil {
-		ad.WatchSeconds = normalizedWatchSeconds(*params.WatchSeconds)
+		ad.WatchSeconds = normalizedRewardAdWatchSeconds(ad.AdType, *params.WatchSeconds)
 	}
 	if params.TotalBudget != nil {
 		ad.TotalBudget = 0
@@ -390,7 +395,7 @@ func toStaffRewardAdResponse(ad model.RewardAd) StaffRewardAdResponse {
 		SlotTargetURL:     "",
 		SortOrder:         ad.SortOrder,
 		RewardPoints:      ad.RewardPoints,
-		WatchSeconds:      normalizedWatchSeconds(ad.WatchSeconds),
+		WatchSeconds:      normalizedRewardAdWatchSeconds(ad.AdType, ad.WatchSeconds),
 		TotalBudget:       ad.TotalBudget,
 		TotalGranted:      ad.TotalGranted,
 		RemainingBudget:   remainingBudget,
@@ -423,6 +428,14 @@ func normalizedRewardAdMediaType(value string) string {
 	}
 }
 
+// 10.1 normalizedRewardAdWatchSeconds returns watch seconds for reward ads only.
+func normalizedRewardAdWatchSeconds(adType string, value int) int {
+	if normalizedRewardAdType(adType) != rewardAdTypeReward {
+		return 0
+	}
+	return normalizedWatchSeconds(value)
+}
+
 // 11. normalizedRewardAdType returns a supported ad task type.
 func normalizedRewardAdType(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -430,6 +443,20 @@ func normalizedRewardAdType(value string) string {
 		return rewardAdTypeReward
 	case rewardAdTypeDisplay:
 		return rewardAdTypeDisplay
+	case rewardAdTypeDisplayShort:
+		return rewardAdTypeDisplayShort
+	case rewardAdTypeDisplayLong:
+		return rewardAdTypeDisplayLong
+	default:
+		return ""
+	}
+}
+
+// 11.1 normalizedDisplayAdType returns a supported display ad type.
+func normalizedDisplayAdType(value string) string {
+	switch normalizedRewardAdType(value) {
+	case rewardAdTypeDisplay, rewardAdTypeDisplayShort, rewardAdTypeDisplayLong:
+		return normalizedRewardAdType(value)
 	default:
 		return ""
 	}
@@ -475,13 +502,47 @@ func normalizedDisplayAdLayout(value string) string {
 
 // 15. displayAdLayoutForSlot returns the fixed visual layout for one listing-side slot.
 func displayAdLayoutForSlot(slotIndex int) string {
-	switch {
-	case slotIndex >= 1 && slotIndex <= 3:
-		return displayAdLayoutTextCompact
-	case slotIndex >= 4 && slotIndex <= 6:
+	switch slotIndex {
+	case 1, 2, 3:
 		return displayAdLayoutImageText
-	default:
+	case 4, 5:
 		return displayAdLayoutImageFull
+	default:
+		return ""
+	}
+}
+
+// 15.1 displayAdTypes returns all display-compatible ad types.
+func displayAdTypes() []string {
+	return []string{rewardAdTypeDisplay, rewardAdTypeDisplayShort, rewardAdTypeDisplayLong}
+}
+
+// 15.2 displayAdTypeMatchesSlot validates short and long display ad placement.
+func displayAdTypeMatchesSlot(adType string, slotIndex int) bool {
+	normalizedType := normalizedDisplayAdType(adType)
+	switch slotIndex {
+	case 1, 2, 3:
+		return normalizedType == rewardAdTypeDisplayShort || normalizedType == rewardAdTypeDisplay
+	case 4, 5:
+		return normalizedType == rewardAdTypeDisplayLong || normalizedType == rewardAdTypeDisplay
+	default:
+		return false
+	}
+}
+
+// 15.3 displayAdTypeMatchesLayout validates display ad type and visual layout.
+func displayAdTypeMatchesLayout(adType string, layout string) bool {
+	normalizedType := normalizedDisplayAdType(adType)
+	normalizedLayout := normalizedDisplayAdLayout(layout)
+	switch normalizedType {
+	case rewardAdTypeDisplayLong:
+		return normalizedLayout == displayAdLayoutImageFull
+	case rewardAdTypeDisplayShort:
+		return normalizedLayout == displayAdLayoutImageText
+	case rewardAdTypeDisplay:
+		return normalizedLayout != ""
+	default:
+		return false
 	}
 }
 
@@ -543,8 +604,9 @@ func (s *WalletService) loadDisplayAdPublicIDMap(ctx context.Context, channel st
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("public_id IN ?", taskIDs).
-		Where("ad_type = ?", rewardAdTypeDisplay).
+		Where("ad_type IN ?", displayAdTypes()).
 		Where("media_type = ?", rewardAdMediaTypeImage).
+		Where("display_channel = ?", channel).
 		Find(&ads).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load image ads")
 	}
@@ -569,7 +631,7 @@ func (s *WalletService) loadDisplayAdMap(ctx context.Context, channel string, ad
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("id IN ?", adIDs).
-		Where("ad_type = ?", rewardAdTypeDisplay).
+		Where("ad_type IN ?", displayAdTypes()).
 		Where("media_type = ?", rewardAdMediaTypeImage).
 		Find(&ads).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load image ads")
@@ -580,7 +642,7 @@ func (s *WalletService) loadDisplayAdMap(ctx context.Context, channel string, ad
 	return result, nil
 }
 
-// 19. buildDisplayAdSettingsResponse maps slot assignments into fixed 10 slots.
+// 19. buildDisplayAdSettingsResponse maps slot assignments into fixed listing-side slots.
 func buildDisplayAdSettingsResponse(channel string, assignments []model.DisplayAdSlotAssignment, adMap map[int64]model.RewardAd) *DisplayAdChannelSettingsResponse {
 	slotAssignments := map[int][]model.DisplayAdSlotAssignment{}
 	for _, assignment := range assignments {

@@ -114,7 +114,7 @@ func (s *SecondhandService) RenewSecondhandListing(ctx context.Context, ownerUse
 	return result, nil
 }
 
-// 8. MarkSold marks a listing as sold and removes it from active discovery.
+// 8. MarkSold marks a listing as sold.
 func (s *SecondhandService) MarkSold(ctx context.Context, ownerUserID int64, listingPublicID string) error {
 	listing, _, _, err := s.loadOwnedListing(ctx, ownerUserID, listingPublicID)
 	if err != nil {
@@ -126,7 +126,7 @@ func (s *SecondhandService) MarkSold(ctx context.Context, ownerUserID int64, lis
 		Update("business_status", "sold").Error
 }
 
-// 9. Deactivate hides a listing from public discovery.
+// 9. Deactivate hides a listing from public listing pages.
 func (s *SecondhandService) Deactivate(ctx context.Context, ownerUserID int64, listingPublicID string) error {
 	listing, _, _, err := s.loadOwnedListing(ctx, ownerUserID, listingPublicID)
 	if err != nil {
@@ -216,11 +216,14 @@ func (s *SecondhandService) GetSecondhandDetail(ctx context.Context, listingPubl
 		return nil, err
 	}
 
-	if listing.PublicationStatus == "hidden" {
-		return nil, errcode.New(errcode.CodeHidden, "listing is hidden")
-	}
-
-	if viewerUserID == nil || *viewerUserID != listing.OwnerUserID {
+	isOwner := viewerUserID != nil && *viewerUserID == listing.OwnerUserID
+	if !isOwner {
+		if listing.PublicationStatus == "hidden" {
+			return nil, errcode.New(errcode.CodeHidden, "listing is hidden")
+		}
+		if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
+			return nil, errcode.New(errcode.CodeNotFound, "listing not found")
+		}
 		if !s.canViewListing(listing, secondhand, viewerCommunityID) {
 			return nil, errcode.New(errcode.CodeVisibilityForbidden, "listing is not visible to the current user")
 		}
@@ -474,7 +477,7 @@ func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, para
 	var returnPublicID string
 	var charge *PointsChargeResponse
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		listing, secondhand, _, err := s.loadOwnedListingWithTx(ctx, tx, params.OwnerUserID, params.ListingPublicID)
+		listing, secondhand, currentContact, err := s.loadOwnedListingWithTx(ctx, tx, params.OwnerUserID, params.ListingPublicID)
 		if err != nil {
 			return err
 		}
@@ -535,6 +538,7 @@ func (s *SecondhandService) updateSecondhandWithCharge(ctx context.Context, para
 		if err != nil {
 			return err
 		}
+		mergeListingContactRetainedSecrets(contact, currentContact, params.Contact)
 		if err := tx.Save(contact).Error; err != nil {
 			return err
 		}
@@ -671,6 +675,10 @@ func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) 
 
 	if strings.TrimSpace(params.PickupRegionCode) == "" || strings.TrimSpace(params.VisibilityScope) == "" || strings.TrimSpace(params.ContactMethod) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required pickup or contact fields")
+	}
+
+	if strings.TrimSpace(params.PickupLocationText) == "" {
+		return errcode.New(errcode.CodeValidationError, "pickup location is required")
 	}
 
 	if !isAllowedSecondhandValue(params.CategoryCode, allowedSecondhandCategoryCodes) {

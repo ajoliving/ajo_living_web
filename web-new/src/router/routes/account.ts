@@ -1,48 +1,144 @@
 /*
  * 會員中心路由。
- * 1. 定義登入頁、會員資料頁、二手交易會員頁與通知兼容跳轉路由。
+ * 1. 定義登入頁、會員資料頁、二手交易會員頁與舊路徑兼容跳轉路由。
  * 2. 對外輸出會員中心路由陣列供總路由組裝。
  */
 import type { RouteRecordRaw } from 'vue-router';
 
+import ForgotPasswordPage from '@/pages/account/forgot-password/Page.vue';
 import LoginPage from '@/pages/account/login/LoginPage.vue';
 import AccountMyPage from '@/pages/account/my/AccountMyPage.vue';
-import AccountNotificationsPage from '@/pages/account/my/notifications/AccountNotificationsPage.vue';
-import AccountProfilePage from '@/pages/account/my/profile/info/Page.vue';
 import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
 import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
 import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
 import MarketplaceChatPage from '@/pages/marketplace/chat/MarketplaceChatPage.vue';
 import MarketplaceMyFavoritesPage from '@/pages/marketplace/my/favorites/MarketplaceMyFavoritesPage.vue';
-import MarketplaceMyOrdersPage from '@/pages/marketplace/my/orders/MarketplaceMyOrdersPage.vue';
 import MarketplaceMyProfilePage from '@/pages/marketplace/my/profile/MarketplaceMyProfilePage.vue';
 import MarketplaceMyPage from '@/pages/marketplace/my/MarketplaceMyPage.vue';
 import MarketplaceMyListingsPage from '@/pages/marketplace/my-listings/MarketplaceMyListingsPage.vue';
 import MarketplaceListingEditorPage from '@/pages/marketplace/my-listings/editor/MarketplaceListingEditorPage.vue';
 import MarketplaceMyListingPreviewPage from '@/pages/marketplace/my-listings/preview/MarketplaceMyListingPreviewPage.vue';
 import MarketplaceSettingsPage from '@/pages/marketplace/settings/Page.vue';
-import MarketplaceSettingsDiscoverPage from '@/pages/marketplace/settings/discover/Page.vue';
 import MarketplaceSettingsDisplayAdsPage from '@/pages/marketplace/settings/display-ads/Page.vue';
-import MarketplaceSettingsHomeCarouselPage from '@/pages/marketplace/settings/home-carousel/Page.vue';
 import MarketplaceSettingsHomeHeroCardsPage from '@/pages/marketplace/settings/home-hero-cards/Page.vue';
 import MarketplaceSettingsLoginHeroPage from '@/pages/marketplace/settings/login-hero/Page.vue';
 import MarketplaceSettingsNoticePage from '@/pages/marketplace/settings/notice/Page.vue';
 import MarketplaceManagementPage from '@/pages/marketplace/management/Page.vue';
-import MarketplaceManagementMembersPage from '@/pages/marketplace/management/members/Page.vue';
-import MarketplaceManagementPropertySalesPage from '@/pages/marketplace/management/property-sales/Page.vue';
 import MarketplaceManagementRewardAdEditorPage from '@/pages/marketplace/management/reward-ad-editor/Page.vue';
-import MarketplaceManagementRewardAdsPage from '@/pages/marketplace/management/reward-ads/Page.vue';
-import MarketplaceManagementSecondhandListingsPage from '@/pages/marketplace/management/secondhand-listings/Page.vue';
-import MarketplaceManagementServicedApartmentsPage from '@/pages/marketplace/management/serviced-apartments/Page.vue';
-import MarketplaceManagementWalletTransactionsPage from '@/pages/marketplace/management/wallet-transactions/Page.vue';
 
-// 1. 輸出會員中心路由
+// 1. 管理中心舊子路徑對應真實管理分頁
+const managementTabRoute = (tab: string) => ({
+  path: '/account/marketplace/management',
+  query: { tab },
+});
+
+// 2. 輸出會員中心路由
 export const accountRoutes: RouteRecordRaw[] = [
+  {
+    path: '/chat',
+    redirect: '/account/chat',
+  },
+  {
+    path: '/saved',
+    redirect: '/account/favorites',
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: AccountMyPage,
+    meta: { titleKey: 'nav.memberCenter', requiresAuth: true },
+  },
   {
     path: '/login',
     name: 'Login',
     component: LoginPage,
     meta: { titleKey: 'nav.login' },
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: ForgotPasswordPage,
+    meta: { titleKey: 'auth.forgotPassword' },
+  },
+  {
+    path: '/account/marketplace/management',
+    name: 'MarketplaceManagement',
+    component: MarketplaceManagementPage,
+    meta: { titleKey: 'nav.marketplaceManagement', requiresAuth: true, requiresStaff: true },
+  },
+  {
+    path: '/account/marketplace/management/secondhand-listings',
+    redirect: () => managementTabRoute('admin-furniture'),
+  },
+  {
+    path: '/account/marketplace/management/property-sales',
+    redirect: () => managementTabRoute('admin-properties'),
+  },
+  {
+    path: '/account/marketplace/management/members',
+    redirect: () => managementTabRoute('admin-members'),
+  },
+  {
+    path: '/account/marketplace/management/system-notices',
+    redirect: () => managementTabRoute('admin-notices'),
+  },
+  {
+    path: '/account/marketplace/management/serviced-apartments',
+    redirect: () => managementTabRoute('admin-homes'),
+  },
+  {
+    path: '/account/marketplace/management/reward-ad-editor/:taskId?',
+    name: 'MarketplaceManagementRewardAdEditor',
+    component: MarketplaceManagementRewardAdEditorPage,
+    meta: { titleKey: 'marketplace.management.walletAdPublishSection', requiresAuth: true, requiresStaff: true },
+  },
+  {
+    path: '/account/marketplace/management/reward-ads',
+    redirect: () => managementTabRoute('admin-ads'),
+  },
+  {
+    path: '/account/marketplace/management/wallet-transactions',
+    redirect: () => managementTabRoute('admin-points'),
+  },
+  {
+    path: '/account/marketplace/management/wallet-grants',
+    redirect: () => managementTabRoute('admin-members'),
+  },
+  {
+    path: '/account/marketplace/settings',
+    component: MarketplaceSettingsPage,
+    meta: { titleKey: 'nav.marketplaceSettings', requiresAuth: true, requiresStaff: true },
+    children: [
+      {
+        path: '',
+        name: 'MarketplaceSettings',
+        redirect: '/account/marketplace/settings/home-hero-cards',
+      },
+      {
+        path: 'notice',
+        name: 'MarketplaceSettingsNotice',
+        component: MarketplaceSettingsNoticePage,
+        meta: { titleKey: 'marketplace.settings.noticeSection', requiresAuth: true, requiresStaff: true },
+      },
+      {
+        path: 'home-hero-cards',
+        name: 'MarketplaceSettingsHomeHeroCards',
+        component: MarketplaceSettingsHomeHeroCardsPage,
+        meta: { titleKey: 'marketplace.settings.homeHeroCardsSection', requiresAuth: true, requiresStaff: true },
+      },
+      {
+        path: 'login-hero',
+        name: 'MarketplaceSettingsLoginHero',
+        component: MarketplaceSettingsLoginHeroPage,
+        meta: { titleKey: 'marketplace.settings.loginHeroSection', requiresAuth: true, requiresStaff: true },
+      },
+      {
+        path: 'display-ads',
+        name: 'MarketplaceSettingsDisplayAds',
+        component: MarketplaceSettingsDisplayAdsPage,
+        meta: { titleKey: 'marketplace.settings.displayAdSection', requiresAuth: true, requiresStaff: true },
+      },
+    ],
   },
   {
     path: '/account',
@@ -55,13 +151,13 @@ export const accountRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'profile',
-        redirect: '/account/profile/info',
+        name: 'AccountProfile',
+        component: AccountMyPage,
+        meta: { titleKey: 'account.profile.title', requiresAuth: true },
       },
       {
         path: 'profile/info',
-        name: 'AccountProfile',
-        component: AccountProfilePage,
-        meta: { titleKey: 'account.profile.title', requiresAuth: true },
+        redirect: '/account/profile',
       },
       {
         path: 'profile/wallet',
@@ -75,9 +171,7 @@ export const accountRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'notifications',
-        name: 'AccountNotificationsRedirect',
-        component: AccountNotificationsPage,
-        meta: { titleKey: 'chat.systemNoticeTitle', requiresAuth: true },
+        redirect: '/notifications',
       },
       {
         path: 'chat/:conversationId?',
@@ -212,9 +306,7 @@ export const accountRoutes: RouteRecordRaw[] = [
           },
           {
             path: 'orders',
-            name: 'MarketplaceMyOrders',
-            component: MarketplaceMyOrdersPage,
-            meta: { titleKey: 'marketplace.myHub.orders', requiresAuth: true },
+            redirect: '/account/listings',
           },
           {
             path: 'favorites',
@@ -235,138 +327,6 @@ export const accountRoutes: RouteRecordRaw[] = [
               query: to.query,
               hash: to.hash,
             }),
-          },
-        ],
-      },
-      {
-        path: 'marketplace/settings',
-        name: 'MarketplaceSettings',
-        component: MarketplaceSettingsPage,
-        meta: { titleKey: 'nav.marketplaceSettings', requiresAuth: true, requiresStaff: true },
-        children: [
-          {
-            path: '',
-            redirect: '/account/marketplace/settings/discover',
-          },
-          {
-            path: 'wallet-grants',
-            redirect: '/account/marketplace/management/members',
-          },
-          {
-            path: 'reward-ad-editor/:taskId?',
-            redirect: (to) => ({
-              path: to.params.taskId
-                ? `/account/marketplace/management/reward-ad-editor/${String(to.params.taskId)}`
-                : '/account/marketplace/management/reward-ad-editor',
-              query: to.query,
-              hash: to.hash,
-            }),
-          },
-          {
-            path: 'reward-ads',
-            redirect: '/account/marketplace/management/reward-ads',
-          },
-          {
-            path: 'wallet-transactions',
-            redirect: '/account/marketplace/management/wallet-transactions',
-          },
-          {
-            path: 'wallet',
-            redirect: '/account/marketplace/management/members',
-          },
-          {
-            path: 'notice',
-            name: 'MarketplaceSettingsNotice',
-            component: MarketplaceSettingsNoticePage,
-            meta: { titleKey: 'marketplace.settings.noticeSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'discover',
-            name: 'MarketplaceSettingsDiscover',
-            component: MarketplaceSettingsDiscoverPage,
-            meta: { titleKey: 'marketplace.settings.discoverSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'home-carousel',
-            name: 'MarketplaceSettingsHomeCarousel',
-            component: MarketplaceSettingsHomeCarouselPage,
-            meta: { titleKey: 'marketplace.settings.homeCarouselSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'home-hero-cards',
-            name: 'MarketplaceSettingsHomeHeroCards',
-            component: MarketplaceSettingsHomeHeroCardsPage,
-            meta: { titleKey: 'marketplace.settings.homeHeroCardsSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'login-hero',
-            name: 'MarketplaceSettingsLoginHero',
-            component: MarketplaceSettingsLoginHeroPage,
-            meta: { titleKey: 'marketplace.settings.loginHeroSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'display-ads',
-            name: 'MarketplaceSettingsDisplayAds',
-            component: MarketplaceSettingsDisplayAdsPage,
-            meta: { titleKey: 'marketplace.settings.displayAdSection', requiresAuth: true, requiresStaff: true },
-          },
-        ],
-      },
-      {
-        path: 'marketplace/management',
-        name: 'MarketplaceManagement',
-        component: MarketplaceManagementPage,
-        meta: { titleKey: 'nav.marketplaceManagement', requiresAuth: true, requiresStaff: true },
-        children: [
-          {
-            path: '',
-            redirect: '/account/marketplace/management/secondhand-listings',
-          },
-          {
-            path: 'wallet-grants',
-            redirect: '/account/marketplace/management/members',
-          },
-          {
-            path: 'reward-ad-editor/:taskId?',
-            name: 'MarketplaceManagementRewardAdEditor',
-            component: MarketplaceManagementRewardAdEditorPage,
-            meta: { titleKey: 'marketplace.management.walletAdPublishSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'reward-ads',
-            name: 'MarketplaceManagementRewardAds',
-            component: MarketplaceManagementRewardAdsPage,
-            meta: { titleKey: 'marketplace.management.walletAdListSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'wallet-transactions',
-            name: 'MarketplaceManagementWalletTransactions',
-            component: MarketplaceManagementWalletTransactionsPage,
-            meta: { titleKey: 'marketplace.management.walletTransactionsSection', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'secondhand-listings',
-            name: 'MarketplaceManagementSecondhandListings',
-            component: MarketplaceManagementSecondhandListingsPage,
-            meta: { titleKey: 'marketplace.management.secondhandListings', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'property-sales',
-            name: 'MarketplaceManagementPropertySales',
-            component: MarketplaceManagementPropertySalesPage,
-            meta: { titleKey: 'marketplace.management.propertySales', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'members',
-            name: 'MarketplaceManagementMembers',
-            component: MarketplaceManagementMembersPage,
-            meta: { titleKey: 'marketplace.management.members', requiresAuth: true, requiresStaff: true },
-          },
-          {
-            path: 'serviced-apartments',
-            name: 'MarketplaceManagementServicedApartments',
-            component: MarketplaceManagementServicedApartmentsPage,
-            meta: { titleKey: 'marketplace.management.servicedApartments', requiresAuth: true, requiresStaff: true },
           },
         ],
       },

@@ -116,6 +116,8 @@ export interface ListingListParams {
 export interface MyListingListParams {
   page?: number;
   page_size?: number;
+  keyword?: string;
+  category_code?: string;
   status?: string;
 }
 
@@ -128,29 +130,7 @@ export interface SettingsListingListParams {
   status?: string;
 }
 
-// 12. 定義發現頁廣告位
-export interface DiscoverPlacementResponse {
-  scene: 'discover_hero' | 'discover_category_carousel';
-  category_code: string;
-  slot_index: number;
-  listing?: SecondhandListingSummaryResponse;
-}
-
-// 13. 定義發現頁資料
-export interface DiscoverPayloadResponse {
-  hero: DiscoverPlacementResponse[];
-  categories: Record<string, DiscoverPlacementResponse[]>;
-}
-
-// 14. 定義發現頁廣告位儲存請求
-export interface DiscoverPlacementPayload {
-  scene: 'discover_hero' | 'discover_category_carousel';
-  category_code: string;
-  slot_index: number;
-  listing_id: string;
-}
-
-// 15. 定義帖子建立與更新請求
+// 12. 定義帖子建立與更新請求
 export interface UpsertSecondhandListingPayload {
   title: string;
   summary: string;
@@ -185,7 +165,7 @@ export interface UpsertSecondhandListingPayload {
   };
 }
 
-// 16. 定義上傳預簽名請求
+// 13. 定義上傳預簽名請求
 export interface PresignUploadPayload {
   file_name: string;
   mime_type: string;
@@ -193,14 +173,14 @@ export interface PresignUploadPayload {
   object_prefix?: string;
 }
 
-// 17. 定義上傳預簽名結果
+// 14. 定義上傳預簽名結果
 export interface PresignUploadResult {
   upload_url: string;
   object_key: string;
   headers: Record<string, string>;
 }
 
-// 18. 定義媒體資產回應
+// 15. 定義媒體資產回應
 export interface MediaAssetResponse {
   media_asset_id: string;
   storage_provider: string;
@@ -216,7 +196,7 @@ export interface MediaAssetResponse {
   created_at: string;
 }
 
-// 19. 定義前端卡片可接受的帖子資料
+// 16. 定義前端卡片可接受的帖子資料
 export type MarketplaceListingLike =
   | Listing
   | SecondhandListingSummaryResponse

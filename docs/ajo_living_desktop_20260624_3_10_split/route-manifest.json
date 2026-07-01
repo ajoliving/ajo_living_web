@@ -1,0 +1,155 @@
+{
+  "source": "../ajo_living_desktop_20260624(3)(10).html",
+  "entry": "index.html",
+  "generatedAt": "2026-06-25T08:34:19.775Z",
+  "routes": [
+    {
+      "name": "listing",
+      "id": "page-listing",
+      "title": "樓盤租售",
+      "file": "listing.html",
+      "startLine": 1045,
+      "endLine": 1236
+    },
+    {
+      "name": "market",
+      "id": "page-market",
+      "title": "家具市集",
+      "file": "market.html",
+      "startLine": 1236,
+      "endLine": 1316
+    },
+    {
+      "name": "login",
+      "id": "page-login",
+      "title": "登入",
+      "file": "login.html",
+      "startLine": 1316,
+      "endLine": 1412
+    },
+    {
+      "name": "home",
+      "id": "page-home",
+      "title": "首頁",
+      "file": "home.html",
+      "startLine": 1412,
+      "endLine": 1490
+    },
+    {
+      "name": "service",
+      "id": "page-service",
+      "title": "服務式住宅",
+      "file": "service.html",
+      "startLine": 1490,
+      "endLine": 1545
+    },
+    {
+      "name": "offers",
+      "id": "page-offers",
+      "title": "綜合優惠",
+      "file": "offers.html",
+      "startLine": 1545,
+      "endLine": 1800
+    },
+    {
+      "name": "payment",
+      "id": "page-payment",
+      "title": "AJO Pay",
+      "file": "payment.html",
+      "startLine": 1800,
+      "endLine": 3026
+    },
+    {
+      "name": "detail",
+      "id": "page-detail",
+      "title": "物件詳情",
+      "file": "detail.html",
+      "startLine": 3027,
+      "endLine": 3151
+    },
+    {
+      "name": "market-detail",
+      "id": "page-market-detail",
+      "title": "家具詳情",
+      "file": "market-detail.html",
+      "startLine": 3151,
+      "endLine": 3201
+    },
+    {
+      "name": "service-detail",
+      "id": "page-service-detail",
+      "title": "服務式住宅詳情",
+      "file": "service-detail.html",
+      "startLine": 3201,
+      "endLine": 3325
+    },
+    {
+      "name": "notif",
+      "id": "page-notif",
+      "title": "通知中心",
+      "file": "notif.html",
+      "startLine": 4481,
+      "endLine": 4566
+    },
+    {
+      "name": "affairs",
+      "id": "page-affairs",
+      "title": "我的大廈",
+      "file": "affairs.html",
+      "startLine": 4566,
+      "endLine": 4994
+    },
+    {
+      "name": "profile",
+      "id": "page-profile",
+      "title": "會員中心",
+      "file": "profile.html",
+      "startLine": 4994,
+      "endLine": 5368
+    },
+    {
+      "name": "management",
+      "id": "page-management",
+      "title": "管理中心",
+      "file": "management.html",
+      "startLine": 5368,
+      "endLine": 5469
+    },
+    {
+      "name": "trend",
+      "id": "page-trend",
+      "title": "租金走勢",
+      "file": "trend.html",
+      "startLine": 5645,
+      "endLine": 5709
+    },
+    {
+      "name": "saved",
+      "id": "page-saved",
+      "title": "收藏清單",
+      "file": "saved.html",
+      "startLine": 5776,
+      "endLine": 5797
+    }
+  ],
+  "partials": [
+    "chrome.html",
+    "lightbox-and-price-modal.html",
+    "floating-tools.html",
+    "onboarding.html",
+    "footer.html",
+    "alert-modal.html"
+  ],
+  "assets": [
+    "assets/styles.css",
+    "assets/payment.css",
+    "assets/payment.js",
+    "assets/app.js"
+  ],
+  "cleanup": [
+    "移除重複 scroll-progress 與 toast-container",
+    "移除第二套 compare/chat/calc 浮層 DOM，只保留一套公共 partial",
+    "移除 AJO Pay 隱藏 mobile view、mobile modal 與相關桌面未使用 CSS/JS",
+    "拆出主路由、公共 partial、CSS 與 JS，原始 HTML 不修改"
+  ]
+}

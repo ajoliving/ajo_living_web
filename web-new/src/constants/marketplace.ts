@@ -1,7 +1,7 @@
 /*
  * 二手交易選項常量。
  * 1. 統一分類、地區、價格、成色與聯絡方式 code。
- * 2. 供發布、篩選、Discover 與詳情頁共用。
+ * 2. 供發布、篩選與詳情頁共用。
  */
 import type { AppLocale } from '@/stores/preferences';
 

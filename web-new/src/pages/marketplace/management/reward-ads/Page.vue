@@ -8,7 +8,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { fetchStaffRewardAds, renewStaffRewardAd, updateStaffRewardAd } from '@/httpapis/wallet';
-import type { StaffRewardAdResponse } from '@/model/wallet';
+import type { StaffRewardAdResponse, StaffRewardAdType } from '@/model/wallet';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { formatDate } from '@/utils/format';
 import { formatAjoPoints } from '@/utils/wallet';
@@ -21,6 +21,9 @@ import {
 import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
 
+const router = useRouter();
+const adTypeFilter = ref<StaffRewardAdType | ''>('');
+
 // 1. 查詢廣告列表
 const fetchRewardAdItems: StaffManagementListFetcher<StaffRewardAdResponse> = (
   params: StaffManagementListParams,
@@ -30,9 +33,9 @@ const fetchRewardAdItems: StaffManagementListFetcher<StaffRewardAdResponse> = (
     page_size: params.page_size,
     keyword: params.keyword,
     is_active: params.status ? params.status === 'active' : undefined,
+    ad_type: adTypeFilter.value || undefined,
   });
 
-const router = useRouter();
 const {
   hasNext,
   hasPrevious,
@@ -64,6 +67,14 @@ const canSubmitRenewal = computed(() =>
   Number(renewalDays.value) <= 365,
 );
 
+// 2.1 廣告類型篩選選項
+const adTypeOptions = computed<Array<{ label: string; value: StaffRewardAdType | '' }>>(() => [
+  { label: t('marketplace.management.walletAdTypeAll'), value: '' },
+  { label: t('marketplace.management.walletAdTypeReward'), value: 'reward' },
+  { label: t('marketplace.management.walletAdTypeDisplayShort'), value: 'display_short' },
+  { label: t('marketplace.management.walletAdTypeDisplayLong'), value: 'display_long' },
+]);
+
 // 2. 格式化廣告狀態
 const formatAdStatus = (ad: StaffRewardAdResponse): string =>
   ad.is_active ? t('common.state.active') : t('common.state.hidden');
@@ -74,37 +85,49 @@ const formatAdMediaType = (ad: StaffRewardAdResponse): string =>
     ? t('marketplace.management.walletAdMediaTypeVideo')
     : t('marketplace.management.walletAdMediaTypeImage');
 
-// 4. 格式化積分
+// 4. 格式化廣告用途
+const formatAdType = (ad: StaffRewardAdResponse): string => {
+  if (ad.ad_type === 'display_short') {
+    return t('marketplace.management.walletAdTypeDisplayShort');
+  }
+  if (ad.ad_type === 'display_long' || ad.ad_type === 'display') {
+    return t('marketplace.management.walletAdTypeDisplayLong');
+  }
+  return t('marketplace.management.walletAdTypeReward');
+};
+
+// 5. 格式化積分
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), 'zh-HK');
-
-// 5. 格式化可選日期
-const formatOptionalDate = (value?: string | null): string =>
-  value ? formatDate(value) : '-';
 
 // 6. 跳轉廣告編輯頁
 const editRewardAd = async (ad: StaffRewardAdResponse): Promise<void> => {
   await router.push(`/account/marketplace/management/reward-ad-editor/${ad.task_id}`);
 };
 
-// 7. 啟停廣告任務
+// 7. 跳轉新增廣告頁
+const createRewardAd = async (): Promise<void> => {
+  await router.push('/account/marketplace/management/reward-ad-editor');
+};
+
+// 8. 啟停廣告任務
 const toggleRewardAd = async (ad: StaffRewardAdResponse): Promise<void> => {
   await runAction(() => updateStaffRewardAd(ad.task_id, { is_active: !ad.is_active }));
 };
 
-// 8. 開啟續期彈窗
+// 9. 開啟續期彈窗
 const openRenewalDialog = (ad: StaffRewardAdResponse): void => {
   renewalDialogAd.value = ad;
   renewalDays.value = 14;
 };
 
-// 9. 關閉續期彈窗
+// 10. 關閉續期彈窗
 const closeRenewalDialog = (): void => {
   renewalDialogAd.value = null;
   renewalDays.value = 14;
 };
 
-// 10. 提交續期設定
+// 11. 提交續期設定
 const submitRenewal = async (): Promise<void> => {
   if (!renewalDialogAd.value || !canSubmitRenewal.value) {
     return;
@@ -133,6 +156,17 @@ const submitRenewal = async (): Promise<void> => {
         <h1>{{ t('marketplace.management.walletAdListSection') }}</h1>
         <p>{{ t('marketplace.management.walletAdsDescription') }}</p>
       </div>
+      <button
+        type="button"
+        class="management-list-button"
+        @click="createRewardAd"
+      >
+        <AppIcon
+          name="plus-square"
+          :size="16"
+        />
+        新增廣告
+      </button>
     </header>
 
     <article class="management-list-panel">
@@ -149,6 +183,19 @@ const submitRenewal = async (): Promise<void> => {
             @keyup.enter="search"
           />
         </label>
+        <select
+          v-model="adTypeFilter"
+          class="management-list-select"
+          @change="search"
+        >
+          <option
+            v-for="option in adTypeOptions"
+            :key="option.value || 'all'"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
         <select
           v-model="status"
           class="management-list-select"
@@ -194,11 +241,11 @@ const submitRenewal = async (): Promise<void> => {
           <thead>
             <tr>
               <th>{{ t('marketplace.management.columnTitle') }}</th>
+              <th>{{ t('marketplace.management.walletAdTypeField') }}</th>
               <th>{{ t('marketplace.management.walletAdMediaTypeField') }}</th>
               <th>{{ t('marketplace.management.walletAdRewardField') }}</th>
               <th>{{ t('common.label.status') }}</th>
               <th>{{ t('marketplace.management.walletAdWatchCountColumn') }}</th>
-              <th>{{ t('common.label.expiresAt') }}</th>
               <th>{{ t('marketplace.management.columnUpdatedAt') }}</th>
               <th class="management-table-actions">{{ t('marketplace.management.columnActions') }}</th>
             </tr>
@@ -212,13 +259,13 @@ const submitRenewal = async (): Promise<void> => {
                 <strong>{{ ad.title }}</strong>
                 <small>{{ ad.summary || t('marketplace.management.walletAdNoSummary') }}</small>
               </td>
+              <td>{{ formatAdType(ad) }}</td>
               <td>{{ formatAdMediaType(ad) }}</td>
-              <td>{{ formatPoints(ad.reward_points) }}</td>
+              <td>{{ ad.ad_type === 'reward' ? formatPoints(ad.reward_points) : '-' }}</td>
               <td>
                 <span class="management-status-pill">{{ formatAdStatus(ad) }}</span>
               </td>
               <td>{{ t('marketplace.management.walletAdWatchCountValue', { count: ad.watch_count }) }}</td>
-              <td>{{ formatOptionalDate(ad.ends_at) }}</td>
               <td>{{ formatDate(ad.updated_at) }}</td>
               <td class="management-table-actions">
                 <div class="management-action-group">

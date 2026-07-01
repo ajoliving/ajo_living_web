@@ -22,6 +22,7 @@ import {
 import type {
   StaffRewardAdPayload,
   StaffRewardAdResponse,
+  StaffRewardAdType,
   StaffWalletTransactionResponse,
 } from '@/model/wallet';
 import type { StaffUserSummary } from '@/model/user';
@@ -31,7 +32,7 @@ import { buildUploadHeaders } from '@/utils/upload';
 import { formatAjoPoints } from '@/utils/wallet';
 
 type WalletDirectionFilter = '' | 'credit' | 'debit';
-export type RewardAdType = 'reward' | 'display';
+export type RewardAdType = Exclude<StaffRewardAdType, 'display'>;
 export type RewardAdMediaType = 'image' | 'video';
 export type RewardAdDisplayChannel = 'property_sale' | 'serviced_apartment' | 'furniture' | '';
 export type RewardAdDisplayPlacement = 'listing_side' | '';
@@ -234,7 +235,7 @@ export const useRewardAdEditorPage = () => {
   };
 
   const stageRewardAdMedia = (file: File): void => {
-    const expectedType = adForm.adType === 'display' ? 'image' : adForm.mediaType;
+    const expectedType = isDisplayRewardAdType(adForm.adType) ? 'image' : adForm.mediaType;
     if (expectedType === 'image' && !file.type.startsWith('image/')) {
       feedbackStore.pushToast(t('marketplace.management.walletAdImageRequired'), 'error');
       return;
@@ -291,7 +292,7 @@ export const useRewardAdEditorPage = () => {
       if (loadingAd.value) {
         return;
       }
-      if (adForm.adType === 'display') {
+      if (isDisplayRewardAdType(adForm.adType)) {
         adForm.mediaType = 'image';
         return;
       }
@@ -308,9 +309,10 @@ export const useRewardAdEditorPage = () => {
       if (loadingAd.value) {
         return;
       }
-      if (adForm.adType === 'display') {
+      if (isDisplayRewardAdType(adForm.adType)) {
         adForm.mediaType = 'image';
         adForm.displayPlacement = 'listing_side';
+        adForm.displayLayout = displayLayoutForAdType(adForm.adType);
         if (!adForm.displayChannel) {
           adForm.displayChannel = 'property_sale';
         }
@@ -450,7 +452,7 @@ export const useWalletTransactionPage = () => {
 const applyRewardAdToForm = (ad: StaffRewardAdResponse, form: RewardAdForm): void => {
   revokeRewardAdPreview(form);
   form.taskId = ad.task_id;
-  form.adType = ad.ad_type;
+  form.adType = normalizeEditorAdType(ad.ad_type);
   form.title = ad.title;
   form.summary = ad.summary;
   form.mediaURL = ad.media_url;
@@ -460,7 +462,7 @@ const applyRewardAdToForm = (ad: StaffRewardAdResponse, form: RewardAdForm): voi
   form.targetURL = ad.target_url;
   form.displayChannel = ad.display_channel || '';
   form.displayPlacement = ad.display_placement || '';
-  form.displayLayout = ad.display_layout || 'image_text';
+  form.displayLayout = displayLayoutForAdType(form.adType);
   form.sortOrder = ad.sort_order;
   form.rewardPoints = ad.reward_points;
   form.watchSeconds = ad.watch_seconds;
@@ -475,14 +477,14 @@ const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffReward
   summary: form.summary.trim(),
   cover_url: '',
   media_url: mediaURL.trim(),
-  media_type: form.adType === 'display' ? 'image' : form.mediaType,
+  media_type: isDisplayRewardAdType(form.adType) ? 'image' : form.mediaType,
   target_url: form.targetURL.trim(),
-  display_channel: form.adType === 'display' ? form.displayChannel : '',
-  display_placement: form.adType === 'display' ? 'listing_side' : '',
-  display_layout: form.adType === 'display' ? form.displayLayout : 'image_text',
+  display_channel: isDisplayRewardAdType(form.adType) ? form.displayChannel : '',
+  display_placement: isDisplayRewardAdType(form.adType) ? 'listing_side' : '',
+  display_layout: isDisplayRewardAdType(form.adType) ? displayLayoutForAdType(form.adType) : 'image_text',
   sort_order: Number(form.sortOrder),
-  reward_points: form.adType === 'display' ? 0 : Number(form.rewardPoints),
-  watch_seconds: form.adType === 'display' ? 0 : Number(form.watchSeconds),
+  reward_points: isDisplayRewardAdType(form.adType) ? 0 : Number(form.rewardPoints),
+  watch_seconds: isDisplayRewardAdType(form.adType) ? 0 : Number(form.watchSeconds),
   total_budget: 0,
   retention_days: Number(form.retentionDays),
   is_active: form.isActive,
@@ -491,9 +493,9 @@ const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffReward
 // 8. 判斷廣告表單是否可提交
 const isRewardAdFormValid = (form: RewardAdForm, isEditingAd: boolean): boolean =>
   form.title.trim().length > 0 &&
-  (form.adType === 'display' || form.summary.trim().length > 0) &&
-  (form.adType === 'display' || (Number.isFinite(Number(form.rewardPoints)) && Number(form.rewardPoints) > 0)) &&
-  (form.adType === 'display' || (Number.isFinite(Number(form.watchSeconds)) && Number(form.watchSeconds) > 0)) &&
+  (isDisplayRewardAdType(form.adType) || form.summary.trim().length > 0) &&
+  (isDisplayRewardAdType(form.adType) || (Number.isFinite(Number(form.rewardPoints)) && Number(form.rewardPoints) > 0)) &&
+  (isDisplayRewardAdType(form.adType) || (Number.isFinite(Number(form.watchSeconds)) && Number(form.watchSeconds) > 0)) &&
   (form.adType === 'reward' || (form.displayChannel.length > 0 && form.displayPlacement.length > 0 && form.displayLayout.length > 0)) &&
   Number.isFinite(Number(form.retentionDays)) &&
   Number(form.retentionDays) > 0 &&
@@ -550,7 +552,26 @@ const resolveRetentionDays = (endsAt?: string): number => {
   return Math.max(1, Math.ceil((endTime - Date.now()) / dayMs));
 };
 
-// 12. 解析 API 錯誤訊息
+// 12. 判斷是否為列表右側展示廣告
+export const isDisplayRewardAdType = (adType: RewardAdType): boolean =>
+  adType === 'display_short' || adType === 'display_long';
+
+// 13. 標準化編輯頁廣告類型
+const normalizeEditorAdType = (adType: StaffRewardAdType): RewardAdType => {
+  if (adType === 'display_short') {
+    return 'display_short';
+  }
+  if (adType === 'display_long' || adType === 'display') {
+    return 'display_long';
+  }
+  return 'reward';
+};
+
+// 14. 依廣告類型固定展示樣式
+export const displayLayoutForAdType = (adType: RewardAdType): RewardAdDisplayLayout =>
+  adType === 'display_long' ? 'image_full' : 'image_text';
+
+// 15. 解析 API 錯誤訊息
 const readErrorMessage = (error: unknown, fallback: string): string =>
   axios.isAxiosError<{ message?: string }>(error)
     ? error.response?.data?.message ?? fallback

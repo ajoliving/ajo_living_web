@@ -12,9 +12,16 @@ import {
   publishStaffSecondhandListing,
   renewStaffSecondhandListing,
 } from '@/httpapis/staff';
+import {
+  getMarketplaceCategoryLabel,
+  getMarketplaceDistrictLabel,
+  getMarketplaceOptionLabel,
+  marketplaceCategories,
+} from '@/constants/marketplace';
 import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
-import { formatDate } from '@/utils/format';
+import { usePreferenceStore } from '@/stores/preferences';
+import { formatDate, formatPrice } from '@/utils/format';
 import { resolveListingOwnerName, resolveListingStatus } from '@/utils/marketplace';
 
 import { useStaffManagementList } from '../composables/useStaffManagementList';
@@ -22,6 +29,7 @@ import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
 
 const {
+  categoryCode,
   hasNext,
   hasPrevious,
   items,
@@ -44,6 +52,13 @@ const renewalDialogListing = ref<SecondhandListingSummaryResponse | null>(null);
 const renewalDays = ref(14);
 const renewing = ref(false);
 const renewalDayOptions = [7, 14, 30, 60, 90];
+const preferenceStore = usePreferenceStore();
+const categoryOptions = computed(() =>
+  marketplaceCategories.map((category) => ({
+    label: getMarketplaceOptionLabel(category, preferenceStore.locale),
+    value: category.value,
+  })),
+);
 const canSubmitRenewal = computed(() =>
   Number.isInteger(Number(renewalDays.value)) &&
   Number(renewalDays.value) > 0 &&
@@ -54,9 +69,17 @@ const canSubmitRenewal = computed(() =>
 const formatStatus = (listing: SecondhandListingSummaryResponse): string =>
   t(`common.state.${resolveListingStatus(listing)}`);
 
-// 2. 格式化可選日期
-const formatOptionalDate = (value?: string | null): string =>
-  value ? formatDate(value) : '-';
+// 2. 格式化分類、價格與地區
+const formatCategory = (listing: SecondhandListingSummaryResponse): string =>
+  getMarketplaceCategoryLabel(listing.category_code, preferenceStore.locale);
+
+const formatDistrict = (listing: SecondhandListingSummaryResponse): string =>
+  getMarketplaceDistrictLabel(listing.district_code, preferenceStore.locale);
+
+const formatListingPrice = (listing: SecondhandListingSummaryResponse): string =>
+  listing.price_mode === 'free'
+    ? t('common.price.free')
+    : formatPrice(listing.price_hkd ?? 0, preferenceStore.locale);
 
 // 3. 開啟續期彈窗
 const openRenewalDialog = (listing: SecondhandListingSummaryResponse): void => {
@@ -116,6 +139,21 @@ const submitRenewal = async (): Promise<void> => {
           />
         </label>
         <select
+          v-model="categoryCode"
+          class="management-list-select"
+        >
+          <option value="">
+            {{ t('marketplace.list.categoryTitle') }}
+          </option>
+          <option
+            v-for="option in categoryOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+        <select
           v-model="status"
           class="management-list-select"
         >
@@ -170,9 +208,10 @@ const submitRenewal = async (): Promise<void> => {
             <tr>
               <th>{{ t('marketplace.management.columnTitle') }}</th>
               <th>{{ t('marketplace.management.columnOwner') }}</th>
+              <th>{{ t('marketplace.mine.category') }}</th>
+              <th>{{ t('marketplace.mine.price') }}</th>
+              <th>{{ t('marketplace.detail.pickupArea') }}</th>
               <th>{{ t('common.label.status') }}</th>
-              <th>{{ t('common.label.publishedAt') }}</th>
-              <th>{{ t('common.label.expiresAt') }}</th>
               <th>{{ t('marketplace.management.columnUpdatedAt') }}</th>
               <th class="management-table-actions">{{ t('marketplace.management.columnActions') }}</th>
             </tr>
@@ -187,11 +226,12 @@ const submitRenewal = async (): Promise<void> => {
                 <small>{{ listing.listing_id }}</small>
               </td>
               <td>{{ resolveListingOwnerName(listing) }}</td>
+              <td>{{ formatCategory(listing) }}</td>
+              <td>{{ formatListingPrice(listing) }}</td>
+              <td>{{ formatDistrict(listing) }}</td>
               <td>
                 <span class="management-status-pill">{{ formatStatus(listing) }}</span>
               </td>
-              <td>{{ formatOptionalDate(listing.published_at) }}</td>
-              <td>{{ formatOptionalDate(listing.expire_at) }}</td>
               <td>{{ formatDate(listing.updated_at) }}</td>
               <td
                 class="management-table-actions"

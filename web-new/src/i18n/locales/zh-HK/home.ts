@@ -26,8 +26,6 @@ export default {
     pages: '資料來源',
   },
   loadError: '首頁資料載入失敗，請稍後再試。',
-  carouselAriaLabel: '自動輪播圖集',
-  carouselImageAlt: '首頁輪播圖片 {index}',
   newShell: {
     eyebrow: 'AJO LIVING',
     title: '理想生活由此出發',

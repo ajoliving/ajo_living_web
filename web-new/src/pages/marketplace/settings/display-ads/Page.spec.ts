@@ -53,9 +53,9 @@ const createSettingsResponse = () => ({
   data: {
     data: {
       channel: 'property_sale',
-      slots: Array.from({ length: 10 }, (_, index) => ({
+      slots: Array.from({ length: 5 }, (_, index) => ({
         slot_index: index + 1,
-        layout: index < 3 ? 'text_compact' : 'image_text',
+        layout: index < 3 ? 'image_text' : 'image_full',
         ads: [],
       })),
     },
@@ -69,7 +69,7 @@ const createAdsResponse = () => ({
       items: [
         {
           task_id: 'ad-1',
-          ad_type: 'display',
+          ad_type: 'display_short',
           title: '搬屋優惠',
           summary: '即日報價',
           cover_url: '',
@@ -144,11 +144,10 @@ describe('DisplayAdsSettingsPage', () => {
           target_url: 'https://example.com',
         }],
       },
-      {
-        slot_index: 2,
-        ad_task_ids: [],
-        ads: [],
-      },
+      { slot_index: 2, ad_task_ids: [], ads: [] },
+      { slot_index: 3, ad_task_ids: [], ads: [] },
+      { slot_index: 4, ad_task_ids: [], ads: [] },
+      { slot_index: 5, ad_task_ids: [], ads: [] },
     ]);
   });
 });

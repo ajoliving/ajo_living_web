@@ -443,6 +443,19 @@ onBeforeUnmount(() => {
         </label>
 
         <label class="editor-field">
+          <span class="editor-field-label-row">
+            <span>{{ t('marketplace.editor.whatsAppField') }}</span>
+            <span class="editor-phone-prefix">{{ t('marketplace.editor.phoneCountryCode') }}</span>
+          </span>
+          <input
+            v-model="props.formState.whatsapp"
+            type="tel"
+            :placeholder="t('marketplace.editor.whatsAppPlaceholder')"
+          />
+          <small class="editor-field-hint">{{ t('marketplace.editor.contactRetainHint') }}</small>
+        </label>
+
+        <label class="editor-field">
           <span>{{ t('marketplace.editor.tradeNote') }}</span>
           <input
             v-model="props.formState.tradeNote"
@@ -596,6 +609,13 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   line-height: 1;
   text-transform: none;
+}
+
+.editor-field-hint {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .editor-donation-field {

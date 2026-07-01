@@ -7,7 +7,7 @@ import axios from 'axios';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { publishSystemNotice } from '@/httpapis/chats';
+import { publishSystemNotice } from '@/httpapis/notifications';
 import { useFeedbackStore } from '@/stores/feedback';
 
 // 1. 建立發布通知流程
@@ -17,21 +17,13 @@ export const useMarketplaceSettingsNoticePage = () => {
   const publishingNotice = ref(false);
   const noticeTitle = ref('');
   const noticeBody = ref('');
-  const noticeActionLabel = ref('');
-  const noticeActionURL = ref('');
 
   // 1.1 發布系統通知
   const publishNotice = async (): Promise<void> => {
     const title = noticeTitle.value.trim();
     const body = noticeBody.value.trim();
-    const actionLabel = noticeActionLabel.value.trim();
-    const actionURL = noticeActionURL.value.trim();
     if (!title || !body) {
       feedbackStore.pushToast(t('marketplace.settings.noticeRequired'), 'error');
-      return;
-    }
-    if ((actionLabel && !actionURL) || (!actionLabel && actionURL)) {
-      feedbackStore.pushToast(t('marketplace.settings.noticeActionPairRequired'), 'error');
       return;
     }
 
@@ -41,13 +33,9 @@ export const useMarketplaceSettingsNoticePage = () => {
       const { data } = await publishSystemNotice({
         title,
         body,
-        action_label: actionLabel || undefined,
-        action_url: actionURL || undefined,
       });
       noticeTitle.value = '';
       noticeBody.value = '';
-      noticeActionLabel.value = '';
-      noticeActionURL.value = '';
       feedbackStore.pushToast(
         t('marketplace.settings.noticePublishSuccess', { count: data.data.delivered_count }),
         'success',
@@ -60,8 +48,6 @@ export const useMarketplaceSettingsNoticePage = () => {
   };
 
   return {
-    noticeActionLabel,
-    noticeActionURL,
     noticeBody,
     noticeTitle,
     publishNotice,

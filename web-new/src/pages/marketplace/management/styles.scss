@@ -317,6 +317,13 @@
   width: min(100%, 42rem);
 }
 
+.management-dialog-panel--editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(100%, 72rem);
+  max-height: calc(100vh - 2rem);
+}
+
 .management-dialog-header {
   display: flex;
   align-items: flex-start;
@@ -363,6 +370,16 @@
   display: grid;
   gap: 0.9rem;
   padding: 1rem;
+}
+
+.management-dialog-body--editor {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.management-dialog-body--editor .property-editor-page {
+  max-width: none;
+  padding: 0 0 0.5rem;
 }
 
 .management-dialog-grid {

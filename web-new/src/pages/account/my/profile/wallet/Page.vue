@@ -1,15 +1,18 @@
 <!--
  * 會員錢包頁。
  * 1. 顯示 AJO Point 餘額、廣告獎勵與最近流水。
- * 2. 提供後台廣告任務彈窗觀看、倒數與積分自動領取流程。
+ * 2. 提供線上充值、支付狀態查詢與廣告積分領取流程。
 -->
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
   claimRewardAdTask,
+  createWalletRechargeOrder,
+  fetchWalletRechargeOrder,
   fetchRewardAdTasks,
   fetchWalletOverview,
   startRewardAdTask,
@@ -19,8 +22,13 @@ import type {
   RewardAdSessionResponse,
   RewardAdTaskResponse,
   WalletOverviewResponse,
+  WalletRechargeDeviceMode,
+  WalletRechargeOrderResponse,
+  WalletRechargePayMethod,
+  WalletRechargePayRegion,
 } from '@/model/wallet';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -31,15 +39,20 @@ interface RunningAdSession {
   taskId: string;
   claimId: string;
   remainingSeconds: number;
+  availableAtTime: number;
 }
 
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 
 const loading = ref(false);
 const claiming = ref(false);
+const rechargeSubmitting = ref(false);
+const rechargeRefreshing = ref(false);
 const overview = ref<WalletOverviewResponse | null>(null);
 const adTasks = ref<RewardAdTaskResponse[]>([]);
 const runningSession = ref<RunningAdSession | null>(null);
@@ -47,7 +60,13 @@ const selectedAdTask = ref<RewardAdTaskResponse | null>(null);
 const showingExitConfirm = ref(false);
 const adClaimSucceeded = ref(false);
 const startingAd = ref(false);
+const showingRechargeDialog = ref(false);
+const rechargeAmount = ref<number>(100);
+const rechargePayMethod = ref<WalletRechargePayMethod>('wechat');
+const rechargePayRegion = ref<WalletRechargePayRegion>('HK');
+const activeRechargeOrder = ref<WalletRechargeOrderResponse | null>(null);
 let countdownTimer: number | undefined;
+let rechargePollTimer: number | undefined;
 
 const account = computed(() => overview.value?.account);
 const transactions = computed(() => overview.value?.recent_transactions ?? []);
@@ -68,11 +87,102 @@ const selectedAdRemainingSeconds = computed(() => {
 const selectedAdIsRunning = computed(() => Boolean(
   runningSession.value && runningSession.value.taskId === selectedAdTask.value?.task_id,
 ));
+const rechargeRate = computed(() => overview.value?.recharge_rate ?? 100);
+const rechargeAmountCents = computed(() => Math.round((Number(rechargeAmount.value) || 0) * 100));
+const rechargePoints = computed(() =>
+  Math.max(0, Math.floor(rechargeAmountCents.value * rechargeRate.value / 100)));
+const rechargeAmountValue = computed(() => rechargeAmountCents.value / 100);
+const rechargeAmountIsValid = computed(() =>
+  rechargeAmountCents.value >= 1 && rechargeAmountCents.value <= 5000000);
+const rechargeMethods = computed<Array<{ key: WalletRechargePayMethod; label: string; description: string }>>(() => [
+  {
+    key: 'wechat',
+    label: t('account.wallet.payWechat'),
+    description: t('account.wallet.payWechatHint'),
+  },
+  {
+    key: 'alipay',
+    label: t('account.wallet.payAlipay'),
+    description: t('account.wallet.payAlipayHint'),
+  },
+  {
+    key: 'unionpay',
+    label: t('account.wallet.payUnionpay'),
+    description: t('account.wallet.payUnionpayHint'),
+  },
+]);
+const rechargeRegionOptions = computed<Array<{ key: WalletRechargePayRegion; label: string }>>(() => [
+  { key: 'HK', label: t('account.wallet.regionHK') },
+  { key: 'CN', label: t('account.wallet.regionCN') },
+]);
+const shouldShowRechargeRegion = computed(() => rechargePayMethod.value === 'alipay');
+const activeRechargeIsPending = computed(() => activeRechargeOrder.value?.state === 'PAYING');
+const activeRechargeMethodLabel = computed(() => {
+  const order = activeRechargeOrder.value;
+  if (!order) {
+    return '';
+  }
+  if (order.pay_channel === 'YSF_QR') {
+    return t('account.wallet.payUnionpay');
+  }
+  if (order.pay_channel.startsWith('WX_')) {
+    return t('account.wallet.payWechat');
+  }
+  if (order.pay_region === 'CN') {
+    return t('account.wallet.payAlipayCN');
+  }
+  return t('account.wallet.payAlipayHK');
+});
+const activeRechargeStateClass = computed(() => {
+  const state = activeRechargeOrder.value?.state ?? '';
+  if (state === 'SUCCESS') {
+    return 'wallet-recharge-status--success';
+  }
+  if (state === 'FAILED' || state === 'CLOSED' || state === 'EXPIRED' || state === 'REVOKED') {
+    return 'wallet-recharge-status--failed';
+  }
+  return 'wallet-recharge-status--pending';
+});
+const activeRechargeQrImage = computed(() => {
+  const order = activeRechargeOrder.value;
+  if (!order || order.state !== 'PAYING') {
+    return '';
+  }
+
+  return normalizePayDataType(order.pay_data_type) === 'codeimgurl' ? order.pay_data : '';
+});
+const activeRechargeQrLink = computed(() => {
+  const order = activeRechargeOrder.value;
+  if (!order || order.state !== 'PAYING') {
+    return '';
+  }
+  if (normalizePayDataType(order.pay_data_type) === 'codeurl') {
+    return order.pay_data;
+  }
+  if (normalizePayDataType(order.pay_data_type) === 'payurl' && isDesktopBrowser()) {
+    return order.pay_data;
+  }
+
+  return '';
+});
+const activeRechargeCanRedirect = computed(() => {
+  const order = activeRechargeOrder.value;
+  return Boolean(order && order.state === 'PAYING' && normalizePayDataType(order.pay_data_type) === 'payurl' && order.pay_data);
+});
+const activeRechargeHasPaymentEntry = computed(() =>
+  Boolean(activeRechargeQrImage.value || activeRechargeQrLink.value || activeRechargeCanRedirect.value));
 
 // 1. 格式化錢包主數字
 const formatPointNumber = (value: number): string => pointFormatter.format(value);
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+const formatHKD = (value: number | string): string =>
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
 
 // 2. 讀取錯誤訊息
 const readErrorMessage = (error: unknown, fallback: string): string =>
@@ -80,7 +190,38 @@ const readErrorMessage = (error: unknown, fallback: string): string =>
     ? error.response?.data?.message ?? fallback
     : fallback;
 
-// 3. 讀取錢包和廣告任務
+// 3.1 判斷桌面瀏覽器
+const isDesktopBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return true;
+  }
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isTablet =
+    userAgent.includes('ipad') ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    (userAgent.includes('android') && !userAgent.includes('mobile'));
+  const isMobile = /(iphone|ipod|windows phone|iemobile|blackberry|bb10|opera mini|mobile)/i.test(userAgent);
+  return !isMobile && !isTablet;
+};
+
+// 3.2 輸出設備支付模式
+const resolveDeviceMode = (): WalletRechargeDeviceMode =>
+  isDesktopBrowser() ? 'desktop' : 'mobile';
+
+// 3.3 標準化網關付款資料類型
+const normalizePayDataType = (value: string): string =>
+  String(value || '').trim().toLowerCase();
+
+// 3.4 建立 H5 回跳地址
+const buildRechargeReturnPath = (): string => {
+  if (typeof window === 'undefined') {
+    return '/account/profile/wallet';
+  }
+
+  return `${window.location.origin}/account/profile/wallet`;
+};
+
+// 3.5 讀取錢包和廣告任務
 const loadWallet = async (): Promise<void> => {
   loading.value = true;
   try {
@@ -98,12 +239,164 @@ const loadWallet = async (): Promise<void> => {
   }
 };
 
+// 3.6 發起充值
+const submitRecharge = async (): Promise<void> => {
+  if (rechargeSubmitting.value) {
+    return;
+  }
+  if (!rechargeAmountIsValid.value) {
+    feedbackStore.pushToast(t('account.wallet.rechargeAmountInvalid'), 'error');
+    return;
+  }
+
+  rechargeSubmitting.value = true;
+  try {
+    const response = await createWalletRechargeOrder({
+      amount_hkd: rechargeAmountValue.value,
+      pay_method: rechargePayMethod.value,
+      pay_region: rechargePayRegion.value,
+      device_mode: resolveDeviceMode(),
+      return_path: buildRechargeReturnPath(),
+    });
+    activeRechargeOrder.value = response.data.data;
+    if (activeRechargeCanRedirect.value && !isDesktopBrowser()) {
+      window.location.assign(response.data.data.pay_data);
+      return;
+    }
+    feedbackStore.pushToast(t('account.wallet.rechargeOrderCreated'), 'success');
+  } catch (error: unknown) {
+    feedbackStore.pushToast(readErrorMessage(error, t('account.wallet.rechargeCreateError')), 'error');
+  } finally {
+    rechargeSubmitting.value = false;
+  }
+};
+
+// 3.7 刷新充值訂單
+const refreshRechargeOrder = async (silent = false): Promise<void> => {
+  const order = activeRechargeOrder.value;
+  if (!order || rechargeRefreshing.value) {
+    return;
+  }
+
+  rechargeRefreshing.value = true;
+  try {
+    const response = await fetchWalletRechargeOrder(order.order_id, { refresh: true });
+    activeRechargeOrder.value = response.data.data;
+    if (response.data.data.state === 'SUCCESS') {
+      feedbackStore.pushToast(t('account.wallet.rechargeSuccess'), 'success');
+      await loadWallet();
+      stopRechargePolling();
+      activeRechargeOrder.value = null;
+      showingRechargeDialog.value = false;
+    } else if (!silent) {
+      feedbackStore.pushToast(t('account.wallet.rechargeStatusUpdated'), 'info');
+    }
+  } catch (error: unknown) {
+    feedbackStore.pushToast(readErrorMessage(error, t('account.wallet.rechargeRefreshError')), 'error');
+  } finally {
+    rechargeRefreshing.value = false;
+  }
+};
+
+// 3.8 從支付回跳參數恢復充值訂單
+const hydrateRechargeReturn = async (): Promise<void> => {
+  const queryOrderNo = String(route.query.mch_order_no ?? '').trim();
+  const isWalletRechargeReturn = String(route.query.wallet_recharge ?? '') === '1';
+  if (!queryOrderNo || !isWalletRechargeReturn) {
+    return;
+  }
+
+  rechargeRefreshing.value = true;
+  try {
+    const response = await fetchWalletRechargeOrder(queryOrderNo, { refresh: true });
+    activeRechargeOrder.value = response.data.data;
+    await loadWallet();
+    if (response.data.data.state === 'SUCCESS') {
+      feedbackStore.pushToast(t('account.wallet.rechargeSuccess'), 'success');
+      activeRechargeOrder.value = null;
+      showingRechargeDialog.value = false;
+    }
+  } catch (error: unknown) {
+    feedbackStore.pushToast(readErrorMessage(error, t('account.wallet.rechargeRefreshError')), 'error');
+  } finally {
+    rechargeRefreshing.value = false;
+    await router.replace({ path: route.path, query: {} });
+  }
+};
+
+// 3.9 打開當前充值支付鏈接
+const openRechargePayData = (): void => {
+  const order = activeRechargeOrder.value;
+  if (!order?.pay_data) {
+    return;
+  }
+
+  window.location.assign(order.pay_data);
+};
+
+// 3.10 切換充值支付方式
+const selectRechargeMethod = (method: WalletRechargePayMethod): void => {
+  rechargePayMethod.value = method;
+  if (method === 'wechat' || method === 'unionpay') {
+    rechargePayRegion.value = 'HK';
+  }
+};
+
+// 3.11 打開充值彈窗
+const openRechargeDialog = (): void => {
+  showingRechargeDialog.value = true;
+};
+
+// 3.12 關閉充值彈窗
+const closeRechargeDialog = (): void => {
+  if (rechargeSubmitting.value || rechargeRefreshing.value) {
+    return;
+  }
+  showingRechargeDialog.value = false;
+};
+
+// 3.13 停止充值查單輪詢
+const stopRechargePolling = (): void => {
+  if (rechargePollTimer) {
+    window.clearInterval(rechargePollTimer);
+    rechargePollTimer = undefined;
+  }
+};
+
+// 3.14 根據彈窗狀態啟停充值查單輪詢
+const syncRechargePolling = (): void => {
+  stopRechargePolling();
+  if (!showingRechargeDialog.value || activeRechargeOrder.value?.state !== 'PAYING') {
+    return;
+  }
+
+  rechargePollTimer = window.setInterval(() => {
+    void refreshRechargeOrder(true);
+  }, 3000);
+};
+
 // 4. 停止倒數計時
 const stopCountdown = (): void => {
   if (countdownTimer) {
     window.clearInterval(countdownTimer);
     countdownTimer = undefined;
   }
+};
+
+// 4.1 計算最新剩餘觀看秒數
+const getRunningSessionRemainingSeconds = (session: RunningAdSession): number =>
+  Math.max(0, Math.ceil((session.availableAtTime - Date.now()) / 1000));
+
+// 4.2 判斷目前廣告是否已完整觀看
+const isSelectedAdReadyToClaim = (): boolean => {
+  const task = selectedAdTask.value;
+  const session = runningSession.value;
+  if (!task || !session || session.taskId !== task.task_id) {
+    return false;
+  }
+
+  session.remainingSeconds = getRunningSessionRemainingSeconds(session);
+  return session.remainingSeconds <= 0;
 };
 
 // 5. 開始倒數計時
@@ -118,6 +411,7 @@ const startCountdown = (session: RewardAdSessionResponse): void => {
   runningSession.value = {
     taskId: session.task_id,
     claimId: session.claim_id,
+    availableAtTime: targetAvailableAtTime,
     remainingSeconds: calculateRemainingSeconds(),
   };
   countdownTimer = window.setInterval(() => {
@@ -125,7 +419,7 @@ const startCountdown = (session: RewardAdSessionResponse): void => {
       stopCountdown();
       return;
     }
-    runningSession.value.remainingSeconds = calculateRemainingSeconds();
+    runningSession.value.remainingSeconds = getRunningSessionRemainingSeconds(runningSession.value);
     if (runningSession.value.remainingSeconds <= 0) {
       stopCountdown();
       void handleClaimSelectedAd();
@@ -171,7 +465,12 @@ const handleClaimSelectedAd = async (): Promise<void> => {
   if (!task) {
     return;
   }
-  if (!runningSession.value || runningSession.value.taskId !== task.task_id || runningSession.value.remainingSeconds > 0) {
+  const session = runningSession.value;
+  if (!session || session.taskId !== task.task_id) {
+    return;
+  }
+  session.remainingSeconds = getRunningSessionRemainingSeconds(session);
+  if (session.remainingSeconds > 0) {
     return;
   }
   if (claiming.value) {
@@ -180,7 +479,7 @@ const handleClaimSelectedAd = async (): Promise<void> => {
 
   claiming.value = true;
   try {
-    await claimRewardAdTask(task.task_id, runningSession.value.claimId);
+    await claimRewardAdTask(task.task_id, session.claimId);
     feedbackStore.pushToast(t('account.wallet.adClaimSuccess'), 'success');
     runningSession.value = null;
     adClaimSucceeded.value = true;
@@ -235,10 +534,19 @@ const runAdAction = async (task: RewardAdTaskResponse): Promise<void> => {
 };
 
 // 13. 要求關閉廣告彈窗
-const requestCloseAdDialog = (): void => {
+const requestCloseAdDialog = async (): Promise<void> => {
   if (claiming.value || startingAd.value) {
     return;
   }
+
+  if (isSelectedAdReadyToClaim()) {
+    await handleClaimSelectedAd();
+    if (adClaimSucceeded.value) {
+      closeAdDialog();
+    }
+    return;
+  }
+
   if (runningSession.value && runningSession.value.remainingSeconds > 0 && !adClaimSucceeded.value) {
     showingExitConfirm.value = true;
     return;
@@ -256,17 +564,44 @@ const closeAdDialog = (): void => {
 };
 
 // 15. 確認未完成觀看時離開
-const confirmExitAdDialog = (): void => {
+const confirmExitAdDialog = async (): Promise<void> => {
+  if (claiming.value || startingAd.value) {
+    return;
+  }
+  if (isSelectedAdReadyToClaim()) {
+    await handleClaimSelectedAd();
+    if (adClaimSucceeded.value) {
+      closeAdDialog();
+    }
+    return;
+  }
+
   closeAdDialog();
 };
 
 onMounted(() => {
-  void loadWallet();
+  void hydrateRechargeReturn().then(() => {
+    if (!overview.value) {
+      return loadWallet();
+    }
+    return undefined;
+  });
 });
 
 onBeforeUnmount(() => {
+  if (isSelectedAdReadyToClaim()) {
+    void handleClaimSelectedAd();
+  }
   stopCountdown();
+  stopRechargePolling();
 });
+
+watch(
+  [showingRechargeDialog, activeRechargeOrder],
+  () => {
+    syncRechargePolling();
+  },
+);
 </script>
 
 <template>
@@ -355,8 +690,13 @@ onBeforeUnmount(() => {
               class="wallet-ad-card"
             >
               <div class="wallet-ad-cover">
+                <img
+                  v-if="task.cover_url"
+                  :src="task.cover_url"
+                  :alt="task.title"
+                />
                 <video
-                  v-if="task.media_type === 'video' && task.media_url"
+                  v-else-if="task.media_type === 'video' && task.media_url"
                   :src="task.media_url"
                   preload="metadata"
                 />
@@ -371,14 +711,20 @@ onBeforeUnmount(() => {
                   :size="34"
                 />
               </div>
+
               <div class="wallet-ad-body">
                 <h3>{{ task.title }}</h3>
                 <p>{{ task.summary }}</p>
-                <span>{{ t('account.wallet.rewardPoints', { points: formatPoints(task.reward_points) }) }}</span>
+                <div class="wallet-ad-meta">
+                  <span>{{ t('account.wallet.rewardPoints', { points: formatPoints(task.reward_points) }) }}</span>
+                  <span>{{ t('account.wallet.watchSecondsValue', { seconds: task.watch_seconds }) }}</span>
+                  <span>{{ resolveAdActionLabel(task) }}</span>
+                </div>
               </div>
+
               <button
                 type="button"
-                class="wallet-action-button"
+                class="wallet-action-button wallet-action-button--compact"
                 :disabled="isAdActionDisabled(task)"
                 @click="runAdAction(task)"
               >
@@ -389,9 +735,46 @@ onBeforeUnmount(() => {
         </article>
 
         <aside class="wallet-side-stack">
-          <article class="wallet-panel">
-            <h2>{{ t('account.wallet.rechargeTitle') }}</h2>
-            <p class="wallet-muted">{{ t('account.wallet.rechargeUnavailable') }}</p>
+          <article class="wallet-panel wallet-recharge-panel">
+            <div class="wallet-panel-title">
+              <div>
+                <h2>{{ t('account.wallet.rechargeTitle') }}</h2>
+                <p>{{ t('account.wallet.rechargeDescription', { rate: rechargeRate }) }}</p>
+              </div>
+            </div>
+
+            <div class="wallet-recharge-summary">
+              <span>{{ t('account.wallet.rechargePointsPreview') }}</span>
+              <strong>{{ formatPoints(rechargePoints) }}</strong>
+            </div>
+
+            <section
+              v-if="activeRechargeIsPending"
+              class="wallet-recharge-mini-order"
+            >
+              <div>
+                <span>{{ activeRechargeMethodLabel }}</span>
+                <strong>{{ activeRechargeOrder ? formatHKD(activeRechargeOrder.amount_hkd) : '' }}</strong>
+              </div>
+              <em
+                class="wallet-recharge-status"
+                :class="activeRechargeStateClass"
+              >
+                {{ activeRechargeOrder?.state_label }}
+              </em>
+            </section>
+
+            <button
+              type="button"
+              class="wallet-action-button wallet-recharge-submit"
+              @click="openRechargeDialog"
+            >
+              <AppIcon
+                name="plus-square"
+                :size="16"
+              />
+              <span>{{ t('account.wallet.rechargeOpenDialog') }}</span>
+            </button>
           </article>
         </aside>
       </section>
@@ -436,6 +819,183 @@ onBeforeUnmount(() => {
     </template>
 
     <Teleport to="body">
+      <Transition name="wallet-ad-dialog-fade">
+        <div
+          v-if="showingRechargeDialog"
+          class="wallet-recharge-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('account.wallet.rechargeTitle')"
+          @click.self="closeRechargeDialog"
+        >
+          <div class="wallet-recharge-dialog__panel">
+            <header class="wallet-recharge-dialog__header">
+              <div>
+                <p class="wallet-kicker">{{ t('common.brand.pointsName') }}</p>
+                <h2>{{ t('account.wallet.rechargeTitle') }}</h2>
+                <p>{{ t('account.wallet.rechargeDescription', { rate: rechargeRate }) }}</p>
+              </div>
+              <button
+                type="button"
+                class="wallet-ad-dialog__close"
+                :aria-label="t('account.wallet.rechargeClose')"
+                @click="closeRechargeDialog"
+              >
+                <AppIcon
+                  name="close"
+                  :size="18"
+                />
+              </button>
+            </header>
+
+            <div class="wallet-recharge-dialog__body">
+              <div class="wallet-recharge-form">
+                <label class="wallet-recharge-field">
+                  <span>{{ t('account.wallet.rechargeAmountLabel') }}</span>
+                  <div class="wallet-recharge-input">
+                    <span>HKD</span>
+                    <input
+                      v-model.number="rechargeAmount"
+                      type="number"
+                      min="0.01"
+                      max="50000"
+                      step="0.01"
+                      inputmode="decimal"
+                    />
+                  </div>
+                </label>
+
+                <div class="wallet-recharge-points">
+                  <span>{{ t('account.wallet.rechargePointsPreview') }}</span>
+                  <strong>{{ formatPoints(rechargePoints) }}</strong>
+                </div>
+
+                <div
+                  class="wallet-recharge-methods"
+                  role="radiogroup"
+                  :aria-label="t('account.wallet.rechargeMethodLabel')"
+                >
+                  <button
+                    v-for="method in rechargeMethods"
+                    :key="method.key"
+                    type="button"
+                    class="wallet-recharge-method"
+                    :class="{ 'wallet-recharge-method--active': rechargePayMethod === method.key }"
+                    @click="selectRechargeMethod(method.key)"
+                  >
+                    <strong>{{ method.label }}</strong>
+                    <small>{{ method.description }}</small>
+                  </button>
+                </div>
+
+                <div
+                  v-if="shouldShowRechargeRegion"
+                  class="wallet-recharge-regions"
+                  role="radiogroup"
+                  :aria-label="t('account.wallet.rechargeRegionLabel')"
+                >
+                  <button
+                    v-for="region in rechargeRegionOptions"
+                    :key="region.key"
+                    type="button"
+                    :class="{ 'wallet-recharge-region--active': rechargePayRegion === region.key }"
+                    @click="rechargePayRegion = region.key"
+                  >
+                    {{ region.label }}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  class="wallet-action-button wallet-recharge-submit"
+                  :disabled="rechargeSubmitting || !rechargeAmountIsValid"
+                  @click="submitRecharge"
+                >
+                  <AppIcon
+                    name="send"
+                    :size="16"
+                  />
+                  <span>{{ rechargeSubmitting ? t('account.wallet.rechargeCreating') : t('account.wallet.rechargeCreateAction') }}</span>
+                </button>
+              </div>
+
+              <section
+                v-if="activeRechargeOrder"
+                class="wallet-recharge-order"
+              >
+                <div class="wallet-recharge-order-header">
+                  <div>
+                    <span>{{ activeRechargeMethodLabel }}</span>
+                    <strong>{{ formatHKD(activeRechargeOrder.amount_hkd) }}</strong>
+                  </div>
+                  <em
+                    class="wallet-recharge-status"
+                    :class="activeRechargeStateClass"
+                  >
+                    {{ activeRechargeOrder.state_label }}
+                  </em>
+                </div>
+
+                <div class="wallet-recharge-order-meta">
+                  <span>{{ t('account.wallet.rechargeOrderNo') }}</span>
+                  <strong>{{ activeRechargeOrder.mch_order_no }}</strong>
+                  <span>{{ t('account.wallet.rechargePoints') }}</span>
+                  <strong>{{ formatPoints(activeRechargeOrder.points_amount) }}</strong>
+                </div>
+
+                <div
+                  v-if="activeRechargeIsPending && activeRechargeHasPaymentEntry"
+                  class="wallet-recharge-pay-entry"
+                >
+                  <img
+                    v-if="activeRechargeQrImage"
+                    :src="activeRechargeQrImage"
+                    :alt="t('account.wallet.rechargeQrAlt')"
+                  />
+                  <QrCodeImage
+                    v-else-if="activeRechargeQrLink"
+                    :text="activeRechargeQrLink"
+                    :alt="t('account.wallet.rechargeQrAlt')"
+                    :size="220"
+                  />
+                  <button
+                    v-else-if="activeRechargeCanRedirect"
+                    type="button"
+                    class="wallet-action-button wallet-recharge-pay-button"
+                    @click="openRechargePayData"
+                  >
+                    {{ t('account.wallet.rechargeContinuePay') }}
+                  </button>
+                </div>
+
+                <div class="wallet-recharge-order-actions">
+                  <button
+                    type="button"
+                    class="wallet-action-button wallet-action-button--secondary"
+                    :disabled="rechargeRefreshing"
+                    @click="refreshRechargeOrder()"
+                  >
+                    <AppIcon
+                      name="reload"
+                      :size="16"
+                    />
+                    <span>{{ rechargeRefreshing ? t('common.status.loading') : t('account.wallet.rechargeRefresh') }}</span>
+                  </button>
+                  <button
+                    v-if="activeRechargeCanRedirect"
+                    type="button"
+                    class="wallet-action-button wallet-recharge-pay-button"
+                    @click="openRechargePayData"
+                  >
+                    {{ t('account.wallet.rechargeContinuePay') }}
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <Transition name="wallet-ad-dialog-fade">
         <div
           v-if="selectedAdTask"
@@ -860,6 +1420,10 @@ onBeforeUnmount(() => {
 }
 
 .wallet-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   min-height: 2.4rem;
   border: 1px solid rgb(var(--color-primary));
   border-radius: 0.5rem;
@@ -875,11 +1439,335 @@ onBeforeUnmount(() => {
   color: rgb(var(--color-text));
 }
 
+.wallet-action-button--compact {
+  min-height: 2rem;
+  border-radius: 0.35rem;
+  padding: 0 0.65rem;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .wallet-action-button:disabled {
   cursor: not-allowed;
   border-color: rgb(var(--color-border));
   background: rgb(var(--color-surface-raised));
   color: rgb(var(--color-text-muted));
+}
+
+.wallet-recharge-panel {
+  gap: 0.85rem;
+}
+
+.wallet-recharge-summary {
+  display: grid;
+  gap: 0.25rem;
+  border-radius: 0.65rem;
+  background: rgb(var(--color-primary-soft));
+  padding: 0.8rem;
+}
+
+.wallet-recharge-summary span,
+.wallet-recharge-mini-order span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.wallet-recharge-summary strong {
+  color: rgb(var(--color-primary));
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.wallet-recharge-mini-order {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgb(var(--color-border) / 0.72);
+  border-radius: 0.65rem;
+  background: rgb(var(--color-surface-raised) / 0.34);
+  padding: 0.75rem;
+}
+
+.wallet-recharge-mini-order > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.wallet-recharge-mini-order strong {
+  font-size: 0.95rem;
+}
+
+.wallet-recharge-dialog {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(15 23 42 / 0.38);
+  padding: 1rem;
+}
+
+.wallet-recharge-dialog__panel {
+  display: grid;
+  width: min(100%, 54rem);
+  max-height: min(90vh, 44rem);
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border) / 0.74);
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  box-shadow: 0 28px 70px rgb(15 23 42 / 0.28);
+}
+
+.wallet-recharge-dialog__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.74);
+  padding: 1rem;
+}
+
+.wallet-recharge-dialog__header h2 {
+  margin: 0.25rem 0 0;
+  color: rgb(var(--color-text));
+  font-size: 1.18rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.wallet-recharge-dialog__header p:not(.wallet-kicker) {
+  margin: 0.35rem 0 0;
+  color: rgb(var(--color-text-muted));
+  line-height: 1.55;
+}
+
+.wallet-recharge-dialog__body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.wallet-recharge-form {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+}
+
+.wallet-recharge-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.wallet-recharge-field > span,
+.wallet-recharge-points > span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.wallet-recharge-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.55rem;
+  background: rgb(var(--color-surface-raised) / 0.45);
+}
+
+.wallet-recharge-input span {
+  display: inline-flex;
+  align-items: center;
+  border-right: 1px solid rgb(var(--color-border));
+  padding: 0 0.7rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.wallet-recharge-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.72rem 0.75rem;
+  color: rgb(var(--color-text));
+  font: inherit;
+  font-weight: 900;
+  outline: none;
+}
+
+.wallet-recharge-points {
+  display: grid;
+  gap: 0.25rem;
+  border-radius: 0.6rem;
+  background: rgb(var(--color-primary-soft));
+  padding: 0.75rem;
+}
+
+.wallet-recharge-points strong {
+  color: rgb(var(--color-primary));
+  font-size: 1.18rem;
+  line-height: 1.2;
+}
+
+.wallet-recharge-methods {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.wallet-recharge-method {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.55rem;
+  background: rgb(var(--color-surface-raised) / 0.38);
+  padding: 0.72rem;
+  color: rgb(var(--color-text));
+  text-align: left;
+}
+
+.wallet-recharge-method strong {
+  font-size: 0.9rem;
+}
+
+.wallet-recharge-method small {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.wallet-recharge-method--active {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary-soft));
+}
+
+.wallet-recharge-regions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.wallet-recharge-regions button {
+  min-height: 2.25rem;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 0.5rem;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text-muted));
+  font-weight: 900;
+}
+
+.wallet-recharge-regions .wallet-recharge-region--active {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.wallet-recharge-submit,
+.wallet-recharge-pay-button {
+  width: 100%;
+}
+
+.wallet-recharge-order {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  border: 1px solid rgb(var(--color-border) / 0.76);
+  border-radius: 0.65rem;
+  background: rgb(var(--color-surface-raised) / 0.24);
+  padding: 0.9rem;
+}
+
+.wallet-recharge-order-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.wallet-recharge-order-header > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.wallet-recharge-order-header span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.wallet-recharge-order-header strong {
+  font-size: 1.05rem;
+}
+
+.wallet-recharge-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.wallet-recharge-status--pending {
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
+}
+
+.wallet-recharge-status--success {
+  background: rgb(var(--color-success) / 0.14);
+  color: rgb(var(--color-success));
+}
+
+.wallet-recharge-status--failed {
+  background: rgb(var(--color-danger) / 0.12);
+  color: rgb(var(--color-danger));
+}
+
+.wallet-recharge-order-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem 0.6rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.76rem;
+}
+
+.wallet-recharge-order-meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(var(--color-text));
+  font-weight: 900;
+}
+
+.wallet-recharge-pay-entry {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border) / 0.76);
+  border-radius: 0.65rem;
+  background: rgb(var(--color-surface-raised) / 0.35);
+  padding: 0.75rem;
+}
+
+.wallet-recharge-pay-entry img {
+  display: block;
+  width: min(100%, 13.75rem);
+  height: auto;
+  border-radius: 0.45rem;
+}
+
+.wallet-recharge-order-actions {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .wallet-transaction-row {
@@ -1101,6 +1989,10 @@ onBeforeUnmount(() => {
   .wallet-grid {
     grid-template-columns: 1fr;
   }
+
+  .wallet-recharge-dialog__body {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1111,6 +2003,7 @@ onBeforeUnmount(() => {
 
   .wallet-ad-dialog__header,
   .wallet-ad-dialog__footer,
+  .wallet-recharge-dialog__header,
   .wallet-ad-dialog__success-actions,
   .wallet-ad-exit-confirm__panel > div {
     align-items: stretch;
@@ -1120,7 +2013,8 @@ onBeforeUnmount(() => {
   .wallet-heading,
   .wallet-balance-card,
   .wallet-stat-card,
-  .wallet-panel {
+  .wallet-panel,
+  .wallet-recharge-dialog__panel {
     border-radius: 0.65rem;
   }
 
@@ -1246,6 +2140,13 @@ onBeforeUnmount(() => {
 .wallet-stat-card,
 .wallet-panel,
 .wallet-ad-card,
+.wallet-recharge-dialog__panel,
+.wallet-recharge-mini-order,
+.wallet-recharge-method,
+.wallet-recharge-input,
+.wallet-recharge-points,
+.wallet-recharge-order,
+.wallet-recharge-pay-entry,
 .wallet-ad-dialog__panel,
 .wallet-ad-exit-confirm__panel {
   border-radius: 8px;
@@ -1390,11 +2291,58 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.wallet-ad-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wallet-ad-meta span {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 999px;
+  background: rgb(var(--color-surface-raised) / 0.42);
+  padding: 5px 8px;
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.wallet-ad-meta span:first-child {
+  border-color: rgb(var(--color-primary) / 0.24);
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
+}
+
 .wallet-action-button,
 .wallet-ad-countdown,
 .wallet-ad-dialog__close {
   border-radius: 6px;
   font-size: 12px;
+  font-weight: 700;
+}
+
+.wallet-recharge-dialog__header,
+.wallet-recharge-dialog__body {
+  padding: 16px;
+}
+
+.wallet-recharge-field > span,
+.wallet-recharge-points > span,
+.wallet-recharge-summary span,
+.wallet-recharge-mini-order span,
+.wallet-recharge-order-header span,
+.wallet-recharge-order-meta {
+  font-size: 12px;
+}
+
+.wallet-recharge-summary strong,
+.wallet-recharge-points strong {
+  color: rgb(var(--color-primary));
+  font-size: 18px;
   font-weight: 700;
 }
 

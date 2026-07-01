@@ -1,12 +1,15 @@
 <!--
- * 走勢頁 - 香港租金走勢。
- * 1. 頁首標題與區域切換 Tabs。
- * 2. SVG 折線圖呈現過去 6 個月各區平均呎租趨勢。
- * 3. 各區最新呎租卡片網格。
+ * 走勢頁 - 香港住宅租金走勢。
+ * 1. 讀取 AJO 後端提供的香港公開租金走勢資料。
+ * 2. 以 SVG 折線圖呈現近 6 個月香港島、九龍與新界平均呎租。
+ * 3. 提供區域切換、最新值與資料來源狀態。
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import axios from 'axios';
+import { computed, onMounted, ref } from 'vue';
+
+import { fetchMarketRentTrend } from '@/httpapis/market-trends';
+import type { MarketRentTrendRegion, MarketRentTrendResponse } from '@/model/market-trend';
 
 // 1. 區域 Tab 型別
 interface TrendTab {
@@ -14,22 +17,13 @@ interface TrendTab {
   label: string;
 }
 
-// 2. 區域卡片型別
-interface DistrictCard {
-  code: string;
-  name: string;
-  price: string;
-  change: string;
-  direction: 'up' | 'down';
-}
-
-// 3. 折線圖資料點型別
+// 2. 折線圖資料點型別
 interface ChartPoint {
   x: number;
   y: number;
 }
 
-// 4. 折線圖系列型別
+// 3. 折線圖系列型別
 interface ChartSeries {
   key: string;
   label: string;
@@ -37,261 +31,384 @@ interface ChartSeries {
   strokeWidth: number;
   dashed: boolean;
   points: ChartPoint[];
-  legendX: number;
+  values: string[];
 }
 
-const router = useRouter();
-
-// 5. 區域 Tab 列表
-const tabs: TrendTab[] = [
-  { key: 'all', label: '全港' },
-  { key: 'hk', label: '香港島' },
-  { key: 'kln', label: '九龍' },
-  { key: 'nt', label: '新界' },
-];
-
 const activeTab = ref('all');
+const loading = ref(false);
+const errorMessage = ref('');
+const rentTrend = ref<MarketRentTrendResponse | null>(null);
 
-// 6. 折線圖 Y 軸標籤
-const chartYLabels = [
-  { y: 20, text: '$60' },
-  { y: 60, text: '$50' },
-  { y: 100, text: '$40' },
-  { y: 140, text: '$30' },
-];
+const chartWidth = 600;
+const chartHeight = 180;
+const chartLeft = 64;
+const chartRight = 580;
+const chartTop = 24;
+const chartBottom = 142;
+const seriesColors: Record<string, string> = {
+  hk: '#b45309',
+  kln: '#111827',
+  nt: '#64748b',
+};
 
-// 7. 折線圖網格線 Y 座標
-const chartGridLines = [20, 60, 100, 140];
+// 4. 區域 Tab 列表
+const tabs = computed<TrendTab[]>(() => [
+  { key: 'all', label: '全港' },
+  ...trendRegions.value.map((region) => ({
+    key: region.key,
+    label: region.label,
+  })),
+]);
 
-// 8. 折線圖 X 軸標籤
-const chartXLabels = [
-  { x: 108, text: '1月' },
-  { x: 192, text: '2月' },
-  { x: 276, text: '3月' },
-  { x: 360, text: '4月' },
-  { x: 444, text: '5月' },
-  { x: 528, text: '6月' },
-];
+const trendRegions = computed<MarketRentTrendRegion[]>(() => rentTrend.value?.regions ?? []);
+const visibleRegions = computed<MarketRentTrendRegion[]>(() => {
+  if (activeTab.value === 'all') {
+    return trendRegions.value;
+  }
 
-// 9. 折線圖系列資料
-const chartSeries: ChartSeries[] = [
-  {
-    key: 'hk',
-    label: '香港島',
-    color: '#f05a00',
-    strokeWidth: 2.5,
-    dashed: false,
-    points: [
-      { x: 108, y: 45 },
-      { x: 192, y: 40 },
-      { x: 276, y: 50 },
-      { x: 360, y: 35 },
-      { x: 444, y: 38 },
-      { x: 528, y: 30 },
-    ],
-    legendX: 300,
-  },
-  {
-    key: 'kln',
-    label: '九龍',
-    color: '#1a1a1a',
-    strokeWidth: 2.5,
-    dashed: false,
-    points: [
-      { x: 108, y: 75 },
-      { x: 192, y: 72 },
-      { x: 276, y: 80 },
-      { x: 360, y: 68 },
-      { x: 444, y: 65 },
-      { x: 528, y: 60 },
-    ],
-    legendX: 360,
-  },
-  {
-    key: 'nt',
-    label: '新界',
-    color: '#aaa',
-    strokeWidth: 2,
-    dashed: true,
-    points: [
-      { x: 108, y: 115 },
-      { x: 192, y: 112 },
-      { x: 276, y: 118 },
-      { x: 360, y: 108 },
-      { x: 444, y: 110 },
-      { x: 528, y: 105 },
-    ],
-    legendX: 410,
-  },
-];
+  return trendRegions.value.filter((region) => region.key === activeTab.value);
+});
 
-// 10. 各區最新呎租卡片
-const districtCards: DistrictCard[] = [
-  { code: 'central-admiralty', name: '中環 / 金鐘', price: 'HK$62/呎', change: '+3.2% 本月', direction: 'up' },
-  { code: 'causeway-bay', name: '銅鑼灣', price: 'HK$55/呎', change: '+1.8% 本月', direction: 'up' },
-  { code: 'tsim-sha-tsui', name: '尖沙咀', price: 'HK$48/呎', change: '+0.9% 本月', direction: 'up' },
-  { code: 'mong-kok', name: '旺角', price: 'HK$42/呎', change: '-0.5% 本月', direction: 'down' },
-  { code: 'sha-tin', name: '沙田', price: 'HK$32/呎', change: '+1.1% 本月', direction: 'up' },
-  { code: 'tseung-kwan-o', name: '將軍澳', price: 'HK$28/呎', change: '-0.3% 本月', direction: 'down' },
-];
+const chartValues = computed<number[]>(() =>
+  visibleRegions.value.flatMap((region) =>
+    region.points.map((point) => point.value_hkd_per_sqft),
+  ),
+);
 
-// 11. 切換區域 Tab
+const chartRange = computed(() => {
+  if (chartValues.value.length === 0) {
+    return { min: 0, max: 1 };
+  }
+
+  const minValue = Math.min(...chartValues.value);
+  const maxValue = Math.max(...chartValues.value);
+  if (minValue === maxValue) {
+    return { min: minValue - 1, max: maxValue + 1 };
+  }
+
+  const padding = Math.max((maxValue - minValue) * 0.16, 1);
+  return {
+    min: Math.max(0, Math.floor(minValue - padding)),
+    max: Math.ceil(maxValue + padding),
+  };
+});
+
+const chartGridLines = computed(() => {
+  const lines = 4;
+  const step = (chartRange.value.max - chartRange.value.min) / (lines - 1);
+
+  return Array.from({ length: lines }, (_, index) => {
+    const value = chartRange.value.max - step * index;
+    return {
+      y: chartTop + ((chartRange.value.max - value) / (chartRange.value.max - chartRange.value.min)) * (chartBottom - chartTop),
+      text: `$${Math.round(value)}`,
+    };
+  });
+});
+
+const chartXLabels = computed(() => {
+  const points = visibleRegions.value[0]?.points ?? [];
+  return points.map((point, index) => ({
+    x: pointX(index, points.length),
+    text: point.label.replace('年', '/').replace('月', ''),
+  }));
+});
+
+const chartSeries = computed<ChartSeries[]>(() =>
+  visibleRegions.value.map((region, index) => ({
+    key: region.key,
+    label: region.label,
+    color: seriesColors[region.key] ?? '#111827',
+    strokeWidth: index === 0 ? 2.6 : 2.2,
+    dashed: region.key === 'nt',
+    points: region.points.map((point, pointIndex) => ({
+      x: pointX(pointIndex, region.points.length),
+      y: pointY(point.value_hkd_per_sqft),
+    })),
+    values: region.points.map((point) => `$${point.value_hkd_per_sqft.toFixed(1)}`),
+  })),
+);
+
+const updatedMonthLabel = computed(() => {
+  if (!rentTrend.value?.updated_month) {
+    return '';
+  }
+
+  return rentTrend.value.updated_month.replace('-', '年') + '月';
+});
+
+// 5. 讀取租金走勢
+const loadTrend = async (): Promise<void> => {
+  loading.value = true;
+  errorMessage.value = '';
+
+  try {
+    const { data } = await fetchMarketRentTrend();
+    rentTrend.value = data.data;
+    if (!data.data.regions.some((region) => region.key === activeTab.value)) {
+      activeTab.value = 'all';
+    }
+  } catch (error: unknown) {
+    errorMessage.value = resolveTrendError(error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 6. 切換區域 Tab
 const selectTab = (key: string): void => {
   activeTab.value = key;
 };
 
-// 12. 將折線圖系列點轉為 polyline points 字串
-const toPolylinePoints = (points: ChartPoint[]): string => {
-  return points.map((p) => `${p.x},${p.y}`).join(' ');
+// 7. 將折線圖系列點轉為 polyline points 字串
+const toPolylinePoints = (points: ChartPoint[]): string =>
+  points.map((point) => `${point.x},${point.y}`).join(' ');
+
+// 8. 計算 X 軸位置
+const pointX = (index: number, total: number): number => {
+  if (total <= 1) {
+    return chartLeft;
+  }
+
+  return chartLeft + ((chartRight - chartLeft) / (total - 1)) * index;
 };
 
-// 13. 開啟各區詳情
-const openDistrict = (card: DistrictCard): void => {
-  void router.push({ path: `/trend/district/${encodeURIComponent(card.code)}` });
+// 9. 計算 Y 軸位置
+const pointY = (value: number): number => {
+  const range = chartRange.value.max - chartRange.value.min;
+  if (range <= 0) {
+    return chartBottom;
+  }
+
+  return chartBottom - ((value - chartRange.value.min) / range) * (chartBottom - chartTop);
 };
+
+// 10. 格式化月變化
+const formatChange = (value: number): string => {
+  if (value > 0) {
+    return `+${value.toFixed(1)}%`;
+  }
+
+  return `${value.toFixed(1)}%`;
+};
+
+// 11. 解析錯誤訊息
+const resolveTrendError = (error: unknown): string =>
+  axios.isAxiosError<{ message?: string }>(error)
+    ? error.response?.data?.message ?? '無法載入公開租金走勢。'
+    : '無法載入公開租金走勢。';
+
+onMounted(() => {
+  void loadTrend();
+});
 </script>
 
 <template>
-  <main class="trend-page">
+  <div
+    id="page-trend"
+    class="page"
+  >
     <div class="trend-page-wrap">
       <!-- 1. 頁首 -->
-      <header class="trend-header">
-        <div class="trend-eyebrow">市場數據</div>
-        <h1 class="trend-title">香港租金走勢</h1>
-        <p class="trend-sub">過去6個月各區平均月租變化（每呎）</p>
-      </header>
+      <div class="trend-header">
+        <div class="section-eyebrow">市場數據</div>
+        <div class="trend-title">香港住宅租金走勢</div>
+        <div class="trend-sub">
+          差餉物業估價署公開數據，近 6 個月 A 至 C 類私人住宅平均月租。
+        </div>
+      </div>
 
       <!-- 2. 區域 Tabs -->
-      <nav class="trend-tabs">
+      <div class="trend-tabs">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
           class="trend-tab"
-          :class="activeTab === tab.key ? 'on' : ''"
+          :class="{ on: activeTab === tab.key }"
           @click="selectTab(tab.key)"
-        >{{ tab.label }}</button>
-      </nav>
-
-      <!-- 3. 折線圖 -->
-      <section class="chart-wrap">
-        <div class="chart-title">平均呎租趨勢（HK$/呎）</div>
-        <svg
-          class="svg-chart"
-          viewBox="0 0 600 180"
-          role="img"
-          aria-label="平均呎租趨勢圖"
         >
-          <!-- 網格線 -->
-          <line
-            v-for="y in chartGridLines"
-            :key="`grid-${y}`"
-            x1="60"
-            :y1="y"
-            x2="580"
-            :y2="y"
-            stroke="#e8e8e8"
-            stroke-width="1"
-          />
-          <!-- Y 軸標籤 -->
-          <text
-            v-for="label in chartYLabels"
-            :key="`y-${label.y}`"
-            x="50"
-            :y="label.y + 4"
-            text-anchor="end"
-            font-size="10"
-            fill="#aaa"
-          >{{ label.text }}</text>
-          <!-- X 軸標籤 -->
-          <text
-            v-for="label in chartXLabels"
-            :key="`x-${label.x}`"
-            :x="label.x"
-            y="165"
-            text-anchor="middle"
-            font-size="10"
-            fill="#aaa"
-          >{{ label.text }}</text>
-          <!-- 折線 -->
-          <polyline
-            v-for="series in chartSeries"
-            :key="`line-${series.key}`"
-            :points="toPolylinePoints(series.points)"
-            fill="none"
-            :stroke="series.color"
-            :stroke-width="series.strokeWidth"
-            stroke-linejoin="round"
-            :stroke-dasharray="series.dashed ? '4,3' : 'none'"
-          />
-          <!-- 終點圓點 -->
-          <circle
-            v-for="series in chartSeries"
-            :key="`dot-${series.key}`"
-            :cx="series.points[series.points.length - 1].x"
-            :cy="series.points[series.points.length - 1].y"
-            r="4"
-            :fill="series.color"
-          />
-          <!-- 圖例 -->
-          <g
-            v-for="series in chartSeries"
-            :key="`legend-${series.key}`"
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <!-- 3. 狀態 -->
+      <div
+        v-if="loading"
+        class="trend-state"
+      >
+        正在載入公開租金走勢
+      </div>
+      <div
+        v-else-if="errorMessage"
+        class="trend-state trend-state--error"
+      >
+        {{ errorMessage }}
+        <button
+          type="button"
+          @click="loadTrend"
+        >
+          重新載入
+        </button>
+      </div>
+
+      <template v-else-if="rentTrend">
+        <!-- 4. 折線圖 -->
+        <div class="chart-wrap">
+          <div class="chart-head">
+            <div>
+              <div class="chart-title">平均呎租趨勢（HK$/呎/月）</div>
+              <div class="chart-meta">更新至 {{ updatedMonthLabel }}</div>
+            </div>
+            <a
+              class="chart-source"
+              :href="rentTrend.source_url"
+              target="_blank"
+              rel="noreferrer"
+            >
+              DATA.GOV.HK
+            </a>
+          </div>
+
+          <svg
+            class="svg-chart"
+            :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
+            role="img"
+            aria-label="香港住宅租金走勢折線圖"
           >
-            <rect
-              :x="series.legendX"
-              y="8"
-              width="10"
-              height="3"
-              :fill="series.color"
-              rx="1"
+            <line
+              v-for="line in chartGridLines"
+              :key="`grid-${line.text}`"
+              x1="64"
+              :y1="line.y"
+              x2="580"
+              :y2="line.y"
+              stroke="#e8e8e8"
+              stroke-width="1"
             />
             <text
-              :x="series.legendX + 14"
-              y="13"
+              v-for="line in chartGridLines"
+              :key="`y-${line.text}`"
+              x="54"
+              :y="line.y + 4"
+              text-anchor="end"
               font-size="10"
-              fill="#555"
-            >{{ series.label }}</text>
-          </g>
-        </svg>
-      </section>
+              fill="#777"
+            >
+              {{ line.text }}
+            </text>
+            <text
+              v-for="label in chartXLabels"
+              :key="`x-${label.text}`"
+              :x="label.x"
+              y="165"
+              text-anchor="middle"
+              font-size="10"
+              fill="#777"
+            >
+              {{ label.text }}
+            </text>
+            <polyline
+              v-for="series in chartSeries"
+              :key="`line-${series.key}`"
+              :points="toPolylinePoints(series.points)"
+              fill="none"
+              :stroke="series.color"
+              :stroke-width="series.strokeWidth"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :stroke-dasharray="series.dashed ? '5,4' : 'none'"
+            />
+            <g
+              v-for="series in chartSeries"
+              :key="`dots-${series.key}`"
+            >
+              <circle
+                v-for="(point, index) in series.points"
+                :key="`${series.key}-${index}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="3.6"
+                :fill="series.color"
+              >
+                <title>{{ `${series.label} ${series.values[index]}` }}</title>
+              </circle>
+            </g>
+          </svg>
 
-      <!-- 4. 各區最新呎租 -->
-      <div class="trend-section-label">各區最新呎租</div>
-      <section class="district-grid">
-        <article
-          v-for="card in districtCards"
-          :key="card.code"
-          class="district-card"
-          @click="openDistrict(card)"
-        >
-          <div class="dc-name">{{ card.name }}</div>
-          <div class="dc-price">{{ card.price }}</div>
-          <div
-            class="dc-change"
-            :class="card.direction === 'up' ? 'dc-up' : 'dc-dn'"
-          >
-            <span class="dc-arrow">{{ card.direction === 'up' ? '↑' : '↓' }}</span>
-            <span>{{ card.change }}</span>
+          <div class="chart-legend">
+            <div
+              v-for="series in chartSeries"
+              :key="`legend-${series.key}`"
+              class="legend-item"
+            >
+              <span
+                class="legend-line"
+                :style="{ background: series.color }"
+              />
+              {{ series.label }}
+            </div>
           </div>
-        </article>
-      </section>
+        </div>
+
+        <!-- 5. 各區最新呎租 -->
+        <div
+          class="label-text"
+          style="margin-bottom: 12px;"
+        >
+          各區最新呎租
+        </div>
+        <div class="district-grid">
+          <button
+            v-for="region in trendRegions"
+            :key="region.key"
+            type="button"
+            class="district-card"
+            :class="{ on: activeTab === region.key }"
+            @click="selectTab(region.key)"
+          >
+            <div class="dc-name">{{ region.label }}</div>
+            <div class="dc-price">HK${{ region.latest_hkd_per_sqft.toFixed(1) }}/呎</div>
+            <div
+              class="dc-change"
+              :class="{
+                'dc-up': region.direction === 'up',
+                'dc-dn': region.direction === 'down',
+              }"
+            >
+              {{ formatChange(region.monthly_change_percent) }} 按月
+            </div>
+          </button>
+        </div>
+
+        <!-- 6. 資料說明 -->
+        <div class="source-note">
+          <span>{{ rentTrend.dataset }}</span>
+          <span>{{ rentTrend.method }}</span>
+        </div>
+      </template>
     </div>
-  </main>
+  </div>
 </template>
 
 <style scoped>
+/*
+ * 走勢頁樣式。
+ * 1. 頁面容器與頁首。
+ * 2. 區域 Tabs 與狀態。
+ * 3. 折線圖卡片。
+ * 4. 各區呎租卡片網格。
+ */
+
 /* 1. 頁面容器 */
-.trend-page {
+.page {
   width: 100%;
-  max-width: var(--layout-page-max-width);
-  margin: 0 auto;
-  background: rgb(var(--color-surface-2));
-  color: rgb(var(--color-text));
+  background: var(--sur-2);
 }
 
 .trend-page-wrap {
   padding: 24px;
+  background: var(--sur-2);
 }
 
 /* 2. 頁首 */
@@ -299,88 +416,158 @@ const openDistrict = (card: DistrictCard): void => {
   margin-bottom: 20px;
 }
 
-.trend-eyebrow {
+.section-eyebrow {
+  margin-bottom: 6px;
+  color: var(--accent);
   font-size: 9px;
+  font-weight: 500;
   letter-spacing: 2.5px;
   text-transform: uppercase;
-  color: rgb(var(--color-primary));
-  margin-bottom: 6px;
-  font-weight: 500;
 }
 
 .trend-title {
-  font-family: var(--font-display);
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-family: var(--font-serif);
   font-size: 20px;
-  font-weight: 500;
-  color: rgb(var(--color-text));
-  margin: 0 0 4px;
+  font-weight: 400;
 }
 
 .trend-sub {
+  color: var(--g4);
   font-size: 12px;
-  color: rgb(var(--color-ink-4));
-  margin: 0;
 }
 
 /* 3. 區域 Tabs */
 .trend-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 20px;
-  flex-wrap: wrap;
 }
 
 .trend-tab {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 5px 14px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 20px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-pill);
+  background: var(--white);
+  color: var(--g4);
   cursor: pointer;
-  color: rgb(var(--color-ink-4));
-  background: rgb(var(--color-surface));
-  transition: all 0.12s;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  padding: 5px 14px;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .trend-tab.on {
-  background: rgb(var(--color-text));
-  color: rgb(var(--color-surface));
-  border-color: rgb(var(--color-text));
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
 }
 
-/* 4. 折線圖 */
-.chart-wrap {
-  background: rgb(var(--color-surface));
-  border: 1px solid rgb(var(--color-border));
+/* 4. 狀態 */
+.trend-state {
+  border: 1px solid var(--g2);
   border-radius: 4px;
-  padding: 20px;
+  background: var(--white);
+  color: var(--g4);
+  font-size: 13px;
+  padding: 18px;
+}
+
+.trend-state--error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--error);
+}
+
+.trend-state button {
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+/* 5. 折線圖卡片 */
+.chart-wrap {
+  border: 1px solid var(--g2);
+  border-radius: 4px;
+  background: var(--white);
   margin-bottom: 16px;
+  padding: 20px;
+}
+
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 
 .chart-title {
+  color: var(--black);
   font-size: 12px;
   font-weight: 500;
-  margin-bottom: 14px;
-  color: rgb(var(--color-text));
+}
+
+.chart-meta {
+  color: var(--g4);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.chart-source {
+  color: var(--accent);
+  font-size: 11px;
+  text-decoration: none;
 }
 
 .svg-chart {
   width: 100%;
-  height: auto;
   overflow: visible;
 }
 
-/* 5. 區段標籤 */
-.trend-section-label {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: rgb(var(--color-ink-4));
-  font-weight: 500;
-  margin-bottom: 12px;
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
 }
 
-/* 6. 各區卡片網格 */
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--g4);
+  font-size: 11px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+/* 6. 區段標籤 */
+.label-text {
+  color: var(--g4);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* 7. 各區卡片網格 */
 .district-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -389,65 +576,73 @@ const openDistrict = (card: DistrictCard): void => {
 }
 
 .district-card {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--g2);
   border-radius: 3px;
-  padding: 14px;
-  background: rgb(var(--color-surface));
+  background: var(--white);
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  font-family: inherit;
+  padding: 14px;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
-.district-card:hover {
-  box-shadow: var(--shadow-raised);
-  border-color: rgb(var(--color-brand-mid));
+.district-card:hover,
+.district-card.on {
+  border-color: var(--accent);
+}
+
+.district-card.on {
+  background: #fffaf5;
 }
 
 .dc-name {
   font-size: 12px;
   font-weight: 500;
   margin-bottom: 4px;
-  color: rgb(var(--color-text));
 }
 
 .dc-price {
+  color: var(--ink);
   font-size: 18px;
   font-weight: 300;
-  letter-spacing: -0.5px;
-  color: rgb(var(--color-text));
 }
 
 .dc-change {
+  color: var(--g4);
   font-size: 11px;
   margin-top: 3px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 .dc-up {
-  color: rgb(var(--color-success));
+  color: var(--success);
 }
 
 .dc-dn {
-  color: rgb(var(--color-danger));
+  color: var(--error);
 }
 
-.dc-arrow {
-  display: inline-block;
+.source-note {
+  display: grid;
+  gap: 4px;
+  color: var(--g4);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 18px;
 }
 
-/* 7. 響應式設計 */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .trend-page-wrap {
     padding: 16px;
   }
 
-  .district-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .chart-head,
+  .trend-state--error {
+    align-items: stretch;
+    flex-direction: column;
   }
-}
 
-@media (max-width: 480px) {
   .district-grid {
     grid-template-columns: 1fr;
   }

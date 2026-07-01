@@ -38,23 +38,29 @@ const handleToggle = () => {
 <style scoped>
 .ft {
   font-size: 11px;
-  padding: 4px 9px;
-  border: 1px solid var(--color-border);
-  color: var(--color-ink-3);
+  min-height: 28px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-pill);
+  background: var(--sur-2);
+  padding: 4px 11px;
+  color: var(--ink-3);
   cursor: pointer;
-  background: var(--color-surface);
-  border-radius: 2px;
   font-family: inherit;
+  line-height: 1;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .ft:hover {
-  border-color: var(--color-primary);
-  color: var(--color-brand-dark);
+  border-color: var(--brand);
+  color: var(--brand-dark);
 }
 
 .ft.on {
-  background: var(--color-primary);
-  color: var(--color-surface);
-  border-color: var(--color-primary);
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
 }
 </style>

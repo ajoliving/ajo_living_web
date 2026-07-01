@@ -4,18 +4,25 @@
  * 2. 提供續期狀態操作。
 -->
 <script setup lang="ts">
+import { computed, ref } from 'vue';
+
 import {
   fetchStaffServicedApartments,
   renewStaffServicedApartment,
 } from '@/httpapis/staff';
 import type { PropertyListingSummaryResponse } from '@/model/property';
+import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { formatDate } from '@/utils/format';
-import { resolvePropertyPublisherRole, resolvePropertyStatus } from '@/utils/property';
+import { resolvePropertyPriceText, resolvePropertyPublisherRole, resolvePropertyStatus } from '@/utils/property';
 
 import { useStaffManagementList } from '../composables/useStaffManagementList';
 import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
+
+type PropertyEditorDialogInstance = InstanceType<typeof PropertyEditorPage> & {
+  requestCloseEditor: () => Promise<void>;
+};
 
 const {
   hasNext,
@@ -36,6 +43,10 @@ const {
   fetcher: fetchStaffServicedApartments,
   loadErrorKey: 'marketplace.management.loadServicedApartmentsError',
 });
+const editorOpen = ref(false);
+const editorListingId = ref('');
+const propertyEditorDialog = ref<PropertyEditorDialogInstance | null>(null);
+const editorKey = computed(() => `staff-serviced-${editorListingId.value}-${editorOpen.value ? 'open' : 'closed'}`);
 
 // 1. 格式化狀態標籤
 const formatStatus = (listing: PropertyListingSummaryResponse): string =>
@@ -45,9 +56,32 @@ const formatStatus = (listing: PropertyListingSummaryResponse): string =>
 const formatOwner = (listing: PropertyListingSummaryResponse): string =>
   listing.owner?.display_name?.trim() || resolvePropertyPublisherRole(listing);
 
-// 3. 格式化可選日期
-const formatOptionalDate = (value?: string | null): string =>
-  value ? formatDate(value) : '-';
+// 3. 格式化價格
+const formatPriceText = (listing: PropertyListingSummaryResponse): string =>
+  resolvePropertyPriceText(listing, 'zh-HK');
+
+// 4. 開啟管理編輯器
+const openEditor = (listingId: string): void => {
+  editorListingId.value = listingId;
+  editorOpen.value = true;
+};
+
+// 5. 關閉管理編輯器
+const closeEditor = (): void => {
+  editorOpen.value = false;
+  editorListingId.value = '';
+};
+
+// 6. 請求關閉管理編輯器
+const requestCloseEditor = (): void => {
+  void propertyEditorDialog.value?.requestCloseEditor();
+};
+
+// 7. 完成管理編輯後刷新列表
+const handleEditorDone = async (): Promise<void> => {
+  closeEditor();
+  await search();
+};
 </script>
 
 <template>
@@ -131,9 +165,8 @@ const formatOptionalDate = (value?: string | null): string =>
             <tr>
               <th>{{ t('marketplace.management.columnTitle') }}</th>
               <th>{{ t('marketplace.management.columnOwner') }}</th>
+              <th>{{ t('marketplace.management.columnPrice') }}</th>
               <th>{{ t('common.label.status') }}</th>
-              <th>{{ t('common.label.publishedAt') }}</th>
-              <th>{{ t('common.label.expiresAt') }}</th>
               <th>{{ t('marketplace.management.columnUpdatedAt') }}</th>
               <th>{{ t('marketplace.management.columnActions') }}</th>
             </tr>
@@ -148,22 +181,30 @@ const formatOptionalDate = (value?: string | null): string =>
                 <small>{{ listing.listing_id }}</small>
               </td>
               <td>{{ formatOwner(listing) }}</td>
+              <td>{{ formatPriceText(listing) }}</td>
               <td>
                 <span class="management-status-pill">{{ formatStatus(listing) }}</span>
               </td>
-              <td>{{ formatOptionalDate(listing.published_at) }}</td>
-              <td>{{ formatOptionalDate(listing.expire_at) }}</td>
               <td>{{ formatDate(listing.updated_at) }}</td>
               <td
                 class="management-table-actions"
               >
-                <button
-                  type="button"
-                  class="management-list-action"
-                  @click="runAction(() => renewStaffServicedApartment(listing.listing_id))"
-                >
-                  {{ t('marketplace.management.renewAction') }}
-                </button>
+                <div class="management-action-group">
+                  <button
+                    type="button"
+                    class="management-list-action"
+                    @click="openEditor(listing.listing_id)"
+                  >
+                    {{ t('property.mine.edit') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="management-list-action"
+                    @click="runAction(() => renewStaffServicedApartment(listing.listing_id))"
+                  >
+                    {{ t('marketplace.management.renewAction') }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -182,5 +223,53 @@ const formatOptionalDate = (value?: string | null): string =>
         @previous="previous"
       />
     </article>
+
+    <Teleport to="body">
+      <Transition name="management-dialog">
+        <div
+          v-if="editorOpen"
+          class="management-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('property.editor.editMode')"
+          @click.self="requestCloseEditor"
+        >
+          <section class="management-dialog-panel management-dialog-panel--editor">
+            <header class="management-dialog-header">
+              <div>
+                <p>Staff</p>
+                <h2>{{ t('property.editor.editMode') }}</h2>
+              </div>
+              <button
+                type="button"
+                class="management-dialog-close"
+                :aria-label="t('marketplace.management.closeDialog')"
+                @click="requestCloseEditor"
+              >
+                <AppIcon
+                  name="close"
+                  :size="18"
+                />
+              </button>
+            </header>
+
+            <div class="management-dialog-body management-dialog-body--editor">
+              <PropertyEditorPage
+                ref="propertyEditorDialog"
+                :key="editorKey"
+                channel="serviced"
+                :listing-id="editorListingId"
+                embedded
+                staff-mode
+                hide-header
+                @cancel="closeEditor"
+                @published="handleEditorDone"
+                @saved="handleEditorDone"
+              />
+            </div>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>

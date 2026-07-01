@@ -26,7 +26,6 @@ export const useHeaderSubnav = () => {
   const subnavItems = computed<HeaderSubnavItem[]>(() => {
     if (route.path.startsWith('/marketplace')) {
       return [
-        { key: 'marketplace-discover', label: t('nav.discover'), to: '/marketplace/discover', match: ['/marketplace/discover'] },
         { key: 'marketplace-filter', label: t('nav.filter'), to: '/marketplace/filter', match: ['/marketplace/filter'] },
       ];
     }

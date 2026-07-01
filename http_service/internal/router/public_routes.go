@@ -21,6 +21,7 @@ func registerPublicRoutes(
 	secondhandHandler *handler.SecondhandHandler,
 	propertyHandler *handler.PropertyHandler,
 	supermarketOfferHandler *handler.SupermarketOfferHandler,
+	marketTrendHandler *handler.MarketTrendHandler,
 	optionalAuth gin.HandlerFunc,
 ) {
 	// 1.1 Health and channel metadata routes.
@@ -53,4 +54,7 @@ func registerPublicRoutes(
 	api.GET("/supermarket-offers/summary", supermarketOfferHandler.Summary)
 	api.GET("/supermarket-offers/search", supermarketOfferHandler.Search)
 	api.GET("/supermarket-offers/products/:code", optionalAuth, supermarketOfferHandler.ProductDetail)
+
+	// 1.7 Public market trend routes.
+	api.GET("/market-trends/rent", marketTrendHandler.RentTrend)
 }

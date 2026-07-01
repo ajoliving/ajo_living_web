@@ -39,10 +39,11 @@ func NewStaffListingHandler(secondhandService *service.SecondhandService, proper
 func (h *StaffListingHandler) ListSecondhand(c *gin.Context) {
 	page, pageSize := parsePagination(c)
 	items, pagination, err := h.secondhandService.ListStaffSecondhand(c.Request.Context(), service.SecondhandSettingsListFilters{
-		Page:     page,
-		PageSize: pageSize,
-		Keyword:  strings.TrimSpace(c.Query("keyword")),
-		Status:   strings.TrimSpace(c.Query("status")),
+		Page:         page,
+		PageSize:     pageSize,
+		Keyword:      strings.TrimSpace(c.Query("keyword")),
+		CategoryCode: strings.TrimSpace(c.Query("category_code")),
+		Status:       strings.TrimSpace(c.Query("status")),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)

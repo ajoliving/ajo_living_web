@@ -1,7 +1,7 @@
 <!--
- * 二手交易設定外框頁。
+ * 管理設定外框頁。
  * 1. 提供設定子路由左側導航。
- * 2. 承載發現設定、首頁內容、發布通知與登入背景圖設定頁。
+ * 2. 承載首頁內容、登入背景圖、廣告位與發布通知設定頁。
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-type SettingsIconName = 'palette' | 'picture' | 'layout-grid' | 'send' | 'login';
+type SettingsIconName = 'picture' | 'layout-grid' | 'send' | 'login';
 
 interface SettingsRouteItem {
   label: string;
@@ -23,16 +23,6 @@ const { t } = useI18n();
 
 // 1. 建立設定子路由導航
 const settingsRoutes = computed<SettingsRouteItem[]>(() => [
-  {
-    label: t('marketplace.settings.discoverSection'),
-    to: '/account/marketplace/settings/discover',
-    icon: 'palette',
-  },
-  {
-    label: t('marketplace.settings.homeCarouselSection'),
-    to: '/account/marketplace/settings/home-carousel',
-    icon: 'picture',
-  },
   {
     label: t('marketplace.settings.homeHeroCardsSection'),
     to: '/account/marketplace/settings/home-hero-cards',
@@ -105,7 +95,7 @@ const isActiveRoute = (path: string): boolean =>
 .settings-shell {
   display: grid;
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   gap: 1rem;
   margin: 0 auto;
   padding: 0.75rem var(--layout-page-padding-inline) 4rem;

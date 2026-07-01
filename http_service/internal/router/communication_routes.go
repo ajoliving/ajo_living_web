@@ -1,6 +1,6 @@
 /*
  * Communication route registration.
- * 1. Register chat, message, read state, and staff system notice routes.
+ * 1. Register chat, message, and read state routes.
  * 2. Keep platform communication routes separate from marketplace listing routes.
  */
 package router
@@ -32,9 +32,4 @@ func registerChatRoutes(
 		chatHandler.SendMessage,
 	)
 	api.POST("/chats/:chatId/read", requireAuth, chatHandler.MarkRead)
-}
-
-// 2. registerStaffNoticeRoutes registers staff-only system notice publishing.
-func registerStaffNoticeRoutes(api *gin.RouterGroup, chatHandler *handler.ChatHandler, requireStaff gin.HandlerFunc) {
-	api.POST("/staff/system-notices", requireStaff, chatHandler.PublishSystemNotice)
 }

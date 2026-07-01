@@ -18,6 +18,7 @@ export interface StaffListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  category_code?: string;
   status?: string;
 }
 

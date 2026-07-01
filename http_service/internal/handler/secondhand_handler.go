@@ -55,17 +55,12 @@ type secondhandContactRequest struct {
 	ShowInquiryForm bool   `json:"show_inquiry_form"`
 }
 
-// 4. discoverPlacementsRequest defines the settings slot save payload.
-type discoverPlacementsRequest struct {
-	Placements []service.DiscoverPlacementInput `json:"placements"`
-}
-
-// 5. NewSecondhandHandler creates a secondhand handler instance.
+// 4. NewSecondhandHandler creates a secondhand handler instance.
 func NewSecondhandHandler(secondhandService *service.SecondhandService) *SecondhandHandler {
 	return &SecondhandHandler{secondhandService: secondhandService}
 }
 
-// 6. ListPublic returns public secondhand listings.
+// 5. ListPublic returns public secondhand listings.
 func (h *SecondhandHandler) ListPublic(c *gin.Context) {
 	page, pageSize := parsePagination(c)
 	current := currentUser(c)
@@ -111,18 +106,7 @@ func (h *SecondhandHandler) ListPublic(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 7. PublicDiscover returns configured discover placements.
-func (h *SecondhandHandler) PublicDiscover(c *gin.Context) {
-	result, err := h.secondhandService.GetPublicDiscover(c.Request.Context())
-	if err != nil {
-		errcode.WriteError(c, err)
-		return
-	}
-
-	errcode.Success(c, result)
-}
-
-// 8. GetDetail returns a secondhand detail payload.
+// 6. GetDetail returns a secondhand detail payload.
 func (h *SecondhandHandler) GetDetail(c *gin.Context) {
 	current := currentUser(c)
 	var userID *int64
@@ -370,51 +354,7 @@ func (h *SecondhandHandler) SettingsListings(c *gin.Context) {
 	errcode.Success(c, gin.H{"items": items, "pagination": pagination})
 }
 
-// 21. SettingsDiscoverPlacements returns the settings slot matrix.
-func (h *SecondhandHandler) SettingsDiscoverPlacements(c *gin.Context) {
-	if currentUser(c) == nil {
-		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
-		return
-	}
-
-	result, err := h.secondhandService.GetDiscoverSettings(c.Request.Context())
-	if err != nil {
-		errcode.WriteError(c, err)
-		return
-	}
-
-	errcode.Success(c, result)
-}
-
-// 22. SaveSettingsDiscoverPlacements saves the settings slot matrix.
-func (h *SecondhandHandler) SaveSettingsDiscoverPlacements(c *gin.Context) {
-	user := currentUser(c)
-	if user == nil {
-		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
-		return
-	}
-
-	var request discoverPlacementsRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
-		return
-	}
-	for index := range request.Placements {
-		request.Placements[index].Scene = strings.TrimSpace(request.Placements[index].Scene)
-		request.Placements[index].CategoryCode = strings.TrimSpace(request.Placements[index].CategoryCode)
-		request.Placements[index].ListingID = strings.TrimSpace(request.Placements[index].ListingID)
-	}
-
-	result, err := h.secondhandService.SaveDiscoverPlacements(c.Request.Context(), user.UserID, request.Placements)
-	if err != nil {
-		errcode.WriteError(c, err)
-		return
-	}
-
-	errcode.Success(c, result)
-}
-
-// 23. SettingsMarkSold marks any secondhand listing as sold.
+// 21. SettingsMarkSold marks any secondhand listing as sold.
 func (h *SecondhandHandler) SettingsMarkSold(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
@@ -430,7 +370,7 @@ func (h *SecondhandHandler) SettingsMarkSold(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": listingID, "business_status": "sold"})
 }
 
-// 24. SettingsDeactivate hides any secondhand listing.
+// 22. SettingsDeactivate hides any secondhand listing.
 func (h *SecondhandHandler) SettingsDeactivate(c *gin.Context) {
 	if currentUser(c) == nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))

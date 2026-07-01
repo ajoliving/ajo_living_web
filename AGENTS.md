@@ -75,6 +75,8 @@
 - 聊天相關通知應與全站通知中心保持一致，避免每個模組各自生成不可統一管理的未讀數與提醒邏輯。
 
 ## 專案技術基線
+- 目前正在開發與維護的前端子專案是 `web-new`；後續所有前端功能修改、頁面調整、接口接入與 UI 修正，預設都必須落在 `web-new`。
+- `web` 是舊版前端歸檔目錄，只可作為歷史參考；除非使用者明確要求修改舊版歸檔，不得把新功能或修正落到 `web`。
 - 前端統一使用 `Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS + Axios`。
 - 如需元件庫，統一使用 `Ant Design Vue 4`。
 - 後端統一使用 `Go + Gin + GORM + PostgreSQL`。
@@ -106,7 +108,7 @@
 - 若是三層導航結構，推薦按「主模組 page 目錄 / 子路由 page 目錄 / 具體頁面 widgets 與 composables」的方式組織，而不是把不同層級頁面混放。
 
 ## 子專案提示詞文檔
-- 前端子專案遵循 [`web/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/web/AGENTS.md)。
+- 前端子專案遵循 [`web-new/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/web-new/AGENTS.md)；`web` 僅為舊版歸檔與參考目錄。
 - 後端子專案遵循 [`http_service/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/http_service/AGENTS.md)。
 - 子專案文檔與本檔衝突時，以子專案文檔為準。
 

@@ -1,9 +1,10 @@
 # AGENTS.md
 
 ## 說明
-- 本文件用於補充 `web` 子專案規範。
+- 本文件用於補充 `web-new` 子專案規範。
 - 未特別說明之事項，沿用上層 [`AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/AGENTS.md)。
-- 本文件及 `web` 目錄下所有 `.md` 檔案中均不得使用 emoji。
+- 本文件及 `web-new` 目錄下所有 `.md` 檔案中均不得使用 emoji。
+- `web-new` 是目前正在開發與維護的前端子專案；後續前端功能修改、頁面調整、接口接入與 UI 修正預設都在本目錄完成。`web` 僅為舊版前端歸檔目錄，不承接新功能，除非使用者明確要求修改舊版歸檔。
 
 ## 技術棧
 - 前端統一使用 `Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS + Axios`。

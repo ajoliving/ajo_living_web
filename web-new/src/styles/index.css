@@ -285,7 +285,7 @@
   user-select: text;
 }
 
-#app :where(img, canvas, video, svg[aria-hidden='true'], .app-icon, .home-carousel, .home-carousel *) {
+#app :where(img, canvas, video, svg[aria-hidden='true'], .app-icon) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;

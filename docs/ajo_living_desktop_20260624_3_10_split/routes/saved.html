@@ -1,0 +1,26 @@
+<!--
+ * Route - 收藏清單
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-saved">
+  <div class="saved-page">
+    <div class="saved-toolbar reveal">
+      <div>
+        <div class="section-eyebrow">我的收藏</div>
+        <div class="saved-toolbar-title">已收藏物件</div>
+      </div>
+      <div class="saved-filters">
+        <select class="saved-sort" onchange="sortSaved(this.value)">
+          <option value="date">最近收藏</option>
+          <option value="price-asc">租金低至高</option>
+          <option value="price-desc">租金高至低</option>
+          <option value="area">面積大至小</option>
+        </select>
+        <button class="nav-login ripple-host" onclick="showToast('已清除全部收藏','error')" style="background:var(--sur)!important;color:var(--ink)!important;border:1px solid var(--bdr)!important;font-size:12px;padding:6px 14px;">清除全部</button>
+      </div>
+    </div>
+    <div class="saved-grid" id="saved-grid"></div>
+  </div>
+</div>

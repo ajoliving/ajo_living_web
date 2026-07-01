@@ -36,6 +36,7 @@ type Dependencies struct {
 	OrderService            *service.OrderService
 	NotificationService     *service.NotificationService
 	SupermarketOfferService *service.SupermarketOfferService
+	MarketTrendService      *service.MarketTrendService
 }
 
 // 2. New builds and returns the gin engine.
@@ -69,9 +70,10 @@ func New(deps *Dependencies) *gin.Engine {
 	orderHandler := handler.NewOrderHandler(deps.OrderService)
 	notificationHandler := handler.NewNotificationHandler(deps.NotificationService)
 	supermarketOfferHandler := handler.NewSupermarketOfferHandler(deps.SupermarketOfferService)
+	marketTrendHandler := handler.NewMarketTrendHandler(deps.MarketTrendService)
 
 	api := engine.Group("/api/v1")
-	registerPublicRoutes(api, healthHandler, userHandler, homeContentHandler, walletHandler, secondhandHandler, propertyHandler, supermarketOfferHandler, optionalAuth)
+	registerPublicRoutes(api, healthHandler, userHandler, homeContentHandler, walletHandler, secondhandHandler, propertyHandler, supermarketOfferHandler, marketTrendHandler, optionalAuth)
 	registerPublicPOSPaymentRoutes(api, posBuildingHandler, walletHandler)
 	registerAuthRoutes(api, authHandler, requireAuth, limiter)
 	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth)
@@ -87,7 +89,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerNotificationRoutes(api, notificationHandler, requireAuth)
 	registerSupermarketMemberRoutes(api, supermarketOfferHandler, requireAuth)
 	registerStaffRoutes(api, staffHandler, staffWalletHandler, staffListingHandler, homeContentHandler, secondhandHandler, requireStaff)
-	registerStaffNoticeRoutes(api, chatHandler, requireStaff)
+	registerStaffNoticeRoutes(api, notificationHandler, requireStaff)
 
 	return engine
 }

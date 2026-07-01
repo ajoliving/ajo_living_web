@@ -19,7 +19,13 @@ import (
 
 // 1. Summary returns cached public good-price summary data.
 func (s *SupermarketOfferService) Summary(ctx context.Context) (map[string]any, error) {
-	return s.fetchGoodPriceJSON(ctx, "/summary", nil, true)
+	result, err := s.fetchGoodPriceJSON(ctx, "/summary", nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	s.attachSupermarketImages(result)
+	return result, nil
 }
 
 // 2. Search returns cached public good-price product search data.
@@ -35,7 +41,61 @@ func (s *SupermarketOfferService) Search(ctx context.Context, filters Supermarke
 	query.Set("page", intString(page))
 	query.Set("pageSize", intString(pageSize))
 
-	return s.fetchGoodPriceJSON(ctx, "/search", query, true)
+	result, err := s.fetchGoodPriceJSON(ctx, "/search", query, true)
+	if err != nil {
+		return nil, err
+	}
+
+	s.attachSupermarketImages(result)
+	return result, nil
+}
+
+// 3.1 attachSupermarketImages injects canonical image URLs into product payloads.
+func (s *SupermarketOfferService) attachSupermarketImages(payload map[string]any) {
+	if payload == nil {
+		return
+	}
+
+	baseURL := strings.TrimSpace(s.runtime.Config.MediaBaseURL)
+	attachProductImage := func(product map[string]any) {
+		if product == nil {
+			return
+		}
+		code := stringFromMap(product, "code")
+		if code == "" {
+			return
+		}
+
+		imageURL := buildMediaURL(baseURL, supermarketImageObjectKey(code))
+		if imageURL == "" {
+			return
+		}
+		product["image_url"] = imageURL
+		product["imageUrl"] = imageURL
+	}
+
+	if product, _ := payload["product"].(map[string]any); product != nil {
+		attachProductImage(product)
+	}
+	attachProductSlice := func(key string) {
+		items, _ := payload[key].([]any)
+		if len(items) == 0 {
+			return
+		}
+		for _, raw := range items {
+			item, _ := raw.(map[string]any)
+			attachProductImage(item)
+		}
+	}
+
+	attachProductSlice("sameBrand")
+	attachProductSlice("sameCategory")
+	attachProductSlice("items")
+	attachProductSlice("favorites")
+	attachProductSlice("cheapest")
+	attachProductSlice("bestDiscounts")
+	attachProductSlice("biggestDiffs")
+	attachProductSlice("offers")
 }
 
 // 3. ProductDetail returns one good-price product detail with optional AJO member state.
@@ -54,6 +114,7 @@ func (s *SupermarketOfferService) ProductDetail(ctx context.Context, code string
 	if err != nil {
 		return nil, err
 	}
+	s.attachSupermarketImages(detail)
 
 	isFavorite := false
 	var rule *SupermarketPriceAlertView
@@ -96,12 +157,12 @@ func (s *SupermarketOfferService) ListFavorites(ctx context.Context, userID int6
 	for _, favorite := range favorites {
 		detail, err := s.ProductDetail(ctx, favorite.ProductCode, 1, &userID)
 		if err != nil {
-			items = append(items, fallbackFavoriteProduct(favorite))
+			items = append(items, fallbackFavoriteProduct(favorite, s.runtime.Config.MediaBaseURL))
 			continue
 		}
 		product, _ := detail["product"].(map[string]any)
 		if product == nil {
-			items = append(items, fallbackFavoriteProduct(favorite))
+			items = append(items, fallbackFavoriteProduct(favorite, s.runtime.Config.MediaBaseURL))
 			continue
 		}
 		product["isFavorite"] = true
@@ -166,11 +227,14 @@ func (s *SupermarketOfferService) isFavorite(ctx context.Context, userID int64, 
 }
 
 // 8. fallbackFavoriteProduct returns a minimal product payload when good-price detail is temporarily unavailable.
-func fallbackFavoriteProduct(favorite model.SupermarketFavorite) map[string]any {
+func fallbackFavoriteProduct(favorite model.SupermarketFavorite, baseURL string) map[string]any {
+	imageURL := buildMediaURL(baseURL, supermarketImageObjectKey(favorite.ProductCode))
 	return map[string]any{
 		"code":       favorite.ProductCode,
 		"name":       favorite.ProductName,
 		"brand":      favorite.Brand,
+		"image_url":  imageURL,
+		"imageUrl":   imageURL,
 		"isFavorite": true,
 	}
 }

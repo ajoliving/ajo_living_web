@@ -20,9 +20,8 @@ const preferenceStore = usePreferenceStore();
 const sellerId = String(route.params.sellerId ?? '');
 
 const sampleItems = [
-  '/home-stage/carousel/building.jpeg',
-  '/home-stage/carousel/intercom.png',
-  '/home-stage/carousel/rant.png',
+  '/home-stage/property-sale.webp',
+  '/home-stage/serviced-apartment.webp',
   '/home-stage/secondhand.webp',
 ];
 const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
@@ -96,7 +95,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
 .seller-page {
   display: grid;
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   min-height: calc(100vh - var(--app-header-offset, 0rem));
   gap: 1rem;
   margin: 0 auto;

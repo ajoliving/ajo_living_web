@@ -13,6 +13,15 @@ interface FetchNotificationsParams {
   only_unread?: boolean;
 }
 
+export interface PublishSystemNoticePayload {
+  title: string;
+  body: string;
+}
+
+export interface PublishSystemNoticeResponse {
+  delivered_count: number;
+}
+
 // 1. 取得通知列表
 export const fetchNotifications = (params: FetchNotificationsParams = {}) =>
   httpClient.get<ApiResponse<NotificationListPayload>>('/notifications', { params });
@@ -30,3 +39,7 @@ export const markNotificationRead = (notificationId: string) =>
 // 4. 標記全部通知已讀
 export const markAllNotificationsRead = () =>
   httpClient.post<ApiResponse<{ updated: number }>>('/notifications/read-all');
+
+// 5. 發布系統通知
+export const publishSystemNotice = (payload: PublishSystemNoticePayload) =>
+  httpClient.post<ApiResponse<PublishSystemNoticeResponse>>('/staff/system-notices', payload);

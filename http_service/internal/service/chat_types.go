@@ -62,20 +62,7 @@ type ChatMember struct {
 	RoleInChat  string `json:"role_in_chat"`
 }
 
-// 6. SystemNoticePublishParams defines a staff broadcast notice input.
-type SystemNoticePublishParams struct {
-	Title       string
-	Body        string
-	ActionLabel string
-	ActionURL   string
-}
-
-// 7. SystemNoticePublishResult defines the broadcast delivery summary.
-type SystemNoticePublishResult struct {
-	DeliveredCount int `json:"delivered_count"`
-}
-
-// 8. MessageResponse defines a chat message payload.
+// 6. MessageResponse defines a chat message payload.
 type MessageResponse struct {
 	MessageID    string `json:"message_id"`
 	SenderUserID string `json:"sender_user_id"`

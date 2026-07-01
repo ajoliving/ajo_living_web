@@ -544,6 +544,7 @@ func (s *WalletService) listPublicConfiguredDisplayAds(ctx context.Context, chan
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("id IN ?", adIDs).
+		Where("ad_type IN ?", displayAdTypes()).
 		Where("media_type = ? AND is_active = ?", rewardAdMediaTypeImage, true).
 		Where("(starts_at IS NULL OR starts_at <= ?)", now).
 		Where("(ends_at IS NULL OR ends_at >= ?)", now).
@@ -561,7 +562,7 @@ func (s *WalletService) listPublicConfiguredDisplayAds(ctx context.Context, chan
 	for slotIndex := 1; slotIndex <= displayAdSlotCount && len(items) < limit; slotIndex++ {
 		candidates := make([]model.DisplayAdSlotAssignment, 0, len(slotMap[slotIndex]))
 		for _, assignment := range slotMap[slotIndex] {
-			if _, exists := adMap[assignment.RewardAdID]; exists {
+			if ad, exists := adMap[assignment.RewardAdID]; exists && displayAdTypeMatchesSlot(ad.AdType, slotIndex) {
 				candidates = append(candidates, assignment)
 			}
 		}
@@ -588,7 +589,7 @@ func (s *WalletService) listPublicLegacyDisplayAds(ctx context.Context, channel 
 	now := s.runtime.Now()
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
-		Where("ad_type = ? AND is_active = ?", rewardAdTypeDisplay, true).
+		Where("ad_type IN ? AND is_active = ?", displayAdTypes(), true).
 		Where("media_type = ?", rewardAdMediaTypeImage).
 		Where("display_channel = ? AND display_placement = ?", channel, placement).
 		Where("(starts_at IS NULL OR starts_at <= ?)", now).
@@ -600,9 +601,33 @@ func (s *WalletService) listPublicLegacyDisplayAds(ctx context.Context, channel 
 	}
 
 	items := make([]PublicDisplayAdResponse, 0, len(ads))
-	for index, ad := range ads {
+	nextShortSlot := 1
+	nextLongSlot := 4
+	nextFallbackSlot := 1
+	for _, ad := range ads {
+		slotIndex := 0
+		switch normalizedDisplayAdType(ad.AdType) {
+		case rewardAdTypeDisplayShort:
+			if nextShortSlot > 3 {
+				continue
+			}
+			slotIndex = nextShortSlot
+			nextShortSlot++
+		case rewardAdTypeDisplayLong:
+			if nextLongSlot > 5 {
+				continue
+			}
+			slotIndex = nextLongSlot
+			nextLongSlot++
+		default:
+			if nextFallbackSlot > displayAdSlotCount {
+				continue
+			}
+			slotIndex = nextFallbackSlot
+			nextFallbackSlot++
+		}
 		item := toPublicDisplayAdResponse(ad)
-		item.SlotIndex = index + 1
+		item.SlotIndex = slotIndex
 		item.DisplayLayout = displayAdLayoutForSlot(item.SlotIndex)
 		items = append(items, item)
 	}
@@ -887,12 +912,12 @@ func rewardAdClickRate(watchCount int64, linkClickCount int64) float64 {
 	return float64(linkClickCount) / float64(watchCount) * 100
 }
 
-// 32. walletDate returns the server-side wallet date string.
+// 36. walletDate returns the server-side wallet date string.
 func walletDate(value time.Time) string {
 	return value.Format("2006-01-02")
 }
 
-// 33. walletDayStart returns the start of the current wallet day.
+// 37. walletDayStart returns the start of the current wallet day.
 func walletDayStart(value time.Time) time.Time {
 	year, month, day := value.Date()
 	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())

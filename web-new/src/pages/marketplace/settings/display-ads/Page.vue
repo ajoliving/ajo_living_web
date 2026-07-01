@@ -1,7 +1,7 @@
 <!--
  * 展示廣告位設定頁。
  * 1. 按頻道讀取可用 display 廣告。
- * 2. 綁定樓盤與二手列表右側廣告位。
+ * 2. 綁定 3 個 16:9 短廣告位與 2 個 9:16 長廣告位。
  * 3. 保存 slot 顯示文案與跳轉 URL。
 -->
 <script setup lang="ts">
@@ -18,6 +18,7 @@ type DisplayAdChannel = PublicDisplayAdResponse['display_channel'];
 
 interface DisplayAdSlotForm {
   slotIndex: number;
+  kind: 'short' | 'long';
   adTaskId: string;
   displayTitle: string;
   displayText: string;
@@ -41,8 +42,14 @@ const channelOptions = computed<Array<{ label: string; value: DisplayAdChannel }
 
 // 1. 建立固定右側廣告位表單
 const createEmptySlots = (): DisplayAdSlotForm[] =>
-  [1, 2].map((slotIndex) => ({
-    slotIndex,
+  ([
+    { slotIndex: 1, kind: 'short' },
+    { slotIndex: 2, kind: 'short' },
+    { slotIndex: 3, kind: 'short' },
+    { slotIndex: 4, kind: 'long' },
+    { slotIndex: 5, kind: 'long' },
+  ] as Array<Pick<DisplayAdSlotForm, 'slotIndex' | 'kind'>>).map((slot) => ({
+    ...slot,
     adTaskId: '',
     displayTitle: '',
     displayText: '',
@@ -90,7 +97,7 @@ const loadSettings = async (): Promise<void> => {
       }
 
       return {
-        slotIndex: slot.slotIndex,
+        ...slot,
         adTaskId: savedAd.task_id,
         displayTitle: savedAd.slot_display_title || savedAd.title,
         displayText: savedAd.display_text || savedAd.summary,
@@ -110,7 +117,16 @@ const loadSettings = async (): Promise<void> => {
   }
 };
 
-// 4. 切換廣告時套用預設文案
+// 4. 取得廣告位可用素材
+const availableAdsForSlot = (slot: DisplayAdSlotForm): StaffRewardAdResponse[] =>
+  availableAds.value.filter((ad) => {
+    if (slot.kind === 'short') {
+      return ad.ad_type === 'display_short' || ad.ad_type === 'display';
+    }
+    return ad.ad_type === 'display_long' || ad.ad_type === 'display';
+  });
+
+// 5. 切換廣告時套用預設文案
 const applySelectedAd = (slot: DisplayAdSlotForm): void => {
   const ad = availableAds.value.find((item) => item.task_id === slot.adTaskId);
   if (!ad) {
@@ -125,7 +141,7 @@ const applySelectedAd = (slot: DisplayAdSlotForm): void => {
   slot.targetURL = ad.slot_target_url || ad.target_url;
 };
 
-// 5. 保存廣告位設定
+// 6. 保存廣告位設定
 const saveSettings = async (): Promise<void> => {
   const slots: DisplayAdSlotSaveItem[] = slotForms.value.map((slot) => ({
     slot_index: slot.slotIndex,
@@ -229,7 +245,7 @@ onMounted(() => {
           >
             <div class="display-ads-slot__title">
               <h3>{{ t('marketplace.settings.displayAdSlotLabel', { index: slot.slotIndex }) }}</h3>
-              <span>{{ slot.slotIndex === 1 ? '160 × 600' : '300 × 250' }}</span>
+              <span>{{ slot.kind === 'short' ? '16:9' : '9:16' }}</span>
             </div>
 
             <label class="display-ads-field">
@@ -243,7 +259,7 @@ onMounted(() => {
                   {{ t('marketplace.settings.emptySlot') }}
                 </option>
                 <option
-                  v-for="ad in availableAds"
+                  v-for="ad in availableAdsForSlot(slot)"
                   :key="ad.task_id"
                   :value="ad.task_id"
                 >
@@ -293,7 +309,7 @@ onMounted(() => {
             v-for="slot in slotForms"
             :key="`preview-${slot.slotIndex}`"
             class="display-ads-preview__slot"
-            :class="{ 'display-ads-preview__slot--large': slot.slotIndex === 1 }"
+            :class="`display-ads-preview__slot--${slot.kind}`"
           >
             <span>{{ t('marketplace.settings.displayAdBadge') }}</span>
             <strong>{{ slot.displayTitle || t('marketplace.settings.emptySlot') }}</strong>
@@ -485,17 +501,17 @@ onMounted(() => {
 
 .display-ads-preview__slot {
   display: grid;
-  min-height: 180px;
   align-content: end;
   gap: 0.35rem;
+  aspect-ratio: 16 / 9;
   border: 1px dashed rgb(var(--color-border));
   border-radius: 3px;
   background: linear-gradient(135deg, rgb(var(--color-surface-muted)), rgb(var(--color-surface-raised)));
   padding: 0.85rem;
 }
 
-.display-ads-preview__slot--large {
-  min-height: 320px;
+.display-ads-preview__slot--long {
+  aspect-ratio: 9 / 16;
 }
 
 .display-ads-preview__slot span {

@@ -1,7 +1,7 @@
 <!--
  * 二手交易我的中心頁。
  * 1. 提供我的模組左側內置導航。
- * 2. 承載我的帖子、新增帖子、訂單、收藏、個人資料與聊天子頁。
+ * 2. 承載我的帖子、新增帖子、收藏、個人資料與聊天子頁。
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -14,7 +14,7 @@ interface MyNavItem {
   key: string;
   label: string;
   to: string;
-  icon: 'browse' | 'plus-square' | 'inbox' | 'star' | 'user' | 'message';
+  icon: 'browse' | 'plus-square' | 'star' | 'user' | 'message';
   match: string[];
 }
 
@@ -42,13 +42,6 @@ const navItems = computed<MyNavItem[]>(() => [
     to: '/account/marketplace/my/new',
     icon: 'plus-square',
     match: ['/account/marketplace/my/new'],
-  },
-  {
-    key: 'orders',
-    label: t('marketplace.myHub.orders'),
-    to: '/account/marketplace/my/orders',
-    icon: 'inbox',
-    match: ['/account/marketplace/my/orders'],
   },
   {
     key: 'favorites',
@@ -121,7 +114,7 @@ const isNavActive = (item: MyNavItem): boolean =>
 .marketplace-my-hub {
   display: grid;
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   gap: 1rem;
   margin: 0 auto;
   padding: 0.75rem var(--layout-page-padding-inline) 4rem;

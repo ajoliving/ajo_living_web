@@ -1,7 +1,7 @@
 /*
  * 首頁與登入圖片預設內容種子。
  * 1. 將前端預設靜態圖片上傳至 OSS。
- * 2. 在資料庫內建立首頁輪播、首頁三大圖與登入背景圖配置。
+ * 2. 在資料庫內建立首頁三大圖與登入背景圖配置。
  * 3. 已有配置時保持不覆蓋。
  */
 package service
@@ -70,9 +70,6 @@ func (s *HomeContentService) SeedDefaultHomeContent(ctx context.Context, options
 	if err := s.seedDefaultLoginHeroes(ctx, operatorUserID, loginSeeds); err != nil {
 		return err
 	}
-	if err := s.seedDefaultHomeCarousel(ctx, operatorUserID, defaultHomeCarouselSeeds(publicDir)); err != nil {
-		return err
-	}
 	if err := s.seedDefaultHomeModuleCards(ctx, operatorUserID, defaultHomeModuleCardSeeds(publicDir)); err != nil {
 		return err
 	}
@@ -108,33 +105,7 @@ func (s *HomeContentService) seedDefaultLoginHeroes(ctx context.Context, operato
 	return err
 }
 
-// 7. seedDefaultHomeCarousel stores homepage carousel defaults when absent.
-func (s *HomeContentService) seedDefaultHomeCarousel(ctx context.Context, operatorUserID int64, seeds []defaultContentAsset) error {
-	items, err := s.ListCarouselSettings(ctx)
-	if err != nil {
-		return err
-	}
-	if len(items) > 0 {
-		return nil
-	}
-
-	inputs := make([]HomeCarouselInput, 0, len(seeds))
-	for index, seed := range seeds {
-		asset, err := s.ensureDefaultMediaAsset(ctx, operatorUserID, seed)
-		if err != nil {
-			return err
-		}
-		inputs = append(inputs, HomeCarouselInput{
-			MediaAssetID: asset.PublicID,
-			SortOrder:    index + 1,
-		})
-	}
-
-	_, err = s.SaveCarouselSettings(ctx, operatorUserID, inputs)
-	return err
-}
-
-// 8. seedDefaultHomeModuleCards stores homepage module card defaults when absent.
+// 7. seedDefaultHomeModuleCards stores homepage module card defaults when absent.
 func (s *HomeContentService) seedDefaultHomeModuleCards(ctx context.Context, operatorUserID int64, seeds []defaultHomeModuleCardSeed) error {
 	items, err := s.ListModuleCardSettings(ctx)
 	if err != nil {
@@ -163,7 +134,7 @@ func (s *HomeContentService) seedDefaultHomeModuleCards(ctx context.Context, ope
 	return err
 }
 
-// 9. ensureDefaultMediaAsset uploads local image to storage and upserts media asset metadata.
+// 8. ensureDefaultMediaAsset uploads local image to storage and upserts media asset metadata.
 func (s *HomeContentService) ensureDefaultMediaAsset(ctx context.Context, operatorUserID int64, seed defaultContentAsset) (*model.MediaAsset, error) {
 	body, err := os.ReadFile(seed.LocalPath)
 	if err != nil {
@@ -212,7 +183,7 @@ func (s *HomeContentService) ensureDefaultMediaAsset(ctx context.Context, operat
 	return media, nil
 }
 
-// 10. loadMediaAssetByObjectKey loads one media asset by object key.
+// 9. loadMediaAssetByObjectKey loads one media asset by object key.
 func (s *HomeContentService) loadMediaAssetByObjectKey(ctx context.Context, objectKey string) (*model.MediaAsset, error) {
 	var media model.MediaAsset
 	if err := s.runtime.DB.WithContext(ctx).Where("object_key = ?", objectKey).Limit(1).Find(&media).Error; err != nil {
@@ -225,7 +196,7 @@ func (s *HomeContentService) loadMediaAssetByObjectKey(ctx context.Context, obje
 	return &media, nil
 }
 
-// 11. defaultLoginHeroSeeds returns the initial login background set.
+// 10. defaultLoginHeroSeeds returns the initial login background set.
 func defaultLoginHeroSeeds(publicDir string) []defaultLoginHeroSeed {
 	return []defaultLoginHeroSeed{
 		{
@@ -253,34 +224,7 @@ func defaultLoginHeroSeeds(publicDir string) []defaultLoginHeroSeed {
 	}
 }
 
-// 12. defaultHomeCarouselSeeds returns the initial homepage carousel set.
-func defaultHomeCarouselSeeds(publicDir string) []defaultContentAsset {
-	return []defaultContentAsset{
-		{
-			LocalPath: filepath.Join(publicDir, "home-stage", "carousel", "building.jpeg"),
-			ObjectKey: homeEngMediaObjectPrefix + "building.jpeg",
-			MimeType:  "image/jpeg",
-			Width:     1280,
-			Height:    720,
-		},
-		{
-			LocalPath: filepath.Join(publicDir, "home-stage", "carousel", "intercom.png"),
-			ObjectKey: homeEngMediaObjectPrefix + "intercom.png",
-			MimeType:  "image/png",
-			Width:     2730,
-			Height:    1535,
-		},
-		{
-			LocalPath: filepath.Join(publicDir, "home-stage", "carousel", "rant.png"),
-			ObjectKey: homeEngMediaObjectPrefix + "rant.png",
-			MimeType:  "image/png",
-			Width:     2730,
-			Height:    1535,
-		},
-	}
-}
-
-// 13. defaultHomeModuleCardSeeds returns the initial homepage module card set.
+// 11. defaultHomeModuleCardSeeds returns the initial homepage module card set.
 func defaultHomeModuleCardSeeds(publicDir string) []defaultHomeModuleCardSeed {
 	return []defaultHomeModuleCardSeed{
 		{

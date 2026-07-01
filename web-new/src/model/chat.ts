@@ -32,7 +32,7 @@ export interface ChatConversation {
 export type ChatMessageRole = 'self' | 'peer';
 
 // 5. 定義聊天頁會話類型
-export type ChatConversationType = 'direct_listing_chat' | 'system_notice';
+export type ChatConversationType = 'direct_listing_chat';
 
 // 6. 定義聊天頁訊息
 export interface ChatMessageView {

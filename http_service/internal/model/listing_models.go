@@ -1,6 +1,6 @@
 /*
  * Listing and media data models.
- * 1. Define shared listing entities, secondhand module extension, and discover placements.
+ * 1. Define shared listing entities, secondhand module extension, and favorite records.
  * 2. Keep sensitive contact and visibility fields isolated for service access.
  */
 package model
@@ -88,19 +88,7 @@ type ContactAccessLog struct {
 	CreatedAt       time.Time      `json:"created_at"`
 }
 
-// 6. DiscoverPlacement stores manually curated discover page slots.
-type DiscoverPlacement struct {
-	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	Scene        string `gorm:"type:varchar(64);not null;uniqueIndex:uk_discover_placements_position,priority:1;index" json:"scene"`
-	CategoryCode string `gorm:"type:varchar(64);not null;default:'';uniqueIndex:uk_discover_placements_position,priority:2;index" json:"category_code"`
-	SlotIndex    int    `gorm:"not null;uniqueIndex:uk_discover_placements_position,priority:3" json:"slot_index"`
-	ListingID    int64  `gorm:"not null;index" json:"listing_id"`
-	CreatedBy    *int64 `gorm:"index" json:"created_by"`
-	UpdatedBy    *int64 `gorm:"index" json:"updated_by"`
-	TimestampModel
-}
-
-// 7. ListingFavorite stores member saved listing relationships.
+// 6. ListingFavorite stores member saved listing relationships.
 type ListingFavorite struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID    int64     `gorm:"not null;uniqueIndex:uk_listing_favorite_user_listing,priority:1;index" json:"user_id"`
@@ -110,7 +98,7 @@ type ListingFavorite struct {
 	Listing   *Listing  `gorm:"foreignKey:ListingID" json:"listing,omitempty"`
 }
 
-// 8. SecondhandListing stores secondhand-only listing fields.
+// 7. SecondhandListing stores secondhand-only listing fields.
 type SecondhandListing struct {
 	ListingID          int64          `gorm:"primaryKey" json:"listing_id"`
 	CategoryCode       string         `gorm:"type:varchar(64);not null" json:"category_code"`

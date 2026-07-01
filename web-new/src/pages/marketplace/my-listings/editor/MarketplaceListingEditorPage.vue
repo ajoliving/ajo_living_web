@@ -114,10 +114,9 @@ const {
 
 <style scoped>
 .listing-editor-page {
+  display: grid;
+  gap: 1rem;
   width: 100%;
-  max-width: min(1180px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 0.75rem 0 4rem;
   color: rgb(var(--color-text));
 }
 

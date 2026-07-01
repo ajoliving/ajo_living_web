@@ -6,23 +6,24 @@
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { RewardAdDisplayChannel, RewardAdDisplayLayout, RewardAdForm, RewardAdType } from '../wallet';
+import {
+  displayLayoutForAdType,
+  isDisplayRewardAdType,
+  type RewardAdDisplayChannel,
+  type RewardAdForm,
+  type RewardAdType,
+} from '../wallet';
 
 const adTypeOptions: Array<{ labelKey: string; value: RewardAdType }> = [
   { labelKey: 'marketplace.management.walletAdTypeReward', value: 'reward' },
-  { labelKey: 'marketplace.management.walletAdTypeDisplay', value: 'display' },
+  { labelKey: 'marketplace.management.walletAdTypeDisplayShort', value: 'display_short' },
+  { labelKey: 'marketplace.management.walletAdTypeDisplayLong', value: 'display_long' },
 ];
 
 const displayChannelOptions: Array<{ labelKey: string; value: Exclude<RewardAdDisplayChannel, ''> }> = [
   { labelKey: 'marketplace.settings.displayAdChannelPropertySale', value: 'property_sale' },
   { labelKey: 'marketplace.settings.displayAdChannelFurniture', value: 'furniture' },
   { labelKey: 'marketplace.settings.displayAdChannelServicedApartment', value: 'serviced_apartment' },
-];
-
-const displayLayoutOptions: Array<{ labelKey: string; value: RewardAdDisplayLayout }> = [
-  { labelKey: 'marketplace.management.walletAdDisplayLayoutImageFull', value: 'image_full' },
-  { labelKey: 'marketplace.management.walletAdDisplayLayoutImageText', value: 'image_text' },
-  { labelKey: 'marketplace.management.walletAdDisplayLayoutTextCompact', value: 'text_compact' },
 ];
 
 defineProps<{
@@ -47,6 +48,12 @@ const handleMediaFileChange = (event: Event): void => {
     emit('stageMedia', file);
   }
 };
+
+// 2. 輸出展示廣告尺寸文字
+const resolveDisplayAdSizeLabel = (adType: RewardAdType, t: (key: string) => string): string =>
+  adType === 'display_long'
+    ? t('marketplace.management.walletAdDisplayLongSize')
+    : t('marketplace.management.walletAdDisplayShortSize');
 </script>
 
 <template>
@@ -86,16 +93,23 @@ const handleMediaFileChange = (event: Event): void => {
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdRewardField') }}</span>
           <input
+            v-if="adForm.adType === 'reward'"
             v-model.number="adForm.rewardPoints"
             type="number"
             min="1"
             step="1"
           />
+          <input
+            v-else
+            :value="resolveDisplayAdSizeLabel(adForm.adType, t)"
+            type="text"
+            readonly
+          />
         </label>
       </div>
 
       <label class="wallet-settings-field">
-        <span>{{ adForm.adType === 'display' ? t('marketplace.settings.displayAdTextField') : t('marketplace.management.walletAdSummaryField') }}</span>
+        <span>{{ isDisplayRewardAdType(adForm.adType) ? t('marketplace.settings.displayAdTextField') : t('marketplace.management.walletAdSummaryField') }}</span>
         <textarea
           v-model="adForm.summary"
           rows="3"
@@ -109,7 +123,7 @@ const handleMediaFileChange = (event: Event): void => {
           <span>{{ t('marketplace.management.walletAdMediaTypeField') }}</span>
           <select
             v-model="adForm.mediaType"
-            :disabled="adForm.adType === 'display'"
+            :disabled="isDisplayRewardAdType(adForm.adType)"
           >
             <option value="image">
               {{ t('marketplace.management.walletAdMediaTypeImage') }}
@@ -131,7 +145,7 @@ const handleMediaFileChange = (event: Event): void => {
       </div>
 
       <div
-        v-if="adForm.adType === 'display'"
+        v-if="isDisplayRewardAdType(adForm.adType)"
         class="wallet-settings-three-column"
       >
         <label class="wallet-settings-field">
@@ -149,15 +163,11 @@ const handleMediaFileChange = (event: Event): void => {
 
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdDisplayLayoutField') }}</span>
-          <select v-model="adForm.displayLayout">
-            <option
-              v-for="option in displayLayoutOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ t(option.labelKey) }}
-            </option>
-          </select>
+          <input
+            :value="t(`marketplace.management.walletAdDisplayLayout.${displayLayoutForAdType(adForm.adType)}`)"
+            type="text"
+            readonly
+          />
         </label>
 
         <label class="wallet-settings-field">

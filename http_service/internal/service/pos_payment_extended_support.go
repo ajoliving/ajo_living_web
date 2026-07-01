@@ -52,7 +52,7 @@ func (s *POSPaymentService) resolveHistoryAccess(ctx context.Context, userID int
 	}
 	if len(unitIDs) > 0 && len(unitOptions) == 0 {
 		for _, unitID := range unitIDs {
-			if err := s.ensureStaffBuildingUnit(ctx, contextValue.BuildingID, unitID); err != nil {
+			if err := s.ensureStaffBuildingUnit(ctx, userID, contextValue.BuildingID, unitID); err != nil {
 				return nil, "", nil, err
 			}
 		}
@@ -333,11 +333,11 @@ func ensureReportPayloadContext(payload map[string]any, contextValue *POSUnitCon
 }
 
 // 16. ensureStaffBuildingUnit checks one unit belongs to a visible Staff building.
-func (s *POSPaymentService) ensureStaffBuildingUnit(ctx context.Context, buildingID string, unitID string) error {
+func (s *POSPaymentService) ensureStaffBuildingUnit(ctx context.Context, userID int64, buildingID string, unitID string) error {
 	if strings.TrimSpace(unitID) == "" {
 		return nil
 	}
-	units, err := NewPOSBuildingService(s.runtime).ListUnits(ctx, buildingID)
+	units, err := s.memberPOSUnits(ctx, userID, buildingID)
 	if err != nil {
 		return err
 	}

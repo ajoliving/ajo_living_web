@@ -50,7 +50,6 @@ func Migrate(db *gorm.DB) error {
 		&model.MediaAsset{},
 		&model.ListingImage{},
 		&model.ContactAccessLog{},
-		&model.DiscoverPlacement{},
 		&model.ListingFavorite{},
 		&model.HomeContentPlacement{},
 		&model.Order{},

@@ -11,32 +11,28 @@ import BaseTextarea from '@/shared/components/base/BaseTextarea.vue';
 import BaseEmpty from '@/shared/components/feedback/BaseEmpty.vue';
 
 import { useMarketplaceChatPage } from './chat';
-import EmojiPicker from './widgets/EmojiPicker.vue';
 import MessageBubble from './widgets/MessageBubble.vue';
 
 const {
   activeConversation,
   activeReferencePrice,
   activeMessages,
-  chatEmojiOptions,
+  canSendMessage,
   conversations,
   draftMessage,
-  emojiPickerOpen,
   formatPrice,
   handleSelectChat,
   handleSendByEnter,
   handleSendMessage,
-  insertEmoji,
-  isSystemNoticeConversation,
   loadingConversations,
   loadingMessages,
+  messageMaxLength,
   preferenceStore,
   selectedChatId,
   setMessageContainerRef,
   sendingMessage,
   sessionStore,
   t,
-  toggleEmojiPicker,
 } = useMarketplaceChatPage();
 </script>
 
@@ -50,8 +46,8 @@ const {
         <div class="chat-panel chat-panel--conversations">
           <div class="chat-panel__header chat-panel__header--compact">
             <div>
-              <p class="chat-panel__eyebrow">Chat</p>
-              <h1 class="chat-panel__title">{{ t('chat.conversations') }}</h1>
+              <p class="chat-panel__eyebrow">{{ t('chat.kicker') }}</p>
+              <h1 class="chat-panel__title">{{ t('chat.title') }}</h1>
             </div>
             <span class="chat-panel__count">{{ conversations.length }}</span>
           </div>
@@ -60,6 +56,13 @@ const {
             class="chat-loading"
           >
             {{ t('chat.loadingConversations') }}
+          </div>
+          <div
+            v-else-if="conversations.length === 0"
+            class="chat-conversation-empty"
+          >
+            <p>{{ t('chat.noConversationsTitle') }}</p>
+            <span>{{ t('chat.noConversationsDescription') }}</span>
           </div>
           <div
             v-else
@@ -90,7 +93,7 @@ const {
                         {{ conversation.peer.display_name }}
                       </p>
                       <p class="truncate text-xs text-text-muted">
-                        {{ conversation.type === 'system_notice' ? t('chat.systemNoticeSubtitle') : conversation.listing.title }}
+                        {{ conversation.listing.title }}
                       </p>
                     </div>
                     <span
@@ -118,11 +121,11 @@ const {
                     {{ activeConversation.peer.display_name }}
                   </p>
                   <p class="chat-thread-header__subtitle">
-                    {{ isSystemNoticeConversation ? t('chat.systemNoticeSubtitle') : activeConversation.listing.title }}
+                    {{ activeConversation.listing.title }}
                   </p>
                 </div>
                 <div
-                  v-if="!isSystemNoticeConversation && activeReferencePrice > 0"
+                  v-if="activeReferencePrice > 0"
                   class="chat-listing-summary"
                 >
                   <p class="chat-listing-summary__label">{{ t('chat.listingPrice') }}</p>
@@ -150,32 +153,27 @@ const {
               />
             </div>
 
-            <div
-              v-if="!isSystemNoticeConversation"
-              class="chat-composer"
-            >
+            <div class="chat-composer">
+              <div class="chat-composer__meta">
+                <span>{{ t('chat.replying') }}</span>
+                <span>{{ draftMessage.length }}/{{ messageMaxLength }}</span>
+              </div>
               <div class="chat-composer__row">
                 <BaseTextarea
                   :model-value="draftMessage"
                   :rows="2"
+                  :maxlength="messageMaxLength"
                   class="chat-composer__textarea"
                   :placeholder="t('chat.composePlaceholder')"
                   @update:model-value="draftMessage = $event"
                   @keydown.enter="handleSendByEnter"
                 />
                 <div class="chat-composer__actions">
-                  <EmojiPicker
-                    :emojis="chatEmojiOptions"
-                    :open="emojiPickerOpen"
-                    :t="t"
-                    @select="insertEmoji"
-                    @toggle="toggleEmojiPicker"
-                  />
                   <BaseButton
                     variant="primary"
                     size="sm"
                     class="chat-send-button"
-                    :disabled="sendingMessage"
+                    :disabled="!canSendMessage"
                     @click="handleSendMessage"
                   >
                     <template #leading>
@@ -293,6 +291,25 @@ const {
   font-size: 0.8125rem;
   line-height: 1.6;
   padding: 1rem 0.9rem;
+}
+
+.chat-conversation-empty {
+  display: grid;
+  gap: 0.35rem;
+  color: rgb(var(--color-text-muted));
+  padding: 1rem 0.9rem;
+}
+
+.chat-conversation-empty p {
+  margin: 0;
+  color: rgb(var(--color-text));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.chat-conversation-empty span {
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .chat-conversation-list {
@@ -430,6 +447,16 @@ const {
 .chat-composer {
   border-top: 1px solid rgb(var(--color-border));
   padding: 0.75rem;
+}
+
+.chat-composer__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .chat-composer__row {

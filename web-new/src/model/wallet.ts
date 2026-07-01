@@ -124,10 +124,13 @@ export interface StaffWalletGrantResponse {
   operator: StaffWalletUserResponse;
 }
 
-// 12. 定義 Staff 廣告任務
+// 12. 定義 Staff 廣告任務類型
+export type StaffRewardAdType = 'reward' | 'display' | 'display_short' | 'display_long';
+
+// 13. 定義 Staff 廣告任務
 export interface StaffRewardAdResponse {
   task_id: string;
-  ad_type: 'reward' | 'display';
+  ad_type: StaffRewardAdType;
   title: string;
   summary: string;
   cover_url: string;
@@ -159,7 +162,7 @@ export interface StaffRewardAdResponse {
 
 // 13. 定義 Staff 廣告任務保存資料
 export interface StaffRewardAdPayload {
-  ad_type?: 'reward' | 'display';
+  ad_type?: StaffRewardAdType;
   title?: string;
   summary?: string;
   cover_url?: string;

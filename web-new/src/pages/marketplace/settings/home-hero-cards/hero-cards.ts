@@ -13,7 +13,7 @@ import type { HomeContentModuleCode, HomeModuleCard } from '@/model/home-content
 import { useFeedbackStore } from '@/stores/feedback';
 import { buildUploadHeaders } from '@/utils/upload';
 
-const homeCarouselObjectPrefix = 'ajo_living/eng/home-carousel/';
+const homeModuleObjectPrefix = 'ajo_living/eng/home-modules/';
 
 interface HomeModuleCardView {
   moduleCode: HomeContentModuleCode;
@@ -95,7 +95,7 @@ export const useHomeHeroCardsSettingsPage = () => {
         file_name: file.name,
         mime_type: file.type,
         file_size: file.size,
-        object_prefix: homeCarouselObjectPrefix,
+        object_prefix: homeModuleObjectPrefix,
       });
       const presign = data.data;
       const uploadResponse = await fetch(presign.upload_url, {

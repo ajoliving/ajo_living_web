@@ -5,11 +5,34 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
+import BuildingPage from '@/pages/building/BuildingPage.vue';
 import PropertyDetailPage from '@/pages/property/detail/PropertyDetailPage.vue';
 import PropertyListPage from '@/pages/property/list/PropertyListPage.vue';
 
 // 1. 輸出樓盤放售路由
 export const buildingRoutes: RouteRecordRaw[] = [
+  {
+    path: '/affairs',
+    redirect: '/building',
+  },
+  {
+    path: '/building',
+    name: 'Building',
+    component: BuildingPage,
+    meta: { titleKey: 'nav.building' },
+  },
+  {
+    path: '/building/:section',
+    redirect: '/building',
+  },
+  {
+    path: '/listing',
+    redirect: '/properties',
+  },
+  {
+    path: '/detail',
+    redirect: '/properties/1',
+  },
   {
     path: '/properties',
     name: 'Properties',

@@ -69,8 +69,8 @@ const footerColumns = computed<FooterColumn[]>(() => [
 
 const footerSocials = computed(() => [
   { key: 'facebook', label: t('common.footer.socials.facebook'), text: 'f' },
-  { key: 'camera', label: t('common.footer.socials.camera'), text: '📸' },
-  { key: 'chat', label: t('common.footer.socials.chat'), text: '💬' },
+  { key: 'camera', label: t('common.footer.socials.camera'), text: 'IG' },
+  { key: 'chat', label: t('common.footer.socials.chat'), text: 'WA' },
   { key: 'video', label: t('common.footer.socials.video'), text: '▶' },
 ]);
 </script>
@@ -162,7 +162,6 @@ const footerSocials = computed(() => [
 
 .app-main {
   min-height: calc(100vh - var(--nav-h));
-  padding-top: var(--nav-h);
 }
 
 .app-footer {

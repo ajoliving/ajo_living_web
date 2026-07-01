@@ -564,12 +564,19 @@ onMounted(() => {
             {{ product.isFavorite ? '已收藏' : '收藏' }}
           </button>
           <div class="gp-card-img">
-            <div class="gp-card-img-ph" />
+            <img
+              v-if="product.image_url || product.imageUrl"
+              :src="product.image_url || product.imageUrl"
+              :alt="product.name"
+            >
+            <div
+              v-else
+              class="gp-card-img-ph"
+            />
           </div>
           <div class="gp-card-body">
             <div class="gp-card-heading">
               <div>
-                <div class="gp-card-store">{{ displaySupermarketStore(supermarketPrimaryPrice(product).store) }}</div>
                 <div class="gp-card-name">{{ product.name }}</div>
                 <div class="gp-card-brand">{{ product.brand || '未提供品牌' }}</div>
               </div>
@@ -976,9 +983,20 @@ onMounted(() => {
   justify-content: center;
   width: 100%;
   height: 140px;
+  padding: 14px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--bdr);
-  background: #f6f6f6;
+  background: #fff;
   overflow: hidden;
+}
+
+.gp-card-img img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .gp-card-img-ph {

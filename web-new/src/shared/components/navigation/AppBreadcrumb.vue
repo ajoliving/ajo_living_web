@@ -22,7 +22,7 @@ defineProps<AppBreadcrumbProps>();
 <template>
   <nav class="breadcrumb">
     <template v-for="(item, index) in items" :key="index">
-      <span v-if="index > 0" class="bc-sep">/</span>
+      <span v-if="index > 0" class="bc-sep">›</span>
       <span v-if="index === items.length - 1" class="bc-current">{{ item.label }}</span>
       <RouterLink v-else-if="item.to" :to="item.to" class="bc-link">{{ item.label }}</RouterLink>
       <button v-else class="bc-link" type="button">{{ item.label }}</button>
@@ -36,7 +36,13 @@ defineProps<AppBreadcrumbProps>();
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--color-ink-3);
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 12px max(24px, calc((100vw - 1180px) / 2 + 24px));
+  border: 1px solid var(--bdr);
+  background: var(--sur);
+  color: var(--ink-3);
+  font-family: var(--font);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -44,23 +50,23 @@ defineProps<AppBreadcrumbProps>();
 .bc-link {
   border: 0;
   background: transparent;
-  color: var(--color-ink-3);
+  color: var(--ink-3);
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font);
   font-size: 12px;
   padding: 0;
 }
 
 .bc-link:hover {
-  color: var(--color-primary);
+  color: var(--brand);
 }
 
 .bc-sep {
-  color: var(--color-ink-4);
+  color: var(--ink-4);
 }
 
 .bc-current {
-  color: var(--color-text);
+  color: var(--ink);
   font-weight: 600;
 }
 </style>

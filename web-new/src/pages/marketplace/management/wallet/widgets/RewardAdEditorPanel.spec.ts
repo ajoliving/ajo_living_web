@@ -17,7 +17,8 @@ const t = (key: string): string => {
     'marketplace.management.walletAdEditorDescription': '設定廣告',
     'marketplace.management.walletAdTypeField': '廣告用途',
     'marketplace.management.walletAdTypeReward': '看廣告賺積分',
-    'marketplace.management.walletAdTypeDisplay': '列表展示廣告',
+    'marketplace.management.walletAdTypeDisplayShort': '右側短廣告',
+    'marketplace.management.walletAdTypeDisplayLong': '右側長廣告',
     'marketplace.management.walletAdTitleField': '任務標題',
     'marketplace.management.walletAdSummaryField': '任務摘要',
     'marketplace.management.walletAdTitlePlaceholder': '請輸入標題',
@@ -28,9 +29,10 @@ const t = (key: string): string => {
     'marketplace.management.walletAdMediaUploadField': '上傳媒體',
     'marketplace.management.walletAdDisplayChannelField': '展示頻道',
     'marketplace.management.walletAdDisplayLayoutField': '展示樣式',
-    'marketplace.management.walletAdDisplayLayoutImageFull': '圖片主視覺',
-    'marketplace.management.walletAdDisplayLayoutImageText': '圖片加文字',
-    'marketplace.management.walletAdDisplayLayoutTextCompact': '精簡文字',
+    'marketplace.management.walletAdDisplayLayout.image_full': '長版圖片',
+    'marketplace.management.walletAdDisplayLayout.image_text': '短版圖片',
+    'marketplace.management.walletAdDisplayShortSize': '16:9',
+    'marketplace.management.walletAdDisplayLongSize': '9:16',
     'marketplace.management.walletAdSortOrderField': '排序',
     'marketplace.management.walletAdRetentionDaysField': '保留天數',
     'marketplace.management.walletAdActiveField': '啟用任務',
@@ -49,7 +51,7 @@ const t = (key: string): string => {
 describe('RewardAdEditorPanel', () => {
   it('shows display ad controls and disables video selection in display mode', () => {
     const adForm = reactive(emptyRewardAdForm());
-    adForm.adType = 'display';
+    adForm.adType = 'display_long';
     adForm.displayChannel = 'property_sale';
     adForm.displayPlacement = 'listing_side';
     adForm.mediaType = 'image';

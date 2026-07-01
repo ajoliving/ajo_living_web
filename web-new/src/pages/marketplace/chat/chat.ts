@@ -19,44 +19,19 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 
-export interface ChatEmojiOption {
-  key: string;
-  value: string;
-}
+const messageMaxLength = 1000;
+const directListingChatType = 'direct_listing_chat';
+const hiddenMessageTypes = new Set(['notice_card']);
 
-const chatEmojiCodePoints = [
-  0x1f600,
-  0x1f604,
-  0x1f60a,
-  0x1f602,
-  0x1f60d,
-  0x1f914,
-  0x1f44d,
-  0x1f44b,
-  0x1f64f,
-  0x1f44c,
-  0x1f389,
-  0x1f525,
-  0x1f4a1,
-  0x1f4b0,
-  0x1f4e6,
-  0x1f69a,
-  0x1f4cd,
-  0x1f4de,
-  0x1f4f7,
-  0x1f44a,
-  0x1f622,
-  0x1f621,
-  0x2764,
-  0x2705,
-];
+// 1. 只保留真實聊天會話
+const isDisplayableConversation = (item: ChatSummaryResponse): boolean =>
+  String(item.chat_type) === directListingChatType;
 
-const chatEmojiOptions: ChatEmojiOption[] = chatEmojiCodePoints.map((codePoint) => ({
-  key: String(codePoint),
-  value: String.fromCodePoint(codePoint),
-}));
+// 2. 過濾歷史通知卡片訊息
+const isDisplayableMessage = (item: MessageResponse): boolean =>
+  !hiddenMessageTypes.has(String(item.message_type));
 
-// 1. 管理聊天頁資料與動作
+// 3. 管理聊天頁資料與動作
 export const useMarketplaceChatPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -72,22 +47,28 @@ export const useMarketplaceChatPage = () => {
   const activeMessages = ref<ChatMessageView[]>([]);
   const participantPublicIdByUserId = ref<Record<string, string>>({});
   const draftMessage = ref('');
-  const emojiPickerOpen = ref(false);
   const messageContainerRef = ref<HTMLDivElement | null>(null);
 
   const activeConversation = computed(() =>
     conversations.value.find((conversation) => conversation.id === selectedChatId.value),
   );
-  const isSystemNoticeConversation = computed(() => activeConversation.value?.type === 'system_notice');
   const activeReferencePrice = computed(() => Number(activeConversation.value?.listing.price_hkd || 0));
+  const canSendMessage = computed(() =>
+    Boolean(
+      selectedChatId.value &&
+      activeConversation.value &&
+      draftMessage.value.trim().length > 0 &&
+      !sendingMessage.value,
+    ),
+  );
 
-  // 1.1 映射會話資料
+  // 3.1 映射會話資料
   const mapConversation = (item: ChatSummaryResponse): ChatConversationView => ({
     id: item.chat_id,
-    type: item.chat_type,
+    type: directListingChatType,
     listing: {
       id: item.listing?.listing_id || item.listing_id,
-      title: item.chat_type === 'system_notice' ? t('chat.systemNoticeTitle') : item.listing?.title || item.listing_title,
+      title: item.listing?.title || item.listing_title,
       summary: item.listing?.summary || '',
       price_hkd: item.listing?.price_hkd ?? 0,
       status: item.listing?.business_status || 'available',
@@ -106,16 +87,14 @@ export const useMarketplaceChatPage = () => {
     last_message_at: item.last_message_at || '',
   });
 
-  // 1.2 根據參與者資料映射訊息
+  // 3.2 根據參與者資料映射訊息
   const mapMessage = (item: MessageResponse): ChatMessageView => ({
     id: item.message_id,
     chat_id: selectedChatId.value,
     sender_role:
-      item.message_type === 'notice_card'
-        ? 'peer'
-        : participantPublicIdByUserId.value[item.sender_user_id] === sessionStore.currentUser.public_id
-          ? 'self'
-          : 'peer',
+      participantPublicIdByUserId.value[item.sender_user_id] === sessionStore.currentUser.public_id
+        ? 'self'
+        : 'peer',
     body: item.content,
     message_type: item.message_type,
     action_label: item.action_label,
@@ -123,26 +102,32 @@ export const useMarketplaceChatPage = () => {
     sent_at: item.created_at,
   });
 
-  // 1.3 讀取會話列表
+  // 3.3 讀取會話列表
   const loadChats = async (): Promise<void> => {
     loadingConversations.value = true;
 
     try {
       const { data } = await fetchChats({ page: 1, page_size: 50 });
-      conversations.value = data.data.items.map(mapConversation);
+      conversations.value = data.data.items.filter(isDisplayableConversation).map(mapConversation);
 
       const deepLinkedChatId = String(route.params.conversationId || '').trim();
       const targetConversationType = String(route.query.target || '').trim();
       const targetConversation = conversations.value.find(
         (conversation) => conversation.type === targetConversationType,
       );
-      if (deepLinkedChatId) {
+      const deepLinkedConversation = conversations.value.find(
+        (conversation) => conversation.id === deepLinkedChatId,
+      );
+      if (deepLinkedConversation) {
         selectedChatId.value = deepLinkedChatId;
       } else if (targetConversation) {
         selectedChatId.value = targetConversation.id;
         await router.replace(`/account/chat/${targetConversation.id}`);
       } else if (!selectedChatId.value && conversations.value[0]) {
         selectedChatId.value = conversations.value[0].id;
+      } else if (deepLinkedChatId) {
+        selectedChatId.value = '';
+        await router.replace('/account/chat');
       }
     } catch (error) {
       feedbackStore.pushToast(
@@ -156,11 +141,19 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
-  // 1.4 讀取目前會話資料
+  // 3.4 讀取目前會話資料
   const loadActiveChat = async (): Promise<void> => {
     if (!selectedChatId.value) {
       activeMessages.value = [];
       participantPublicIdByUserId.value = {};
+      return;
+    }
+    const selectedConversation = conversations.value.find((item) => item.id === selectedChatId.value);
+    if (!selectedConversation) {
+      activeMessages.value = [];
+      participantPublicIdByUserId.value = {};
+      selectedChatId.value = conversations.value[0]?.id || '';
+      await router.replace(selectedChatId.value ? `/account/chat/${selectedChatId.value}` : '/account/chat');
       return;
     }
 
@@ -171,11 +164,19 @@ export const useMarketplaceChatPage = () => {
         fetchChatDetail(selectedChatId.value),
         fetchMessages(selectedChatId.value, { page: 1, page_size: 100 }),
       ]);
+      if (String(chatData.data.chat_type) !== directListingChatType) {
+        conversations.value = conversations.value.filter((item) => item.id !== selectedChatId.value);
+        activeMessages.value = [];
+        participantPublicIdByUserId.value = {};
+        selectedChatId.value = conversations.value[0]?.id || '';
+        await router.replace(selectedChatId.value ? `/account/chat/${selectedChatId.value}` : '/account/chat');
+        return;
+      }
 
       participantPublicIdByUserId.value = Object.fromEntries(
         chatData.data.participants.map((participant) => [participant.user_id, participant.public_id || '']),
       );
-      activeMessages.value = messageData.data.items.map(mapMessage);
+      activeMessages.value = messageData.data.items.filter(isDisplayableMessage).map(mapMessage);
 
       const matchedConversation = conversations.value.find((item) => item.id === selectedChatId.value);
       if (matchedConversation?.unread_count) {
@@ -196,20 +197,19 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
-  // 1.5 切換會話
+  // 3.5 切換會話
   const handleSelectChat = async (chatId: string): Promise<void> => {
     selectedChatId.value = chatId;
     await router.replace(`/account/chat/${chatId}`);
   };
 
-  // 1.6 送出訊息
+  // 3.6 送出訊息
   const handleSendMessage = async (): Promise<void> => {
     const content = draftMessage.value.trim();
-    if (!content || !selectedChatId.value || isSystemNoticeConversation.value) {
+    if (!content || !selectedChatId.value) {
       return;
     }
 
-    emojiPickerOpen.value = false;
     sendingMessage.value = true;
 
     try {
@@ -238,9 +238,9 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
-  // 1.7 使用 Enter 送出訊息，Shift + Enter 保留換行
+  // 3.7 使用 Enter 送出訊息，Shift + Enter 保留換行
   const handleSendByEnter = (event: KeyboardEvent): void => {
-    if (event.shiftKey || event.isComposing || sendingMessage.value) {
+    if (event.shiftKey || event.isComposing || !canSendMessage.value) {
       return;
     }
 
@@ -248,25 +248,15 @@ export const useMarketplaceChatPage = () => {
     void handleSendMessage();
   };
 
-  // 1.8 綁定訊息滾動容器
+  // 3.8 綁定訊息滾動容器
   const setMessageContainerRef = (element: Element | ComponentPublicInstance | null): void => {
     messageContainerRef.value = element instanceof HTMLDivElement ? element : null;
-  };
-
-  // 1.9 切換表情面板
-  const toggleEmojiPicker = (): void => {
-    emojiPickerOpen.value = !emojiPickerOpen.value;
-  };
-
-  // 1.10 插入表情到輸入內容
-  const insertEmoji = (emoji: string): void => {
-    draftMessage.value = `${draftMessage.value}${emoji}`;
   };
 
   watch(
     () => selectedChatId.value,
     () => {
-      emojiPickerOpen.value = false;
+      draftMessage.value = '';
       void loadActiveChat();
     },
   );
@@ -288,7 +278,12 @@ export const useMarketplaceChatPage = () => {
     (conversationId) => {
       const nextId = String(conversationId || '').trim();
       if (nextId && nextId !== selectedChatId.value) {
-        selectedChatId.value = nextId;
+        if (conversations.value.some((conversation) => conversation.id === nextId)) {
+          selectedChatId.value = nextId;
+          return;
+        }
+
+        void router.replace('/account/chat');
       }
     },
   );
@@ -301,24 +296,21 @@ export const useMarketplaceChatPage = () => {
     activeConversation,
     activeReferencePrice,
     activeMessages,
-    chatEmojiOptions,
+    canSendMessage,
     conversations,
     draftMessage,
-    emojiPickerOpen,
     formatPrice,
     handleSelectChat,
     handleSendByEnter,
     handleSendMessage,
-    insertEmoji,
-    isSystemNoticeConversation,
     loadingConversations,
     loadingMessages,
+    messageMaxLength,
     preferenceStore,
     selectedChatId,
     setMessageContainerRef,
     sendingMessage,
     sessionStore,
     t,
-    toggleEmojiPicker,
   };
 };

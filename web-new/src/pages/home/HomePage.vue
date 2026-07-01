@@ -2,18 +2,35 @@
  * 首頁入口頁。
  * 1. HERO 區：暗色漸層背景 + SVG 城市剪影 + 標題與雙按鈕。
  * 2. 探索服務區：4 個分類卡片（樓盤租售、服務式住宅、家具市集、綜合優惠）。
- * 3. 精選樓盤區：3 個樓盤卡片（圖片 + 標籤 + 標題 + 價格 + 面積）。
- * 4. 全部使用靜態 mock 資料，不呼叫 API。
+ * 3. 精選樓盤區：讀取公開樓盤列表並展示真實樓盤資料。
+ * 4. 樣式嚴格對齊 HTML 設計稿原生變量。
 -->
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-type HomeTarget = 'listing' | 'service' | 'market' | 'offers' | 'detail';
+import { fetchPropertySaleListings } from '@/httpapis/properties';
+import type { PropertyListingSummaryResponse } from '@/model/property';
+import {
+  resolvePropertyArea,
+  resolvePropertyCoverImage,
+  resolvePropertyDetailPath,
+  resolvePropertyDistrict,
+  resolvePropertyPrice,
+  resolvePropertyPriceText,
+  resolvePropertyPublisherRole,
+  resolvePropertyTitle,
+  resolvePropertyTransactionType,
+  resolvePropertyTypeLabel,
+} from '@/utils/property';
+
+type HomeTarget = 'listing' | 'service' | 'market' | 'offers';
 
 interface CategoryCard {
   key: HomeTarget;
   name: string;
   desc: string;
+  icon: 'building' | 'service' | 'market' | 'offers';
 }
 
 interface FeaturedTag {
@@ -30,6 +47,8 @@ interface FeaturedCard {
   area: string;
   imgClass: 'tall' | 'short';
   bg: string;
+  imageUrl?: string;
+  targetPath: string;
 }
 
 // 1. 路由跳轉
@@ -38,72 +57,96 @@ const go = (target: HomeTarget): void => {
   const routeMap: Record<HomeTarget, string> = {
     listing: '/properties',
     service: '/serviced-residences',
-    market: '/furniture',
+    market: '/marketplace',
     offers: '/supermarket-offers',
-    detail: '/properties/1',
   };
   void router.push(routeMap[target]);
 };
 
-// 2. 探索服務分類靜態資料
+// 2. 精選樓盤狀態
+const propertyListings = ref<PropertyListingSummaryResponse[]>([]);
+const loadingFeatured = ref(false);
+const featuredError = ref('');
+
+// 3. 精選樓盤資料
+const featured = computed<FeaturedCard[]>(() =>
+  propertyListings.value.map((listing, index) => toFeaturedCard(listing, index)),
+);
+
+// 4. 探索服務分類靜態資料
 const categories: CategoryCard[] = [
-  { key: 'listing', name: '樓盤租售', desc: '住宅、商廈、車位一應俱全' },
-  { key: 'service', name: '服務式住宅', desc: '短期靈活入住，設施齊備' },
-  { key: 'market', name: '家具市集', desc: '社區二手好物交易平台' },
-  { key: 'offers', name: '綜合優惠', desc: '住戶專屬折扣與生活禮遇' },
+  { key: 'listing', name: '樓盤租售', desc: '住宅、商廈、車位一應俱全', icon: 'building' },
+  { key: 'service', name: '服務式住宅', desc: '短期靈活入住，設施齊備', icon: 'service' },
+  { key: 'market', name: '家具市集', desc: '社區二手好物交易平台', icon: 'market' },
+  { key: 'offers', name: '綜合優惠', desc: '住戶專屬折扣與生活禮遇', icon: 'offers' },
 ];
 
-// 3. 精選樓盤靜態資料
-const featured: FeaturedCard[] = [
-  {
-    key: 'feat-1',
+// 5. 讀取真實公開樓盤
+const loadFeaturedProperties = async (): Promise<void> => {
+  loadingFeatured.value = true;
+  featuredError.value = '';
+
+  try {
+    const { data } = await fetchPropertySaleListings({
+      page: 1,
+      page_size: 3,
+      sort_by: 'latest',
+    });
+    propertyListings.value = data.data.items;
+  } catch {
+    featuredError.value = '暫時無法讀取樓盤。';
+    propertyListings.value = [];
+  } finally {
+    loadingFeatured.value = false;
+  }
+};
+
+// 6. 轉換首頁樓盤卡片
+const toFeaturedCard = (
+  listing: PropertyListingSummaryResponse,
+  index: number,
+): FeaturedCard => {
+  const area = resolvePropertyArea(listing);
+  const price = resolvePropertyPrice(listing);
+  const priceText = resolvePropertyPriceText(listing, 'zh-HK');
+  const isRent = resolvePropertyTransactionType(listing) === 'rent';
+  const imageUrl = resolvePropertyCoverImage(listing)?.url;
+
+  return {
+    key: listing.listing_id,
     tags: [
-      { label: '熱門', dark: true },
-      { label: '九龍', dark: false },
+      { label: resolvePropertyPublisherRole(listing), dark: true },
+      { label: resolvePropertyDistrict(listing, 'zh-HK'), dark: false },
+      { label: resolvePropertyTypeLabel(listing, 'zh-HK'), dark: false },
     ],
-    title: '佐敦 高級住宅',
-    price: 'HK$36,000',
-    unit: '/ 月',
-    area: '實用面積 200呎',
-    imgClass: 'tall',
+    title: resolvePropertyTitle(listing),
+    price: priceText,
+    unit: isRent && price > 0 ? '/ 月' : '',
+    area: area > 0 ? `實用面積 ${area.toLocaleString('zh-HK')}呎` : '面積待補充',
+    imgClass: index % 2 === 1 ? 'short' : 'tall',
     bg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
-  },
-  {
-    key: 'feat-2',
-    tags: [
-      { label: '香港島', dark: false },
-      { label: '商廈', dark: false },
-    ],
-    title: '中環甲級寫字樓',
-    price: 'HK$120,000',
-    unit: '/ 月',
-    area: '實用面積 2,400呎',
-    imgClass: 'short',
-    bg: 'linear-gradient(160deg,#e0e0e8,#c8c8d8)',
-  },
-  {
-    key: 'feat-3',
-    tags: [
-      { label: '業主盤', dark: true },
-      { label: '新界', dark: false },
-    ],
-    title: '沙田第一城 3房',
-    price: 'HK$18,500',
-    unit: '/ 月',
-    area: '實用面積 650呎',
-    imgClass: 'tall',
-    bg: 'linear-gradient(160deg,#e4dcd8,#ccc0bc)',
-  },
-];
+    imageUrl,
+    targetPath: resolvePropertyDetailPath(listing),
+  };
+};
+
+// 7. 進入樓盤詳情
+const openFeatured = (card: FeaturedCard): void => {
+  void router.push(card.targetPath);
+};
+
+onMounted(() => {
+  void loadFeaturedProperties();
+});
 </script>
 
 <template>
-  <main class="page-home">
+  <div class="page" id="page-home">
     <!-- 1. HERO -->
-    <section class="hero">
-      <div class="hero-bg pat">
+    <div class="hero">
+      <div class="hero-bg pat" style="background:linear-gradient(160deg,#1a1a1a 0%,#2e2e2e 100%);">
         <svg
-          class="hero-skyline"
+          style="position:absolute;inset:0;width:100%;height:100%;opacity:.08"
           viewBox="0 0 800 420"
           preserveAspectRatio="xMidYMid slice"
           aria-hidden="true"
@@ -126,19 +169,15 @@ const featured: FeaturedCard[] = [
             全港最大社區生活平台，搜尋住宅、服務式公寓、家具及生活優惠，一站式滿足您的所有需要。
           </p>
           <div class="hero-btns">
-            <button class="hbtn-primary" type="button" @click="go('listing')">
-              搜尋樓盤
-            </button>
-            <button class="hbtn-ghost" type="button" @click="go('service')">
-              了解服務
-            </button>
+            <button class="hbtn-primary" type="button" @click="go('listing')">搜尋樓盤</button>
+            <button class="hbtn-ghost" type="button" @click="go('service')">了解服務</button>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- 2. 探索服務 -->
-    <section class="home-section">
+    <div class="home-section">
       <div class="home-sec-title">探索服務</div>
       <div class="cat-grid">
         <div
@@ -151,43 +190,149 @@ const featured: FeaturedCard[] = [
           @keyup.enter="go(cat.key)"
         >
           <div class="cat-icon">
+            <!-- 2.1 樓盤租售圖示 -->
             <svg
+              v-if="cat.icon === 'building'"
               viewBox="0 0 32 32"
               width="28"
               height="28"
               aria-hidden="true"
             >
               <rect
-                x="4"
-                y="10"
-                width="24"
-                height="18"
+                x="5"
+                y="8"
+                width="22"
+                height="20"
                 rx="1"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.5"
+                stroke-width="1.6"
               />
-              <path
-                d="M8 10V6h16v4"
+              <rect
+                x="9"
+                y="12"
+                width="4"
+                height="4"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="1.5"
+                stroke-width="1.4"
+              />
+              <rect
+                x="15"
+                y="12"
+                width="4"
+                height="4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <rect
+                x="21"
+                y="12"
+                width="3"
+                height="4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <rect
+                x="9"
+                y="19"
+                width="4"
+                height="4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <rect
+                x="15"
+                y="19"
+                width="7"
+                height="5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+            </svg>
+            <!-- 2.2 服務式住宅圖示 -->
+            <svg
+              v-else-if="cat.icon === 'service'"
+              viewBox="0 0 32 32"
+              width="28"
+              height="28"
+              aria-hidden="true"
+            >
+              <path
+                d="M6 26V12l10-6 10 6v14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+              <rect
+                x="13"
+                y="16"
+                width="6"
+                height="10"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
               />
               <line
-                x1="12"
-                y1="16"
-                x2="20"
-                y2="16"
+                x1="6"
+                y1="26"
+                x2="26"
+                y2="26"
                 stroke="currentColor"
-                stroke-width="1.5"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+            <!-- 2.3 家具市集圖示 -->
+            <svg
+              v-else-if="cat.icon === 'market'"
+              viewBox="0 0 32 32"
+              width="28"
+              height="28"
+              aria-hidden="true"
+            >
+              <path
+                d="M5 13h22l-2 13H7L5 13z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M11 13V9a5 5 0 0 1 10 0v4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+              />
+            </svg>
+            <!-- 2.4 綜合優惠圖示 -->
+            <svg
+              v-else
+              viewBox="0 0 32 32"
+              width="28"
+              height="28"
+              aria-hidden="true"
+            >
+              <path
+                d="M16 4l2.6 5.3 5.9.9-4.3 4.1 1 5.8L16 17.5 10.8 20l1-5.8L7.5 10l5.9-.9L16 4z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
               />
               <line
-                x1="12"
-                y1="20"
-                x2="20"
-                y2="20"
+                x1="11"
+                y1="26"
+                x2="21"
+                y2="26"
                 stroke="currentColor"
-                stroke-width="1.5"
+                stroke-width="1.6"
+                stroke-linecap="round"
               />
             </svg>
           </div>
@@ -195,10 +340,10 @@ const featured: FeaturedCard[] = [
           <div class="cat-desc">{{ cat.desc }}</div>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- 3. 精選樓盤 -->
-    <section class="home-section home-section--tint">
+    <div class="home-section" style="background:var(--g1);padding-top:32px;padding-bottom:32px;">
       <div class="home-sec-title">精選樓盤</div>
       <div class="feat-grid">
         <div
@@ -207,14 +352,22 @@ const featured: FeaturedCard[] = [
           class="feat-card"
           role="button"
           tabindex="0"
-          @click="go('detail')"
-          @keyup.enter="go('detail')"
+          @click="openFeatured(feat)"
+          @keyup.enter="openFeatured(feat)"
         >
           <div
             class="feat-img pat"
             :class="feat.imgClass"
             :style="{ background: feat.bg }"
-          ></div>
+          >
+            <img
+              v-if="feat.imageUrl"
+              :src="feat.imageUrl"
+              :alt="feat.title"
+              loading="lazy"
+            />
+            <span v-else>AJO Living</span>
+          </div>
           <div class="feat-body">
             <div class="gtags">
               <span
@@ -225,24 +378,35 @@ const featured: FeaturedCard[] = [
               >{{ tag.label }}</span>
             </div>
             <div class="gtitle">{{ feat.title }}</div>
-            <div class="gprice">
-              {{ feat.price }} <span>{{ feat.unit }}</span>
-            </div>
+            <div class="gprice">{{ feat.price }} <span>{{ feat.unit }}</span></div>
             <div class="feat-area">{{ feat.area }}</div>
           </div>
         </div>
       </div>
-    </section>
-  </main>
+      <p
+        v-if="loadingFeatured && featured.length === 0"
+        class="feat-state"
+      >
+        正在讀取樓盤。
+      </p>
+      <p
+        v-else-if="featuredError"
+        class="feat-state feat-state-error"
+      >
+        {{ featuredError }}
+      </p>
+      <p
+        v-else-if="featured.length === 0"
+        class="feat-state"
+      >
+        暫時未有公開樓盤。
+      </p>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.page-home {
-  background: rgb(var(--color-canvas));
-  color: rgb(var(--color-text));
-}
-
-/* HERO */
+/* 1. HERO 區 */
 .hero {
   position: relative;
 }
@@ -254,17 +418,7 @@ const featured: FeaturedCard[] = [
   align-items: center;
   padding: 60px 48px;
   overflow: hidden;
-  background: linear-gradient(150deg, rgb(var(--color-text)) 0%, #2d2d2d 100%);
   filter: brightness(0.85);
-}
-
-.hero-skyline {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.08;
-  pointer-events: none;
 }
 
 .hero-content {
@@ -274,29 +428,29 @@ const featured: FeaturedCard[] = [
 }
 
 .hero-eyebrow {
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 3px;
-  color: rgb(var(--color-ink-4));
+  color: var(--g3);
   margin-bottom: 14px;
   animation: fadeUp 0.5s ease 0.1s both;
 }
 
 .hero-title {
   margin: 0 0 14px;
-  font-family: var(--font-display);
-  font-size: 44px;
+  font-family: var(--font-serif);
+  font-size: var(--text-3xl);
   font-weight: 400;
   line-height: 1.15;
-  color: #ffffff;
+  color: var(--sur);
   animation: fadeUp 0.5s ease 0.25s both;
 }
 
 .hero-desc {
   margin: 0 0 24px;
   max-width: 380px;
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.8;
-  color: rgb(var(--color-ink-4));
+  color: var(--g3);
   animation: fadeUp 0.5s ease 0.4s both;
 }
 
@@ -307,86 +461,75 @@ const featured: FeaturedCard[] = [
   animation: fadeUp 0.5s ease 0.55s both;
 }
 
+/* 1.1 HERO 主按鈕 */
 .hbtn-primary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 22px;
-  font-family: inherit;
-  font-size: 12px;
+  font-family: var(--font);
+  font-size: var(--text-sm);
   letter-spacing: 0.5px;
-  color: #ffffff;
-  background: rgb(var(--color-primary));
-  border: 1px solid rgb(var(--color-primary));
+  font-weight: 500;
+  color: var(--sur);
+  background: var(--brand);
+  border: none;
   border-radius: 2px;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
 }
 
-.hbtn-primary:hover {
-  background: rgb(var(--color-brand-dark));
-  border-color: rgb(var(--color-brand-dark));
-}
-
+/* 1.2 HERO 次按鈕 */
 .hbtn-ghost {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 22px;
-  font-family: inherit;
-  font-size: 12px;
+  font-family: var(--font);
+  font-size: var(--text-sm);
   letter-spacing: 0.5px;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  color: var(--sur);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 2px;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
+  transition: border-color 0.15s ease;
 }
 
 .hbtn-ghost:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
-/* HOME SECTION */
+/* 2. HOME SECTION 通用 */
 .home-section {
   padding: 32px 40px;
-}
-
-.home-section--tint {
-  padding-top: 32px;
-  padding-bottom: 32px;
-  background: rgb(var(--color-surface-2));
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .home-sec-title {
   margin-bottom: 16px;
   padding-left: 10px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  font-weight: 400;
   letter-spacing: 0.5px;
-  color: rgb(var(--color-text));
-  border-left: 3px solid rgb(var(--color-primary));
+  color: var(--ink);
+  border-left: 3px solid var(--brand);
 }
 
-/* CATEGORIES */
+/* 3. 探索服務分類卡片 */
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .cat-card {
-  padding: 20px 16px;
-  background: rgb(var(--color-surface));
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 12px;
+  padding: 20px var(--sp-4);
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-lg);
   cursor: pointer;
   outline: none;
   transition:
@@ -396,42 +539,42 @@ const featured: FeaturedCard[] = [
 
 .cat-card:hover,
 .cat-card:focus-visible {
-  border-color: rgb(var(--color-brand-mid));
-  box-shadow: var(--shadow-raised);
+  border-color: var(--brand-mid);
+  box-shadow: var(--shadow-md);
 }
 
 .cat-icon {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  color: rgb(var(--color-primary));
+  margin-bottom: var(--sp-2);
+  color: var(--brand);
 }
 
 .cat-name {
-  margin-bottom: 4px;
-  font-size: 13px;
+  margin-bottom: var(--sp-1);
+  font-size: var(--text-base);
   font-weight: 500;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .cat-desc {
   font-size: 11px;
   line-height: 1.5;
-  color: rgb(var(--color-ink-3));
+  color: var(--g4);
 }
 
-/* FEATURED */
+/* 4. 精選樓盤卡片 */
 .feat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .feat-card {
   overflow: hidden;
-  background: rgb(var(--color-surface));
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 12px;
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-lg);
   cursor: pointer;
   outline: none;
   transition:
@@ -441,12 +584,15 @@ const featured: FeaturedCard[] = [
 
 .feat-card:hover,
 .feat-card:focus-visible {
-  border-color: rgb(var(--color-brand-mid));
-  box-shadow: var(--shadow-raised);
+  border-color: var(--brand-mid);
+  box-shadow: var(--shadow-md);
 }
 
 .feat-img {
   width: 100%;
+  color: var(--g4);
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
 }
 
 .feat-img.tall {
@@ -457,8 +603,21 @@ const featured: FeaturedCard[] = [
   height: 100px;
 }
 
+.feat-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feat-img span {
+  position: relative;
+  z-index: 1;
+}
+
 .feat-body {
-  padding: 12px;
+  padding: var(--sp-3);
 }
 
 .gtags {
@@ -468,27 +627,29 @@ const featured: FeaturedCard[] = [
 }
 
 .gtag {
-  padding: 1px 5px;
+  padding: 3px 7px;
   font-size: 11px;
   letter-spacing: 0.8px;
-  color: rgb(var(--color-ink-3));
-  border: 1px solid rgb(var(--color-border));
+  color: var(--g4);
+  border: 1px solid var(--g2);
   border-radius: 1px;
 }
 
 .gtag.dark {
-  font-weight: 500;
-  color: #ffffff;
-  background: rgb(var(--color-primary));
-  border-color: rgb(var(--color-primary));
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: var(--r-sm);
+  color: var(--sur);
+  background: var(--brand);
+  border-color: var(--brand);
 }
 
 .gtitle {
   margin-bottom: 3px;
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
   line-height: 1.35;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .gprice {
@@ -496,23 +657,38 @@ const featured: FeaturedCard[] = [
   font-size: 20px;
   font-weight: 300;
   letter-spacing: -0.3px;
-  color: rgb(var(--color-text));
+  color: var(--ink);
 }
 
 .gprice span {
   font-size: 11px;
   font-weight: 400;
-  color: rgb(var(--color-ink-3));
+  color: var(--g4);
 }
 
 .feat-area {
   margin-top: 6px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.4;
-  color: rgb(var(--color-ink-3));
+  color: var(--ink-3);
 }
 
-/* PATTERN OVERLAY */
+.feat-state {
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--g4);
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-lg);
+}
+
+.feat-state-error {
+  color: #8a2c2c;
+}
+
+/* 5. 圖片紋理覆蓋層 */
 .pat {
   position: relative;
   overflow: hidden;
@@ -535,7 +711,7 @@ const featured: FeaturedCard[] = [
   pointer-events: none;
 }
 
-/* ANIMATION */
+/* 6. 進場動畫 */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -547,7 +723,7 @@ const featured: FeaturedCard[] = [
   }
 }
 
-/* RESPONSIVE */
+/* 7. 響應式 */
 @media (max-width: 900px) {
   .cat-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -561,15 +737,15 @@ const featured: FeaturedCard[] = [
 @media (max-width: 640px) {
   .hero-bg {
     min-height: 280px;
-    padding: 40px 24px;
+    padding: 40px var(--sp-5);
   }
 
   .hero-title {
-    font-size: 32px;
+    font-size: var(--text-2xl);
   }
 
   .home-section {
-    padding: 24px 20px;
+    padding: var(--sp-5) 20px;
   }
 
   .cat-grid {

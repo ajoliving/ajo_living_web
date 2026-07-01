@@ -35,7 +35,7 @@ go run ./http_service/cmd/server
 | --- | --- | --- | --- | --- |
 | 1 | /api/v1/health | GET | 服務健康檢查 | 無 |
 
-### Discovery 模組
+### 基礎資料模組
 
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
@@ -52,6 +52,8 @@ go run ./http_service/cmd/server
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
 | 49 | /api/v1/auth/email/register | POST | 建立手機密碼帳戶，可選綁定郵箱 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
+| 50.2 | /api/v1/auth/password/email/request | POST | 申請電郵重設密碼驗證碼 | 無 |
+| 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
 | 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
 | 73 | /api/v1/auth/ismart/login | POST | 使用 ismart 帳戶登入並同步 POS 權限 | 無 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
@@ -126,6 +128,7 @@ go run ./http_service/cmd/server
 | 77 | /api/v1/property-sales | POST | 建立樓盤草稿 | 會員 |
 | 78 | /api/v1/property-sales/{listingId} | PATCH | 更新樓盤草稿或已發布樓盤 | 會員 |
 | 79 | /api/v1/property-addresses/search | GET | 查詢屋苑或大廈地址聯想 | 無 |
+| 80 | /api/v1/market-trends/rent | GET | 香港住宅租金走勢 | 無 |
 
 ### Chat 模組
 
@@ -166,6 +169,7 @@ go run ./http_service/cmd/server
 | 29 | /api/v1/staff/users | POST | 新增管理員帳戶 | Staff |
 | 30 | /api/v1/staff/users/{userId}/role | PATCH | 更新目標帳號角色 | Staff |
 | 42 | /api/v1/staff/roles | GET | 查詢可用角色與權限矩陣 | Staff |
+| 99 | /api/v1/staff/system-notices | POST | 發布全站系統通知 | Staff |
 | 57 | /api/v1/staff/wallet/transactions | GET | 查詢平台積分流水 | Staff |
 | 58 | /api/v1/staff/wallet/grants | POST | 手動發放 AJO Point | Staff |
 | 59 | /api/v1/staff/wallet/reward-ads | GET | 查詢廣告任務 | Staff |
@@ -217,7 +221,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/health" -Method GET
 
 ---
 
-## Discovery 模組
+## 基礎資料模組
 
 ### 2. /api/v1/channel-home/overview [GET]
 - **簡介**: 取得頻道首頁摘要
@@ -551,9 +555,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
   "username": "email-member", // 必填
   "phone_country_code": "+852", // 必填
   "phone_number": "91234567", // 必填
-  "primary_community_id": "01KCOMMUNITY001", // 必填
-  "residence_floor": "12", // 必填
-  "residence_unit": "08" // 必填
+  "publisher_identity_type": "owner", // 選填，owner / tenant / resident_representative / company_authorized_person
+  "primary_community_id": "01KCOMMUNITY001", // 選填
+  "residence_floor": "12", // 選填
+  "residence_unit": "08" // 選填
 }
 ```
 - **回應參數**
@@ -598,6 +603,7 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
     "username": "email-member",
     "phone_country_code": "+852",
     "phone_number": "91234567",
+    "publisher_identity_type": "owner",
     "primary_community_id": "01KCOMMUNITY001",
     "residence_floor": "12",
     "residence_unit": "08"
@@ -612,6 +618,7 @@ $body=@{
   username="email-member"
   phone_country_code="+852"
   phone_number="91234567"
+  publisher_identity_type="owner"
   primary_community_id="01KCOMMUNITY001"
   residence_floor="12"
   residence_unit="08"
@@ -679,6 +686,95 @@ $body=@{
   password="safe-password-123"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/login" -Method POST -Headers $headers -Body $body
+```
+
+---
+
+### 50.1 /api/v1/auth/username/login [POST]
+- **簡介**: 使用本地住戶用戶名密碼登入。用戶名由 `/api/v1/auth/email/register` 建立，後端會以小寫形式保存與查找。
+- **請求參數**
+```json
+{
+  "username": "email-member", // 必填
+  "password": "safe-password-123" // 必填
+}
+```
+- **回應參數**: 同 `/api/v1/auth/email/login`
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/username/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "email-member",
+    "password": "safe-password-123"
+  }'
+```
+
+---
+
+### 50.2 /api/v1/auth/password/email/request [POST]
+- **簡介**: 針對已綁定電郵的帳戶發送重設密碼驗證碼。
+- **請求參數**
+```json
+{
+  "email": "member@example.com" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "expires_in": 300,
+    "mock_code": "123456"
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:16:20Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/password/email/request" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "member@example.com"
+  }'
+```
+
+---
+
+### 50.3 /api/v1/auth/password/email/reset [POST]
+- **簡介**: 使用電郵驗證碼重設本系統登入密碼。
+- **請求參數**
+```json
+{
+  "email": "member@example.com", // 必填
+  "code": "123456", // 必填
+  "password": "new-password-123" // 必填，至少 8 個字元
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "password_reset": true
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:16:40Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/password/email/reset" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "member@example.com",
+    "code": "123456",
+    "password": "new-password-123"
+  }'
 ```
 
 ---
@@ -2161,15 +2257,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/listings/01KSECONDHAND002/c
         "last_message_preview": "你好，請問仍可交易嗎？",
         "last_message_at": "2026-04-17T05:30:00Z",
         "unread_count": 1
-      },
-      {
-        "chat_id": "01KCHATNOTICE001",
-        "listing_id": "",
-        "listing_title": "通知",
-        "chat_type": "system_notice",
-        "last_message_preview": "最高100幣，可以當錢花",
-        "last_message_at": "2026-04-17T05:28:00Z",
-        "unread_count": 4
       }
     ],
     "pagination": {
@@ -2266,16 +2353,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
         "message_type": "text",
         "status": "sent",
         "created_at": "2026-04-17T05:32:00Z"
-      },
-      {
-        "message_id": "01KNOTICE001",
-        "sender_user_id": "1",
-        "content": "紅包到賬提醒\n拼手氣，瓜分 HK$35999 現金紅包",
-        "message_type": "notice_card",
-        "action_label": "去查看",
-        "action_url": "/furniture",
-        "status": "sent",
-        "created_at": "2026-04-17T05:28:00Z"
       }
     ],
     "pagination": {
@@ -2307,7 +2384,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages?p
 ```json
 {
   "chatId": "01KCHAT001", // 路徑參數
-  "content": "你好，請問仍可交易嗎？" // 必填
+  "content": "你好，請問仍可交易嗎？" // 必填，最多 1000 字
 }
 ```
 - **回應參數**
@@ -3193,13 +3270,14 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ---
 
 ### 62. /api/v1/staff/secondhand/listings [GET]
-- **簡介**: Staff 管理頁分頁查詢二手帖子，支援 keyword 與 status 篩選。
+- **簡介**: Staff 管理頁分頁查詢二手帖子，支援 keyword、category_code 與 status 篩選。
 - **請求參數**
 ```json
 {
   "page": 1,
   "page_size": 20,
   "keyword": "sofa",
+  "category_code": "home_furniture",
   "status": "active"
 }
 ```
@@ -3287,6 +3365,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 - **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低月租或日租。
 - **公開回應規則**: `floor_raw` 只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
 - **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天；`fast_sale` 權重 3 / 1200 / 15 天。
+- **會員狀態操作**: `publish` 僅支援草稿；`republish` 支援過期或已下架樓盤重新上架；`deactivate` 會將樓盤設為已下架。
 - **地址聯想**
 ```json
 {
@@ -3770,21 +3849,31 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001/complete
       {
         "notification_id": "01KNOTIFY002",
         "category": "chat_message",
-        "title": "New chat message",
+        "title": "新訊息",
         "body": "See you tonight at the lobby.",
         "related_type": "chat",
         "related_public_id": "01KCHAT001",
         "is_read": true,
         "read_at": "2026-04-17T05:52:00Z",
         "created_at": "2026-04-17T05:50:00Z"
+      },
+      {
+        "notification_id": "01KNOTIFY003",
+        "category": "system_notice",
+        "title": "系統維護通知",
+        "body": "今晚 10 時系統會進行例行維護。",
+        "related_type": "notification",
+        "related_public_id": "",
+        "is_read": false,
+        "created_at": "2026-06-29T10:00:00Z"
       }
     ],
     "pagination": {
       "page": 1,
       "page_size": 20,
-      "total": 2
+      "total": 3
     },
-    "unread_count": 1
+    "unread_count": 2
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T06:05:00Z"
@@ -3889,6 +3978,89 @@ curl -X POST "http://127.0.0.1:8080/api/v1/notifications/read-all" \
 ```powershell
 $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/notifications/read-all" -Method POST -Headers $headers
+```
+
+### 99. /api/v1/staff/system-notices [POST]
+- **簡介**: 發布全站系統通知。系統會為每位 active 會員建立一則通知中心記錄，不會寫入訊息管理會話。
+- **請求參數**
+```json
+{
+  "title": "系統維護通知", // 必填
+  "body": "今晚 10 時系統會進行例行維護。" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "delivered_count": 120
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-06-29T10:00:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/staff/system-notices" \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "系統維護通知",
+    "body": "今晚 10 時系統會進行例行維護。"
+  }'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $token";"Content-Type"="application/json"}
+$body=@{
+  title="系統維護通知"
+  body="今晚 10 時系統會進行例行維護。"
+}|ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/system-notices" -Method POST -Headers $headers -Body $body
+```
+
+### 80. /api/v1/market-trends/rent [GET]
+- **簡介**: 公開香港住宅租金走勢，資料來自香港 DATA.GOV.HK / 差餉物業估價署「Private Domestic - Average Rents by Class - Monthly」CSV。
+- **請求參數**: 無
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "source": "Rating and Valuation Department, DATA.GOV.HK",
+    "source_url": "https://www.rvd.gov.hk/datagovhk/1.1M.csv",
+    "dataset": "Private Domestic - Average Rents by Class - Monthly",
+    "unit": "HKD per square metre per month",
+    "display_unit": "HKD per square foot per month",
+    "updated_month": "2026-05",
+    "method": "A 至 C 類私人住宅各區平均租金簡單平均，並由每平方米月租換算為每平方呎月租。",
+    "months": ["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05"],
+    "regions": [
+      {
+        "key": "hk",
+        "label": "香港島",
+        "latest_hkd_per_sqft": 44.9,
+        "monthly_change_percent": 3.1,
+        "direction": "up",
+        "points": [
+          {
+            "month": "2026-05",
+            "label": "2026年5月",
+            "value_hkd_per_sqft": 44.9,
+            "source_value_hkd_per_sqm": 483
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/market-trends/rent"
 ```
 
 ### 43. /api/v1/supermarket-offers/summary [GET]

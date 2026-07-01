@@ -1,6 +1,6 @@
 /*
  * Notification route registration.
- * 1. Register member notification list, unread count, and read state routes.
+ * 1. Register member notification list, unread count, read state, and staff publish routes.
  * 2. Keep notification routes separate from communication message routes.
  */
 package router
@@ -17,4 +17,9 @@ func registerNotificationRoutes(api *gin.RouterGroup, notificationHandler *handl
 	api.GET("/notifications/unread-count", requireAuth, notificationHandler.UnreadCount)
 	api.POST("/notifications/:notificationId/read", requireAuth, notificationHandler.MarkRead)
 	api.POST("/notifications/read-all", requireAuth, notificationHandler.MarkAllRead)
+}
+
+// 2. registerStaffNoticeRoutes registers staff-only system notice publishing.
+func registerStaffNoticeRoutes(api *gin.RouterGroup, notificationHandler *handler.NotificationHandler, requireStaff gin.HandlerFunc) {
+	api.POST("/staff/system-notices", requireStaff, notificationHandler.PublishSystemNotice)
 }

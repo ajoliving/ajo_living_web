@@ -42,6 +42,7 @@ type PayStatus = 'paid' | 'due';
 interface NavItem {
   target: AffairsTab;
   label: string;
+  needsApi?: boolean;
 }
 
 interface NoticeRow {
@@ -171,15 +172,15 @@ const mediaFileName = ref('');
 
 // 5. 左側導航項目
 const navItems: NavItem[] = [
-  { target: 'affairs-notices', label: '最新通告' },
+  { target: 'affairs-notices', label: '最新通告', needsApi: true },
   { target: 'affairs-building', label: '大廈資料' },
-  { target: 'affairs-finance', label: '大廈財務' },
-  { target: 'affairs-owner-account', label: '業戶帳目' },
+  { target: 'affairs-finance', label: '大廈財務', needsApi: true },
+  { target: 'affairs-owner-account', label: '業戶帳目', needsApi: true },
   { target: 'affairs-forms', label: '申請表格' },
-  { target: 'affairs-feedback', label: '意見提供/維修報修' },
+  { target: 'affairs-feedback', label: '意見提供/維修報修', needsApi: true },
   { target: 'affairs-access', label: '智能門禁' },
   { target: 'affairs-icctv', label: '視像監控' },
-  { target: 'affairs-equipment', label: '設備監測' },
+  { target: 'affairs-equipment', label: '設備監測', needsApi: true },
 ];
 
 // 6. 最新通告 mock 資料
@@ -736,7 +737,8 @@ onMounted(() => {
             :class="{ on: activeTab === item.target }"
             @click="switchTab(item.target)"
           >
-            {{ item.label }}
+            <span class="work-nav-label">{{ item.label }}</span>
+            <span v-if="item.needsApi" class="work-nav-note">（需要接口）</span>
           </button>
         </nav>
       </aside>
@@ -2179,6 +2181,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 6px;
   min-height: 34px;
   border: 0;
   border-radius: 0;
@@ -2191,6 +2195,19 @@ onMounted(() => {
   padding: 8px 2px;
   text-align: left;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.work-nav-label {
+  min-width: 0;
+}
+
+.work-nav-note {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .work-nav-item::after {

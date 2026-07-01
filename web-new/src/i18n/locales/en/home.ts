@@ -26,8 +26,6 @@ export default {
     pages: 'Data source',
   },
   loadError: 'Failed to load home data. Please try again later.',
-  carouselAriaLabel: 'Auto rotating gallery',
-  carouselImageAlt: 'Homepage carousel image {index}',
   newShell: {
     eyebrow: 'AJO Living',
     title: 'Start Your Ideal Living',

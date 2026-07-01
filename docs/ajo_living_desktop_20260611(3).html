@@ -49,16 +49,16 @@
 #page-offers .gp-hdiv{height:42px;background:rgba(255,255,255,.26);}
 #page-offers .gp-controls{margin:0;border:0;border-bottom:1px solid var(--bdr);border-radius:0;background:#fff;padding:18px 28px 14px;}
 #page-offers .gp-content{margin:0 0 0;border:0;border-radius:0;background:var(--sur-2);padding:26px 28px 44px;}
-#page-offers .gp-search-row{display:flex;align-items:stretch;gap:8px;margin-bottom:12px;}
+#page-offers .gp-search-row{display:flex;align-items:stretch;justify-content:center;gap:8px;margin-bottom:4px;}
 #page-offers .gp-search-box{display:flex;max-width:520px;align-items:center;gap:8px;flex:0 1 520px;border:1px solid var(--bdr);border-radius:3px;background:#fff;padding:0 13px;}
-#page-offers .gp-search-ico{color:var(--ink-3);font-size:18px;line-height:1;}
-#page-offers .gp-sinput{border:0 !important;box-shadow:none !important;padding:12px 0 !important;font-size:13px !important;}
+#page-offers .gp-search-ico{color:var(--ink-3);font-size:21px;line-height:1;}
+#page-offers .gp-sinput{border:0 !important;box-shadow:none !important;padding:12px 0 !important;font-size:14px !important;}
 #page-offers .gp-search-btn,#page-offers .gp-fav-btn,#page-offers .gp-view-btn{border:1px solid var(--bdr);border-radius:3px;background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:0 18px;}
 #page-offers .gp-search-btn{border-color:var(--accent);background:var(--accent);color:#fff;}
 #page-offers .gp-fav-btn.on,#page-offers .gp-view-btn.on{border-color:var(--brand-mid);background:var(--brand-light);color:var(--accent);}
-#page-offers .gp-filter-pills,#page-offers .gp-store-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;}
-#page-offers .gp-fpill{padding:5px 13px;border-radius:999px;}
-#page-offers .gp-spill{padding:5px 13px;border-radius:3px;}
+#page-offers .gp-filter-pills,#page-offers .gp-store-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px;}
+#page-offers .gp-fpill{padding:7px 15px;border-radius:999px;font-size:13px !important;}
+#page-offers .gp-spill{padding:7px 15px;border-radius:3px;font-size:13px !important;}
 #page-offers .gp-content-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;}
 #page-offers .gp-count{color:var(--ink-3);font-size:12px;font-weight:400;}
 #page-offers .gp-toolbar{display:flex;align-items:center;gap:8px;}
@@ -923,11 +923,12 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 #page-listing .listing-filter-menu .ft{font-size:11px;padding:5px 10px;}
 #page-listing .listing-search-wrap{display:flex;min-width:0;}
 #page-listing .listing-search-wrap .autocomplete-wrap{flex:1;min-width:0;}
-#page-listing .listing-search-wrap .sinput{width:100%;height:44px;border-radius:8px 0 0 8px;background:var(--sur-2);border-color:var(--bdr);font-size:13px;padding:0 14px;}
+#page-listing .listing-search-wrap .sinput{width:100%;height:44px;border-radius:8px 0 0 8px !important;border-right:0 !important;background:var(--sur-2);border-color:var(--bdr);font-size:13px;padding:0 14px;}
 #page-listing .listing-search-submit{display:inline-flex;width:52px;height:44px;align-items:center;justify-content:center;border:0;border-radius:0 8px 8px 0;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;}
 #page-listing .listing-filter-reset{height:44px;border:0;background:transparent;color:var(--ink-3);cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:0 8px;}
-#page-listing .listing-results-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px;}
+#page-listing .listing-results-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;}
 #page-listing .listing-results-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#page-listing .listing-results-actions .ssel{height:34px;min-width:118px;border-radius:8px !important;font-size:12px;font-weight:800;padding:0 10px;}
 #page-listing .listing-view-toggle{display:inline-flex;align-items:center;border:1px solid var(--bdr);border-radius:8px;background:#fff;overflow:hidden;}
 #page-listing .listing-view-btn{display:inline-flex;height:34px;min-width:52px;align-items:center;justify-content:center;border:0;border-right:1px solid var(--bdr);background:#fff;color:var(--ink-3);cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:0 12px;}
 #page-listing .listing-view-btn:last-child{border-right:0;}
@@ -954,6 +955,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 #page-listing .grid-mode .gc .gdeal{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:8px;background:var(--brand);color:#fff;font-size:13px;font-weight:800;margin-right:8px;vertical-align:middle;}
 #page-listing .grid-mode .gc .garea-price{order:5;display:block;color:#8A8EA3;font-size:13px;font-weight:700;line-height:1.4;margin:0 0 12px;}
 #page-listing .grid-mode .gc .garea-price::before{content:'';}
+#page-listing .gc .garea .garea-price{display:inline;margin:0 0 0 8px;color:inherit;font-size:inherit;font-weight:700;line-height:inherit;white-space:nowrap;}
 #page-listing .grid-mode .gc .gpills{display:none;}
 #page-listing .grid-mode .gc .gc-actions{display:none;}
 #page-listing .grid-mode .listing-card-type-stack{display:none;}
@@ -979,6 +981,51 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 #page-listing .listing-ad-aside .listing-ad .ad-agent{margin-top:5px;color:var(--ink-3);font-size:10px;font-weight:500;line-height:1.4;}
 #page-listing .listing-ad-aside .listing-ad.vertical .ad-location{font-size:11px;}
 #page-listing .listing-ad-aside .listing-ad.vertical .ad-price{font-size:12px;}
+#page-market .mp{grid-template-columns:260px minmax(0,720px) 260px;justify-content:center;max-width:1440px;margin:0 auto;background:var(--sur-2);}
+#page-market .market-ad-aside{position:sticky;top:52px;align-self:start;min-height:calc(100vh - 52px);overflow:visible;background:var(--sur-2);padding:18px 18px 40px;}
+#page-market .market-ad-left{border-right:1px solid var(--bdr);border-left:0;}
+#page-market .market-ad-right{border-left:1px solid var(--bdr);}
+#page-market .mr{padding:14px 14px 36px;min-width:0;}
+#page-market .market-search-panel{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:14px 16px;margin-bottom:18px;}
+#page-market .market-filter-row{display:grid;grid-template-columns:auto 130px 130px 150px minmax(180px,1fr) auto;gap:10px;align-items:center;}
+#page-market .market-filter-label{color:var(--brand);font-size:13px;font-weight:800;white-space:nowrap;}
+#page-market .market-filter-dd{position:relative;z-index:12;}
+#page-market .market-filter-dd summary{display:flex;height:44px;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--bdr);border-radius:8px;background:var(--sur-2);color:var(--ink);cursor:pointer;font-size:13px;font-weight:800;list-style:none;padding:0 14px;}
+#page-market .market-filter-dd summary::-webkit-details-marker{display:none;}
+#page-market .market-filter-dd summary::after{content:'';width:8px;height:8px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg) translateY(-2px);flex:0 0 auto;}
+#page-market .market-filter-dd[open] summary{border-color:var(--brand-mid);background:#fff;}
+#page-market .market-filter-dd[open] summary::after{transform:rotate(225deg) translate(-2px,-1px);}
+#page-market .market-filter-menu{position:absolute;top:calc(100% + 8px);left:0;z-index:24;min-width:260px;border:1px solid var(--bdr);border-radius:10px;background:#fff;box-shadow:var(--shadow-md);padding:12px;}
+#page-market .market-filter-menu.wide{min-width:340px;}
+#page-market .market-filter-group+.market-filter-group{margin-top:12px;border-top:1px solid var(--sur-3);padding-top:12px;}
+#page-market .market-filter-group-title{color:var(--ink-3);font-size:10px;font-weight:800;letter-spacing:.8px;margin-bottom:8px;text-transform:uppercase;}
+#page-market .market-filter-menu .ftags{gap:6px;}
+#page-market .market-filter-menu .ft{font-size:11px;padding:5px 10px;}
+#page-market .market-search-wrap{display:flex;min-width:0;}
+#page-market .market-search-wrap .sinput{width:100%;height:44px;border-radius:8px 0 0 8px !important;border-right:0 !important;background:var(--sur-2);border-color:var(--bdr);font-size:13px;padding:0 14px;}
+#page-market .market-search-submit{display:inline-flex;width:52px;height:44px;align-items:center;justify-content:center;border:0;border-radius:0 8px 8px 0;background:var(--brand);color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;}
+#page-market .market-filter-reset{height:44px;border:0;background:transparent;color:var(--ink-3);cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:0 8px;}
+#page-market .sort-row{max-width:none;margin-left:0;margin-right:0;align-items:center;}
+#page-market .sort-row .ssel{height:34px;min-width:118px;border-radius:8px !important;font-size:12px;font-weight:800;padding:0 10px;}
+#page-market .mgrid,#page-market .market-pagination{max-width:none;margin-left:0;margin-right:0;}
+@media (min-width:1440px){
+  #page-market .mp{grid-template-columns:280px minmax(0,760px) 280px;max-width:1480px;}
+}
+@media (max-width:900px){
+  #page-market .mp{grid-template-columns:1fr;max-width:none;}
+  #page-market .mr{order:1;}
+  #page-market .market-ad-left{order:2;}
+  #page-market .market-ad-right{order:3;}
+  #page-market .market-ad-aside{position:static;min-height:0;border-left:0;border-right:0;border-top:1px solid var(--bdr);padding:14px;}
+  #page-market .market-filter-row{grid-template-columns:1fr 1fr;}
+  #page-market .market-filter-label,#page-market .market-search-wrap,#page-market .market-filter-reset{grid-column:1/-1;}
+  #page-market .market-filter-dd{position:static;}
+  #page-market .market-filter-menu,#page-market .market-filter-menu.wide{position:static;min-width:0;margin-top:8px;box-shadow:none;}
+}
+@media (max-width:560px){
+  #page-market .market-filter-row{grid-template-columns:1fr;}
+  #page-market .market-filter-label,#page-market .market-search-wrap,#page-market .market-filter-reset{grid-column:auto;}
+}
 </style>
 </head>
 <body>
@@ -1145,7 +1192,6 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
       </section>
       <div class="listing-results-head">
         <div>
-          <h2 class="listing-results-title">樓盤租售</h2>
           <div class="listing-results-count">搜尋結果共 <strong>24</strong> 筆</div>
         </div>
         <div class="listing-results-actions">
@@ -1163,7 +1209,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi tall pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);">
             <svg width="80" height="60" viewBox="0 0 80 60" opacity=".2"><rect x="5" y="15" width="70" height="40" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="31" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="52" y="20" width="18" height="14" rx="1" stroke="#000" fill="none"/><rect x="28" y="37" width="24" height="18" rx="1" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">新界</span><span class="gtag">住宅</span></div><div class="gtitle">山景兩房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>荃灣 · 翠豐臺</div><div class="gsub">3座中層B室 · 2房 · 向西北</div><div class="gprice"><span class="gdeal">售</span>HK$6,500,000</div><div class="garea">實用面積 424呎</div><div class="garea-price">@HK$15,330/呎</div><div class="gpills"><span class="gpill">2房</span><span class="gpill">山景</span><span class="gpill">代理盤</span></div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">新界</span><span class="gtag">住宅</span></div><div class="gtitle"><span class="listing-grid-type">私人住宅</span>山景兩房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>荃灣 · 翠豐臺</div><div class="gsub">3座中層B室 · 2房 · 向西北</div><div class="gprice"><span class="gdeal">售</span>HK$6,500,000</div><div class="garea">實用面積 424呎 <span class="garea-price">@HK$15,330/呎</span></div><div class="gpills"><span class="gpill">2房</span><span class="gpill">山景</span><span class="gpill">代理盤</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('山景兩房');showToast('已加入比較')">比較</button>
@@ -1176,7 +1222,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi short pat" style="background:linear-gradient(160deg,#d8e0e0,#c0cccc);">
             <svg width="60" height="40" viewBox="0 0 60 40" opacity=".2"><rect x="3" y="5" width="54" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="8" y="10" width="44" height="15" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle">佐敦婚 38 窗 套房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>九龍 · 佐敦</div><div class="gsub">1–3房可選 · 地端式佣</div><div class="gprice"><span class="gdeal">租</span>HK$6,500 <span>/ 月</span></div><div class="garea">實用面積 100呎</div><div class="garea-price">@HK$65/呎</div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">九龍</span><span class="gtag">住宅</span></div><div class="gtitle"><span class="listing-grid-type">私人住宅</span>佐敦婚 38 窗 套房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>九龍 · 佐敦</div><div class="gsub">1–3房可選 · 地端式佣</div><div class="gprice"><span class="gdeal">租</span>HK$6,500 <span>/ 月</span></div><div class="garea">實用面積 100呎 <span class="garea-price">@HK$65/呎</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('佐敦婚 38窗 套房');showToast('已加入比較')">比較</button>
@@ -1189,7 +1235,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi tall pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);">
             <svg width="70" height="55" viewBox="0 0 70 55" opacity=".2"><rect x="5" y="5" width="60" height="45" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><line x1="5" y1="20" x2="65" y2="20" stroke="#000" stroke-width=".8"/><line x1="35" y1="5" x2="35" y2="50" stroke="#000" stroke-width=".8"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">香港島</span><span class="gtag dark">商廈</span></div><div class="gtitle">中環甲級寫字樓</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>中環 · IFC</div><div class="gsub">海景全層 · IFC 對面 · 即租</div><div class="gprice"><span class="gdeal">租</span>HK$120,000 <span>/ 月</span></div><div class="garea">實用面積 2,400呎</div><div class="garea-price">@HK$50/呎</div><div class="gpills"><span class="gpill">海景</span><span class="gpill">全新裝修</span><span class="gpill">有冷氣</span></div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">香港島</span><span class="gtag dark">商廈</span></div><div class="gtitle"><span class="listing-grid-type">工商物業</span>中環甲級寫字樓</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>中環 · IFC</div><div class="gsub">海景全層 · IFC 對面 · 即租</div><div class="gprice"><span class="gdeal">租</span>HK$120,000 <span>/ 月</span></div><div class="garea">實用面積 2,400呎 <span class="garea-price">@HK$50/呎</span></div><div class="gpills"><span class="gpill">海景</span><span class="gpill">全新裝修</span><span class="gpill">有冷氣</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('中環甲級寫字樓');showToast('已加入比較')">比較</button>
@@ -1202,13 +1248,15 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
           <div class="gi short pat" style="background:linear-gradient(160deg,#e4dcd8,#ccc0bc);">
             <svg width="55" height="40" viewBox="0 0 55 40" opacity=".2"><rect x="5" y="5" width="45" height="30" rx="1" stroke="#000" stroke-width="1.2" fill="none"/><rect x="10" y="10" width="15" height="10" stroke="#000" fill="none"/><rect x="30" y="10" width="15" height="10" stroke="#000" fill="none"/></svg>
           </div>
-          <div class="gb"><div class="gtags"><span class="gtag">新界</span></div><div class="gtitle">沙田第一城 3房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>沙田 · 第一城</div><div class="gsub">低層 · 靚裝 · 近港鐵</div><div class="gprice"><span class="gdeal">租</span>HK$18,500 <span>/ 月</span></div><div class="garea">實用面積 650呎</div><div class="garea-price">@HK$28/呎</div></div>
+          <div class="gb"><div class="gtags"><span class="gtag">新界</span></div><div class="gtitle"><span class="listing-grid-type">私人住宅</span>沙田第一城 3房</div><div class="g-location"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-5.2 7-12A7 7 0 0 0 5 9c0 6.8 7 12 7 12Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12.2a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4Z" stroke-width="1.8"/></svg>沙田 · 第一城</div><div class="gsub">低層 · 靚裝 · 近港鐵</div><div class="gprice"><span class="gdeal">租</span>HK$18,500 <span>/ 月</span></div><div class="garea">實用面積 650呎 <span class="garea-price">@HK$28/呎</span></div></div>
           <div class="gc-actions">
             <button class="gc-action-btn" onclick="event.stopPropagation();addToSaved(this.closest('.gc'));showToast('已加入收藏','success')">收藏</button>
             <button class="gc-action-btn" onclick="event.stopPropagation();addToCompare('沙田第一城 3房');showToast('已加入比較')">比較</button>
             <button class="gc-action-btn primary" onclick="event.stopPropagation();go('detail')">查看</button>
           </div>
         </div>
+
+      </div>
 
       <!-- MAP VIEW -->
       <div class="map-view" id="map-view">
@@ -1306,17 +1354,81 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
 <!-- 家具市集 -->
 <div class="page" id="page-market">
   <div class="mp">
-    <aside class="mf">
-      <div class="sbar"><input class="sinput" placeholder="搜尋物品…"><button class="sbtn">搜</button></div>
-      <div class="fs"><div class="ft-title">分類</div><div class="ftags"><span class="ft on">全部</span><span class="ft">家居傢俱</span><span class="ft">家庭電器</span><span class="ft">電子產品</span><span class="ft">BB用品</span><span class="ft">其他</span></div></div>
-      <div class="fs"><div class="ft-title">價格範圍</div><div class="ftags"><span class="ft on">全部</span><span class="ft">$1k以下</span><span class="ft">$1k–3k</span><span class="ft">$3k–5k</span><span class="ft">$10k+</span></div></div>
-      <div class="fs"><div class="ft-title">成色</div><div class="ftags"><span class="ft on">全部</span><span class="ft">近乎全新</span><span class="ft">良好</span><span class="ft">尚可</span></div></div>
-      <div class="fs"><div class="ft-title">地區</div><div class="ftags"><span class="ft on">全部</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div></div>
-      <div class="fs"><div class="ft-title">可見範圍</div><div class="ftags"><span class="ft on">全部</span><span class="ft">公開</span><span class="ft">同棟可見</span></div></div>
+    <aside class="market-ad-aside market-ad-left" aria-label="家具市集左側廣告">
+      <div class="ad-side-panel">
+        <article class="ad-card banner">
+          <div class="ad-visual home"></div>
+          <div class="ad-copy">
+            <span class="ad-label">16:9</span>
+            <div class="ad-title">家居收納精選</div>
+            <div class="ad-desc">層架、收納箱與小型家具推薦。</div>
+          </div>
+        </article>
+        <article class="ad-card banner">
+          <div class="ad-visual move"></div>
+          <div class="ad-copy">
+            <span class="ad-label">16:9</span>
+            <div class="ad-title">同區搬運配送</div>
+            <div class="ad-desc">家具交收、搬運與即日配送安排。</div>
+          </div>
+        </article>
+        <article class="ad-card vertical">
+          <div class="ad-visual service"></div>
+          <div class="ad-copy">
+            <span class="ad-label">9:16</span>
+            <div class="ad-title">上門安裝</div>
+            <div class="ad-desc">燈具、窗簾與層架安裝。</div>
+          </div>
+        </article>
+      </div>
     </aside>
     <main class="mr">
-      <button class="filter-toggle-btn" id="market-filter-btn">&#x2630; 篩選條件</button>
-      <div class="sort-row"><span class="rn">3 個結果</span><select class="ssel"><option>最新發佈</option><option>價格低至高</option></select></div>
+      <section class="market-search-panel" aria-label="家具篩選">
+        <div class="market-filter-row">
+          <div class="market-filter-label">篩選</div>
+          <details class="market-filter-dd">
+            <summary>分類</summary>
+            <div class="market-filter-menu">
+              <div class="market-filter-group">
+                <div class="market-filter-group-title">分類</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">家居傢俱</span><span class="ft">家庭電器</span><span class="ft">電子產品</span><span class="ft">BB用品</span><span class="ft">其他</span></div>
+              </div>
+            </div>
+          </details>
+          <details class="market-filter-dd">
+            <summary>價格</summary>
+            <div class="market-filter-menu">
+              <div class="market-filter-group">
+                <div class="market-filter-group-title">價格範圍</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">$1k以下</span><span class="ft">$1k–3k</span><span class="ft">$3k–5k</span><span class="ft">$10k+</span></div>
+              </div>
+            </div>
+          </details>
+          <details class="market-filter-dd">
+            <summary>更多</summary>
+            <div class="market-filter-menu wide">
+              <div class="market-filter-group">
+                <div class="market-filter-group-title">成色</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">近乎全新</span><span class="ft">良好</span><span class="ft">尚可</span></div>
+              </div>
+              <div class="market-filter-group">
+                <div class="market-filter-group-title">地區</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">香港島</span><span class="ft">九龍</span><span class="ft">新界</span><span class="ft">離島</span></div>
+              </div>
+              <div class="market-filter-group">
+                <div class="market-filter-group-title">可見範圍</div>
+                <div class="ftags"><span class="ft on">全部</span><span class="ft">公開</span><span class="ft">同棟可見</span></div>
+              </div>
+            </div>
+          </details>
+          <div class="market-search-wrap">
+            <input class="sinput" placeholder="搜尋家具、電器或地區">
+            <button class="market-search-submit" type="button">搜</button>
+          </div>
+          <button class="market-filter-reset" type="button">重設</button>
+        </div>
+      </section>
+      <div class="sort-row"><span class="rn">搜尋結果共 18 筆</span><select class="ssel"><option>最新發佈</option><option>價格低至高</option></select></div>
       <div class="mgrid">
         <div class="mc" onclick="go('market-detail')"><span class="mnew">全新</span><div class="mimg" style="background:#f0ece8;"></div><div class="mbody"><div class="mname">三色短毛貓領養</div><div class="msub">香港島 · 黃埔 · 良好</div><div class="mprice">HK$3</div><div class="mfoot"><span>其他 · 28/03</span></div></div><div class="mc-actions"><button class="mc-action-btn" onclick="event.stopPropagation();showToast('已加入收藏','success')">收藏</button><button class="mc-action-btn" onclick="event.stopPropagation();addToCompare('三色短毛貓領養');showToast('已加入比較')">比較</button><button class="mc-action-btn primary" onclick="event.stopPropagation();go('market-detail')">查看</button></div></div>
         <div class="mc" onclick="go('market-detail')"><div class="mimg pat" style="background:linear-gradient(135deg,#eee,#ddd);"></div><div class="mbody"><div class="mname">北歐實木餐桌</div><div class="msub">九龍 · 旺角 · 近乎全新</div><div class="mprice">HK$2,400</div><div class="mfoot"><span>傢俱 · 02/04</span></div></div><div class="mc-actions"><button class="mc-action-btn" onclick="event.stopPropagation();showToast('已加入收藏','success')">收藏</button><button class="mc-action-btn" onclick="event.stopPropagation();addToCompare('北歐實木餐桌');showToast('已加入比較')">比較</button><button class="mc-action-btn primary" onclick="event.stopPropagation();go('market-detail')">查看</button></div></div>
@@ -1333,7 +1445,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         </div>
       </div>
     </main>
-    <aside class="market-ad-aside" aria-label="家具市集展示廣告">
+    <aside class="market-ad-aside market-ad-right" aria-label="家具市集右側廣告">
       <div class="ad-side-panel">
         <div class="ad-side-head"><span>展示廣告</span><span>家具</span></div>
         <article class="ad-card banner">
@@ -1683,7 +1795,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <div class="gp-card-body">
           <div class="gp-card-heading">
             <div>
-              <div class="gp-card-store">AEON</div>
+              <div class="gp-card-store">高露潔</div>
               <div class="gp-card-name">纖柔牙刷 精巧頭 3支裝</div>
               <div class="gp-card-brand">高露潔</div>
             </div>
@@ -1703,7 +1815,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <div class="gp-card-body">
           <div class="gp-card-heading">
             <div>
-              <div class="gp-card-store">惠康 · Market Place</div>
+              <div class="gp-card-store">羅遜氏</div>
               <div class="gp-card-name">Shiraz Cabernet 紅酒 750ml</div>
               <div class="gp-card-brand">羅遜氏</div>
             </div>
@@ -1722,7 +1834,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <div class="gp-card-body">
           <div class="gp-card-heading">
             <div>
-              <div class="gp-card-store">百佳</div>
+              <div class="gp-card-store">出前一丁</div>
               <div class="gp-card-name">即食海鮮烏冬 5包裝</div>
               <div class="gp-card-brand">出前一丁</div>
             </div>
@@ -1741,7 +1853,7 @@ body.dark .profile-chat-day,body.dark .profile-chat-bubble,body.dark .profile-ch
         <div class="gp-card-body">
           <div class="gp-card-heading">
             <div>
-              <div class="gp-card-store">AEON</div>
+              <div class="gp-card-store">維達</div>
               <div class="gp-card-name">純棉面巾紙 200抽 4盒裝</div>
               <div class="gp-card-brand">維達</div>
             </div>
@@ -2398,12 +2510,12 @@ body.dark #page-offers .gp-chart circle{fill:#FF8A3D;}
         </section>
         <section class="d-pay-step-section">
           <div class="d-pay-step-head"><span class="d-pay-step-index">2</span><div class="d-section-label">選擇付款方式</div></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">WX</span><span style="font-size:13px;color:var(--ink);flex:1">微信支付</span><span class="d-method-fee">費率 2.70%</span></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">AP</span><span style="font-size:13px;color:var(--ink);flex:1">支付寶（大陸）</span><span class="d-method-fee">費率 2.70%</span></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">HK</span><span style="font-size:13px;color:var(--ink);flex:1">支付寶香港</span><span class="d-method-fee">費率 2.70%</span></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo d-fps">YF</span><span style="font-size:13px;color:var(--ink);flex:1">雲閃付</span><span class="d-method-fee">費率 2.70%</span></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">BT</span><span style="font-size:13px;color:var(--ink);flex:1">銀行轉賬</span><span class="d-method-fee">費率 0.00%</span></div>
-          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">CQ</span><span style="font-size:13px;color:var(--ink);flex:1">支票</span><span class="d-method-fee">費率 0.00%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">WX</span><span style="font-size:13px;color:var(--ink);flex:1">微信支付</span><span class="d-method-fee">手續費 2.70%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">AP</span><span style="font-size:13px;color:var(--ink);flex:1">支付寶（大陸）</span><span class="d-method-fee">手續費 2.70%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">HK</span><span style="font-size:13px;color:var(--ink);flex:1">支付寶香港</span><span class="d-method-fee">手續費 2.70%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo d-fps">YF</span><span style="font-size:13px;color:var(--ink);flex:1">雲閃付</span><span class="d-method-fee">手續費 2.70%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">BT</span><span style="font-size:13px;color:var(--ink);flex:1">銀行轉賬</span><span class="d-method-fee">手續費 0.00%</span></div>
+          <div class="d-method-opt" onclick="dSelM(this)"><div class="d-radio"></div><span class="d-mlogo">CQ</span><span style="font-size:13px;color:var(--ink);flex:1">支票</span><span class="d-method-fee">手續費 0.00%</span></div>
         </section>
         <section class="d-pay-step-section">
           <div class="d-pay-step-head"><span class="d-pay-step-index">3</span><div class="d-section-label">確認付款</div></div>
@@ -3469,8 +3581,6 @@ document.querySelectorAll('.ltab').forEach(function(t){t.addEventListener('click
 // Filter toggles
 var lft=document.getElementById('listing-filter-btn');
 if(lft){lft.addEventListener('click',function(){var s=document.querySelector('.lf');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'✕ 關閉篩選':'☰ 篩選條件';});}
-var mft=document.getElementById('market-filter-btn');
-if(mft){mft.addEventListener('click',function(){var s=document.querySelector('.mf');s.classList.toggle('open');this.textContent=s.classList.contains('open')?'✕ 關閉篩選':'☰ 篩選條件';});}
 // Pay nav
 document.querySelectorAll('.pay-nav-item').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.pay-nav-item').forEach(function(x){x.classList.remove('on');});this.classList.add('on');});});
 function gpNav(el){document.querySelectorAll('.gp-sidebar-nav-item').forEach(function(x){x.classList.remove('on');});el.classList.add('on');}

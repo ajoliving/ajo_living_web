@@ -39,9 +39,13 @@ const router = createRouter({
   },
 });
 
-// 2. 集中處理需登入頁面的導航守衛
+// 2. 統一處理登入與管理端守衛
 router.beforeEach(async (to) => {
   const sessionStore = useSessionStore(pinia);
+
+  if (!sessionStore.isLoaded) {
+    await sessionStore.hydrateSession();
+  }
 
   if (to.meta.requiresAuth && !sessionStore.isAuthenticated) {
     return {
@@ -50,22 +54,13 @@ router.beforeEach(async (to) => {
     };
   }
 
-  if (to.meta.requiresAuth && sessionStore.isAuthenticated && !sessionStore.me) {
-    try {
-      await sessionStore.loadCurrentUser();
-    } catch {
-      sessionStore.clearSession();
-      return {
-        path: '/login',
-        query: { redirect: to.fullPath },
-      };
-    }
+  if (to.meta.requiresStaff && !sessionStore.currentUser.is_staff) {
+    return { path: '/profile' };
   }
 
-  if (to.meta.requiresStaff) {
-    if (!sessionStore.currentUser.is_staff) {
-      return { path: '/account/profile' };
-    }
+  if (to.path === '/login' && sessionStore.isAuthenticated) {
+    const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : '/';
+    return redirect === '/login' ? '/' : redirect;
   }
 
   return true;

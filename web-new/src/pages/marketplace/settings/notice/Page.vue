@@ -1,6 +1,6 @@
 <!--
  * 發布通知設定頁。
- * 1. 提供站內通知標題、內容與可選行動按鈕表單。
+ * 1. 提供站內通知標題與內容表單。
  * 2. 發布後清空表單並提示送達人數。
 -->
 <script setup lang="ts">
@@ -9,8 +9,6 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useMarketplaceSettingsNoticePage } from './notice';
 
 const {
-  noticeActionLabel,
-  noticeActionURL,
   noticeBody,
   noticeTitle,
   publishNotice,
@@ -52,27 +50,6 @@ const {
             :placeholder="t('marketplace.settings.noticeBodyPlaceholder')"
           />
         </label>
-
-        <div class="notice-action-grid">
-          <label class="notice-field">
-            <span>{{ t('marketplace.settings.noticeActionLabelField') }}</span>
-            <input
-              v-model="noticeActionLabel"
-              type="text"
-              maxlength="80"
-              :placeholder="t('marketplace.settings.noticeActionLabelPlaceholder')"
-            />
-          </label>
-          <label class="notice-field">
-            <span>{{ t('marketplace.settings.noticeActionURLField') }}</span>
-            <input
-              v-model="noticeActionURL"
-              type="text"
-              maxlength="500"
-              :placeholder="t('marketplace.settings.noticeActionURLPlaceholder')"
-            />
-          </label>
-        </div>
 
         <div class="notice-footer">
           <button
@@ -144,12 +121,6 @@ const {
   padding: 1rem;
 }
 
-.notice-action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
 .notice-field {
   display: grid;
   gap: 0.45rem;
@@ -211,10 +182,6 @@ const {
 @media (max-width: 767px) {
   .notice-header {
     flex-direction: column;
-  }
-
-  .notice-action-grid {
-    grid-template-columns: 1fr;
   }
 
   .notice-button {

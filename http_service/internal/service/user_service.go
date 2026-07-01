@@ -1,5 +1,5 @@
 /*
- * User and discovery business logic.
+ * User and member profile business logic.
  * 1. Load and update current member profile data.
  * 2. Provide community metadata and simple channel home content.
  */

@@ -81,6 +81,7 @@ func main() {
 	propertyService := service.NewPropertyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
 	supermarketOfferService := service.NewSupermarketOfferService(runtime)
+	marketTrendService := service.NewMarketTrendService(runtime)
 	chatService := service.NewChatService(runtime, secondhandService, propertyService)
 	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
 	lifecycleService := service.NewLifecycleService(runtime)
@@ -119,6 +120,7 @@ func main() {
 		OrderService:            orderService,
 		NotificationService:     notificationService,
 		SupermarketOfferService: supermarketOfferService,
+		MarketTrendService:      marketTrendService,
 	})
 
 	server := &http.Server{

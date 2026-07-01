@@ -13,6 +13,8 @@ const defaultRewardAdRetentionDays = 30
 const maxRewardAdRetentionDays = 365
 const rewardAdTypeReward = "reward"
 const rewardAdTypeDisplay = "display"
+const rewardAdTypeDisplayShort = "display_short"
+const rewardAdTypeDisplayLong = "display_long"
 const rewardAdMediaTypeImage = "image"
 const rewardAdMediaTypeVideo = "video"
 const displayAdChannelPropertySale = "property_sale"
@@ -22,7 +24,7 @@ const displayAdPlacementListingSide = "listing_side"
 const displayAdLayoutImageFull = "image_full"
 const displayAdLayoutImageText = "image_text"
 const displayAdLayoutTextCompact = "text_compact"
-const displayAdSlotCount = 10
+const displayAdSlotCount = 5
 
 // 1. StaffWalletUserResponse defines staff-visible wallet user metadata.
 type StaffWalletUserResponse struct {

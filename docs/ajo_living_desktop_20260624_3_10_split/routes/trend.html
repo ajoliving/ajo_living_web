@@ -1,0 +1,69 @@
+<!--
+ * Route - 租金走勢
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-trend">
+  <div class="trend-page-wrap">
+    <div class="trend-header">
+      <div class="section-eyebrow">市場數據</div>
+      <div class="trend-title">香港租金走勢</div>
+      <div class="trend-sub">過去6個月各區平均月租變化（每呎）</div>
+    </div>
+    <div class="trend-tabs">
+      <span class="trend-tab on">全港</span>
+      <span class="trend-tab">香港島</span>
+      <span class="trend-tab">九龍</span>
+      <span class="trend-tab">新界</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">平均呎租趨勢（HK$/呎）</div>
+      <svg class="svg-chart" viewBox="0 0 600 180" id="trend-svg">
+        <!-- grid lines -->
+        <line x1="60" y1="20" x2="580" y2="20" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="60" x2="580" y2="60" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="100" x2="580" y2="100" stroke="#e8e8e8" stroke-width="1"/>
+        <line x1="60" y1="140" x2="580" y2="140" stroke="#e8e8e8" stroke-width="1"/>
+        <!-- y labels -->
+        <text x="50" y="24" text-anchor="end" font-size="10" fill="#aaa">$60</text>
+        <text x="50" y="64" text-anchor="end" font-size="10" fill="#aaa">$50</text>
+        <text x="50" y="104" text-anchor="end" font-size="10" fill="#aaa">$40</text>
+        <text x="50" y="144" text-anchor="end" font-size="10" fill="#aaa">$30</text>
+        <!-- x labels -->
+        <text x="108" y="165" text-anchor="middle" font-size="10" fill="#aaa">1月</text>
+        <text x="192" y="165" text-anchor="middle" font-size="10" fill="#aaa">2月</text>
+        <text x="276" y="165" text-anchor="middle" font-size="10" fill="#aaa">3月</text>
+        <text x="360" y="165" text-anchor="middle" font-size="10" fill="#aaa">4月</text>
+        <text x="444" y="165" text-anchor="middle" font-size="10" fill="#aaa">5月</text>
+        <text x="528" y="165" text-anchor="middle" font-size="10" fill="#aaa">6月</text>
+        <!-- HK Island line (orange) -->
+        <polyline points="108,45 192,40 276,50 360,35 444,38 528,30" fill="none" stroke="#f05a00" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- Kowloon line (black) -->
+        <polyline points="108,75 192,72 276,80 360,68 444,65 528,60" fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- NT line (gray) -->
+        <polyline points="108,115 192,112 276,118 360,108 444,110 528,105" fill="none" stroke="#aaa" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4,3"/>
+        <!-- dots HK Island -->
+        <circle cx="528" cy="30" r="4" fill="#f05a00"/>
+        <circle cx="528" cy="60" r="4" fill="#1a1a1a"/>
+        <circle cx="528" cy="105" r="4" fill="#aaa"/>
+        <!-- legend -->
+        <rect x="300" y="8" width="10" height="3" fill="#f05a00" rx="1"/>
+        <text x="314" y="13" font-size="10" fill="#555">香港島</text>
+        <rect x="360" y="8" width="10" height="3" fill="#1a1a1a" rx="1"/>
+        <text x="374" y="13" font-size="10" fill="#555">九龍</text>
+        <rect x="410" y="8" width="10" height="3" fill="#aaa" rx="1"/>
+        <text x="424" y="13" font-size="10" fill="#555">新界</text>
+      </svg>
+    </div>
+    <div class="label-text" style="margin-bottom:12px;">各區最新呎租</div>
+    <div class="district-grid">
+      <div class="district-card"><div class="dc-name">中環 / 金鐘</div><div class="dc-price">HK$62/呎</div><div class="dc-change dc-up">↑ +3.2% 本月</div></div>
+      <div class="district-card"><div class="dc-name">銅鑼灣</div><div class="dc-price">HK$55/呎</div><div class="dc-change dc-up">↑ +1.8% 本月</div></div>
+      <div class="district-card"><div class="dc-name">尖沙咀</div><div class="dc-price">HK$48/呎</div><div class="dc-change dc-up">↑ +0.9% 本月</div></div>
+      <div class="district-card"><div class="dc-name">旺角</div><div class="dc-price">HK$42/呎</div><div class="dc-change dc-dn">↓ -0.5% 本月</div></div>
+      <div class="district-card"><div class="dc-name">沙田</div><div class="dc-price">HK$32/呎</div><div class="dc-change dc-up">↑ +1.1% 本月</div></div>
+      <div class="district-card"><div class="dc-name">將軍澳</div><div class="dc-price">HK$28/呎</div><div class="dc-change dc-dn">↓ -0.3% 本月</div></div>
+    </div>
+  </div>
+</div>

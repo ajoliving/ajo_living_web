@@ -14,6 +14,7 @@ export interface StaffManagementListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  category_code?: string;
   status?: string;
 }
 
@@ -35,6 +36,7 @@ export const useStaffManagementList = <T>(options: UseStaffManagementListOptions
   const feedbackStore = useFeedbackStore();
   const loading = ref(false);
   const keyword = ref('');
+  const categoryCode = ref('');
   const status = ref('');
   const page = ref(1);
   const pageSize = options.pageSize ?? 20;
@@ -51,6 +53,7 @@ export const useStaffManagementList = <T>(options: UseStaffManagementListOptions
         page: targetPage,
         page_size: pageSize,
         keyword: keyword.value.trim() || undefined,
+        category_code: categoryCode.value || undefined,
         status: status.value || undefined,
       });
       items.value = data.data.items;
@@ -93,7 +96,7 @@ export const useStaffManagementList = <T>(options: UseStaffManagementListOptions
     }
   };
 
-  watch(status, () => {
+  watch([categoryCode, status], () => {
     void loadItems(1);
   });
 
@@ -102,6 +105,7 @@ export const useStaffManagementList = <T>(options: UseStaffManagementListOptions
   });
 
   return {
+    categoryCode,
     hasNext,
     hasPrevious,
     items,

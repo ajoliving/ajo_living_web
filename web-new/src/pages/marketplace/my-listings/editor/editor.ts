@@ -108,6 +108,7 @@ export interface ListingEditorFormState {
   dimensionHeight: string;
   dimensionWeight: string;
   phone: string;
+  whatsapp: string;
   tradeNote: string;
   deliveryTags: string[];
   allowChat: boolean;
@@ -137,6 +138,7 @@ const createInitialFormState = (): ListingEditorFormState => ({
   dimensionHeight: '',
   dimensionWeight: '',
   phone: '',
+  whatsapp: '',
   tradeNote: '',
   deliveryTags: [],
   allowChat: true,
@@ -290,6 +292,7 @@ const createEditorSnapshot = (
     dimensionHeight: formState.dimensionHeight.trim(),
     dimensionWeight: formState.dimensionWeight.trim(),
     phone: formState.phone.trim(),
+    whatsapp: formState.whatsapp.trim(),
     tradeNote: formState.tradeNote.trim(),
     deliveryTags: formState.deliveryTags.map((tag) => tag.trim()).filter(Boolean).sort(),
   };
@@ -334,6 +337,7 @@ export const useMarketplaceListingEditorPage = () => {
   const isPublishing = ref(false);
   const isLeavePromptOpen = ref(false);
   const savedSnapshot = ref('');
+  const retainedContactSummary = ref<SecondhandListingDetailResponse['contact_summary'] | null>(null);
   const isProgrammaticNavigation = ref(false);
   let resolveLeavePrompt: ((decision: EditorLeaveDecision) => void) | null = null;
 
@@ -401,7 +405,9 @@ export const useMarketplaceListingEditorPage = () => {
   );
 
   const previewPrice = computed(() =>
-    formatPrice(Number.isFinite(formState.price) ? formState.price : 0, preferenceStore.locale),
+    formState.isDonation
+      ? t('marketplace.editor.freePrice')
+      : formatPrice(Number.isFinite(formState.price) ? formState.price : 0, preferenceStore.locale),
   );
 
   const previewTagLabels = computed(() => [
@@ -416,10 +422,13 @@ export const useMarketplaceListingEditorPage = () => {
     imageSlots.value.filter((slot) => Boolean(slot.mediaAssetId || slot.file)).length,
   );
 
-  const hasValidPrice = computed(() => Number(formState.price) > 0);
+  const hasValidPrice = computed(() => formState.isDonation || Number(formState.price) > 0);
 
   const hasValidContact = computed(() =>
-    formState.allowChat || formState.phone.trim().length > 0,
+    formState.allowChat ||
+    formState.phone.trim().length > 0 ||
+    formState.whatsapp.trim().length > 0 ||
+    Boolean(retainedContactSummary.value?.show_phone || retainedContactSummary.value?.show_whatsapp),
   );
 
   const hasValidVisibility = computed(() =>
@@ -555,6 +564,7 @@ export const useMarketplaceListingEditorPage = () => {
     try {
       const { data } = await fetchSecondhandListingDetail(listingId.value);
       publicationStatus.value = data.data.publication_status;
+      retainedContactSummary.value = data.data.contact_summary;
       syncDetailToForm(data.data, formState);
       imageSlots.value.forEach(revokeImageSlotPreview);
       const detailSlots = data.data.images.map<EditorImageSlot>((image, index) => ({
@@ -807,7 +817,9 @@ export const useMarketplaceListingEditorPage = () => {
         ? sessionStore.currentUser.primary_community.public_id
         : sessionStore.currentUser.primary_community.public_id || '';
     const phone = buildHongKongPhone(formState.phone);
-    const allowPhone = phone.length > 0;
+    const whatsapp = buildHongKongPhone(formState.whatsapp);
+    const allowPhone = phone.length > 0 || Boolean(isEditing.value && retainedContactSummary.value?.show_phone);
+    const allowWhatsApp = whatsapp.length > 0 || Boolean(isEditing.value && retainedContactSummary.value?.show_whatsapp);
 
     return {
       title: formState.title.trim(),
@@ -817,15 +829,19 @@ export const useMarketplaceListingEditorPage = () => {
       community_id: primaryCommunityId,
       publisher_identity_type: sessionStore.me?.publisher_identity_type || 'owner',
       category_code: formState.categoryCode,
-      price_mode: formState.priceMode,
-      price_hkd: Number(formState.price),
+      price_mode: formState.isDonation ? 'free' : formState.priceMode,
+      price_hkd: formState.isDonation ? undefined : Number(formState.price),
       condition_level: formState.condition,
       dimension_text: buildDimensionText(formState),
       pickup_region_code: formState.districtCode,
       pickup_location_text: formState.tradeNote.trim(),
       delivery_tags: deliveryTags,
       visibility_scope: formState.visibility,
-      contact_method: formState.allowChat ? 'chat_or_whatsapp' : 'phone',
+      contact_method: formState.allowChat
+        ? 'chat_or_whatsapp'
+        : allowWhatsApp
+          ? 'whatsapp'
+          : 'phone',
       business_status: formState.businessStatus,
       images: imageSlots.value
         .filter((slot) => Boolean(slot.mediaAssetId))
@@ -836,10 +852,10 @@ export const useMarketplaceListingEditorPage = () => {
         })),
       contact: {
         phone,
-        whatsapp: '',
+        whatsapp,
         email: sessionStore.me?.email ?? '',
         show_phone: allowPhone,
-        show_whatsapp: false,
+        show_whatsapp: allowWhatsApp,
         show_chat: formState.allowChat,
         show_inquiry_form: false,
       },
@@ -968,6 +984,7 @@ export const useMarketplaceListingEditorPage = () => {
 
       resetFormState(formState, imageSlots);
       publicationStatus.value = '';
+      retainedContactSummary.value = null;
       markCurrentStateSaved();
     },
     { immediate: true },

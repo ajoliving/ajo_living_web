@@ -1,8 +1,8 @@
 <!--
  * 列表右側展示廣告欄。
  * 1. 依頻道讀取公開 listing_side 展示廣告。
- * 2. 在未設定廣告時保留固定廣告位佔位。
- * 3. 統一樓盤與二手列表右側廣告版面。
+ * 2. 固定 3 個 16:9 短廣告位與 2 個 9:16 長廣告位。
+ * 3. 在未設定廣告時保留固定比例佔位。
 -->
 <script setup lang="ts">
 import axios from 'axios';
@@ -18,6 +18,21 @@ const props = defineProps<{
 const ads = ref<PublicDisplayAdResponse[]>([]);
 const loading = ref(false);
 
+interface ListingAdSlot {
+  slotIndex: number;
+  kind: 'short' | 'long';
+  label: string;
+  ad?: PublicDisplayAdResponse;
+}
+
+const slotDefinitions: ListingAdSlot[] = [
+  { slotIndex: 1, kind: 'short', label: '16:9' },
+  { slotIndex: 2, kind: 'short', label: '16:9' },
+  { slotIndex: 3, kind: 'short', label: '16:9' },
+  { slotIndex: 4, kind: 'long', label: '9:16' },
+  { slotIndex: 5, kind: 'long', label: '9:16' },
+];
+
 // 1. 讀取公開展示廣告
 const loadAds = async (): Promise<void> => {
   loading.value = true;
@@ -26,7 +41,7 @@ const loadAds = async (): Promise<void> => {
     const { data } = await fetchPublicDisplayAds({
       channel: props.channel,
       placement: 'listing_side',
-      limit: 10,
+      limit: slotDefinitions.length,
     });
     ads.value = data.data.items;
   } catch (error: unknown) {
@@ -49,7 +64,21 @@ const resolveTitle = (ad: PublicDisplayAdResponse): string =>
 const resolveText = (ad: PublicDisplayAdResponse): string =>
   ad.display_text || ad.summary;
 
-const visibleAds = computed(() => ads.value.slice(0, 3));
+// 4. 依固定 slot 回填公開廣告
+const displaySlots = computed<ListingAdSlot[]>(() => {
+  const adBySlot = new Map<number, PublicDisplayAdResponse>();
+  ads.value.forEach((ad, index) => {
+    const slotIndex = ad.slot_index || index + 1;
+    if (!adBySlot.has(slotIndex)) {
+      adBySlot.set(slotIndex, ad);
+    }
+  });
+
+  return slotDefinitions.map((slot) => ({
+    ...slot,
+    ad: adBySlot.get(slot.slotIndex),
+  }));
+});
 
 watch(() => props.channel, loadAds);
 
@@ -63,45 +92,39 @@ onMounted(() => {
     class="listing-side-ads"
     aria-label="廣告"
   >
-    <div
-      v-if="loading"
-      class="listing-side-ads__slot listing-side-ads__slot--placeholder listing-side-ads__slot--large"
+    <template
+      v-for="slot in displaySlots"
+      :key="slot.slotIndex"
     >
-      <span>廣告</span>
-    </div>
-
-    <template v-else-if="visibleAds.length > 0">
       <a
-        v-for="(ad, index) in visibleAds"
-        :key="`${ad.task_id}-${ad.slot_index}`"
+        v-if="slot.ad && !loading"
         class="listing-side-ads__slot"
         :class="[
-          `listing-side-ads__slot--${ad.display_layout}`,
-          { 'listing-side-ads__slot--large': index === 0 },
+          `listing-side-ads__slot--${slot.kind}`,
+          `listing-side-ads__slot--${slot.ad.display_layout}`,
         ]"
-        :href="ad.target_url || undefined"
-        :target="ad.target_url ? '_blank' : undefined"
+        :href="slot.ad.target_url || undefined"
+        :target="slot.ad.target_url ? '_blank' : undefined"
         rel="noopener noreferrer"
       >
         <img
-          v-if="resolveImageURL(ad)"
-          :src="resolveImageURL(ad)"
-          :alt="resolveTitle(ad)"
+          v-if="resolveImageURL(slot.ad)"
+          :src="resolveImageURL(slot.ad)"
+          :alt="resolveTitle(slot.ad)"
         />
         <div class="listing-side-ads__body">
           <p>廣告</p>
-          <h2>{{ resolveTitle(ad) }}</h2>
-          <span v-if="resolveText(ad)">{{ resolveText(ad) }}</span>
+          <h2>{{ resolveTitle(slot.ad) }}</h2>
+          <span v-if="resolveText(slot.ad)">{{ resolveText(slot.ad) }}</span>
         </div>
       </a>
-    </template>
 
-    <template v-else>
-      <div class="listing-side-ads__slot listing-side-ads__slot--placeholder listing-side-ads__slot--large">
-        <span>160 × 600</span>
-      </div>
-      <div class="listing-side-ads__slot listing-side-ads__slot--placeholder listing-side-ads__slot--small">
-        <span>300 × 250</span>
+      <div
+        v-else
+        class="listing-side-ads__slot listing-side-ads__slot--placeholder"
+        :class="`listing-side-ads__slot--${slot.kind}`"
+      >
+        <span>{{ loading ? '廣告' : slot.label }}</span>
       </div>
     </template>
   </aside>
@@ -109,27 +132,24 @@ onMounted(() => {
 
 <style scoped>
 .listing-side-ads {
-  display: flex;
-  width: 176px;
-  flex-direction: column;
+  display: grid;
+  width: 100%;
   gap: 14px;
   align-items: stretch;
-  border-left: 1px solid #e4e4e4;
-  background: #ffffff;
-  padding: 18px 10px 18px 6px;
 }
 
 .listing-side-ads__slot {
   position: relative;
   display: flex;
-  min-height: 250px;
   overflow: hidden;
   flex-direction: column;
   justify-content: flex-end;
-  border: 1px solid #e4e4e4;
-  border-radius: 3px;
-  background: #ffffff;
-  color: #1a1a1a;
+  min-height: 0;
+  border: 1px solid var(--bdr, #e4e4e4);
+  border-radius: 8px;
+  background: var(--sur, #ffffff);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 0.04));
+  color: var(--ink, #1a1a1a);
   text-decoration: none;
 }
 
@@ -144,29 +164,17 @@ onMounted(() => {
   letter-spacing: 0.5px;
 }
 
-.listing-side-ads__slot--large {
-  position: sticky;
-  top: calc(var(--app-header-offset, 48px) + 12px);
-  min-height: 360px;
+.listing-side-ads__slot--short {
+  aspect-ratio: 16 / 9;
 }
 
-.listing-side-ads__slot--text_compact {
-  min-height: 118px;
-}
-
-.listing-side-ads__slot--image_text {
-  min-height: 210px;
-}
-
-.listing-side-ads__slot--large.listing-side-ads__slot--text_compact,
-.listing-side-ads__slot--large.listing-side-ads__slot--image_text,
-.listing-side-ads__slot--large.listing-side-ads__slot--image_full {
-  min-height: 360px;
+.listing-side-ads__slot--long {
+  aspect-ratio: 9 / 16;
 }
 
 .listing-side-ads__slot--image_full .listing-side-ads__body {
-  background: linear-gradient(180deg, transparent, rgb(0 0 0 / 0.68));
-  color: #ffffff;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0), rgb(255 255 255 / 0.92) 76%, #fff 100%);
+  color: var(--ink, #1a1a1a);
 }
 
 .listing-side-ads__slot img {
@@ -182,13 +190,13 @@ onMounted(() => {
   z-index: 1;
   display: grid;
   gap: 4px;
-  background: rgb(255 255 255 / 0.92);
-  padding: 14px 12px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0), rgb(255 255 255 / 0.94) 72%, #fff 100%);
+  padding: 13px;
 }
 
 .listing-side-ads__body p {
   margin: 0;
-  color: rgb(var(--color-primary));
+  color: var(--brand, rgb(var(--color-primary)));
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -212,6 +220,18 @@ onMounted(() => {
   -webkit-line-clamp: 3;
 }
 
+.listing-side-ads__slot--long .listing-side-ads__body {
+  padding: 12px;
+}
+
+.listing-side-ads__slot--long .listing-side-ads__body h2 {
+  font-size: 12px;
+}
+
+.listing-side-ads__slot--long .listing-side-ads__body span {
+  font-size: 10px;
+}
+
 .listing-side-ads__slot--placeholder {
   align-items: center;
   justify-content: center;
@@ -230,10 +250,6 @@ onMounted(() => {
   border: 1px dashed #cccccc;
   border-radius: 3px;
   padding: 10px 12px;
-}
-
-.listing-side-ads__slot--small {
-  min-height: 250px;
 }
 
 @media (max-width: 1199px) {

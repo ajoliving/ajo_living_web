@@ -44,7 +44,7 @@ describe('ListingSideAds', () => {
         target_url: 'https://example.com',
         display_channel: 'property_sale',
         display_placement: 'listing_side',
-        display_layout: 'image_text',
+        display_layout: 'image_full',
         sort_order: 1,
         slot_index: 1,
       },
@@ -60,7 +60,7 @@ describe('ListingSideAds', () => {
     expect(mockedFetchPublicDisplayAds).toHaveBeenCalledWith({
       channel: 'property_sale',
       placement: 'listing_side',
-      limit: 10,
+      limit: 5,
     });
     expect(wrapper.text()).toContain('全港搬屋優惠');
     expect(wrapper.text()).toContain('即日報價');
@@ -77,7 +77,10 @@ describe('ListingSideAds', () => {
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('160 × 600');
-    expect(wrapper.text()).toContain('300 × 250');
+    expect(wrapper.findAll('.listing-side-ads__slot')).toHaveLength(5);
+    expect(wrapper.findAll('.listing-side-ads__slot--short')).toHaveLength(3);
+    expect(wrapper.findAll('.listing-side-ads__slot--long')).toHaveLength(2);
+    expect(wrapper.text()).toContain('16:9');
+    expect(wrapper.text()).toContain('9:16');
   });
 });

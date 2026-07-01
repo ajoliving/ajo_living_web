@@ -6,7 +6,6 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 import MarketplacePage from '@/pages/marketplace/MarketplacePage.vue';
-import MarketplaceDiscoverPage from '@/pages/marketplace/discover/MarketplaceDiscoverPage.vue';
 import MarketplaceFilterPage from '@/pages/marketplace/filter/MarketplaceFilterPage.vue';
 import MarketplaceListingPage from '@/pages/marketplace/listing/MarketplaceListingPage.vue';
 import MarketplaceSellerPage from '@/pages/marketplace/seller/MarketplaceSellerPage.vue';
@@ -15,8 +14,49 @@ import MarketplaceSellerPage from '@/pages/marketplace/seller/MarketplaceSellerP
 const normalizeLegacyRestPath = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value.join('/') : value || '';
 
-// 1. 輸出二手交易路由
+// 2. 取得舊管理路徑對應的新位置
+const resolveLegacyManagementPath = (restPath: string): string => {
+  if (!restPath) {
+    return '/account/marketplace/management';
+  }
+
+  return `/account/marketplace/management/${restPath}`;
+};
+
+// 3. 輸出二手交易路由
 export const marketplaceRoutes: RouteRecordRaw[] = [
+  {
+    path: '/management',
+    redirect: '/account/marketplace/management',
+  },
+  {
+    path: '/management/:rest(.*)*',
+    redirect: (to) => {
+      const restPath = normalizeLegacyRestPath(to.params.rest);
+
+      return {
+        path: resolveLegacyManagementPath(restPath),
+        query: to.query,
+        hash: to.hash,
+      };
+    },
+  },
+  {
+    path: '/marketplace/management',
+    redirect: '/account/marketplace/management',
+  },
+  {
+    path: '/marketplace/management/:rest(.*)*',
+    redirect: (to) => {
+      const restPath = normalizeLegacyRestPath(to.params.rest);
+
+      return {
+        path: resolveLegacyManagementPath(restPath),
+        query: to.query,
+        hash: to.hash,
+      };
+    },
+  },
   {
     path: '/marketplace',
     component: MarketplacePage,
@@ -24,13 +64,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/marketplace/discover',
-      },
-      {
-        path: 'discover',
-        name: 'MarketplaceDiscover',
-        component: MarketplaceDiscoverPage,
-        meta: { titleKey: 'nav.discover' },
+        redirect: '/marketplace/filter',
       },
       {
         path: 'filter',
@@ -46,7 +80,7 @@ export const marketplaceRoutes: RouteRecordRaw[] = [
           return {
             path: restPath
               ? `/account/marketplace/settings/${restPath}`
-              : '/account/marketplace/settings',
+              : '/account/marketplace/settings/home-hero-cards',
             query: to.query,
             hash: to.hash,
           };

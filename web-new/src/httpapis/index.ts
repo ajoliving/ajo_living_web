@@ -19,7 +19,22 @@ const httpClient = axios.create({
   timeout: 10000,
 });
 
-// 2. 統一注入示範登入 token
+// 2. 判斷是否為 POS/iSmart 業務授權失效
+const isPOSBusinessAuthError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+  const url = String(error.config?.url ?? '');
+  const data = error.response?.data as { code?: string; message?: string } | undefined;
+  const message = String(data?.message ?? '').trim().toLowerCase();
+  return (
+    (url.includes('/me/payments/pos/') || url.includes('/me/pos/')) &&
+    data?.code === 'AUTH_REQUIRED' &&
+    (message === 'ismart login is required' || message === 'pos token expired')
+  );
+};
+
+// 3. 統一注入登入 token
 httpClient.interceptors.request.use((config) => {
   const token = readStoredAccessToken();
 
@@ -30,11 +45,11 @@ httpClient.interceptors.request.use((config) => {
   return config;
 });
 
-// 3. 統一處理 401 響應
+// 4. 統一處理 401 響應
 httpClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !isPOSBusinessAuthError(error)) {
       clearStoredTokens();
       emitAuthSessionExpired();
     }

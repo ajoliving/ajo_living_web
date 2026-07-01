@@ -261,12 +261,9 @@ const {
 <style scoped>
 .marketplace-my-page {
   display: grid;
+  gap: 1rem;
   width: 100%;
-  gap: 16px;
-  margin: 0;
-  padding: 0;
   color: rgb(var(--color-text));
-  overflow: visible;
 }
 
 .marketplace-my-results {

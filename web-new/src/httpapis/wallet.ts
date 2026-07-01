@@ -81,7 +81,7 @@ export const fetchStaffRewardAds = (params: {
   page_size?: number;
   keyword?: string;
   is_active?: boolean;
-  ad_type?: string;
+  ad_type?: 'reward' | 'display' | 'display_short' | 'display_long';
   display_channel?: string;
 } = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<StaffRewardAdResponse>>>(

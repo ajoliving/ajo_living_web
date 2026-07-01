@@ -68,4 +68,14 @@ func formatHKPriceForMail(value float64) string {
 	return fmt.Sprintf("HK$%.2f", value)
 }
 
+// 7. supermarketImageObjectKey builds the canonical supermarket image object key.
+func supermarketImageObjectKey(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+
+	return "ajo_living/supermarket/products/" + strings.ToUpper(code) + ".jpg"
+}
+
 type jsonNumber string

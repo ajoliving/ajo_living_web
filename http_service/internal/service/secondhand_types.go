@@ -90,35 +90,7 @@ type SecondhandSettingsListFilters struct {
 	Status       string
 }
 
-// 7. DiscoverPlacementInput defines one configurable discover slot.
-type DiscoverPlacementInput struct {
-	Scene        string `json:"scene"`
-	CategoryCode string `json:"category_code"`
-	SlotIndex    int    `json:"slot_index"`
-	ListingID    string `json:"listing_id"`
-}
-
-// 8. DiscoverPlacementResponse defines one discover slot response.
-type DiscoverPlacementResponse struct {
-	Scene        string                    `json:"scene"`
-	CategoryCode string                    `json:"category_code"`
-	SlotIndex    int                       `json:"slot_index"`
-	Listing      *SecondhandListingSummary `json:"listing,omitempty"`
-}
-
-// 9. DiscoverPayload defines the public discover page payload.
-type DiscoverPayload struct {
-	Hero       []DiscoverPlacementResponse            `json:"hero"`
-	Categories map[string][]DiscoverPlacementResponse `json:"categories"`
-}
-
-// 10. DiscoverSettingsPayload defines the settings page slot payload.
-type DiscoverSettingsPayload struct {
-	Hero       []DiscoverPlacementResponse            `json:"hero"`
-	Categories map[string][]DiscoverPlacementResponse `json:"categories"`
-}
-
-// 11. ListingImageResponse defines image response payload.
+// 7. ListingImageResponse defines image response payload.
 type ListingImageResponse struct {
 	MediaAssetID string `json:"media_asset_id"`
 	URL          string `json:"url"`
@@ -126,7 +98,7 @@ type ListingImageResponse struct {
 	IsCover      bool   `json:"is_cover"`
 }
 
-// 12. ListingContactSummary defines contact channel summary.
+// 8. ListingContactSummary defines contact channel summary.
 type ListingContactSummary struct {
 	ShowPhone    bool `json:"show_phone"`
 	ShowWhatsApp bool `json:"show_whatsapp"`
@@ -134,7 +106,7 @@ type ListingContactSummary struct {
 	ShowInquiry  bool `json:"show_inquiry_form"`
 }
 
-// 13. SecondhandListingSummary defines public list payload.
+// 9. SecondhandListingSummary defines public list payload.
 type SecondhandListingSummary struct {
 	ListingID             string                `json:"listing_id"`
 	Title                 string                `json:"title"`

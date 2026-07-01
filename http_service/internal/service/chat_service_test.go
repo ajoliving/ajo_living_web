@@ -1,77 +1,21 @@
 /*
  * Chat service tests.
- * 1. Validate system notice publishing creates chat cards and notification inbox entries.
- * 2. Validate direct listing chats between different members.
- * 3. Keep broadcast and direct message delivery rules covered by service-level tests.
+ * 1. Validate direct listing chats between different members.
+ * 2. Keep message delivery and legacy notice-chat blocking covered by service-level tests.
  */
 package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"ajoliving_web/http_service/internal/database"
 	"ajoliving_web/http_service/internal/model"
 	"ajoliving_web/http_service/internal/utils"
 )
 
-// 1. TestPublishSystemNoticeCreatesInboxNotifications validates member inbox delivery.
-func TestPublishSystemNoticeCreatesInboxNotifications(t *testing.T) {
-	ctx := context.Background()
-	runtimeValue := newAuthTestRuntime(
-		t,
-		nil,
-		&model.User{},
-		&model.UserProfile{},
-		&model.Chat{},
-		&model.ChatParticipant{},
-		&model.Message{},
-		&model.Notification{},
-	)
-	runtimeValue.Now = func() time.Time {
-		return time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
-	}
-	if err := database.SeedSystemNotificationAccount(ctx, runtimeValue.DB); err != nil {
-		t.Fatalf("seed system notification account: %v", err)
-	}
-
-	activeUser := createNoticeTestUser(t, runtimeValue, "+852", "61230001", "active")
-	inactiveUser := createNoticeTestUser(t, runtimeValue, "+852", "61230002", "inactive")
-	chatService := NewChatService(runtimeValue, nil, nil)
-
-	result, err := chatService.PublishSystemNotice(ctx, SystemNoticePublishParams{
-		Title: "系統維護通知",
-		Body:  "今晚 10 時系統會進行例行維護。",
-	})
-	if err != nil {
-		t.Fatalf("publish system notice: %v", err)
-	}
-	if result.DeliveredCount != 1 {
-		t.Fatalf("expected one active recipient, got %d", result.DeliveredCount)
-	}
-
-	var notification model.Notification
-	if err := runtimeValue.DB.Where("user_id = ?", activeUser.ID).First(&notification).Error; err != nil {
-		t.Fatalf("load active user notification: %v", err)
-	}
-	if notification.Category != chatTypeSystemNotice || notification.Title != "系統維護通知" || notification.Body != "今晚 10 時系統會進行例行維護。" {
-		t.Fatalf("unexpected notification payload: %+v", notification)
-	}
-	if notification.RelatedType != "chat" || notification.RelatedPublicID == "" || notification.IsRead {
-		t.Fatalf("expected unread chat-related notification, got %+v", notification)
-	}
-
-	var inactiveCount int64
-	if err := runtimeValue.DB.Model(&model.Notification{}).Where("user_id = ?", inactiveUser.ID).Count(&inactiveCount).Error; err != nil {
-		t.Fatalf("count inactive notifications: %v", err)
-	}
-	if inactiveCount != 0 {
-		t.Fatalf("expected inactive user to receive no notifications, got %d", inactiveCount)
-	}
-}
-
-// 2. TestDirectListingChatAllowsDifferentUsersToExchangeMessages validates two member messaging.
+// 1. TestDirectListingChatAllowsDifferentUsersToExchangeMessages validates two member messaging.
 func TestDirectListingChatAllowsDifferentUsersToExchangeMessages(t *testing.T) {
 	ctx := context.Background()
 	runtimeValue := newAuthTestRuntime(
@@ -151,7 +95,117 @@ func TestDirectListingChatAllowsDifferentUsersToExchangeMessages(t *testing.T) {
 	}
 }
 
-// 3. createNoticeTestUser inserts a member with the target status.
+// 2. TestSendMessageRejectsTooLongContent validates message length protection.
+func TestSendMessageRejectsTooLongContent(t *testing.T) {
+	ctx := context.Background()
+	runtimeValue := newAuthTestRuntime(
+		t,
+		nil,
+		&model.User{},
+		&model.UserProfile{},
+		&model.Listing{},
+		&model.ListingContact{},
+		&model.SecondhandListing{},
+		&model.Chat{},
+		&model.ChatParticipant{},
+		&model.Message{},
+	)
+	runtimeValue.Now = func() time.Time {
+		return time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	}
+
+	publisher := createChatTestUser(t, runtimeValue, "+852", "61232001", "餐桌發布者")
+	inquirer := createChatTestUser(t, runtimeValue, "+852", "61232002", "查詢會員")
+	listingPublicID := createChatTestSecondhandListing(t, runtimeValue, publisher.ID)
+	chatService := NewChatService(runtimeValue, NewSecondhandService(runtimeValue), nil)
+
+	result, err := chatService.CreateOrReuseChat(ctx, inquirer.ID, nil, listingPublicID)
+	if err != nil {
+		t.Fatalf("create direct listing chat: %v", err)
+	}
+	chatID, ok := result["chat_id"].(string)
+	if !ok || chatID == "" {
+		t.Fatalf("expected chat public id, got %#v", result)
+	}
+
+	if _, err := chatService.SendMessage(ctx, inquirer.ID, chatID, strings.Repeat("長", messageContentMaxRunes+1)); err == nil {
+		t.Fatal("expected too long message to be rejected")
+	}
+
+	var count int64
+	if err := runtimeValue.DB.Model(&model.Message{}).Count(&count).Error; err != nil {
+		t.Fatalf("count messages: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no message to be stored, got %d", count)
+	}
+}
+
+// 3. TestSystemNoticeChatsAreHiddenFromMessageManagement validates legacy notice chats stay out of chat APIs.
+func TestSystemNoticeChatsAreHiddenFromMessageManagement(t *testing.T) {
+	ctx := context.Background()
+	runtimeValue := newAuthTestRuntime(
+		t,
+		nil,
+		&model.User{},
+		&model.UserProfile{},
+		&model.Listing{},
+		&model.SecondhandListing{},
+		&model.Chat{},
+		&model.ChatParticipant{},
+		&model.Message{},
+	)
+	now := time.Date(2026, 6, 29, 13, 0, 0, 0, time.UTC)
+	runtimeValue.Now = func() time.Time {
+		return now
+	}
+
+	member := createNoticeTestUser(t, runtimeValue, "+852", "61233001", "active")
+	legacyChat := model.Chat{
+		PublicID:           utils.NewPublicID(),
+		BizModule:          "system",
+		ListingID:          0,
+		ChatType:           chatTypeSystemNotice,
+		CreatedBy:          member.ID,
+		LastMessagePreview: "系統通知",
+		LastMessageAt:      &now,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+	if err := runtimeValue.DB.Create(&legacyChat).Error; err != nil {
+		t.Fatalf("create legacy notice chat: %v", err)
+	}
+	participant := model.ChatParticipant{
+		ChatID:      legacyChat.ID,
+		UserID:      member.ID,
+		RoleInChat:  "recipient",
+		UnreadCount: 1,
+		JoinedAt:    now,
+	}
+	if err := runtimeValue.DB.Create(&participant).Error; err != nil {
+		t.Fatalf("create legacy notice participant: %v", err)
+	}
+
+	chatService := NewChatService(runtimeValue, nil, nil)
+	items, pagination, err := chatService.ListChats(ctx, member.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("list chats: %v", err)
+	}
+	if len(items) != 0 || pagination.Total != 0 {
+		t.Fatalf("expected legacy system notice chat to be hidden, got items=%#v pagination=%#v", items, pagination)
+	}
+	if _, err := chatService.GetChat(ctx, member.ID, legacyChat.PublicID); err == nil {
+		t.Fatal("expected legacy system notice chat detail to be blocked")
+	}
+	if _, _, err := chatService.ListMessages(ctx, member.ID, legacyChat.PublicID, 1, 20); err == nil {
+		t.Fatal("expected legacy system notice messages to be blocked")
+	}
+	if err := chatService.MarkRead(ctx, member.ID, legacyChat.PublicID); err == nil {
+		t.Fatal("expected legacy system notice read state to be blocked")
+	}
+}
+
+// 4. createNoticeTestUser inserts a member with the target status.
 func createNoticeTestUser(t *testing.T, runtimeValue *Runtime, phoneCountryCode string, phoneNumber string, status string) model.User {
 	t.Helper()
 	user := model.User{
@@ -169,7 +223,7 @@ func createNoticeTestUser(t *testing.T, runtimeValue *Runtime, phoneCountryCode 
 	return user
 }
 
-// 4. createChatTestUser inserts an active member and profile for direct chat tests.
+// 5. createChatTestUser inserts an active member and profile for direct chat tests.
 func createChatTestUser(t *testing.T, runtimeValue *Runtime, phoneCountryCode string, phoneNumber string, displayName string) model.User {
 	t.Helper()
 	user := createNoticeTestUser(t, runtimeValue, phoneCountryCode, phoneNumber, "active")
@@ -185,7 +239,7 @@ func createChatTestUser(t *testing.T, runtimeValue *Runtime, phoneCountryCode st
 	return user
 }
 
-// 5. createChatTestSecondhandListing inserts a chat-enabled public listing.
+// 6. createChatTestSecondhandListing inserts a chat-enabled public listing.
 func createChatTestSecondhandListing(t *testing.T, runtimeValue *Runtime, ownerUserID int64) string {
 	t.Helper()
 	publishedAt := runtimeValue.Now()
@@ -239,7 +293,7 @@ func createChatTestSecondhandListing(t *testing.T, runtimeValue *Runtime, ownerU
 	return listing.PublicID
 }
 
-// 6. assertChatParticipantRole validates one chat participant role.
+// 7. assertChatParticipantRole validates one chat participant role.
 func assertChatParticipantRole(t *testing.T, runtimeValue *Runtime, chatID int64, userID int64, expectedRole string) {
 	t.Helper()
 	var participant model.ChatParticipant
@@ -251,7 +305,7 @@ func assertChatParticipantRole(t *testing.T, runtimeValue *Runtime, chatID int64
 	}
 }
 
-// 7. assertChatUnreadCount validates the participant unread count.
+// 8. assertChatUnreadCount validates the participant unread count.
 func assertChatUnreadCount(t *testing.T, runtimeValue *Runtime, chatID int64, userID int64, expectedCount int) {
 	t.Helper()
 	var participant model.ChatParticipant
@@ -263,7 +317,7 @@ func assertChatUnreadCount(t *testing.T, runtimeValue *Runtime, chatID int64, us
 	}
 }
 
-// 8. assertChatNotification validates one chat notification was delivered.
+// 9. assertChatNotification validates one chat notification was delivered.
 func assertChatNotification(t *testing.T, runtimeValue *Runtime, userID int64, chatPublicID string, expectedBody string) {
 	t.Helper()
 	var notification model.Notification

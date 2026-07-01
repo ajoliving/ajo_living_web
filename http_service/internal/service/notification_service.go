@@ -52,12 +52,23 @@ type CreateNotificationParams struct {
 	RelatedPublicID string
 }
 
-// 5. NewNotificationService creates a notification service instance.
+// 5. SystemNoticePublishParams defines a staff broadcast notice input.
+type SystemNoticePublishParams struct {
+	Title string
+	Body  string
+}
+
+// 6. SystemNoticePublishResult defines the broadcast delivery summary.
+type SystemNoticePublishResult struct {
+	DeliveredCount int `json:"delivered_count"`
+}
+
+// 7. NewNotificationService creates a notification service instance.
 func NewNotificationService(runtime *Runtime) *NotificationService {
 	return &NotificationService{runtime: runtime}
 }
 
-// 6. ListNotifications returns one user's inbox items.
+// 8. ListNotifications returns one user's inbox items.
 func (s *NotificationService) ListNotifications(ctx context.Context, userID int64, filters NotificationListFilters) ([]NotificationItem, *model.Pagination, int64, error) {
 	page, pageSize := normalizePagination(filters.Page, filters.PageSize)
 	query := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID)
@@ -88,7 +99,7 @@ func (s *NotificationService) ListNotifications(ctx context.Context, userID int6
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, unreadCount, nil
 }
 
-// 7. UnreadCount returns the unread inbox count for the target user.
+// 9. UnreadCount returns the unread inbox count for the target user.
 func (s *NotificationService) UnreadCount(ctx context.Context, userID int64) (int64, error) {
 	var count int64
 	if err := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&count).Error; err != nil {
@@ -98,7 +109,7 @@ func (s *NotificationService) UnreadCount(ctx context.Context, userID int64) (in
 	return count, nil
 }
 
-// 8. MarkRead marks a notification as read for the target user.
+// 10. MarkRead marks a notification as read for the target user.
 func (s *NotificationService) MarkRead(ctx context.Context, userID int64, notificationPublicID string) error {
 	result := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("public_id = ? AND user_id = ?", strings.TrimSpace(notificationPublicID), userID).
@@ -116,7 +127,7 @@ func (s *NotificationService) MarkRead(ctx context.Context, userID int64, notifi
 	return nil
 }
 
-// 9. MarkAllRead marks all unread notifications as read for the target user.
+// 11. MarkAllRead marks all unread notifications as read for the target user.
 func (s *NotificationService) MarkAllRead(ctx context.Context, userID int64) (int64, error) {
 	result := s.runtime.DB.WithContext(ctx).Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
@@ -131,7 +142,55 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID int64) (in
 	return result.RowsAffected, nil
 }
 
-// 10. CreateNotification persists one notification inside an existing transaction.
+// 12. PublishSystemNotice sends one system notice to every active member's notification center.
+func (s *NotificationService) PublishSystemNotice(ctx context.Context, params SystemNoticePublishParams) (*SystemNoticePublishResult, error) {
+	title := strings.TrimSpace(params.Title)
+	body := strings.TrimSpace(params.Body)
+	if title == "" || body == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "notice title and body are required")
+	}
+	if len([]rune(title)) > 120 || len([]rune(body)) > 1000 {
+		return nil, errcode.New(errcode.CodeValidationError, "notice content is too long")
+	}
+
+	var users []model.User
+	if err := s.runtime.DB.WithContext(ctx).
+		Where(
+			"member_status = ? AND NOT (phone_country_code = ? AND phone_number = ?)",
+			"active",
+			model.SystemNotificationPhoneCountryCode,
+			model.SystemNotificationPhoneNumber,
+		).
+		Find(&users).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load notice recipients")
+	}
+
+	delivered := 0
+	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, user := range users {
+			if err := s.CreateNotification(ctx, tx, CreateNotificationParams{
+				UserID:          user.ID,
+				Category:        "system_notice",
+				Title:           title,
+				Body:            body,
+				RelatedType:     "notification",
+				RelatedPublicID: "",
+			}); err != nil {
+				return err
+			}
+
+			delivered++
+		}
+
+		return nil
+	}); err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to publish system notice")
+	}
+
+	return &SystemNoticePublishResult{DeliveredCount: delivered}, nil
+}
+
+// 13. CreateNotification persists one notification inside an existing transaction.
 func (s *NotificationService) CreateNotification(ctx context.Context, tx *gorm.DB, params CreateNotificationParams) error {
 	if params.UserID <= 0 {
 		return errcode.New(errcode.CodeValidationError, "notification user is required")
@@ -158,7 +217,7 @@ func (s *NotificationService) CreateNotification(ctx context.Context, tx *gorm.D
 	return nil
 }
 
-// 11. toNotificationItem maps one model notification into the response payload.
+// 14. toNotificationItem maps one model notification into the response payload.
 func toNotificationItem(notification *model.Notification) NotificationItem {
 	result := NotificationItem{
 		NotificationID:  notification.PublicID,

@@ -5,7 +5,6 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
 
 import type { ChatMessageView } from '@/model/chat';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -19,8 +18,6 @@ const preferenceStore = usePreferenceStore();
 
 // 1. 判斷訊息方向
 const isSelf = computed(() => props.message.sender_role === 'self');
-const isNoticeCard = computed(() => props.message.message_type === 'notice_card');
-const noticeLines = computed(() => props.message.body.split('\n').filter(Boolean));
 
 // 2. 格式化訊息時間
 const formattedTime = computed(() =>
@@ -34,35 +31,9 @@ const formattedTime = computed(() =>
 <template>
   <div
     class="message-bubble-row"
-    :class="isNoticeCard ? 'message-bubble-row--notice' : isSelf ? 'message-bubble-row--self' : 'message-bubble-row--peer'"
+    :class="isSelf ? 'message-bubble-row--self' : 'message-bubble-row--peer'"
   >
     <div
-      v-if="isNoticeCard"
-      class="notice-card"
-    >
-      <p class="notice-card__title">
-        {{ noticeLines[0] }}
-      </p>
-      <p
-        v-if="noticeLines[1]"
-        class="notice-card__body"
-      >
-        {{ noticeLines[1] }}
-      </p>
-      <RouterLink
-        v-if="props.message.action_label && props.message.action_url"
-        :to="props.message.action_url"
-        class="notice-card__action"
-      >
-        {{ props.message.action_label }}
-      </RouterLink>
-      <p class="notice-card__time">
-        {{ formattedTime }}
-      </p>
-    </div>
-
-    <div
-      v-else
       class="message-bubble"
       :class="isSelf ? 'message-bubble--self' : 'message-bubble--peer'"
     >
@@ -83,10 +54,6 @@ const formattedTime = computed(() =>
 .message-bubble-row {
   display: flex;
   width: 100%;
-}
-
-.message-bubble-row--notice {
-  justify-content: center;
 }
 
 .message-bubble-row--self {
@@ -137,45 +104,6 @@ const formattedTime = computed(() =>
   white-space: pre-wrap;
   font-size: 0.875rem;
   line-height: 1.6;
-}
-
-.notice-card {
-  width: min(100%, 24rem);
-  border: 1px solid rgb(var(--color-border) / 0.72);
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  padding: 0.9rem;
-  text-align: left;
-}
-
-.notice-card__title {
-  margin: 0;
-  color: rgb(var(--color-text));
-  font-size: 0.92rem;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.notice-card__body {
-  margin: 0.45rem 0 0;
-  color: rgb(var(--color-text-muted));
-  font-size: 0.8125rem;
-  line-height: 1.55;
-}
-
-.notice-card__action {
-  display: inline-flex;
-  margin-top: 0.85rem;
-  color: rgb(var(--color-primary));
-  font-size: 0.8125rem;
-  font-weight: 800;
-}
-
-.notice-card__time {
-  margin: 0.8rem 0 0;
-  color: rgb(var(--color-text-muted));
-  font-size: 0.74rem;
-  text-align: right;
 }
 
 @media (max-width: 640px) {

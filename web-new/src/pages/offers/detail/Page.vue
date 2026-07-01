@@ -578,7 +578,17 @@ watch(
         <!-- 2. 商品頭 -->
         <div class="gp-product-head">
           <div class="gp-product-img">
-            <span class="gp-product-img-text">{{ productInitial }}</span>
+            <img
+              v-if="product.image_url || product.imageUrl"
+              :src="product.image_url || product.imageUrl"
+              :alt="product.name"
+            >
+            <span
+              v-else
+              class="gp-product-img-text"
+            >
+              {{ productInitial }}
+            </span>
           </div>
           <div>
             <div class="gp-product-brand">{{ product.brand || '未提供品牌' }}</div>
@@ -936,7 +946,17 @@ watch(
               @click="openRelatedProduct(item)"
             >
               <div class="gp-related-img">
-                <span class="gp-related-img-text">{{ relatedProductInitial(item) }}</span>
+                <img
+                  v-if="item.image_url || item.imageUrl"
+                  :src="item.image_url || item.imageUrl"
+                  :alt="item.name"
+                >
+                <span
+                  v-else
+                  class="gp-related-img-text"
+                >
+                  {{ relatedProductInitial(item) }}
+                </span>
               </div>
               <div class="gp-related-body">
                 <div class="gp-related-brand">{{ item.brand || '未提供品牌' }}</div>
@@ -963,7 +983,17 @@ watch(
               @click="openRelatedProduct(item)"
             >
               <div class="gp-related-img">
-                <span class="gp-related-img-text">{{ relatedProductInitial(item) }}</span>
+                <img
+                  v-if="item.image_url || item.imageUrl"
+                  :src="item.image_url || item.imageUrl"
+                  :alt="item.name"
+                >
+                <span
+                  v-else
+                  class="gp-related-img-text"
+                >
+                  {{ relatedProductInitial(item) }}
+                </span>
               </div>
               <div class="gp-related-body">
                 <div class="gp-related-brand">{{ item.brand || '未提供品牌' }}</div>
@@ -991,7 +1021,7 @@ watch(
 
 /* 2. 詳情面板 */
 .gp-detail-panel {
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   margin: 0 auto;
   border: 1px solid var(--bdr);
   border-radius: 8px;
@@ -1060,6 +1090,13 @@ watch(
   border-radius: 8px;
   background: linear-gradient(135deg, #fff 0%, var(--sur-2) 100%);
   overflow: hidden;
+}
+
+.gp-product-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .gp-product-img-text {
@@ -1575,6 +1612,14 @@ watch(
   justify-content: center;
   border-bottom: 1px solid var(--bdr);
   background: linear-gradient(135deg, #fff 0%, var(--sur-2) 100%);
+  overflow: hidden;
+}
+
+.gp-related-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .gp-related-img-text {
@@ -1618,7 +1663,7 @@ watch(
 
 /* 14. 狀態訊息 */
 .gp-state {
-  max-width: 1180px;
+  max-width: var(--layout-page-max-width);
   margin: 20px auto 0;
   border: 1px solid var(--bdr);
   border-radius: 8px;

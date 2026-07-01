@@ -179,7 +179,7 @@ export const useMarketplaceMyListingsPage = () => {
 
   // 1.8 導向公開詳情頁
   const openPublicDetail = async (listingId: string): Promise<void> => {
-    await router.push(`/marketplace/listing/${listingId}`);
+    await router.push(`/furniture/${listingId}`);
   };
 
   // 1.9 輸出扣費確認文案 key

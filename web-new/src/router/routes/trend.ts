@@ -15,4 +15,8 @@ export const trendRoutes: RouteRecordRaw[] = [
     component: TrendPage,
     meta: { titleKey: 'nav.trend' },
   },
+  {
+    path: '/trend/district/:district',
+    redirect: '/trend',
+  },
 ];
