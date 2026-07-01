@@ -1,7 +1,7 @@
 <!--
  * 會員中心頁。
  * 1. 承載左側模組導覽與右側內容面板，支援帳號管理、授權副戶、物業綁定、AJO 錢包、我的樓盤、我的住宅、我的家具與我的收藏等面板切換。
- * 2. 綁定單位讀取 POS 大廈與單位資料，其他面板沿用展示資料。
+ * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
 -->
@@ -123,27 +123,72 @@ const syncActivePanelFromRoute = (path: string) => {
   }
 };
 
-// 7. 帳號管理 mock 資料
-const accountProfile = {
-  displayName: 'patrick',
-  ismartAccount: 'patrick',
-  email: '尚未綁定電郵',
-  phone: 'ismart 10',
-  password: '未設定',
-  publisherRole: '未設定',
-  regionCode: 'unknown',
-  managedBuildings:
-    '康睦庭園第二座, 萬高大廈B座, 僑偉大廈, 利來大廈, 仁美大廈, 豐富大廈, 鴻英大廈, 東昇樓, 華園, 麗麗大廈, 協和大廈, 景暉閣, 新萬利大廈, 東山臺24號, 仁英大廈, 浣紗大廈, 東南大樓(77號), 東南大樓(75號), 華興大廈(269號), 華興大廈(271號), 得運大廈, 仁文大廈, 富澤軒, 天富大廈, 榮森工業第二大廈, 仁利大廈, 嘉樂苑, 南昌苑, 測試2大廈, 測試1大廈, 坪麗苑, 玉桂園(車位), 玉桂園(1座), 玉桂園(2座), 玉桂園(3座), 玉桂園(4座), 玉桂園(5座), 玉桂園(6座), 玉桂園(7座), 玉桂園(8座), 玉桂園(9座), 玉桂園(10座), 玉桂園(11座)',
+interface AccountDisplayField {
+  label: string;
+  value: string;
+}
+
+const unsetText = '未設定';
+
+// 7. 格式化會員資料顯示值
+const displayText = (value: unknown, fallback = unsetText): string => {
+  const text = String(value ?? '').trim();
+  return text || fallback;
 };
 
-const identityStatus = {
-  memberNo: '01KRWKDTQY6DY1H650GB63AC66',
-  memberStatus: 'active',
-  memberType: 'user',
-  primaryRole: 'staff',
-  profileCompleteness: '已完成',
-  staffPermission: '已啟用',
+// 8. 遮罩證件編號
+const maskIdentityNumber = (value: unknown): string => {
+  const text = String(value ?? '').trim();
+  return text ? '********' : unsetText;
 };
+
+const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
+const accountDisplayName = computed(() => displayText(sessionStore.me?.display_name, sessionStore.currentUser.display_name));
+const accountAvatarText = computed(() => accountDisplayName.value.trim().slice(0, 1).toUpperCase() || 'A');
+const memberPhoneText = computed(() => {
+  const member = sessionStore.me;
+  if (!member) {
+    return unsetText;
+  }
+  if (isSystemPhonePlaceholder(member.phone_country_code)) {
+    return displayText(member.ismart_bound_phone || ismartProfile.value?.account_phone || member.ismart_msg?.phone);
+  }
+  const countryCode = displayText(member.phone_country_code, '');
+  const phoneNumber = displayText(member.phone_number, '');
+  return displayText([countryCode, phoneNumber].filter(Boolean).join(' '));
+});
+
+// 9. 帳號管理資料
+const accountProfile = computed(() => ({
+  displayName: accountDisplayName.value,
+  ismartAccount: displayText(
+    sessionStore.me?.ismart_username || sessionStore.me?.ismart_msg?.username || ismartProfile.value?.account_code,
+  ),
+  email: displayText(sessionStore.me?.email, '尚未綁定電郵'),
+  phone: memberPhoneText.value,
+  password: sessionStore.me?.local_password ? '已設定' : unsetText,
+  publisherRole: displayText(sessionStore.me?.publisher_identity_type),
+  regionCode: displayText(sessionStore.me?.district_code),
+  managedBuildings: managedBuildingNameText.value,
+}));
+
+const identityStatus = computed(() => ({
+  memberNo: displayText(sessionStore.me?.public_id),
+  memberStatus: displayText(sessionStore.me?.member_status),
+  memberType: displayText(sessionStore.me?.member_type),
+  primaryRole: displayText(sessionStore.me?.role),
+  profileCompleteness: sessionStore.me?.profile_completed ? '已完成' : '未完成',
+  staffPermission: sessionStore.me?.is_staff ? '已啟用' : '未啟用',
+}));
+const accountRoles = computed(() => {
+  const roles = sessionStore.me?.roles?.filter(Boolean) ?? [];
+  return roles.length > 0 ? roles : [displayText(sessionStore.me?.role, 'user')];
+});
+const accountPermissionText = computed(() =>
+  (sessionStore.me?.permissions?.length ?? 0) > 0
+    ? `${sessionStore.me?.permissions?.length ?? 0} 項權限`
+    : '尚未分配權限',
+);
 
 interface BindOption {
   label: string;
@@ -198,7 +243,37 @@ const normalizeBindList = (values: string[] | undefined): string[] => {
   return result;
 };
 
-// 6.4 判斷 POS 單位是否可選
+// 6.4 建立大廈 ID 與名稱索引
+const bindBuildingNameMap = computed<Record<string, string>>(() =>
+  bindBuildings.value.reduce<Record<string, string>>((result, item) => {
+    const buildingID = getBindBuildingID(item);
+    if (buildingID) {
+      result[buildingID] = getBindBuildingName(item);
+    }
+    return result;
+  }, {}),
+);
+
+const managedBuildingIDs = computed(() => {
+  const message = sessionStore.me?.ismart_msg;
+  if (message?.staff_building_permissions?.length) {
+    return normalizeBindList(message.staff_building_permissions);
+  }
+  if (message?.building?.length) {
+    return normalizeBindList(message.building);
+  }
+  return normalizeBindList(sessionStore.me?.bound_building_ids);
+});
+
+const managedBuildingNameText = computed(() =>
+  displayText(
+    managedBuildingIDs.value
+      .map((buildingID) => bindBuildingNameMap.value[buildingID] || buildingID)
+      .join(', '),
+  ),
+);
+
+// 6.5 判斷 POS 單位是否可選
 const isSelectableBindUnit = (buildingID: string, item: PosBuildingUnit): boolean => {
   const normalizedBuildingID = getBindDigitsOnly(buildingID).slice(0, 7);
   const normalizedUnitID = getBindDigitsOnly(getBindUnitID(item));
@@ -207,7 +282,7 @@ const isSelectableBindUnit = (buildingID: string, item: PosBuildingUnit): boolea
   return !(normalizedBuildingID && normalizedUnitID === normalizedBuildingID && !hasFloor && !hasUnit);
 };
 
-// 6.5 由 POS 權限 ID 建立可選單位
+// 6.6 由 POS 權限 ID 建立可選單位
 const buildBindUnitsFromFlatUnitPermissions = (
   buildingID: string,
   flatUnitPermissions: string[],
@@ -249,13 +324,13 @@ const buildBindUnitsFromFlatUnitPermissions = (
   return units.sort((left, right) => getBindUnitID(left).localeCompare(getBindUnitID(right), 'en', { numeric: true }));
 };
 
-// 6.6 轉換 POS 權限碼
+// 6.7 轉換 POS 權限碼
 const toBindTwoDigitCode = (value: unknown): string => {
   const digits = getBindDigitsOnly(value);
   return digits ? digits.slice(-2).padStart(2, '0') : '';
 };
 
-// 6.7 取得單位權限碼
+// 6.8 取得單位權限碼
 const getBindUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): string => {
   const normalizedBuildingID = getBindDigitsOnly(buildingID).slice(0, 7);
   const unitID = getBindDigitsOnly(getBindUnitID(item));
@@ -268,7 +343,7 @@ const getBindUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): s
   return normalizedBuildingID && floorCode && unitCode ? `${normalizedBuildingID}${floorCode}${unitCode}` : '';
 };
 
-// 6.8 判斷單位是否符合 POS 權限
+// 6.9 判斷單位是否符合 POS 權限
 const matchesBindUnitPermission = (
   buildingID: string,
   item: PosBuildingUnit,
@@ -301,7 +376,7 @@ const matchesBindUnitPermission = (
   });
 };
 
-// 6.9 按權限過濾 POS 單位
+// 6.10 按權限過濾 POS 單位
 const filterBindUnitsByPermission = (
   buildingID: string,
   units: PosBuildingUnit[],
@@ -311,7 +386,7 @@ const filterBindUnitsByPermission = (
     .filter((item) => isSelectableBindUnit(buildingID, item))
     .filter((item) => matchesBindUnitPermission(buildingID, item, flatUnitPermissions));
 
-// 6.10 POS 顯示排序
+// 6.11 POS 顯示排序
 const compareBindCodes = (left: string, right: string): number =>
   left.localeCompare(right, 'en', {
     numeric: true,
@@ -515,32 +590,24 @@ const handleSaveBindUnit = async (): Promise<void> => {
   }
 };
 
-const ismartAccountData = [
-  { label: '帳戶編號', value: 'SAWYER' },
-  { label: '帳戶電話', value: '90771352' },
-  { label: '帳戶電郵', value: 'sawyer@seventy2.hk' },
-  { label: '業戶名稱(英)', value: 'CHEUNG CHUN HO' },
-  { label: '業戶名稱(中)', value: '未設定' },
-  { label: '證件編號', value: '********' },
-];
+const ismartAccountData = computed<AccountDisplayField[]>(() => [
+  { label: '帳戶編號', value: displayText(ismartProfile.value?.account_code) },
+  { label: '帳戶電話', value: displayText(ismartProfile.value?.account_phone) },
+  { label: '帳戶電郵', value: displayText(ismartProfile.value?.account_email) },
+  { label: '業戶名稱(英)', value: displayText(ismartProfile.value?.owner_name_en) },
+  { label: '業戶名稱(中)', value: displayText(ismartProfile.value?.owner_name_zh) },
+  { label: '證件編號', value: maskIdentityNumber(ismartProfile.value?.identity_number) },
+]);
 
-const ismartHouseholdData = [
-  { label: '法體類型', value: '自然人' },
-  { label: '性別', value: 'M' },
-  { label: '出生日期', value: '未設定' },
-  { label: '聯絡人名稱', value: 'S' },
-  { label: '聯絡人電話', value: '90771352' },
-  { label: '帳單電郵', value: 'sawyer@seventy2.hk' },
-  { label: '帳單地址', value: 'test@123' },
-];
-
-const relatedProperties = [
-  { name: '界限大廈', status: '登記業主' },
-  { name: '協和大廈', status: '法團' },
-  { name: '華興大廈(271號)', status: '登記業主' },
-  { name: '華興大廈(269號)', status: '登記業主' },
-  { name: '仁英大廈 G 02', status: '登記業主' },
-];
+const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
+  { label: '法體類型', value: displayText(ismartProfile.value?.legal_entity) },
+  { label: '性別', value: displayText(ismartProfile.value?.gender) },
+  { label: '出生日期', value: displayText(ismartProfile.value?.birth_date) },
+  { label: '聯絡人名稱', value: displayText(ismartProfile.value?.contact_name) },
+  { label: '聯絡人電話', value: displayText(ismartProfile.value?.contact_phone) },
+  { label: '帳單電郵', value: displayText(ismartProfile.value?.billing_email) },
+  { label: '帳單地址', value: displayText(ismartProfile.value?.billing_address) },
+]);
 
 // 7. 授權副戶 mock 資料
 const subaccountGroups = [
@@ -694,9 +761,9 @@ watch(
             <div class="work-account-topbar">
               <div class="work-account-head">
                 <div class="work-account-user">
-                  <div class="work-account-avatar">P</div>
+                  <div class="work-account-avatar">{{ accountAvatarText }}</div>
                   <div>
-                    <div class="work-account-name">patrick</div>
+                    <div class="work-account-name">{{ accountDisplayName }}</div>
                     <div class="work-account-sub">個人資料</div>
                   </div>
                 </div>
@@ -737,8 +804,14 @@ watch(
               <div class="work-account-field"><span>資料完整度</span><strong>{{ identityStatus.profileCompleteness }}</strong></div>
               <div class="work-account-field"><span>員工權限</span><strong>{{ identityStatus.staffPermission }}</strong></div>
               <div class="work-role-strip">
-                <span class="work-role-badge">staff</span>
-                <span class="work-role-tag">尚未分配權限</span>
+                <span
+                  v-for="role in accountRoles"
+                  :key="role"
+                  class="work-role-badge"
+                >
+                  {{ role }}
+                </span>
+                <span class="work-role-tag">{{ accountPermissionText }}</span>
               </div>
             </div>
           </section>
@@ -834,21 +907,6 @@ watch(
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
-
-          <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">相關物業</div>
-            <div class="work-table-wrap">
-              <table class="work-table">
-                <thead><tr><th>物業</th><th>狀態</th></tr></thead>
-                <tbody>
-                  <tr v-for="item in relatedProperties" :key="item.name">
-                    <td>{{ item.name }}</td>
-                    <td>{{ item.status }}</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </section>
 

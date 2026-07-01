@@ -162,7 +162,22 @@ else
 fi
 chmod 600 "$APP_DIR/.env"
 
-# 5. Set required production runtime values without breaking other existing secrets.
+# 5. Fill missing environment keys without overwriting production secrets.
+if [ "$SYNC_ENV" != "1" ] && [ -f "$REMOTE_TMP/ajoliving.env" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue ;;
+      *=*)
+        key="${line%%=*}"
+        if [ -n "$key" ] && ! grep -q "^$key=" "$APP_DIR/.env"; then
+          printf '%s\n' "$line" >> "$APP_DIR/.env"
+        fi
+        ;;
+    esac
+  done < "$REMOTE_TMP/ajoliving.env"
+fi
+
+# 6. Set required production runtime values without breaking other existing secrets.
 set_env() {
   local key="$1"
   local value="$2"
@@ -191,7 +206,7 @@ set_env "OSS_CALLBACK_ENABLED" "$OSS_CALLBACK_ENABLED"
 set_env "OSS_CALLBACK_URL" "$OSS_CALLBACK_URL"
 set_env "OSS_ALLOWED_ORIGINS" "$OSS_ALLOWED_ORIGINS"
 
-# 6. Keep the existing PostgreSQL volume intact.
+# 7. Keep the existing PostgreSQL volume intact.
 cat > "$DB_DIR/docker-compose.yml" <<YAML
 services:
   postgres:
@@ -227,7 +242,7 @@ if [ "$db_ready" != "1" ]; then
   echo "PostgreSQL is not ready"; exit 1
 fi
 
-# 7. Take a server-side production backup before backend startup runs migrations.
+# 8. Take a server-side production backup before backend startup runs migrations.
 if [ "$BACKUP_DB" = "1" ]; then
   DB_BACKUP_DIR="$DB_DIR/backups"
   mkdir -p "$DB_BACKUP_DIR"
@@ -248,7 +263,7 @@ if [ "$RESTORE_DB" = "1" ] && [ "${DUMP_READY:-0}" = "1" ] && [ -f "$REMOTE_TMP/
   sudo docker exec -i ajoliving_postgres psql -v ON_ERROR_STOP=1 -U postgres -d ajoliving < "$REMOTE_TMP/ajoliving_backup.sql"
 fi
 
-# 8. Write a stable supervisor runner that follows the current release symlink.
+# 9. Write a stable supervisor runner that follows the current release symlink.
 cat > "$APP_DIR/run.sh" <<SH
 #!/bin/bash
 set -e
@@ -279,11 +294,11 @@ SUP
 sudo supervisorctl reread
 sudo supervisorctl update
 
-# 9. Switch public assets before backend boot so startup seed logic can read them.
+# 10. Switch public assets before backend boot so startup seed logic can read them.
 previous_public_target="$(readlink -f "$WEB_DIR/current_public" 2>/dev/null || true)"
 ln -sfn "$WEB_RELEASE_DIR/public" "$WEB_DIR/current_public"
 
-# 10. Switch backend release and rollback automatically if health check fails.
+# 11. Switch backend release and rollback automatically if health check fails.
 previous_app_target="$(readlink -f "$APP_DIR/current" 2>/dev/null || true)"
 rollback_backend() {
   if [ -n "$previous_app_target" ] && [ -d "$previous_app_target" ]; then
@@ -323,7 +338,7 @@ if [ "$backend_ready" != "1" ]; then
   exit 1
 fi
 
-# 11. Switch frontend release and reload nginx.
+# 12. Switch frontend release and reload nginx.
 previous_dist_target="$(readlink -f "$WEB_DIR/current_dist" 2>/dev/null || true)"
 rollback_frontend() {
   if [ -n "$previous_dist_target" ] && [ -d "$previous_dist_target" ]; then
@@ -367,7 +382,7 @@ if ! sudo nginx -t; then
 fi
 sudo systemctl reload nginx
 
-# 12. Keep only the latest release directories after a successful switch.
+# 13. Keep only the latest release directories after a successful switch.
 if [ "$KEEP_RELEASES" -gt 0 ] 2>/dev/null; then
   ls -1dt "$APP_RELEASES_DIR"/* 2>/dev/null | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf
   ls -1dt "$WEB_RELEASES_DIR"/* 2>/dev/null | tail -n +"$((KEEP_RELEASES + 1))" | xargs -r rm -rf
