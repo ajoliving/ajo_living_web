@@ -41,6 +41,11 @@ type Config struct {
 	IsmartExternalAppBaseURL    string
 	IsmartExternalAppAPIBaseURL string
 	IsmartExternalAppTimeout    time.Duration
+	ICCTVAPIBaseURL             string
+	ICCTVAdminUsername          string
+	ICCTVAdminPassword          string
+	ICCTVRequestTimeout         time.Duration
+	ICCTVStreamProxyBaseURL     string
 	POSTerminalProxyEnabled     bool
 	POSTerminalType             string
 	POSTerminalURL              string
@@ -131,6 +136,11 @@ func Load() *Config {
 		IsmartExternalAppBaseURL:    getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()),
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
 		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
+		ICCTVAPIBaseURL:             getEnv("ICCTV_API_BASE_URL", defaultICCTVAPIBaseURL()),
+		ICCTVAdminUsername:          strings.TrimSpace(getEnv("ICCTV_ADMIN_USERNAME", "")),
+		ICCTVAdminPassword:          os.Getenv("ICCTV_ADMIN_PASSWORD"),
+		ICCTVRequestTimeout:         getDurationEnv("ICCTV_REQUEST_TIMEOUT", 10*time.Second),
+		ICCTVStreamProxyBaseURL:     strings.TrimRight(strings.TrimSpace(getEnv("ICCTV_STREAM_PROXY_BASE_URL", "")), "/"),
 		POSTerminalProxyEnabled:     getBoolEnv("POS_TERMINAL_PROXY_ENABLED", false),
 		GoodPriceAPIBaseURL:         getEnv("GOOD_PRICE_API_BASE_URL", "https://good.price.skylinedances.com/api"),
 		GoodPriceRequestTimeout:     getDurationEnv("GOOD_PRICE_REQUEST_TIMEOUT", 10*time.Second),
@@ -490,4 +500,9 @@ func defaultIsmartExternalAppBaseURL() string {
 // 26. defaultIsmartExternalAppAPIBaseURL returns the deployed iSmart external app API base URL.
 func defaultIsmartExternalAppAPIBaseURL() string {
 	return strings.TrimRight(getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()), "/") + "/api/v1/external"
+}
+
+// 27. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.
+func defaultICCTVAPIBaseURL() string {
+	return "https://icctv.skylinedances.com/api"
 }

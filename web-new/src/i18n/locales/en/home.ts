@@ -98,7 +98,7 @@ export default {
       },
       furniture: {
         title: 'Furniture',
-        description: 'A focused view for home furniture, office furniture, and home decor listings.',
+        description: 'A focused view for furniture, home appliances, electronics, and baby goods listings.',
       },
       supermarketOffers: {
         title: 'Supermarket Offers',

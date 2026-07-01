@@ -701,7 +701,7 @@ func (s *SecondhandService) validateUpsertParams(params UpsertSecondhandParams) 
 		return errcode.New(errcode.CodeValidationError, "invalid visibility scope")
 	}
 
-	if !isAllowedSecondhandValue(params.ConditionLevel, []string{"brand_new", "used_excellent", "used_good", "used_fair"}) {
+	if !isAllowedSecondhandValue(params.ConditionLevel, []string{"used_excellent", "used_good", "used_fair"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid condition level")
 	}
 

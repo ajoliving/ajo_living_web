@@ -98,7 +98,7 @@ export default {
       },
       furniture: {
         title: '家具',
-        description: '集中展示家居傢俬、辦公室傢俬與家居裝飾帖子。',
+        description: '集中展示家居傢俱、家庭電器、電子產品與 BB 用品帖子。',
       },
       supermarketOffers: {
         title: '超市優惠',

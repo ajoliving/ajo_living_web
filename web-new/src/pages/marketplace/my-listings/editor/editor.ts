@@ -17,17 +17,18 @@ import {
 } from '@/httpapis/secondhand-listings';
 import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import {
+  buildMarketplaceRegionFilterOptions,
   getMarketplaceCategoryLabel,
   getMarketplaceConditionLabel,
   getMarketplaceDistrictLabel,
   getMarketplaceOptionLabel,
   marketplaceCategories,
   marketplaceConditions,
-  marketplaceDistricts,
   marketplacePriceModes,
+  normalizeMarketplaceRegionCode,
   type MarketplaceCategoryCode,
   type MarketplaceConditionCode,
-  type MarketplaceDistrictCode,
+  type MarketplaceRegionCode,
   type MarketplacePriceMode,
 } from '@/constants/marketplace';
 import type {
@@ -99,7 +100,7 @@ export interface ListingEditorFormState {
   price: number;
   isDonation: boolean;
   condition: MarketplaceConditionCode;
-  districtCode: MarketplaceDistrictCode;
+  districtCode: MarketplaceRegionCode;
   visibility: ListingEditorVisibility;
   summary: string;
   description: string;
@@ -129,7 +130,7 @@ const createInitialFormState = (): ListingEditorFormState => ({
   price: 0,
   isDonation: false,
   condition: 'used_good',
-  districtCode: 'eastern',
+  districtCode: 'hong_kong_island',
   visibility: 'public',
   summary: '',
   description: '',
@@ -255,7 +256,7 @@ const syncDetailToForm = (
     detail.price_mode === 'free'
   );
   formState.condition = detail.condition_level as MarketplaceConditionCode;
-  formState.districtCode = detail.district_code as MarketplaceDistrictCode;
+  formState.districtCode = normalizeMarketplaceRegionCode(detail.district_code) || 'hong_kong_island';
   formState.visibility = detail.visibility_scope;
   formState.dimensionLength = dimensionFields.dimensionLength;
   formState.dimensionWidth = dimensionFields.dimensionWidth;
@@ -367,11 +368,13 @@ export const useMarketplaceListingEditorPage = () => {
       })),
   );
 
-  const areaOptions = computed<EditorOption<MarketplaceDistrictCode>[]>(() =>
-    marketplaceDistricts.map((district) => ({
-      label: getMarketplaceOptionLabel(district, preferenceStore.locale),
-      value: district.value,
-    })),
+  const areaOptions = computed<EditorOption<MarketplaceRegionCode>[]>(() =>
+    buildMarketplaceRegionFilterOptions(preferenceStore.locale, t('marketplace.filter.areaAll'))
+      .filter((option) => option.value !== 'all')
+      .map((option) => ({
+        label: option.label_zh_hk,
+        value: option.value as MarketplaceRegionCode,
+      })),
   );
 
   const visibilityOptions = computed<EditorOption<ListingEditorVisibility>[]>(() => [

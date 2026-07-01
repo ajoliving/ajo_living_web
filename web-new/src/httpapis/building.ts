@@ -4,6 +4,7 @@
  * 2. 依大廈讀取可選單位清單。
  * 3. 讀取目前會員已綁定的 iSmart 大廈資料。
  * 4. 讀取目前會員已綁定大廈的 iSmart 智能門禁資料。
+ * 5. 讀取目前會員已綁定大廈的 iCCTV 視像監控資料。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
@@ -162,6 +163,29 @@ export interface GenerateIsmartQRCodePayload {
   term?: string;
 }
 
+export interface ICCTVOrangePiSummary {
+  orangepi_id: number;
+  orangepi_name: string;
+  is_active: boolean;
+  camera_count: number;
+}
+
+export interface ICCTVCameraSummary {
+  id: string;
+  title: string;
+  channel: string;
+  url: string;
+  orangepi_id: number;
+  orangepi_name: string;
+  is_active: boolean;
+}
+
+export interface ICCTVPublicCameraResponse extends IsmartBuildingOptionResponse {
+  selected_building_id: string;
+  orangepis: ICCTVOrangePiSummary[];
+  cameras: ICCTVCameraSummary[];
+}
+
 // 1. 取得 POS 樓宇清單
 export const fetchPosBuildings = async (): Promise<PosBuilding[]> => {
   const { data } = await httpClient.get<ApiResponse<ApiListData<PosBuilding>>>('/pos/buildings');
@@ -215,5 +239,12 @@ export const openMemberIsmartDoor = async (payload: OpenIsmartDoorPayload): Prom
 // 9. 生成目前會員 iSmart 門禁二維碼
 export const generateMemberIsmartDoorQRCode = async (payload: GenerateIsmartQRCodePayload): Promise<IsmartQRCodeResponse> => {
   const { data } = await httpClient.post<ApiResponse<IsmartQRCodeResponse>>('/me/ismart/building-access/qrcode', payload);
+  return data.data;
+};
+
+// 10. 取得目前會員 iCCTV 視像監控鏡頭
+export const fetchMemberICCTVPublicCameras = async (buildingID?: string): Promise<ICCTVPublicCameraResponse> => {
+  const params = buildingID ? { building_id: buildingID } : undefined;
+  const { data } = await httpClient.get<ApiResponse<ICCTVPublicCameraResponse>>('/me/security/icctv/public-cameras', { params });
   return data.data;
 };

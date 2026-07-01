@@ -56,11 +56,10 @@ const {
 // 2. 價格快捷選項
 const selectedPriceRange = ref('');
 const furniturePriceRangeOptions = [
-  { value: 'under_1000', label: '$1,000以下', min: 0, max: 1000 },
-  { value: '1000_3000', label: '$1,000-$3,000', min: 1000, max: 3000 },
-  { value: '3000_5000', label: '$3,000-$5,000', min: 3000, max: 5000 },
-  { value: '5000_10000', label: '$5,000-$10,000', min: 5000, max: 10000 },
-  { value: 'over_10000', label: '$10,000以上', min: 10000, max: maxPriceLimit },
+  { value: 'under_1000', label: '$1k以下', min: 0, max: 1000 },
+  { value: '1000_3000', label: '$1k-3k', min: 1000, max: 3000 },
+  { value: '3000_5000', label: '$3k-5k', min: 3000, max: 5000 },
+  { value: 'over_10000', label: '$10k+', min: 10000, max: maxPriceLimit },
 ];
 
 const selectedPriceRangeFromValues = computed(() => {
@@ -360,10 +359,6 @@ watch(
             class="mc"
             @click="handleCardClick(listing.id)"
           >
-            <span
-              v-if="listing.conditionLevel === 'brand_new'"
-              class="mnew"
-            >{{ t('marketplace.filter.newBadge') }}</span>
             <div
               class="mimg"
               :class="listing.imageUrl ? '' : 'pat'"

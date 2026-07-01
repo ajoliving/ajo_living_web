@@ -849,6 +849,7 @@ onMounted(() => {
 .gp-fpill,
 .gp-spill {
   border: 1px solid var(--bdr);
+  border-radius: 999px;
   background: #fff;
   color: var(--ink-3);
   cursor: pointer;
@@ -857,25 +858,12 @@ onMounted(() => {
   padding: 7px 15px;
 }
 
-.gp-fpill {
-  border-radius: 999px;
-}
-
-.gp-spill {
-  border-radius: 3px;
-}
-
-.gp-fpill.on {
+.gp-fpill.on,
+.gp-spill.on {
   background: var(--accent);
   color: var(--white);
   border-color: var(--accent);
-}
-
-.gp-spill.on {
-  background: var(--accent-light);
-  color: var(--accent-dark);
-  border-color: var(--accent);
-  font-weight: 500;
+  font-weight: 700;
 }
 
 /* 4. 內容區 */

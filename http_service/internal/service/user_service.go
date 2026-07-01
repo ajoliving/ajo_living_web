@@ -609,11 +609,8 @@ func profilePhoneUpdate(user model.User, params UpdateProfileParams) (string, st
 	return countryCode, phoneNumber, true, nil
 }
 
-// 23. profileBoundBuildings returns POS-derived building permissions or profile fallback.
+// 23. profileBoundBuildings returns member center building bindings or POS fallback.
 func (s *UserService) profileBoundBuildings(profile *model.UserProfile, ismartMsg *IsmartMessage) []string {
-	if values := resolveIsmartBoundBuildings(ismartMsg); len(values) > 0 {
-		return values
-	}
 	if profile != nil {
 		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)); len(values) > 0 {
 			return values
@@ -621,23 +618,26 @@ func (s *UserService) profileBoundBuildings(profile *model.UserProfile, ismartMs
 		if profile.PrimaryCommunity != nil && strings.TrimSpace(profile.PrimaryCommunity.PublicID) != "" {
 			return []string{strings.TrimSpace(profile.PrimaryCommunity.PublicID)}
 		}
+		if hasLocalProfileBinding(profile) {
+			return []string{}
+		}
 	}
 
 	return resolveIsmartBoundBuildings(ismartMsg)
 }
 
-// 24. profileBoundFlatUnits returns POS-derived unit permissions or profile fallback.
+// 24. profileBoundFlatUnits returns member center unit bindings or POS fallback.
 func (s *UserService) profileBoundFlatUnits(profile *model.UserProfile, ismartMsg *IsmartMessage) []string {
-	if values := resolveIsmartBoundUnits(ismartMsg); len(values) > 0 {
-		return values
-	}
 	if profile != nil {
 		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs)); len(values) > 0 {
 			return values
 		}
+		if hasLocalProfileBinding(profile) {
+			return []string{}
+		}
 	}
 
-	return []string{}
+	return resolveIsmartBoundUnits(ismartMsg)
 }
 
 // 25. shouldChargeAvatarUpdate returns whether the avatar update needs a point charge.

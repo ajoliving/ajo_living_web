@@ -60,7 +60,14 @@ const defaultPageSize = 12;
 const readQueryString = (value: unknown): string =>
   typeof value === 'string' ? value : Array.isArray(value) && typeof value[0] === 'string' ? value[0] : '';
 
-// 2. 建立帖子卡片資料
+// 2. 檢查 query enum 是否仍然可用
+const isMarketplaceCategoryCode = (value: string): value is MarketplaceCategoryCode =>
+  marketplaceCategories.some((category) => category.value === value);
+
+const isMarketplaceConditionCode = (value: string): value is MarketplaceConditionCode =>
+  marketplaceConditions.some((condition) => condition.value === value);
+
+// 3. 建立帖子卡片資料
 const buildListingCard = (
   listing: SecondhandListingSummaryResponse,
   locale: AppLocale,
@@ -85,7 +92,7 @@ const buildListingCard = (
   };
 };
 
-// 3. 管理篩選頁資料與動作
+// 4. 管理篩選頁資料與動作
 export const useMarketplaceFilterPage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -145,19 +152,18 @@ export const useMarketplaceFilterPage = () => {
     })),
   );
 
-  // 3.1 從 URL query 同步本地條件
+  // 4.1 從 URL query 同步本地條件
   const syncStateFromQuery = (): void => {
+    const categoryCode = readQueryString(route.query.category_code);
+    const conditionLevel = readQueryString(route.query.condition_level);
+
     keyword.value = readQueryString(route.query.keyword);
     minPrice.value = readQueryString(route.query.min_price_hkd);
     maxPrice.value = readQueryString(route.query.max_price_hkd);
     sortBy.value = (readQueryString(route.query.sort_by) || 'latest') as FilterSortValue;
     page.value = Number(readQueryString(route.query.page) || 1);
-    selectedCategoryKeys.value = readQueryString(route.query.category_code)
-      ? [readQueryString(route.query.category_code) as MarketplaceCategoryCode]
-      : [];
-    selectedConditions.value = readQueryString(route.query.condition_level)
-      ? [readQueryString(route.query.condition_level) as MarketplaceConditionCode]
-      : [];
+    selectedCategoryKeys.value = isMarketplaceCategoryCode(categoryCode) ? [categoryCode] : [];
+    selectedConditions.value = isMarketplaceConditionCode(conditionLevel) ? [conditionLevel] : [];
 
     const regionCode = readQueryString(route.query.region_code);
     const districtCode = readQueryString(route.query.district_code);
@@ -165,7 +171,7 @@ export const useMarketplaceFilterPage = () => {
     withPhotos.value = readQueryString(route.query.has_media) === 'true';
   };
 
-  // 3.2 建立 API 查詢參數
+  // 4.2 建立 API 查詢參數
   const buildListParams = (): ListingListParams => {
     const selectedArea = areaOptions.value.find((option) => option.value === area.value);
     const minPriceNumber = Number(minPrice.value);
@@ -186,7 +192,7 @@ export const useMarketplaceFilterPage = () => {
     };
   };
 
-  // 3.3 讀取公開帖子
+  // 4.3 讀取公開帖子
   const loadListings = async (): Promise<void> => {
     loading.value = true;
 
@@ -208,7 +214,7 @@ export const useMarketplaceFilterPage = () => {
     }
   };
 
-  // 3.4 切換帖子收藏狀態
+  // 4.4 切換帖子收藏狀態
   const toggleFavorite = async (listingID: string): Promise<void> => {
     const target = sourceListings.value.find((listing) => listing.listing_id === listingID);
     if (!target || isFavoriteUpdating(listingID)) {
@@ -251,7 +257,7 @@ export const useMarketplaceFilterPage = () => {
     }
   };
 
-  // 3.5 將目前條件同步到 URL
+  // 4.5 將目前條件同步到 URL
   const syncFiltersToQuery = async (nextPage = 1): Promise<void> => {
     const selectedArea = areaOptions.value.find((option) => option.value === area.value);
 
@@ -272,19 +278,19 @@ export const useMarketplaceFilterPage = () => {
     });
   };
 
-  // 3.6 切換主分類勾選
+  // 4.6 切換主分類勾選
   const toggleCategory = async (key: MarketplaceCategoryCode): Promise<void> => {
     selectedCategoryKeys.value = selectedCategoryKeys.value.includes(key) ? [] : [key];
     await syncFiltersToQuery();
   };
 
-  // 3.7 切換成色條件
+  // 4.7 切換成色條件
   const toggleCondition = async (value: MarketplaceConditionCode): Promise<void> => {
     selectedConditions.value = selectedConditions.value.includes(value) ? [] : [value];
     await syncFiltersToQuery();
   };
 
-  // 3.8 清除目前篩選條件
+  // 4.8 清除目前篩選條件
   const clearFilters = async (): Promise<void> => {
     keyword.value = '';
     minPrice.value = '';
@@ -297,7 +303,7 @@ export const useMarketplaceFilterPage = () => {
     await syncFiltersToQuery();
   };
 
-  // 3.9 切換分頁
+  // 4.9 切換分頁
   const setPage = async (value: number): Promise<void> => {
     page.value = Math.min(Math.max(value, 1), totalPages.value);
     await syncFiltersToQuery(page.value);

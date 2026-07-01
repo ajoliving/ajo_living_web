@@ -300,12 +300,6 @@ const viewMode = ref<ResultViewMode>('grid');
                 :size="48"
               />
             </div>
-            <span
-              v-if="index === 0 || selectedConditions.includes('brand_new')"
-              class="absolute right-3 top-3 rounded bg-white/90 px-2 py-1 text-xs font-semibold text-primary"
-            >
-              {{ t('marketplace.filter.newBadge') }}
-            </span>
             <button
               type="button"
               class="favorite-card-button"

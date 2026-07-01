@@ -82,6 +82,10 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := migrateSecondhandOptionCodes(db); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -173,6 +177,39 @@ func migrateDistrictCodes(db *gorm.DB) error {
 		}
 		if err := db.Model(&model.SecondhandListing{}).Where("pickup_region_code IN ?", legacyCodes).Update("pickup_region_code", currentCode).Error; err != nil {
 			return fmt.Errorf("migrate secondhand pickup region codes: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// 5. migrateSecondhandOptionCodes folds legacy furniture option codes into current enums.
+func migrateSecondhandOptionCodes(db *gorm.DB) error {
+	categoryGroups := map[string][]string{
+		"home_furniture": {
+			"office_furniture",
+			"home_decor",
+		},
+		"other": {
+			"music",
+		},
+	}
+
+	for currentCode, legacyCodes := range categoryGroups {
+		if err := db.Model(&model.SecondhandListing{}).Where("category_code IN ?", legacyCodes).Update("category_code", currentCode).Error; err != nil {
+			return fmt.Errorf("migrate secondhand category codes: %w", err)
+		}
+	}
+
+	conditionGroups := map[string][]string{
+		"used_excellent": {
+			"brand_new",
+		},
+	}
+
+	for currentCode, legacyCodes := range conditionGroups {
+		if err := db.Model(&model.SecondhandListing{}).Where("condition_level IN ?", legacyCodes).Update("condition_level", currentCode).Error; err != nil {
+			return fmt.Errorf("migrate secondhand condition codes: %w", err)
 		}
 	}
 

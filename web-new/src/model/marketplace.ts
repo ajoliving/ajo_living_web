@@ -4,6 +4,11 @@
  * 2. 為列表、詳情、我的發布與發布頁提供穩定型別。
  */
 import type { Listing } from '@/model/listing';
+import type {
+  MarketplaceCategoryCode,
+  MarketplaceConditionCode,
+  MarketplaceRegionCode,
+} from '@/constants/marketplace';
 
 // 1. 定義帖子圖片回應
 export interface ListingImageResponse {
@@ -46,10 +51,10 @@ export interface SecondhandListingSummaryResponse {
   title: string;
   summary: string;
   district_code: string;
-  category_code: string;
+  category_code: MarketplaceCategoryCode;
   price_mode: string;
   price_hkd?: number | null;
-  condition_level: string;
+  condition_level: MarketplaceConditionCode;
   visibility_scope: 'public' | 'building_only';
   contact_method: string;
   is_free_giveaway: boolean;
@@ -97,10 +102,10 @@ export interface ListingListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
-  category_code?: string;
-  region_code?: string;
+  category_code?: MarketplaceCategoryCode;
+  region_code?: MarketplaceRegionCode;
   district_code?: string;
-  condition_level?: string;
+  condition_level?: MarketplaceConditionCode;
   visibility_scope?: 'public' | 'building_only';
   price_mode?: string;
   min_price_hkd?: number;
@@ -138,10 +143,10 @@ export interface UpsertSecondhandListingPayload {
   district_code: string;
   community_id: string;
   publisher_identity_type: string;
-  category_code: string;
+  category_code: MarketplaceCategoryCode;
   price_mode: string;
   price_hkd?: number;
-  condition_level: string;
+  condition_level: MarketplaceConditionCode;
   dimension_text: string;
   pickup_region_code: string;
   pickup_location_text: string;

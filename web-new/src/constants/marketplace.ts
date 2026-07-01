@@ -9,10 +9,7 @@ export type MarketplaceCategoryCode =
   | 'home_furniture'
   | 'home_appliance'
   | 'electronics'
-  | 'music'
   | 'baby_goods'
-  | 'office_furniture'
-  | 'home_decor'
   | 'other';
 
 export type MarketplaceRegionCode =
@@ -42,7 +39,6 @@ export type MarketplaceDistrictCode =
   | 'islands';
 
 export type MarketplaceConditionCode =
-  | 'brand_new'
   | 'used_excellent'
   | 'used_good'
   | 'used_fair';
@@ -66,21 +62,18 @@ export interface MarketplaceAreaFilterOption extends MarketplaceLabelledOption {
 }
 
 export const marketplaceCategories: MarketplaceLabelledOption<MarketplaceCategoryCode>[] = [
-  { value: 'home_furniture', label_zh_hk: '家居傢俬', label_en: 'Home Furniture' },
+  { value: 'home_furniture', label_zh_hk: '家居傢俱', label_en: 'Home Furniture' },
   { value: 'home_appliance', label_zh_hk: '家庭電器', label_en: 'Home Appliances' },
   { value: 'electronics', label_zh_hk: '電子產品', label_en: 'Electronics' },
-  { value: 'music', label_zh_hk: '樂器', label_en: 'Musical Instruments' },
   { value: 'baby_goods', label_zh_hk: 'BB 用品', label_en: 'Baby Goods' },
-  { value: 'office_furniture', label_zh_hk: '辦公室傢俬', label_en: 'Office Furniture' },
-  { value: 'home_decor', label_zh_hk: '家居裝飾', label_en: 'Home Decor' },
   { value: 'other', label_zh_hk: '其他', label_en: 'Others' },
 ];
 
 export const marketplaceRegions: MarketplaceLabelledOption<MarketplaceRegionCode>[] = [
-  { value: 'hong_kong_island', label_zh_hk: '全香港島', label_en: 'All Hong Kong Island' },
-  { value: 'kowloon', label_zh_hk: '全九龍', label_en: 'All Kowloon' },
-  { value: 'new_territories', label_zh_hk: '全新界', label_en: 'All New Territories' },
-  { value: 'outlying_islands', label_zh_hk: '全離島區', label_en: 'All Outlying Islands' },
+  { value: 'hong_kong_island', label_zh_hk: '香港島', label_en: 'Hong Kong Island' },
+  { value: 'kowloon', label_zh_hk: '九龍', label_en: 'Kowloon' },
+  { value: 'new_territories', label_zh_hk: '新界', label_en: 'New Territories' },
+  { value: 'outlying_islands', label_zh_hk: '離島', label_en: 'Outlying Islands' },
 ];
 
 export const marketplaceDistricts: MarketplaceDistrictOption[] = [
@@ -105,10 +98,9 @@ export const marketplaceDistricts: MarketplaceDistrictOption[] = [
 ];
 
 export const marketplaceConditions: MarketplaceLabelledOption<MarketplaceConditionCode>[] = [
-  { value: 'brand_new', label_zh_hk: '全新', label_en: 'Brand new' },
   { value: 'used_excellent', label_zh_hk: '近乎全新', label_en: 'Excellent' },
   { value: 'used_good', label_zh_hk: '良好', label_en: 'Good' },
-  { value: 'used_fair', label_zh_hk: '可用', label_en: 'Fair' },
+  { value: 'used_fair', label_zh_hk: '尚可', label_en: 'Fair' },
 ];
 
 export const marketplacePriceModes: MarketplaceLabelledOption<MarketplacePriceMode>[] = [
@@ -135,7 +127,9 @@ export const getMarketplaceDistrictLabel = (
   value: string,
   locale: AppLocale,
 ) => {
-  const option = marketplaceDistricts.find((item) => item.value === value);
+  const option =
+    marketplaceRegions.find((item) => item.value === value) ??
+    marketplaceDistricts.find((item) => item.value === value);
 
   return option ? getMarketplaceOptionLabel(option, locale) : value;
 };
@@ -147,6 +141,15 @@ export const getMarketplaceConditionLabel = (
   const option = marketplaceConditions.find((item) => item.value === value);
 
   return option ? getMarketplaceOptionLabel(option, locale) : value;
+};
+
+export const normalizeMarketplaceRegionCode = (value: string): MarketplaceRegionCode | '' => {
+  const region = marketplaceRegions.find((item) => item.value === value);
+  if (region) {
+    return region.value;
+  }
+
+  return marketplaceDistricts.find((item) => item.value === value)?.region ?? '';
 };
 
 export const buildMarketplaceAreaFilterOptions = (
@@ -168,6 +171,26 @@ export const buildMarketplaceAreaFilterOptions = (
     ...district,
     filterType: 'district' as const,
     districtCode: district.value,
+  })),
+].map((option) => ({
+  ...option,
+  label_zh_hk: locale === 'zh-HK' ? option.label_zh_hk : option.label_en,
+}));
+
+export const buildMarketplaceRegionFilterOptions = (
+  locale: AppLocale,
+  allLabel: string,
+): MarketplaceAreaFilterOption[] => [
+  {
+    value: 'all',
+    label_zh_hk: allLabel,
+    label_en: allLabel,
+    filterType: 'all' as const,
+  },
+  ...marketplaceRegions.map((region) => ({
+    ...region,
+    filterType: 'region' as const,
+    regionCode: region.value,
   })),
 ].map((option) => ({
   ...option,

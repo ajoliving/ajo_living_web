@@ -1405,6 +1405,37 @@ func (s *AuthService) ensureCredentialOwner(ctx context.Context, tx *gorm.DB, co
 
 // 43. syncProfileIsmartBindings stores POS building and unit bindings on the local profile.
 func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB, userID int64, ismartMsg *IsmartMessage) (*model.UserProfile, error) {
+	var profile model.UserProfile
+	profileErr := tx.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
+	if errors.Is(profileErr, gorm.ErrRecordNotFound) {
+		profile = model.UserProfile{
+			UserID:      userID,
+			DisplayName: strings.TrimSpace(ismartMsg.Username),
+		}
+		if err := tx.WithContext(ctx).Create(&profile).Error; err != nil {
+			return nil, err
+		}
+	} else if profileErr != nil {
+		return nil, profileErr
+	}
+
+	updates := map[string]any{}
+	if strings.TrimSpace(profile.DisplayName) == "" && strings.TrimSpace(ismartMsg.Username) != "" {
+		updates["display_name"] = strings.TrimSpace(ismartMsg.Username)
+	}
+	if hasLocalProfileBinding(&profile) {
+		if len(updates) > 0 {
+			if err := tx.WithContext(ctx).Model(&model.UserProfile{}).Where("user_id = ?", userID).Updates(updates).Error; err != nil {
+				return nil, err
+			}
+		}
+		if err := tx.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error; err != nil {
+			return nil, err
+		}
+
+		return &profile, nil
+	}
+
 	boundBuildingIDs := resolveIsmartBoundBuildings(ismartMsg)
 	boundFlatUnitIDs := resolveIsmartBoundUnits(ismartMsg)
 	buildingJSON, err := marshalJSON(boundBuildingIDs)
@@ -1416,10 +1447,8 @@ func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB
 		return nil, err
 	}
 
-	updates := map[string]any{
-		"bound_building_ids":  buildingJSON,
-		"bound_flat_unit_ids": unitJSON,
-	}
+	updates["bound_building_ids"] = buildingJSON
+	updates["bound_flat_unit_ids"] = unitJSON
 	if len(boundBuildingIDs) > 0 {
 		community, err := s.resolveRegistrationCommunity(ctx, tx, boundBuildingIDs[0], boundBuildingIDs[0])
 		if err != nil {
@@ -1434,22 +1463,6 @@ func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB
 		updates["residence_unit"] = unit
 	}
 
-	var profile model.UserProfile
-	profileErr := tx.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
-	if errors.Is(profileErr, gorm.ErrRecordNotFound) {
-		profile = model.UserProfile{
-			UserID:      userID,
-			DisplayName: strings.TrimSpace(ismartMsg.Username),
-		}
-		if err := tx.WithContext(ctx).Create(&profile).Error; err != nil {
-			return nil, err
-		}
-	} else if profileErr != nil {
-		return nil, profileErr
-	}
-	if strings.TrimSpace(profile.DisplayName) == "" && strings.TrimSpace(ismartMsg.Username) != "" {
-		updates["display_name"] = strings.TrimSpace(ismartMsg.Username)
-	}
 	if err := tx.WithContext(ctx).Model(&model.UserProfile{}).Where("user_id = ?", userID).Updates(updates).Error; err != nil {
 		return nil, err
 	}
@@ -1458,6 +1471,24 @@ func (s *AuthService) syncProfileIsmartBindings(ctx context.Context, tx *gorm.DB
 	}
 
 	return &profile, nil
+}
+
+// 43.1 hasLocalProfileBinding returns whether the member center already owns residence data.
+func hasLocalProfileBinding(profile *model.UserProfile) bool {
+	if profile == nil {
+		return false
+	}
+	if profile.PrimaryCommunityID != nil {
+		return true
+	}
+	if len(normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs))) > 0 {
+		return true
+	}
+	if len(normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs))) > 0 {
+		return true
+	}
+
+	return strings.TrimSpace(profile.ResidenceFloor) != "" || strings.TrimSpace(profile.ResidenceUnit) != ""
 }
 
 // 44. resolveIsmartBoundBuildings returns the building list allowed by POS.

@@ -113,9 +113,9 @@ const submitRenewal = async (): Promise<void> => {
 </script>
 
 <template>
-  <section class="management-list-page">
-    <header class="management-list-header">
-      <div>
+  <section class="management-list-page furniture-list-page">
+    <header class="management-list-header furniture-list-header">
+      <div class="furniture-list-title-block">
         <p class="management-list-kicker">
           Staff
         </p>
@@ -125,8 +125,8 @@ const submitRenewal = async (): Promise<void> => {
     </header>
 
     <article class="management-list-panel">
-      <div class="management-list-toolbar">
-        <label class="management-list-search">
+      <div class="management-list-toolbar furniture-list-toolbar">
+        <label class="management-list-search furniture-list-search">
           <AppIcon
             name="search"
             :size="16"
@@ -138,51 +138,59 @@ const submitRenewal = async (): Promise<void> => {
             @keyup.enter="search"
           />
         </label>
-        <select
-          v-model="categoryCode"
-          class="management-list-select"
-        >
-          <option value="">
-            {{ t('marketplace.list.categoryTitle') }}
-          </option>
-          <option
-            v-for="option in categoryOptions"
-            :key="option.value"
-            :value="option.value"
+        <div class="furniture-list-filter-actions">
+          <label class="furniture-list-filter-field">
+            <span>{{ t('marketplace.list.categoryTitle') }}</span>
+            <select
+              v-model="categoryCode"
+              class="management-list-select"
+            >
+              <option value="">
+                {{ t('marketplace.list.categoryTitle') }}
+              </option>
+              <option
+                v-for="option in categoryOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label class="furniture-list-filter-field">
+            <span>{{ t('common.label.status') }}</span>
+            <select
+              v-model="status"
+              class="management-list-select"
+            >
+              <option value="">
+                {{ t('marketplace.management.allStatuses') }}
+              </option>
+              <option value="draft">
+                {{ t('common.state.draft') }}
+              </option>
+              <option value="active">
+                {{ t('common.state.active') }}
+              </option>
+              <option value="hidden">
+                {{ t('common.state.hidden') }}
+              </option>
+              <option value="expired">
+                {{ t('common.state.expired') }}
+              </option>
+              <option value="sold">
+                {{ t('common.state.sold') }}
+              </option>
+            </select>
+          </label>
+          <button
+            type="button"
+            class="management-list-button furniture-list-search-button"
+            @click="search"
           >
-            {{ option.label }}
-          </option>
-        </select>
-        <select
-          v-model="status"
-          class="management-list-select"
-        >
-          <option value="">
-            {{ t('marketplace.management.allStatuses') }}
-          </option>
-          <option value="draft">
-            {{ t('common.state.draft') }}
-          </option>
-          <option value="active">
-            {{ t('common.state.active') }}
-          </option>
-          <option value="hidden">
-            {{ t('common.state.hidden') }}
-          </option>
-          <option value="expired">
-            {{ t('common.state.expired') }}
-          </option>
-          <option value="sold">
-            {{ t('common.state.sold') }}
-          </option>
-        </select>
-        <button
-          type="button"
-          class="management-list-button"
-          @click="search"
-        >
-          {{ t('marketplace.list.searchAction') }}
-        </button>
+            {{ t('marketplace.list.searchAction') }}
+          </button>
+        </div>
       </div>
 
       <div
@@ -371,3 +379,80 @@ const submitRenewal = async (): Promise<void> => {
     </Teleport>
   </section>
 </template>
+
+<style scoped lang="scss">
+.furniture-list-header {
+  align-items: stretch;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface-raised));
+  padding: 1rem;
+}
+
+.furniture-list-title-block {
+  min-width: 0;
+  max-width: 42rem;
+}
+
+.furniture-list-toolbar {
+  grid-template-columns: minmax(18rem, 1fr) auto;
+  align-items: end;
+  background: rgb(var(--color-surface));
+}
+
+.furniture-list-filter-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(9rem, 12rem)) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.furniture-list-filter-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.furniture-list-filter-field span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.furniture-list-filter-field .management-list-select {
+  width: 100%;
+}
+
+.furniture-list-search,
+.furniture-list-search-button {
+  align-self: end;
+}
+
+@media (max-width: 1023px) {
+  .furniture-list-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .furniture-list-filter-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .furniture-list-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .furniture-list-search-button {
+    width: 100%;
+  }
+
+  .furniture-list-filter-actions {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

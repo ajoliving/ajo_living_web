@@ -14,7 +14,7 @@ import {
 } from '@/constants/marketplace';
 
 export type PropertyDistrictCode = MarketplaceDistrictCode;
-export type PropertyTypeCode = 'private_flat' | 'estate' | 'house' | 'office' | 'shop' | 'car_park' | 'industrial';
+export type PropertyTypeCode = 'residential' | 'private_flat' | 'estate' | 'house' | 'office' | 'shop' | 'car_park' | 'industrial';
 export type PropertyContactMethod = 'phone' | 'whatsapp' | 'chat' | 'both' | 'chat_or_whatsapp';
 export type PropertyBusinessStatus = 'available' | 'sold';
 export type PropertyTransactionTypeCode = 'sale' | 'rent';
@@ -55,7 +55,12 @@ export const propertyRegionFilterOptions: PropertyFilterOption[] = [
 
 const propertyRegionDisplayOptions: MarketplaceLabelledOption[] = [
   { value: 'hong_kong_island', label_zh_hk: '香港島', label_en: 'Hong Kong Island' },
+  { value: 'hk_east', label_zh_hk: '港島東', label_en: 'Hong Kong Island East' },
+  { value: 'hk_west', label_zh_hk: '港島西', label_en: 'Hong Kong Island West' },
+  { value: 'hk_south', label_zh_hk: '港島南', label_en: 'Hong Kong Island South' },
+  { value: 'hk_central', label_zh_hk: '港島中', label_en: 'Hong Kong Island Central' },
   { value: 'kowloon', label_zh_hk: '九龍', label_en: 'Kowloon' },
+  { value: 'hk_kowloon', label_zh_hk: '九龍', label_en: 'Kowloon' },
   { value: 'new_territories', label_zh_hk: '新界', label_en: 'New Territories' },
   { value: 'outlying_islands', label_zh_hk: '離島', label_en: 'Outlying Islands' },
 ];
@@ -119,6 +124,7 @@ export const propertyPublisherFilterOptions: PropertyFilterOption[] = [
 ];
 
 export const propertyTypeOptions: MarketplaceLabelledOption<PropertyTypeCode>[] = [
+  { value: 'residential', label_zh_hk: '住宅', label_en: 'Residential' },
   { value: 'private_flat', label_zh_hk: '私人住宅', label_en: 'Private flat' },
   { value: 'estate', label_zh_hk: '屋苑單位', label_en: 'Estate flat' },
   { value: 'house', label_zh_hk: '洋房', label_en: 'House' },

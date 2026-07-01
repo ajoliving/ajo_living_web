@@ -15,7 +15,7 @@ import {
   unfavoriteSecondhandListing,
 } from '@/httpapis/secondhand-listings';
 import {
-  buildMarketplaceAreaFilterOptions,
+  buildMarketplaceRegionFilterOptions,
   getMarketplaceCategoryLabel,
   getMarketplaceConditionLabel,
   getMarketplaceDistrictLabel,
@@ -67,7 +67,17 @@ const maxFilterPrice = 20000;
 const readQueryString = (value: unknown): string =>
   typeof value === 'string' ? value : Array.isArray(value) && typeof value[0] === 'string' ? value[0] : '';
 
-// 2. 建立家具帖子卡片資料
+// 2. 檢查 query enum 是否仍然可用
+const isMarketplaceCategoryCode = (value: string): value is MarketplaceCategoryCode =>
+  marketplaceCategories.some((category) => category.value === value);
+
+const isMarketplaceConditionCode = (value: string): value is MarketplaceConditionCode =>
+  marketplaceConditions.some((condition) => condition.value === value);
+
+const isFurnitureVisibilityValue = (value: string): value is FurnitureVisibilityValue =>
+  value === 'all' || value === 'public' || value === 'building_only';
+
+// 3. 建立家具帖子卡片資料
 const buildListingCard = (
   listing: SecondhandListingSummaryResponse,
   locale: AppLocale,
@@ -97,7 +107,7 @@ const buildListingCard = (
   };
 };
 
-// 3. 管理家具市集列表資料與動作
+// 4. 管理家具市集列表資料與動作
 export const useFurniturePage = () => {
   const route = useRoute();
   const router = useRouter();
@@ -128,12 +138,11 @@ export const useFurniturePage = () => {
   ]);
 
   const areaOptions = computed(() =>
-    buildMarketplaceAreaFilterOptions(preferenceStore.locale, t('marketplace.filter.areaAll')).map((option) => ({
+    buildMarketplaceRegionFilterOptions(preferenceStore.locale, t('marketplace.filter.areaAll')).map((option) => ({
       label: option.label_zh_hk,
       value: option.value,
       filterType: option.filterType,
       regionCode: option.regionCode,
-      districtCode: option.districtCode,
     })),
   );
 
@@ -165,28 +174,28 @@ export const useFurniturePage = () => {
   const isFavoriteUpdating = (listingId: string): boolean =>
     favoriteUpdatingIds.value.includes(listingId);
 
-  // 3.1 從 URL query 同步本地條件
+  // 4.1 從 URL query 同步本地條件
   const syncStateFromQuery = (): void => {
+    const categoryCode = readQueryString(route.query.category_code);
+    const conditionLevel = readQueryString(route.query.condition_level);
+    const visibilityScope = readQueryString(route.query.visibility_scope);
+
     keyword.value = readQueryString(route.query.keyword);
     minPrice.value = readQueryString(route.query.min_price_hkd) || '0';
     maxPrice.value = readQueryString(route.query.max_price_hkd) || String(maxFilterPrice);
     sortBy.value = (readQueryString(route.query.sort_by) || 'latest') as FurnitureSortValue;
     page.value = Number(readQueryString(route.query.page) || 1);
-    visibility.value = (readQueryString(route.query.visibility_scope) || 'all') as FurnitureVisibilityValue;
+    visibility.value = isFurnitureVisibilityValue(visibilityScope) ? visibilityScope : 'all';
     withPhotos.value = readQueryString(route.query.has_media) === 'true';
-    selectedCategoryKeys.value = readQueryString(route.query.category_code)
-      ? [readQueryString(route.query.category_code) as MarketplaceCategoryCode]
-      : [];
-    selectedConditions.value = readQueryString(route.query.condition_level)
-      ? [readQueryString(route.query.condition_level) as MarketplaceConditionCode]
-      : [];
+    selectedCategoryKeys.value = isMarketplaceCategoryCode(categoryCode) ? [categoryCode] : [];
+    selectedConditions.value = isMarketplaceConditionCode(conditionLevel) ? [conditionLevel] : [];
 
     const regionCode = readQueryString(route.query.region_code);
     const districtCode = readQueryString(route.query.district_code);
     area.value = districtCode || regionCode || 'all';
   };
 
-  // 3.2 建立 API 查詢參數
+  // 4.2 建立 API 查詢參數
   const buildListParams = (): ListingListParams => {
     const selectedArea = areaOptions.value.find((option) => option.value === area.value);
     const minPriceNumber = Number(minPrice.value);
@@ -198,7 +207,7 @@ export const useFurniturePage = () => {
       keyword: keyword.value.trim() || undefined,
       category_code: selectedCategoryKeys.value[0],
       region_code: selectedArea?.filterType === 'region' ? selectedArea.regionCode : undefined,
-      district_code: selectedArea?.filterType === 'district' ? selectedArea.districtCode : undefined,
+      district_code: undefined,
       condition_level: selectedConditions.value[0],
       min_price_hkd: Number.isFinite(minPriceNumber) && minPriceNumber > 0 ? minPriceNumber : undefined,
       max_price_hkd: Number.isFinite(maxPriceNumber) && maxPriceNumber < maxFilterPrice ? maxPriceNumber : undefined,
@@ -209,7 +218,7 @@ export const useFurniturePage = () => {
     };
   };
 
-  // 3.3 讀取公開家具帖子
+  // 4.3 讀取公開家具帖子
   const loadListings = async (): Promise<void> => {
     loading.value = true;
 
@@ -231,7 +240,7 @@ export const useFurniturePage = () => {
     }
   };
 
-  // 3.4 切換帖子收藏狀態
+  // 4.4 切換帖子收藏狀態
   const toggleFavorite = async (listingId: string): Promise<void> => {
     const target = sourceListings.value.find((listing) => listing.listing_id === listingId);
     if (!target || isFavoriteUpdating(listingId)) {
@@ -274,7 +283,7 @@ export const useFurniturePage = () => {
     }
   };
 
-  // 3.5 將目前條件同步到 URL
+  // 4.5 將目前條件同步到 URL
   const syncFiltersToQuery = async (nextPage = 1): Promise<void> => {
     const selectedArea = areaOptions.value.find((option) => option.value === area.value);
 
@@ -285,7 +294,7 @@ export const useFurniturePage = () => {
         category_code: selectedCategoryKeys.value[0] || undefined,
         condition_level: selectedConditions.value[0] || undefined,
         region_code: selectedArea?.filterType === 'region' ? selectedArea.regionCode : undefined,
-        district_code: selectedArea?.filterType === 'district' ? selectedArea.districtCode : undefined,
+        district_code: undefined,
         min_price_hkd: Number(minPrice.value) > 0 ? minPrice.value : undefined,
         max_price_hkd: Number(maxPrice.value) < maxFilterPrice ? maxPrice.value : undefined,
         has_media: withPhotos.value ? 'true' : undefined,
@@ -297,25 +306,25 @@ export const useFurniturePage = () => {
     });
   };
 
-  // 3.6 切換主分類
+  // 4.6 切換主分類
   const toggleCategory = async (key: MarketplaceCategoryCode): Promise<void> => {
     selectedCategoryKeys.value = selectedCategoryKeys.value.includes(key) ? [] : [key];
     await syncFiltersToQuery();
   };
 
-  // 3.7 切換成色
+  // 4.7 切換成色
   const toggleCondition = async (value: MarketplaceConditionCode): Promise<void> => {
     selectedConditions.value = selectedConditions.value.includes(value) ? [] : [value];
     await syncFiltersToQuery();
   };
 
-  // 3.8 清除成色條件
+  // 4.8 清除成色條件
   const clearConditions = async (): Promise<void> => {
     selectedConditions.value = [];
     await syncFiltersToQuery();
   };
 
-  // 3.9 清除目前篩選條件
+  // 4.9 清除目前篩選條件
   const clearFilters = async (): Promise<void> => {
     keyword.value = '';
     minPrice.value = '0';
@@ -329,13 +338,13 @@ export const useFurniturePage = () => {
     await syncFiltersToQuery();
   };
 
-  // 3.10 切換分頁
+  // 4.10 切換分頁
   const setPage = async (value: number): Promise<void> => {
     page.value = Math.min(Math.max(value, 1), totalPages.value);
     await syncFiltersToQuery(page.value);
   };
 
-  // 3.11 格式化發布時間
+  // 4.11 格式化發布時間
   const formatListingTime = (publishedAt?: string | null, updatedAt?: string): string => {
     const source = publishedAt || updatedAt;
     if (!source) {

@@ -777,7 +777,7 @@ func seedSampleListings(ctx context.Context, db *gorm.DB, cfg *config.Config) ([
 		}
 		if err := upsertSecondhand(tx, furnitureTwo.ID, model.SecondhandListing{
 			ListingID:          furnitureTwo.ID,
-			CategoryCode:       "office_furniture",
+			CategoryCode:       "home_furniture",
 			PriceMode:          "negotiable",
 			PriceHKD:           floatPtr(680),
 			ConditionLevel:     "used_excellent",

@@ -10,10 +10,7 @@ var allowedSecondhandCategoryCodes = []string{
 	"home_furniture",
 	"home_appliance",
 	"electronics",
-	"music",
 	"baby_goods",
-	"office_furniture",
-	"home_decor",
 	"other",
 }
 

@@ -113,7 +113,7 @@ export default {
     hidden: '已隱藏',
     reserved: '已預留',
     public: '公開',
-    buildingOnly: '同屋苑可見',
+    buildingOnly: '同棟可見',
   },
   status: {
     loading: '載入中...',

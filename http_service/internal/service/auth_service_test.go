@@ -263,3 +263,106 @@ func TestAuthServiceIsmartLoginCreatesLocalAccountWithoutRelay(t *testing.T) {
 		t.Fatalf("expected POS unit split into floor and unit, got floor=%q unit=%q", profile.ResidenceFloor, profile.ResidenceUnit)
 	}
 }
+
+// 6. TestAuthServiceIsmartLoginPreservesMemberCenterBinding validates login does not overwrite saved residence.
+func TestAuthServiceIsmartLoginPreservesMemberCenterBinding(t *testing.T) {
+	server := newAuthServiceTestServer(t, http.StatusBadGateway)
+	defer server.Close()
+	runtimeValue := newAuthTestRuntime(
+		t,
+		&config.Config{
+			POSLoginURL:           server.URL + "/poslogin",
+			POSAPIBaseURL:         server.URL,
+			POSLoginUsernameField: "login_name",
+			POSLoginPasswordField: "password",
+			POSLoginTimeout:       time.Second,
+		},
+		&model.User{},
+		&model.UserCredential{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	authService := NewAuthService(runtimeValue)
+
+	if _, err := authService.LoginWithIsmart(context.Background(), IsmartLoginParams{
+		Account:  "patrick",
+		Password: "s61980774",
+	}); err != nil {
+		t.Fatalf("initial login with ismart: %v", err)
+	}
+
+	var ismartAccount model.UserIsmartAccount
+	if err := runtimeValue.DB.First(&ismartAccount, "ismart_user_id = ?", int64(88)).Error; err != nil {
+		t.Fatalf("load ismart account: %v", err)
+	}
+	manualCommunity := model.Community{
+		PublicID:      "0999900",
+		CommunityType: "building",
+		NameZH:        "測試1大廈",
+		DistrictCode:  "HK",
+	}
+	if err := runtimeValue.DB.Create(&manualCommunity).Error; err != nil {
+		t.Fatalf("create manual community: %v", err)
+	}
+	buildingJSON, err := marshalJSON([]string{"0999900"})
+	if err != nil {
+		t.Fatalf("marshal building binding: %v", err)
+	}
+	unitJSON, err := marshalJSON([]string{"099990000001A"})
+	if err != nil {
+		t.Fatalf("marshal unit binding: %v", err)
+	}
+	if err := runtimeValue.DB.Model(&model.UserProfile{}).Where("user_id = ?", ismartAccount.UserID).Updates(map[string]any{
+		"primary_community_id": manualCommunity.ID,
+		"bound_building_ids":   buildingJSON,
+		"bound_flat_unit_ids":  unitJSON,
+		"residence_floor":      "01",
+		"residence_unit":       "A",
+		"district_code":        manualCommunity.DistrictCode,
+	}).Error; err != nil {
+		t.Fatalf("save manual profile binding: %v", err)
+	}
+
+	secondResult, err := authService.LoginWithIsmart(context.Background(), IsmartLoginParams{
+		Account:  "patrick",
+		Password: "s61980774",
+	})
+	if err != nil {
+		t.Fatalf("second login with ismart: %v", err)
+	}
+	if !secondResult.User.ProfileCompleted {
+		t.Fatalf("expected profile to remain completed")
+	}
+
+	var profile model.UserProfile
+	if err := runtimeValue.DB.Preload("PrimaryCommunity").First(&profile, "user_id = ?", ismartAccount.UserID).Error; err != nil {
+		t.Fatalf("load preserved profile: %v", err)
+	}
+	if profile.PrimaryCommunity == nil || profile.PrimaryCommunity.PublicID != "0999900" {
+		t.Fatalf("expected manual community to survive login, got %+v", profile.PrimaryCommunity)
+	}
+	if profile.ResidenceFloor != "01" || profile.ResidenceUnit != "A" {
+		t.Fatalf("expected manual unit to survive login, got floor=%q unit=%q", profile.ResidenceFloor, profile.ResidenceUnit)
+	}
+	if buildings := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)); len(buildings) != 1 || buildings[0] != "0999900" {
+		t.Fatalf("expected manual building bindings to survive login, got %v", buildings)
+	}
+	if units := normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs)); len(units) != 1 || units[0] != "099990000001A" {
+		t.Fatalf("expected manual unit bindings to survive login, got %v", units)
+	}
+
+	me, err := NewUserService(runtimeValue).GetMe(context.Background(), ismartAccount.UserID)
+	if err != nil {
+		t.Fatalf("load me response: %v", err)
+	}
+	if me.PrimaryCommunity == nil || me.PrimaryCommunity.PublicID != "0999900" {
+		t.Fatalf("expected me response to use manual community, got %+v", me.PrimaryCommunity)
+	}
+	if len(me.BoundBuildingIDs) != 1 || me.BoundBuildingIDs[0] != "0999900" {
+		t.Fatalf("expected me response to use manual building binding, got %v", me.BoundBuildingIDs)
+	}
+	if len(me.BoundFlatUnitIDs) != 1 || me.BoundFlatUnitIDs[0] != "099990000001A" {
+		t.Fatalf("expected me response to use manual unit binding, got %v", me.BoundFlatUnitIDs)
+	}
+}

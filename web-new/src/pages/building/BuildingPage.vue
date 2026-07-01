@@ -10,11 +10,14 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
+import { useSessionStore } from '@/stores/session';
 import {
+  fetchMemberICCTVPublicCameras,
   fetchMemberIsmartBuildingAccess,
   fetchMemberIsmartBuildingInfo,
   generateMemberIsmartDoorQRCode,
   openMemberIsmartDoor,
+  type ICCTVCameraSummary,
   type IsmartAccessDoor,
   type IsmartAccessRecord,
   type IsmartBuildingDocument,
@@ -140,6 +143,7 @@ interface AccessRecordRow {
 
 // 2. 路由
 const router = useRouter();
+const sessionStore = useSessionStore();
 
 // 3. 主面板與子面板狀態
 const activeTab = ref<AffairsTab>('affairs-feedback');
@@ -156,6 +160,10 @@ const visiblePasswordDoorIDs = ref<string[]>([]);
 const openingDoorID = ref('');
 const qrLoadingDoorID = ref('');
 const accessQRPanel = ref<AccessQRPanel | null>(null);
+const icctvLoading = ref(false);
+const icctvError = ref('');
+const icctvProfile = ref<Awaited<ReturnType<typeof fetchMemberICCTVPublicCameras>> | null>(null);
+const expandedICCTVCameraIDs = ref<string[]>([]);
 
 // 4. 意見提供引導式表單狀態
 const affairsMode = ref<AffairsMode>('repair');
@@ -346,6 +354,39 @@ const accessRecentRows = computed<AccessRecordRow[]>(() =>
   ),
 );
 
+// 7.3 視像監控資料
+const icctvCameras = computed<ICCTVCameraSummary[]>(() => icctvProfile.value?.cameras ?? []);
+const icctvOrangePis = computed(() => icctvProfile.value?.orangepis ?? []);
+const memberBoundCommunityName = computed(() => String(
+  sessionStore.me?.primary_community?.name_zh
+  || sessionStore.me?.primary_community?.name_en
+  || sessionStore.me?.primary_community?.address_text
+  || '',
+).trim());
+const icctvBuildingTitle = computed(() => {
+  const parts = [
+    memberBoundCommunityName.value,
+    String(sessionStore.me?.residence_floor ?? '').trim(),
+    String(sessionStore.me?.residence_unit ?? '').trim(),
+  ].filter(Boolean);
+  if (parts.length > 0) return parts.join(' / ');
+
+  return buildingName.value;
+});
+const icctvEnabled = computed(() => icctvOrangePis.value.some((item) => item.is_active));
+const icctvStatusText = computed(() => {
+  if (icctvLoading.value) return '載入中';
+  if (icctvError.value) return '未能載入';
+  return icctvEnabled.value ? '已啟用' : '未啟用';
+});
+const icctvCameraName = (camera: ICCTVCameraSummary, index: number): string => {
+  const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
+  return `鏡頭 ${match?.[1] ?? index + 1}`;
+};
+const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is_active && camera.url ? '可查看' : '不可查看');
+const icctvCameraFrameTitle = (camera: ICCTVCameraSummary, index: number): string => `${icctvCameraName(camera, index)} 即時監控`;
+const isICCTVCameraExpanded = (cameraID: string): boolean => expandedICCTVCameraIDs.value.includes(cameraID);
+
 // 8. 大廈財務 mock 資料（管理費總覽）
 const financeOverview: FinanceOverRow[] = [
   { unit: 'G樓 01', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
@@ -528,15 +569,37 @@ const loadBuildingAccess = async (clearMessage = true) => {
   }
 };
 
-// 14. 切換主面板
+// 14. 讀取目前會員視像監控資料
+const loadICCTV = async () => {
+  icctvLoading.value = true;
+  icctvError.value = '';
+  try {
+    const result = await fetchMemberICCTVPublicCameras(selectedBuildingID.value || undefined);
+    icctvProfile.value = result;
+    selectedBuildingID.value = result.selected_building_id || selectedBuildingID.value || '';
+    expandedICCTVCameraIDs.value = [];
+  } catch (error) {
+    console.error(error);
+    icctvError.value = '視像監控資料載入失敗';
+    icctvProfile.value = null;
+    expandedICCTVCameraIDs.value = [];
+  } finally {
+    icctvLoading.value = false;
+  }
+};
+
+// 15. 切換主面板
 const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
   if (target === 'affairs-access' && !ismartAccessProfile.value && !accessLoading.value) {
     void loadBuildingAccess();
   }
+  if (target === 'affairs-icctv' && !icctvProfile.value && !icctvLoading.value) {
+    void loadICCTV();
+  }
 };
 
-// 15. 取得門禁操作用大廈 ID
+// 16. 取得門禁操作用大廈 ID
 const accessPayloadBuildingID = (door?: IsmartAccessDoor): string | undefined => {
   const buildingID = selectedBuildingID.value
     || ismartAccessProfile.value?.selected_building_id
@@ -545,7 +608,7 @@ const accessPayloadBuildingID = (door?: IsmartAccessDoor): string | undefined =>
   return buildingID || undefined;
 };
 
-// 16. 切換門禁密碼可見狀態
+// 17. 切換門禁密碼可見狀態
 const toggleAccessPassword = (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   if (!doorID) return;
@@ -554,7 +617,7 @@ const toggleAccessPassword = (door: IsmartAccessDoor) => {
     : [...visiblePasswordDoorIDs.value, doorID];
 };
 
-// 17. 發送開門指令
+// 18. 發送開門指令
 const openAccessDoor = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const doorNumber = accessDoorNumber(door);
@@ -580,7 +643,7 @@ const openAccessDoor = async (door: IsmartAccessDoor) => {
   }
 };
 
-// 18. 生成門禁二維碼
+// 19. 生成門禁二維碼
 const generateAccessQRCode = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const recordID = accessQRCodeRecordNumber(door);
@@ -615,37 +678,37 @@ const generateAccessQRCode = async (door: IsmartAccessDoor) => {
   }
 };
 
-// 19. 切換財務子面板
+// 20. 切換財務子面板
 const switchFinanceSub = (target: FinanceSubTab) => {
   financeSubTab.value = target;
 };
 
-// 20. 切換意見提供模式
+// 21. 切換意見提供模式
 const setAffairsMode = (mode: AffairsMode) => {
   affairsMode.value = mode;
   affairsStep.value = 1;
 };
 
-// 21. 切換意見提供步驟
+// 22. 切換意見提供步驟
 const setAffairsStep = (step: number) => {
   if (step < 1) return;
   if (step > 4) return;
   affairsStep.value = step;
 };
 
-// 22. 下一步
+// 23. 下一步
 const nextAffairsStep = () => {
   if (affairsStep.value < 4) {
     affairsStep.value += 1;
   }
 };
 
-// 23. 展開/收起最近記錄
+// 24. 展開/收起最近記錄
 const toggleRecord = (index: number) => {
   expandedRecord.value = expandedRecord.value === index ? null : index;
 };
 
-// 24. 選擇檔案
+// 25. 選擇檔案
 const onMediaChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   if (!target.files || target.files.length === 0) {
@@ -657,7 +720,7 @@ const onMediaChange = (e: Event) => {
     .join(', ');
 };
 
-// 25. 提交意見提供
+// 26. 提交意見提供
 const submitAffairsFeedback = () => {
   affairsMode.value = 'repair';
   affairsStep.value = 1;
@@ -670,7 +733,7 @@ const submitAffairsFeedback = () => {
   mediaFileName.value = '';
 };
 
-// 26. 確認提交摘要
+// 27. 確認提交摘要
 const reviewMode = computed(() => (affairsMode.value === 'repair' ? '維修報修' : '意見反映'));
 const reviewCategory = computed(() =>
   affairsMode.value === 'repair'
@@ -689,27 +752,30 @@ const reviewContent = computed(() =>
 );
 const reviewMedia = computed(() => mediaFileName.value || '未選擇檔案');
 
-// 27. 重新整理通告
+// 28. 重新整理通告
 const refreshNotices = () => {
   // 靜態 mock，無需操作
 };
 
-// 28. 重新載入視像監控
-const refreshIcctv = () => {
-  // 靜態 mock，無需操作
+// 29. 展開或收起視像監控鏡頭
+const toggleICCTVCamera = (cameraID: string) => {
+  expandedICCTVCameraIDs.value = isICCTVCameraExpanded(cameraID)
+    ? expandedICCTVCameraIDs.value.filter((id) => id !== cameraID)
+    : [...expandedICCTVCameraIDs.value, cameraID];
 };
 
-// 29. 開啟視像監控新窗口
-const openIcctvWindow = () => {
-  router.push('/building/icctv');
+// 30. 開啟視像監控新窗口
+const openIcctvWindow = (camera: ICCTVCameraSummary) => {
+  if (!camera.url) return;
+  window.open(camera.url, '_blank', 'noopener');
 };
 
-// 30. 重新整理設備監測
+// 31. 重新整理設備監測
 const refreshEquipment = () => {
   // 靜態 mock，無需操作
 };
 
-// 31. 跳轉至通告詳情
+// 32. 跳轉至通告詳情
 const goNoticeDetail = () => {
   router.push('/building/notices');
 };
@@ -2021,58 +2087,105 @@ onMounted(() => {
             <div>
               <div class="work-kicker">ICCTV</div>
               <h2 class="work-title">視像監控</h2>
-              <p class="work-desc">選擇大廈與鏡頭後，查看即時監控畫面。</p>
+              <p class="work-desc">即時查看已授權的大廈鏡頭。</p>
             </div>
             <button
               type="button"
               class="work-action"
-              @click="openIcctvWindow"
+              :disabled="icctvLoading"
+              @click="loadICCTV()"
             >
-              新窗口
+              {{ icctvLoading ? '載入中' : '重新整理' }}
             </button>
           </section>
-          <section class="work-card icctv-panel-wide">
-            <div class="icctv-building-select">
-              <select class="staff-select" />
-              <button
-                type="button"
-                class="work-mini-btn"
-                @click="refreshIcctv"
+          <section class="work-card icctv-panel-wide icctv-table-card">
+            <div class="icctv-profile-head">
+              <div>
+                <h3>{{ icctvBuildingTitle }}</h3>
+                <p>目前會員已綁定單位</p>
+              </div>
+              <span
+                class="icctv-enabled-badge"
+                :class="{ off: !icctvEnabled && !icctvLoading }"
               >
-                重新載入
-              </button>
+                {{ icctvStatusText }}
+              </span>
             </div>
-            <div class="icctv-summary" />
-            <div class="icctv-layout">
-              <div>
-                <div class="icctv-building-meta" />
-                <div class="icctv-camera-list" />
-                <p class="icctv-note">來源頁如限制嵌入，可使用新窗口開啟。</p>
-              </div>
-              <div>
-                <div class="icctv-viewer-bar">
-                  <div class="icctv-viewer-meta">尚未選擇鏡頭</div>
-                  <div class="icctv-viewer-actions">
-                    <button
-                      type="button"
-                      class="work-mini-btn"
-                      @click="openIcctvWindow"
+
+            <div class="icctv-table-wrap">
+              <table class="work-table icctv-table">
+                <thead>
+                  <tr>
+                    <th>鏡頭</th>
+                    <th>狀態</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template
+                    v-for="(camera, index) in icctvCameras"
+                    :key="camera.id"
+                  >
+                    <tr :class="{ expanded: isICCTVCameraExpanded(camera.id) }">
+                      <td>
+                        <div class="icctv-camera-title">{{ icctvCameraName(camera, index) }}</div>
+                        <div class="icctv-camera-channel">{{ camera.channel }}</div>
+                      </td>
+                      <td>
+                        <span
+                          class="icctv-table-status"
+                          :class="camera.is_active && camera.url ? 'on' : 'off'"
+                        >
+                          {{ icctvCameraStatusText(camera) }}
+                        </span>
+                      </td>
+                      <td>
+                        <div class="icctv-row-actions">
+                          <button
+                            type="button"
+                            class="work-mini-btn primary"
+                            :disabled="!camera.url"
+                            @click="toggleICCTVCamera(camera.id)"
+                          >
+                            {{ isICCTVCameraExpanded(camera.id) ? '收起' : '查看' }}
+                          </button>
+                          <button
+                            type="button"
+                            class="work-mini-btn"
+                            :disabled="!camera.url"
+                            @click="openIcctvWindow(camera)"
+                          >
+                            新窗口
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr
+                      v-if="isICCTVCameraExpanded(camera.id)"
+                      class="icctv-expanded-row"
                     >
-                      新窗口
-                    </button>
-                  </div>
-                </div>
-                <div class="icctv-viewer">
-                  <iframe
-                    title="ICCTV 即時監控"
-                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                  />
-                  <div class="icctv-empty">
-                    <strong>未選擇鏡頭</strong>
-                    <span>選擇大廈與鏡頭後，監控畫面會顯示在此處。</span>
-                  </div>
-                </div>
-              </div>
+                      <td colspan="3">
+                        <div class="icctv-inline-viewer">
+                          <iframe
+                            :key="`${camera.id}-frame`"
+                            :src="camera.url"
+                            :title="icctvCameraFrameTitle(camera, index)"
+                            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr v-if="icctvCameras.length === 0">
+                    <td
+                      class="building-empty-row"
+                      colspan="3"
+                    >
+                      {{ icctvLoading ? '正在載入鏡頭資料。' : icctvError || '目前大廈未有鏡頭資料。' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
@@ -3316,11 +3429,53 @@ onMounted(() => {
   grid-column: 1 / -1;
 }
 
-.icctv-building-select {
+.icctv-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.icctv-profile-head {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--bdr);
+  background: #fff;
+  padding: 18px;
+}
+
+.icctv-profile-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.icctv-profile-head p {
+  margin: 6px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.icctv-enabled-badge {
+  display: inline-flex;
+  min-height: 30px;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.icctv-enabled-badge.off {
+  background: var(--sur-2);
+  color: var(--ink-4);
 }
 
 .staff-select {
@@ -3335,109 +3490,90 @@ onMounted(() => {
   padding: 0 12px;
 }
 
-.icctv-building-select .staff-select {
-  flex: 1;
+.icctv-table-wrap {
+  overflow-x: auto;
 }
 
-.icctv-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+.icctv-table {
+  min-width: 760px;
+  table-layout: fixed;
 }
 
-.icctv-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+.icctv-table th:nth-child(1),
+.icctv-table td:nth-child(1) {
+  width: 44%;
 }
 
-.icctv-layout > div {
-  width: 100%;
-  min-width: 0;
+.icctv-table th:nth-child(2),
+.icctv-table td:nth-child(2) {
+  width: 20%;
 }
 
-.icctv-building-meta {
-  margin-top: 12px;
-  border-top: 1px solid var(--bdr);
-  padding-top: 12px;
+.icctv-table th:nth-child(3),
+.icctv-table td:nth-child(3) {
+  width: 36%;
 }
 
-.icctv-camera-list {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
+.icctv-table tbody tr.expanded > td {
+  background: var(--brand-light);
 }
 
-.icctv-note {
-  margin-top: 12px;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
+.icctv-camera-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
 }
 
-.icctv-viewer-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 0 0;
-}
-
-.icctv-viewer-meta {
+.icctv-camera-channel {
+  margin-top: 4px;
   color: var(--ink-3);
   font-size: 12px;
   font-weight: 700;
 }
 
-.icctv-viewer-actions {
+.icctv-table-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.icctv-table-status.on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.icctv-table-status.off {
+  background: var(--sur-2);
+  color: var(--ink-4);
+}
+
+.icctv-row-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.icctv-viewer {
-  position: relative;
-  min-height: 520px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: #111827;
-  overflow: hidden;
+.icctv-expanded-row td {
+  background: #fff;
+  padding: 0;
 }
 
-.icctv-viewer iframe {
+.icctv-inline-viewer {
+  border-top: 1px solid var(--bdr);
+  background: #0F172A;
+}
+
+.icctv-inline-viewer iframe {
   display: block;
   width: 100%;
   height: 520px;
   border: 0;
-  background: #111827;
-}
-
-.icctv-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  background: linear-gradient(160deg, rgba(17, 24, 39, 0.88), rgba(17, 24, 39, 0.65));
-  color: #E5E7EB;
-  text-align: center;
-  padding: 20px;
-}
-
-.icctv-empty strong {
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.icctv-empty span {
-  font-size: 13px;
-  color: #94A3B8;
-  font-weight: 600;
-  max-width: 280px;
-  line-height: 1.6;
+  background: #0F172A;
 }
 
 /* 15. 響應式設計 */
@@ -3473,10 +3609,6 @@ onMounted(() => {
     border-right: 0;
   }
 
-  .icctv-layout {
-    grid-template-columns: 1fr;
-  }
-
   .access-qr-layout,
   .access-qr-meta {
     grid-template-columns: 1fr;
@@ -3506,10 +3638,17 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .icctv-camera-list,
-  .icctv-summary,
   .access-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .icctv-profile-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .icctv-inline-viewer iframe {
+    height: 360px;
   }
 
   .notice-admin-grid {

@@ -374,7 +374,7 @@ onMounted(() => {
     <section class="property-my-heading">
       <div>
         <p class="property-kicker">
-          Properties
+          {{ props.channel === 'sale' ? t('property.sale.title') : t('property.serviced.title') }}
         </p>
         <h1>{{ pageTitle }}</h1>
       </div>
@@ -611,7 +611,7 @@ onMounted(() => {
             <header class="property-editor-dialog__header">
               <div>
                 <p class="property-kicker">
-                  {{ editorListingId ? 'Edit' : 'Publish' }}
+                  {{ editorListingId ? t('property.editor.editMode') : t('property.editor.publishMode') }}
                 </p>
                 <h2>{{ editorDialogTitle }}</h2>
               </div>
