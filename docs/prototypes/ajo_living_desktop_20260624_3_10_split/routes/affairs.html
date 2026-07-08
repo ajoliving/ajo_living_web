@@ -1,0 +1,434 @@
+<!--
+ * Route - 我的大廈
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-affairs">
+  <div class="work-shell">
+    <aside class="work-sidebar">
+      <h1>我的大廈</h1>
+      <nav class="work-nav">
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-notices">最新通告</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-building">大廈資料</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-finance">大廈財務</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-owner-account">業戶帳目</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-forms">申請表格</button>
+        <button class="work-nav-item on" data-work-tab="affairs" data-work-target="affairs-feedback">意見提供/維修報修</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-access">智能門禁</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-icctv">視像監控</button>
+        <button class="work-nav-item" data-work-tab="affairs" data-work-target="affairs-equipment">設備監測</button>
+      </nav>
+    </aside>
+    <main class="work-main">
+      <div class="work-panel" data-work-panel="affairs-notices">
+        <section class="work-hero"><div><div class="work-kicker">Building Notices</div><h2 class="work-title">最新通告</h2></div></section>
+        <section class="notice-admin-grid">
+          <div class="notice-admin-card">
+            <h3>大廈選擇</h3>
+            <label class="notice-admin-label">選擇大廈:</label>
+            <select class="notice-select"><option>仁美大廈</option><option>康睦庭園第二座</option></select>
+          </div>
+        </section>
+        <section class="work-card">
+          <div class="notice-current"><span>目前顯示: 所有通告</span><button class="notice-action-btn">重新整理</button></div>
+          <table class="work-table notice-table">
+            <thead><tr><th>編號</th><th>標題</th><th>類型</th><th>發佈日期</th><th>下架日期</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>bulk/0145100_90c1340f10e849bd9c69</td><td>清潔員大年初一休假一天</td><td>一般</td><td>Jan. 24, 2025</td><td>Jan. 31, 2025</td><td><div class="notice-table-actions"><button class="notice-action-btn">查閱</button></div></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-building">
+        <section class="work-hero">
+          <div>
+            <div class="work-kicker">Building Profile</div>
+            <h2 class="work-title">大廈基本資料管理</h2>
+            <p class="work-desc">在此維護大廈基本欄位，並集中管理表格、大廈資訊附件及平面圖。</p>
+          </div>
+          <button class="work-action">儲存資料</button>
+        </section>
+        <section class="building-summary-grid">
+          <div class="work-card"><div class="work-card-title">機構</div><div class="work-card-sub">時安大廈(洋松街)業主立案法團</div></div>
+          <div class="work-card"><div class="work-card-title">目前大廈</div><div class="work-stat-label">時安大廈</div><div class="work-stat">4</div><div class="work-stat-label">基本資料文件</div></div>
+          <div class="work-card"><div class="work-card-title">資料狀態</div><div class="work-row"><div><strong>已有資料記錄</strong><span>可於下方同頁更新欄位與附件</span></div><span class="work-chip good">正常</span></div></div>
+          <div class="work-card"><div class="work-card-title">大廈</div><div class="work-card-sub">時安大廈</div></div>
+        </section>
+        <section class="work-card">
+          <div class="work-card-title">基本欄位</div>
+          <div class="building-field-grid">
+            <div class="building-field"><span>落成年份</span><strong>1991</strong></div>
+            <div class="building-field"><span>樓層總數</span><strong>15</strong></div>
+            <div class="building-field"><span>單位總數</span><strong>32</strong></div>
+            <div class="building-field"><span>車位總數</span><strong>0</strong></div>
+            <div class="building-field"><span>法團名稱</span><strong>時安大廈(洋松街)業主立案法團</strong></div>
+            <div class="building-field"><span>管理處電話</span><strong>2393 4230</strong></div>
+            <div class="building-field"><span>管理公司名稱</span><strong>顯安居物業管理股份有限公司</strong></div>
+            <div class="building-field"><span>管理公司電話</span><strong>2384 2251</strong></div>
+            <div class="building-field"><span>管理公司電郵</span><strong>info@showsecurity.com.hk</strong></div>
+            <div class="building-field"><span>管理公司傳真</span><strong>2384 2243</strong></div>
+            <div class="building-field"><span>民政事務處電話</span><strong>油尖旺: 2399 2111</strong></div>
+            <div class="building-field"><span>資料來源</span><strong>iSmart 基本資料</strong></div>
+          </div>
+        </section>
+        <section class="work-card">
+          <div class="work-card-title">地圖網址</div>
+          <iframe class="building-map-frame" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d14763.34557254608!2d114.1557081846111!3d22.32202646614546!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x340400b7741874d5%3A0x92522a6b0453ab64!2z5aSn6KeS5ZKA5rSL5p2-6KGXNDbomZ_mmYLlronlpKflu4g!5e0!3m2!1szh-TW!2shk!4v1664891445389!5m2!1szh-TW!2shk" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </section>
+        <section class="work-card">
+          <div class="work-card-title">基本文件區</div>
+          <div class="building-doc-grid">
+            <div class="building-doc-card"><div class="work-card-title">表格</div><div class="work-card-sub">住戶常用或職員常用的基本表格文件。</div><div class="building-doc-count">0 份</div><div class="building-doc-empty">目前未有表格，可按右上角按鈕新增。</div></div>
+            <div class="building-doc-card"><div class="work-card-title">大廈資訊</div><div class="work-card-sub">對外發佈或內部參考的大廈介紹與基本資訊附件。</div><div class="building-doc-count">0 份</div><div class="building-doc-empty">目前未有大廈資訊，可按右上角按鈕新增。</div></div>
+            <div class="building-doc-card"><div class="work-card-title">平面圖</div><div class="work-card-sub">平面圖、設施位置圖及相關圖則文件。</div><div class="building-doc-count">4 份</div><div class="building-doc-empty">已匯入舊系統平面圖資料。</div></div>
+          </div>
+        </section>
+        <section class="work-card">
+          <div class="building-section-head"><div class="work-card-title">表格</div><button class="work-mini-btn primary">新增</button></div>
+          <table class="work-table">
+            <thead><tr><th>標題</th><th>日期</th><th>月份</th><th>下載</th><th>操作</th></tr></thead>
+            <tbody><tr><td class="building-empty-row" colspan="5">目前未有表格。</td></tr></tbody>
+          </table>
+        </section>
+        <section class="work-card">
+          <div class="building-section-head"><div class="work-card-title">大廈資訊</div><button class="work-mini-btn primary">新增</button></div>
+          <table class="work-table">
+            <thead><tr><th>標題</th><th>日期</th><th>月份</th><th>下載</th><th>操作</th></tr></thead>
+            <tbody><tr><td class="building-empty-row" colspan="5">目前未有大廈資訊。</td></tr></tbody>
+          </table>
+        </section>
+        <section class="work-card">
+          <div class="building-section-head"><div class="work-card-title">平面圖</div><button class="work-mini-btn primary">新增</button></div>
+          <table class="work-table">
+            <thead><tr><th>標題</th><th>日期</th><th>月份</th><th>下載</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>15TH.FL.PLAN</td><td>-</td><td>-</td><td><a class="building-link" href="https://s3.us-west-2.amazonaws.com/72ismart/blg_files/%E6%99%82%E5%AE%89-15TH.FL.PLAN.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA6HKTBTYTI3PHQYMY%2F20260615%2Fus-west-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20260615T114117Z&amp;X-Amz-Expires=3600&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=854925b0a788b629cd4ff27a3c54768bb30b7aa806a662e7c08ce08a1611e334" target="_blank" rel="noopener">查看</a></td><td><button class="work-mini-btn">更新</button></td></tr>
+              <tr><td>2ND-14TH,FL.PLAN</td><td>-</td><td>-</td><td><a class="building-link" href="https://s3.us-west-2.amazonaws.com/72ismart/blg_files/%E6%99%82%E5%AE%89-2ND-14THFL.PLAN.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA6HKTBTYTI3PHQYMY%2F20260615%2Fus-west-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20260615T114117Z&amp;X-Amz-Expires=3600&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=e4de008393d23de5faf352b149aca5c408e13f31a87997482a1e2fd307ba909a" target="_blank" rel="noopener">查看</a></td><td><button class="work-mini-btn">更新</button></td></tr>
+              <tr><td>1ST.FLOOR PLAN</td><td>-</td><td>-</td><td><a class="building-link" href="https://s3.us-west-2.amazonaws.com/72ismart/blg_files/%E6%99%82%E5%AE%89-1ST.FLOOR_PLAN.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA6HKTBTYTI3PHQYMY%2F20260615%2Fus-west-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20260615T114117Z&amp;X-Amz-Expires=3600&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=a8ce13a0d361f297d09a9675f0a7b08636651d26be8b8a3a65db41bb6f36dafb" target="_blank" rel="noopener">查看</a></td><td><button class="work-mini-btn">更新</button></td></tr>
+              <tr><td>GROUND FL.PLAN</td><td>-</td><td>-</td><td><a class="building-link" href="https://s3.us-west-2.amazonaws.com/72ismart/blg_files/%E6%99%82%E5%AE%89GROUND_FL.PLAN.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Credential=AKIA6HKTBTYTI3PHQYMY%2F20260615%2Fus-west-2%2Fs3%2Faws4_request&amp;X-Amz-Date=20260615T114117Z&amp;X-Amz-Expires=3600&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Signature=d3298f0acffa21ed9a5ef8fcb0129a87b3a3e6598692eb17e78b27fbe7f389fc" target="_blank" rel="noopener">查看</a></td><td><button class="work-mini-btn">更新</button></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-finance">
+        <section class="work-hero">
+          <div>
+            <div class="work-kicker">Building Finance</div>
+            <h2 class="work-title">大廈財務</h2>
+            <p class="work-desc">按大廈查看管理費、財務報表及核數報告。</p>
+          </div>
+        </section>
+        <section class="work-card" style="padding:0;overflow:hidden;">
+          <div class="acct-tabs">
+            <button class="acct-tab on" type="button" data-acct-target="acct-overview" onclick="switchAccountingSubTab(this)">管理費總覽</button>
+            <button class="acct-tab" type="button" data-acct-target="acct-finance" onclick="switchAccountingSubTab(this)">財務報表</button>
+            <button class="acct-tab" type="button" data-acct-target="acct-audit" onclick="switchAccountingSubTab(this)">核數報告</button>
+          </div>
+          <div style="padding:16px;">
+            <div class="acct-subpanel on" id="acct-overview">
+              <div class="acct-note">選用「電子付款」繳交管理費住戶，於3小時內即可結算，其他支付方式由於核對需時未能即時更新，敬請見諒。</div>
+              <div class="acct-toolbar"><div class="work-card-title" style="margin:0;">管理費總覽</div><input class="acct-search" placeholder="Search.."></div>
+              <div class="acct-table-wrap">
+                <table class="acct-table">
+                  <thead><tr><th>單位</th><th>2025/11</th><th>2025/10</th><th>2025/09</th><th>2025/08月前</th></tr></thead>
+                  <tbody>
+                    <tr><td>G樓 01</td><td class="acct-due">-463.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>G樓 02</td><td class="acct-due">-463.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>G樓 03</td><td class="acct-due">-463.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>G樓 04</td><td class="acct-due">-463.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>G樓 5A</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>G樓 5B</td><td class="acct-due">-543.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>01樓 A</td><td class="acct-due">-476.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>01樓 B</td><td class="acct-due">-476.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>01樓 E</td><td class="acct-due">-1427.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>02樓 B</td><td class="acct-due">-476.0</td><td class="acct-due">-476.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>02樓 E</td><td class="acct-due">-1427.0</td><td class="acct-due">-1427.0</td><td class="acct-due">-1427.0</td><td class="acct-due">-1427.0</td></tr>
+                    <tr><td>03樓 A</td><td class="acct-due">-619.0</td><td class="acct-due">-619.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>04樓 A</td><td class="acct-due">-1162.0</td><td class="acct-due">-1162.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>05樓 D</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>06樓 A</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>07樓 D</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-5030.0</td></tr>
+                    <tr><td>09樓 C</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-2012.0</td></tr>
+                    <tr><td>10樓 C</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-6038.0</td></tr>
+                    <tr><td>11樓 D</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-6036.0</td></tr>
+                    <tr><td>13樓 D</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-7042.0</td></tr>
+                    <tr><td>14樓 C</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-7042.0</td></tr>
+                    <tr><td>15樓 B</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td></tr>
+                    <tr><td>18樓 A</td><td class="acct-due">-1006.0</td><td class="acct-due">-1006.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                    <tr><td>20樓 B</td><td class="acct-due">-697.0</td><td class="acct-due">-697.0</td><td class="acct-due">-697.0</td><td class="acct-due">-3485.0</td></tr>
+                    <tr><td>21樓 C</td><td class="acct-due">-619.0</td><td class="acct-due">-619.0</td><td class="acct-due">-619.0</td><td class="acct-due">-16713.0</td></tr>
+                    <tr><td>22樓 B</td><td class="acct-due">-1006.0</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td><td class="acct-paid">已付</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="acct-subpanel" id="acct-finance">
+              <div class="acct-toolbar"><div class="work-card-title" style="margin:0;">法團財務報表</div><input class="acct-search" placeholder="Search.."></div>
+              <div class="acct-table-wrap">
+                <table class="acct-table">
+                  <thead><tr><th>日期</th><th>標題</th><th>查閱</th></tr></thead>
+                  <tbody>
+                    <tr><td>2027-07</td><td>YIG 財務報告 2022-07</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2023-03</td><td>YIG 財務報告 2023-03</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2023-03</td><td>YIG 財務報告 2023-03</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2023-02</td><td>YIG 財務報告 2023-02</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2023-02</td><td>YIG 財務報告 2023-01</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2022-12</td><td>YIG 財務報告 2022-12</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2022-11</td><td>YIG 財務報告 2022-11</td><td><button class="acct-download">查閱</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="acct-subpanel" id="acct-audit">
+              <div class="acct-toolbar"><div class="work-card-title" style="margin:0;">核數報告</div><input class="acct-search" placeholder="Search.."></div>
+              <div class="acct-table-wrap">
+                <table class="acct-table">
+                  <thead><tr><th>日期</th><th>項目</th><th>查閱</th></tr></thead>
+                  <tbody>
+                    <tr><td>2021-11</td><td>YIG 財務報告 2021-11</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2018</td><td>仁英大廈核數報告2018</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2017</td><td>仁英大廈核數報告2017</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2016</td><td>仁英大廈核數報告2016</td><td><button class="acct-download">查閱</button></td></tr>
+                    <tr><td>2015</td><td>仁英大廈核數報告2015</td><td><button class="acct-download">查閱</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-owner-account">
+        <section class="work-hero">
+          <div>
+            <div class="work-kicker">Owner Account</div>
+            <h2 class="work-title">業戶帳目</h2>
+            <p class="work-desc">查看業戶管理費繳款記錄。</p>
+          </div>
+        </section>
+        <section class="work-card" style="padding:0;overflow:hidden;">
+          <div class="acct-tabs">
+            <button class="acct-tab on" type="button" data-acct-target="acct-payment-records" onclick="switchAccountingSubTab(this)">管理費繳款記錄</button>
+          </div>
+          <div style="padding:16px;">
+            <div class="acct-subpanel on" id="acct-payment-records"><div class="acct-dev">正在開發</div></div>
+          </div>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-forms">
+        <section class="work-hero"><div><div class="work-kicker">Forms</div><h2 class="work-title">申請表格</h2><p class="work-desc">選擇大廈後查看可下載的住戶及工程申請表格。</p></div></section>
+        <section class="notice-admin-grid">
+          <div class="notice-admin-card">
+            <h3>機構</h3>
+            <label class="notice-admin-label">選擇機構:</label>
+            <select class="notice-select"><option>時安大廈(洋松街)業主立案法團</option></select>
+          </div>
+          <div class="notice-admin-card">
+            <h3>大廈</h3>
+            <label class="notice-admin-label">選擇大廈:</label>
+            <select class="notice-select"><option>時安大廈</option><option>康睦庭園第二座</option></select>
+          </div>
+        </section>
+        <section class="work-card">
+          <table class="work-table">
+            <thead><tr><th>標題</th><th>查閱</th></tr></thead>
+            <tbody>
+              <tr><td>單位裝修申請表</td><td><a class="building-link" href="#" onclick="event.preventDefault();showToast('表格下載準備中')">填寫表格</a></td></tr>
+              <tr><td>暫停食水、沖廁水申請表</td><td><a class="building-link" href="#" onclick="event.preventDefault();showToast('表格下載準備中')">填寫表格</a></td></tr>
+              <tr><td>申請增設電錶、加大配電資料記錄跟進表</td><td><a class="building-link" href="#" onclick="event.preventDefault();showToast('表格下載準備中')">填寫表格</a></td></tr>
+              <tr><td>建議新增表格</td><td><button class="work-mini-btn primary" style="padding:3px 10px;margin-left:-11px;">新增表格</button></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <div class="work-panel on" data-work-panel="affairs-feedback">
+        <section class="work-hero"><div><div class="work-kicker">Feedback & Maintenance</div><h2 class="work-title">意見提供/維修報修</h2><p class="work-desc">選擇大廈及事項分類，提交後由管理處跟進。</p></div></section>
+        <section class="work-card">
+          <div class="work-card-title">最近記錄</div>
+          <table class="work-table">
+            <thead><tr><th>類型</th><th>大廈</th><th>事項</th><th>分類</th><th>狀態</th><th>更新時間</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>維修報修</td><td>協和大廈</td><td>公共走廊照明檢查</td><td>電力與燈光</td><td><span class="work-chip warn">處理中</span></td><td>今天 10:20</td><td><button class="work-mini-btn" type="button" onclick="toggleAffairsRecord(this)">查看內容</button></td></tr>
+              <tr class="affairs-record-detail" hidden><td colspan="7"><div class="affairs-record-card"><strong>內容</strong>12樓公共走廊近升降機位置照明不穩，晚間出現閃爍，請安排檢查燈泡及電制。</div></td></tr>
+              <tr><td>維修報修</td><td>協和大廈</td><td>地下門鎖檢查</td><td>結構與門窗</td><td><span class="work-chip">待跟進</span></td><td>昨天 09:30</td><td><button class="work-mini-btn" type="button" onclick="toggleAffairsRecord(this)">查看內容</button></td></tr>
+              <tr class="affairs-record-detail" hidden><td colspan="7"><div class="affairs-record-card"><strong>內容</strong>地下大門門鎖開合不順，住戶進出時需要多次嘗試，請安排師傅檢查。</div></td></tr>
+              <tr><td>意見反映</td><td>協和大廈</td><td>大堂清潔建議</td><td>環境與衛生</td><td><span class="work-chip good">已完成</span></td><td>昨天 16:45</td><td><button class="work-mini-btn" type="button" onclick="toggleAffairsRecord(this)">查看內容</button></td></tr>
+              <tr class="affairs-record-detail" hidden><td colspan="7"><div class="affairs-record-card"><strong>內容</strong>大堂入口雨天較易積水，建議加密清潔及放置防滑提示牌，管理處已完成跟進。</div></td></tr>
+              <tr><td>意見反映</td><td>時安大廈</td><td>平台功能建議</td><td>系統與平台功能</td><td><span class="work-chip warn">處理中</span></td><td>2026年6月4日</td><td><button class="work-mini-btn" type="button" onclick="toggleAffairsRecord(this)">查看內容</button></td></tr>
+              <tr class="affairs-record-detail" hidden><td colspan="7"><div class="affairs-record-card"><strong>內容</strong>希望日後可在平台查看管理處回覆進度及補充相片，方便住戶追蹤事項。</div></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="affairs-entry-grid" aria-label="意見提供與維修報修入口">
+          <button class="affairs-entry-card on" type="button" data-affairs-mode="repair" onclick="setAffairsRequestMode('repair')">
+            <span class="affairs-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m14.7 6.3 3-3a4 4 0 0 1 2.7 5.1l-4.7 4.7-4.8 4.8-3.3 3.3a2 2 0 0 1-2.8-2.8l3.3-3.3 4.8-4.8 4.7-4.7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="m8.1 15.1 2.8 2.8" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+            <span><strong>提交維修報修</strong><span>提交水務、電力、門窗、升降機及設施維修事項。</span></span>
+          </button>
+          <button class="affairs-entry-card" type="button" data-affairs-mode="feedback" onclick="setAffairsRequestMode('feedback')">
+            <span class="affairs-entry-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.8-.9L3 20l1.1-4.6a8.4 8.4 0 1 1 16.9-3.9Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10h8M8 13h5" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+            <span><strong>意見反映</strong><span>提交環境、管理服務、公共設施及平台功能意見。</span></span>
+          </button>
+        </section>
+        <section class="work-card affairs-feedback-form">
+          <div class="work-card-title">選擇大廈</div>
+          <div class="affairs-field">
+            <label for="affairs-building">大廈</label>
+            <select class="affairs-select" id="affairs-building">
+              <option value="">---------</option>
+              <option>仁英大廈</option>
+              <option selected>協和大廈</option>
+              <option>華興大廈(269號)</option>
+              <option>華興大廈(271號)</option>
+              <option>豐富大廈</option>
+              <option>得運大廈</option>
+              <option>天富大廈</option>
+              <option>新萬利大廈</option>
+              <option>萬高大廈B座</option>
+              <option>時安大廈</option>
+              <option>東昇樓</option>
+              <option>華園</option>
+              <option>榮森工業第二大廈</option>
+              <option>康睦庭園第二座</option>
+              <option>南昌苑</option>
+              <option>東南大樓(77號)</option>
+              <option>東南大樓(75號)</option>
+              <option>測試1大廈</option>
+              <option>利來大廈</option>
+              <option>仁文大廈</option>
+              <option>榮昇閣</option>
+              <option>仁利大廈</option>
+              <option>麗麗大廈</option>
+              <option>玉桂園(1座)</option>
+              <option>玉桂園(2座)</option>
+              <option>玉桂園(3座)</option>
+              <option>玉桂園(4座)</option>
+              <option>玉桂園(5座)</option>
+              <option>玉桂園(6座)</option>
+              <option>玉桂園(7座)</option>
+              <option>玉桂園(8座)</option>
+              <option>玉桂園(9座)</option>
+              <option>玉桂園(10座)</option>
+              <option>玉桂園(11座)</option>
+            </select>
+          </div>
+        </section>
+        <section class="work-card affairs-guided-shell">
+          <input type="hidden" id="affairs-request-mode" value="repair">
+          <div class="affairs-stepper" aria-label="意見及維修提交流程">
+            <span class="affairs-step-indicator on" data-affairs-step-dot="1"><b>1</b>選擇分類</span>
+            <span class="affairs-step-indicator" data-affairs-step-dot="2"><b>2</b>填寫內容</span>
+            <span class="affairs-step-indicator" data-affairs-step-dot="3"><b>3</b>上載圖片/影片</span>
+            <span class="affairs-step-indicator" data-affairs-step-dot="4"><b>4</b>確認提交</span>
+          </div>
+          <div class="affairs-guided-step" data-affairs-step="1">
+            <div class="work-card-title">選擇分類</div>
+            <div class="affairs-step-hint" data-affairs-fields="repair">請選擇維修大類及次分類，方便管理處安排合適人員跟進。</div>
+            <div class="affairs-step-hint" data-affairs-fields="feedback" hidden>請選擇意見大類及次分類，方便管理處按事項性質處理。</div>
+            <div class="affairs-field-grid" data-affairs-fields="repair">
+              <div class="affairs-field">
+                <label for="affairs-repair-category">維修大類</label>
+                <select class="affairs-select" id="affairs-repair-category" onchange="updateAffairsSubcategory('repair')"></select>
+              </div>
+              <div class="affairs-field">
+                <label for="affairs-repair-subcategory">維修次分類</label>
+                <select class="affairs-select" id="affairs-repair-subcategory"></select>
+              </div>
+            </div>
+            <div class="affairs-field-grid" data-affairs-fields="feedback" hidden>
+              <div class="affairs-field">
+                <label for="affairs-feedback-category">意見大類</label>
+                <select class="affairs-select" id="affairs-feedback-category" onchange="updateAffairsSubcategory('feedback')"></select>
+              </div>
+              <div class="affairs-field">
+                <label for="affairs-feedback-subcategory">意見次分類</label>
+                <select class="affairs-select" id="affairs-feedback-subcategory"></select>
+              </div>
+            </div>
+          </div>
+          <div class="affairs-guided-step" data-affairs-step="2" hidden>
+            <div class="work-card-title">填寫內容</div>
+            <div class="affairs-field" data-affairs-fields="repair">
+              <label for="affairs-repair-content">內容</label>
+              <textarea class="affairs-textarea" id="affairs-repair-content" placeholder="請描述維修位置、故障情況及需要跟進的內容"></textarea>
+            </div>
+            <div class="affairs-field" data-affairs-fields="feedback" hidden>
+              <label for="affairs-feedback-content">內容</label>
+              <textarea class="affairs-textarea" id="affairs-feedback-content" placeholder="請描述事項位置、情況及需要跟進的內容"></textarea>
+            </div>
+          </div>
+          <div class="affairs-guided-step" data-affairs-step="3" hidden>
+            <div class="work-card-title">上載圖片/影片</div>
+            <div class="affairs-step-hint">如有相關相片或影片，可一併提交予管理處參考。</div>
+            <div class="affairs-upload-box">
+              <strong>提交圖片/影片</strong>
+              <span>支援選擇多個圖片或影片檔案，實際上載限制可按後台設定調整。</span>
+              <input id="affairs-media" type="file" accept="image/*,video/*" multiple>
+            </div>
+          </div>
+          <div class="affairs-guided-step" data-affairs-step="4" hidden>
+            <div class="work-card-title">確認提交</div>
+            <div class="affairs-step-hint" data-affairs-fields="repair">請確認資料無誤。提交後由管理處安排跟進。</div>
+            <div class="affairs-step-hint" data-affairs-fields="feedback" hidden>閣下提供之意見將絕對保密。</div>
+            <div class="affairs-review-list">
+              <div class="affairs-review-row"><span>類型</span><strong id="affairs-review-mode">維修報修</strong></div>
+              <div class="affairs-review-row"><span>大廈</span><strong id="affairs-review-building">協和大廈</strong></div>
+              <div class="affairs-review-row"><span>大類</span><strong id="affairs-review-category">請選擇大類</strong></div>
+              <div class="affairs-review-row"><span>次分類</span><strong id="affairs-review-subcategory">請選擇次分類</strong></div>
+              <div class="affairs-review-row"><span>內容</span><strong id="affairs-review-content">請填寫內容</strong></div>
+              <div class="affairs-review-row"><span>附件</span><strong id="affairs-review-media">未選擇檔案</strong></div>
+            </div>
+          </div>
+          <div class="affairs-guided-actions">
+            <button class="work-action secondary" id="affairs-prev-btn" type="button" onclick="setAffairsStep(affairsCurrentStep-1)">上一步</button>
+            <button class="work-action" id="affairs-next-btn" type="button" onclick="nextAffairsStep()">下一步</button>
+            <button class="work-action" id="affairs-submit-btn" type="button" onclick="submitAffairsFeedback()" hidden>提交</button>
+          </div>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-access">
+        <section class="work-hero"><div><div class="work-kicker">Access</div><h2 class="work-title">智能門禁</h2><p class="work-desc">此功能暫未開通。</p></div></section>
+        <section class="work-card"><div class="work-card-title">暫未開通</div><div class="work-card-sub">智能門禁、訪客通行與門鎖聯動功能目前尚未開放。</div></section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-icctv">
+        <section class="work-hero">
+          <div>
+            <div class="work-kicker">ICCTV</div>
+            <h2 class="work-title">視像監控</h2>
+            <p class="work-desc">選擇大廈與鏡頭後，查看即時監控畫面。</p>
+          </div>
+          <button class="work-action" type="button" onclick="openIcctvWindow('affairs-icctv')">新窗口</button>
+        </section>
+        <section class="work-card icctv-panel-wide" id="affairs-icctv">
+          <div class="icctv-building-select">
+            <select class="staff-select" data-icctv-building-select="affairs-icctv"></select>
+            <button class="work-mini-btn" type="button" onclick="refreshIcctvPanel('affairs-icctv')">重新載入</button>
+          </div>
+          <div class="icctv-summary" data-icctv-summary></div>
+          <div class="icctv-layout">
+            <div>
+              <div class="icctv-building-meta" data-icctv-building-meta></div>
+              <div class="icctv-camera-list" data-icctv-camera-list></div>
+              <p class="icctv-note">來源頁如限制嵌入，可使用新窗口開啟。</p>
+            </div>
+            <div>
+              <div class="icctv-viewer-bar">
+                <div class="icctv-viewer-meta" data-icctv-viewer-meta>尚未選擇鏡頭</div>
+                <div class="icctv-viewer-actions"><button class="work-mini-btn" type="button" onclick="openIcctvWindow('affairs-icctv')">新窗口</button></div>
+              </div>
+              <div class="icctv-viewer">
+                <iframe data-icctv-frame title="ICCTV 即時監控" allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+                <div class="icctv-empty" data-icctv-empty><strong>未選擇鏡頭</strong><span>選擇大廈與鏡頭後，監控畫面會顯示在此處。</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="work-panel" data-work-panel="affairs-equipment">
+        <section class="work-hero"><div><div class="work-kicker">Equipment</div><h2 class="work-title">設備監測</h2><p class="work-desc">查看大廈設備狀態、巡檢紀錄與異常提醒。</p></div><button class="work-action secondary">重新整理</button></section>
+        <section class="work-card"><div class="work-card-title">設備狀態</div><table class="work-table"><thead><tr><th>設備</th><th>位置</th><th>狀態</th><th>更新時間</th></tr></thead><tbody><tr><td>升降機 1 號</td><td>大堂</td><td><span class="work-chip good">正常</span></td><td>今天 10:20</td></tr><tr><td>水泵房</td><td>地庫</td><td><span class="work-chip warn">需檢查</span></td><td>今天 09:40</td></tr><tr><td>照明系統</td><td>公共走廊</td><td><span class="work-chip good">正常</span></td><td>昨天 18:10</td></tr></tbody></table></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 會員中心 -->

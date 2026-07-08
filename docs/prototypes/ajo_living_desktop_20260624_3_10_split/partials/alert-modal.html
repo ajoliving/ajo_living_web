@@ -1,0 +1,30 @@
+<!--
+ * Partial - 目標價提醒彈窗
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<!-- 目標價提醒 Modal -->
+<div class="alert-modal-overlay" id="alert-modal">
+  <div class="alert-modal">
+    <div class="alert-modal-header">
+      <div class="alert-modal-title"> 設定目標價提醒</div>
+      <button class="alert-close" onclick="closeAlertModal()">✕</button>
+    </div>
+    <div class="alert-modal-body">
+      <div class="alert-prop-name" id="alert-prop-name">佐敦 高級住宅</div>
+      <div class="alert-current" id="alert-current">現時月租：HK$36,000</div>
+      <label class="alert-label">目標月租 (HK$)</label>
+      <div class="alert-input-row">
+        <span class="alert-prefix">HK$</span>
+        <input class="alert-input" id="alert-target-input" type="number" placeholder="例如 30000" min="1000">
+      </div>
+      <div class="alert-hint">當物件租金降至或低於目標價，系統會喺通知中心提醒你。</div>
+      <button class="nav-login ripple-host" style="width:100%;padding:11px;font-size:13px;" onclick="saveAlert()">確認設定提醒</button>
+      <div class="alert-active-list" id="alert-active-list">
+        <div class="alert-active-title">已設定嘅提醒</div>
+        <div id="alert-active-items"></div>
+      </div>
+    </div>
+  </div>
+</div>

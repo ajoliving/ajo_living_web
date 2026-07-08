@@ -1,0 +1,129 @@
+<!--
+ * Route - 服務式住宅詳情
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-service-detail">
+  <div class="detail-wrap">
+    <div class="detail-main">
+      <div class="breadcrumb">
+        <span class="bc-link" onclick="go('home')">首頁</span>
+        <span class="bc-sep">›</span>
+        <span class="bc-link" onclick="go('service')">服務式住宅</span>
+        <span class="bc-sep">›</span>
+        <span class="bc-current">中環服務式公寓 Superior</span>
+      </div>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <div class="gtags" style="margin-bottom:8px;"><span class="gtag dark">每日起租</span><span class="gtag">中環</span><span class="gtag">服務式住宅</span></div>
+          <h2 style="font-size:22px;font-weight:400;margin-bottom:6px;">中環服務式公寓 Superior</h2>
+          <div style="font-size:12px;color:var(--g4);margin-bottom:16px;">中環核心地段 · 酒店式管理 · 可短租</div>
+          <div class="detail-price-row">
+            <div style="font-size:28px;font-weight:300;letter-spacing:-1px;">HK$1,800<span style="font-size:13px;color:var(--g4);font-weight:400;"> / 晚起</span></div>
+            <div style="font-size:12px;color:var(--g4);">月租可另議</div>
+          </div>
+          <div class="detail-stats">
+            <div class="detail-stat"><div class="detail-stat-val">780</div><div class="detail-stat-label">實用呎數</div></div>
+            <div class="detail-stat"><div class="detail-stat-val">1</div><div class="detail-stat-label">睡房</div></div>
+            <div class="detail-stat"><div class="detail-stat-val">1</div><div class="detail-stat-label">浴室</div></div>
+            <div class="detail-stat"><div class="detail-stat-val">24hr</div><div class="detail-stat-label">禮賓</div></div>
+          </div>
+          <div class="detail-section">
+            <div style="font-size:12px;font-weight:500;margin-bottom:10px;">設施服務</div>
+            <div class="gpills" style="gap:6px;">
+              <span class="gpill">WiFi</span><span class="gpill">清潔服務</span><span class="gpill">健身室</span><span class="gpill">洗衣房</span><span class="gpill">獨立廚房</span><span class="gpill">24hr 禮賓</span>
+            </div>
+          </div>
+          <div class="detail-section">
+            <div class="service-room-tabs">
+              <div class="service-room-title">房間種類</div>
+              <span class="service-room-currency">HKD</span>
+            </div>
+            <div class="service-room-table" role="table" aria-label="房間種類">
+              <div class="service-room-row service-room-row-head" role="row"><div>房型 / 面積</div><div>價錢（1個月）</div><div></div></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房豪華套房</div><div class="service-room-area">354呎</div></div><div class="service-room-price">1個月 HKD $32,850</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房時尚豪華套房</div><div class="service-room-area">354呎</div></div><div class="service-room-price">1個月 HKD $33,750</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房尊貴套房</div><div class="service-room-area">365呎</div></div><div class="service-room-price">1個月 HKD $34,650</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房時尚尊貴套房</div><div class="service-room-area">365呎</div></div><div class="service-room-price">1個月 HKD $35,500</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房尊尚豪華套房</div><div class="service-room-area">354呎</div></div><div class="service-room-price">1個月 HKD $41,250</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房套房連平台</div><div class="service-room-area">588-798呎</div></div><div class="service-room-price">1個月 HKD $42,000-51,000</div><button class="service-room-book" type="button">訂房</button></div>
+              <div class="service-room-row" role="row"><div><div class="service-room-type">一房尊尚尊貴套房</div><div class="service-room-area">365呎</div></div><div class="service-room-price">1個月 HKD $43,450</div><button class="service-room-book" type="button">訂房</button></div>
+            </div>
+          </div>
+          <div class="detail-section">
+            <div style="font-size:12px;font-weight:500;margin-bottom:8px;">住宅描述</div>
+            <p class="body-text">適合商務出行、短期住宿或搬遷過渡。房間配備基本家具、廚房設備與定期清潔服務，可按日、按週或按月安排入住。</p>
+          </div>
+        </div>
+        <div class="detail-right">
+          <div class="detail-right-card">
+            <div class="detail-gallery">
+              <div class="detail-main-img pat" style="background:linear-gradient(160deg,#dde4e8,#b8c8d0);"></div>
+              <div class="detail-thumb-row">
+                <div class="detail-thumb pat" style="background:linear-gradient(160deg,#e4ecf0,#c8d8df);"></div>
+                <div class="detail-thumb pat" style="background:linear-gradient(160deg,#ece6dc,#d6ccb8);"></div>
+                <div class="detail-thumb pat" style="background:linear-gradient(160deg,#e6ece6,#c8d8c8);"></div>
+                <div class="detail-thumb detail-thumb-more pat" style="background:linear-gradient(160deg,#e4e2dc,#cac4b8);">+6</div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-right-card">
+            <div class="label-text" style="margin-bottom:10px;">物業位置</div>
+            <iframe class="building-map-frame" title="服務式住宅地圖位置" src="https://www.google.com/maps?q=Central%20Hong%20Kong&output=embed" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+          <div class="detail-agent-card">
+            <div class="detail-agent-profile">
+              <div class="detail-agent-avatar">A</div>
+              <div class="detail-agent-copy">
+                <div class="detail-agent-kicker">服務住宅團隊</div>
+                <div class="detail-agent-name">AJO Living 管理處</div>
+                <div class="detail-agent-sub">提供查詢、預約睇房與入住申請協助。</div>
+              </div>
+            </div>
+            <div class="detail-agent-time">
+              <div class="detail-agent-label">可預約時間</div>
+              <div class="detail-agent-value">今天 10:00 - 19:00</div>
+              <div class="detail-agent-note">可安排即日睇房或線上介紹</div>
+            </div>
+            <div class="detail-agent-actions">
+              <button class="detail-agent-contact" type="button" aria-label="服務電話" onclick="revealServicePhone()">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 19 19.5 19.5 0 0 1 5 12.81 19.8 19.8 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.12.92.33 1.82.62 2.68a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6.27 6.27l1.22-1.23a2 2 0 0 1 2.11-.45c.86.29 1.76.5 2.68.62A2 2 0 0 1 22 16.92Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span id="service-detail-phone-text">致電查詢</span>
+              </button>
+              <a class="detail-agent-contact primary" href="https://wa.me/85239888800" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.2 20.2 3 21l.9-4A9 9 0 1 1 7.2 20.2Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 8.7c.2-.4.4-.5.7-.5h.5c.2 0 .4.1.5.4l.6 1.4c.1.3.1.5-.1.7l-.4.5c.7 1.2 1.6 2.1 2.8 2.8l.5-.4c.2-.2.4-.2.7-.1l1.4.6c.3.1.4.3.4.5v.5c0 .3-.1.5-.5.7-.6.3-1.4.3-2.4-.1-2.4-.8-4.3-2.7-5.1-5.1-.4-1-.4-1.8-.1-2.4Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                WhatsApp
+              </a>
+              <button class="detail-agent-contact" type="button" onclick="go('chat')">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.8-.9L3 20l1.1-4.6a8.4 8.4 0 1 1 16.9-3.9Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11h8M8 14h5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                站內聊天
+              </button>
+            </div>
+          </div>
+          <div class="similar-section">
+            <div class="label-text" style="margin-bottom:12px;">相似住宅推薦</div>
+            <div class="similar-scroll">
+              <div class="sim-card" onclick="showToast('正在載入住宅…')">
+                <div class="sim-img pat" style="background:linear-gradient(135deg,#d8e0e0,#c0cccc);"></div>
+                <div class="sim-body"><div class="sim-name">灣仔服務公寓</div><div class="sim-price">HK$1,550/晚</div><div class="sim-meta">香港島 · 520呎</div></div>
+              </div>
+              <div class="sim-card" onclick="showToast('正在載入住宅…')">
+                <div class="sim-img pat" style="background:linear-gradient(135deg,#e4dcd8,#ccc0bc);"></div>
+                <div class="sim-body"><div class="sim-name">上環行政套房</div><div class="sim-price">HK$1,680/晚</div><div class="sim-meta">香港島 · 610呎</div></div>
+              </div>
+              <div class="sim-card" onclick="showToast('正在載入住宅…')">
+                <div class="sim-img pat" style="background:linear-gradient(135deg,#e0e8e0,#c8d8c8);"></div>
+                <div class="sim-body"><div class="sim-name">尖沙咀短租住宅</div><div class="sim-price">HK$1,380/晚</div><div class="sim-meta">九龍 · 460呎</div></div>
+              </div>
+              <div class="sim-card" onclick="showToast('正在載入住宅…')">
+                <div class="sim-img pat" style="background:linear-gradient(135deg,#e8e0e8,#d0c8d0);"></div>
+                <div class="sim-body"><div class="sim-name">銅鑼灣酒店式住宅</div><div class="sim-price">HK$1,920/晚</div><div class="sim-meta">香港島 · 690呎</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

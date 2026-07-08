@@ -1,0 +1,63 @@
+<!--
+ * Partial - 圖片燈箱與價格比較彈窗
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" onclick="closeLB()">✕</button>
+  <div class="lb-img pat" id="lb-img" style="background:linear-gradient(135deg,#e8e8e8,#d0d0d0);width:480px;height:320px;border-radius:4px;"></div>
+  <div class="lb-nav">
+    <button class="lb-arrow" onclick="lbPrev()">‹</button>
+    <span class="lb-counter" id="lb-counter">1 / 4</span>
+    <button class="lb-arrow" onclick="lbNext()">›</button>
+  </div>
+  <div class="lb-thumbs" id="lb-thumbs"></div>
+</div>
+
+<!-- PRICE COMPARE MODAL -->
+<div class="modal-overlay" id="price-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-prod-name">纖柔牙刷 精巧頭 3支裝</div>
+        <div class="modal-brand" id="modal-prod-brand">高露潔</div>
+      </div>
+      <button class="modal-close" onclick="document.getElementById('price-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-best">
+        <div>
+          <div class="modal-best-label">最低價</div>
+          <div class="modal-best-price">HK$14.50</div>
+          <div class="modal-best-store">AEON · 買2件$29.00</div>
+        </div>
+        <div style="margin-left:auto;background:var(--accent);color:white;font-size:13px;font-weight:700;padding:6px 12px;border-radius:3px;">-60%</div>
+      </div>
+      <div class="modal-compare-title">各超市價格比較</div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">AEON</div>
+        <div class="modal-bar-wrap"><div class="modal-bar best" style="width:40%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$14.50</div><div class="modal-store-promo">買2件$29</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">百佳</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:62%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$22.90</div><div class="modal-store-promo">—</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">惠康</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:72%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$26.50</div><div class="modal-store-promo">—</div></div>
+      </div>
+      <div class="modal-store-row">
+        <div class="modal-store-name">CitySuper</div>
+        <div class="modal-bar-wrap"><div class="modal-bar" style="width:100%"></div></div>
+        <div style="text-align:right"><div class="modal-store-price">HK$35.90</div><div class="modal-store-promo">原價</div></div>
+      </div>
+      <div class="modal-chart-title">近30日價格走勢</div>
+      <div class="price-chart" id="price-chart"></div>
+    </div>
+  </div>
+</div>

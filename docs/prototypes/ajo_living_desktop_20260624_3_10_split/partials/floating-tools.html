@@ -1,0 +1,95 @@
+<!--
+ * Partial - 比較列、客服與租金計算器
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<!-- COMPARE BAR -->
+<div class="compare-bar" id="compare-bar">
+  <div class="compare-slots" id="compare-slots">
+    <div class="compare-slot" id="cs-0">+ 加入比較</div>
+    <div class="compare-slot" id="cs-1">+ 加入比較</div>
+    <div class="compare-slot" id="cs-2">+ 加入比較</div>
+  </div>
+  <span class="compare-count" id="compare-count">0 / 3</span>
+  <button class="compare-clear" onclick="clearCompare()">清除</button>
+  <button class="compare-btn" id="compare-go-btn" onclick="openCompareModal()" disabled>開始比較</button>
+</div>
+
+<!-- COMPARE MODAL -->
+<div class="compare-modal" id="compare-modal">
+  <div class="compare-modal-inner">
+    <div class="compare-modal-header">
+      <div style="font-size:14px;font-weight:500;">物件比較</div>
+      <button class="modal-close" onclick="document.getElementById('compare-modal').classList.remove('open')">✕</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="compare-table" id="compare-table">
+        <thead><tr id="compare-thead"></tr></thead>
+        <tbody id="compare-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT FAB -->
+<button class="chat-fab" onclick="toggleChat()">
+  
+  <span class="chat-badge">1</span>
+</button>
+
+<!-- CHAT WINDOW -->
+<div class="chat-window" id="chat-window">
+  <div class="chat-header">
+    <div class="chat-avatar"></div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">AJO 客服助理</div>
+      <div class="chat-header-status">● 在線</div>
+    </div>
+    <button class="chat-close-btn" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg bot">你好！我係 AJO Living 客服助理，有咩可以幫到你？</div>
+  </div>
+  <div class="chat-quick-replies">
+    <span class="chat-qr" onclick="chatReply(this,'睇樓安排')"> 睇樓安排</span>
+    <span class="chat-qr" onclick="chatReply(this,'租金查詢')"> 租金查詢</span>
+    <span class="chat-qr" onclick="chatReply(this,'付款方式')"> 付款方式</span>
+    <span class="chat-qr" onclick="chatReply(this,'聯絡代理')"> 聯絡代理</span>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chat-input" placeholder="輸入訊息…" onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<!-- CALCULATOR FAB -->
+<button class="calc-fab" onclick="toggleCalc()" title="租金計算器"></button>
+
+<!-- CALCULATOR WINDOW -->
+<div class="calc-window" id="calc-window">
+  <div class="calc-header">
+    <span class="calc-title"> 租金計算器</span>
+    <button class="calc-close" onclick="toggleCalc()">✕</button>
+  </div>
+  <div class="calc-body">
+    <div class="calc-field">
+      <label class="calc-label">月租金額 (HK$)</label>
+      <input class="calc-input" id="calc-rent" type="number" placeholder="例如 36000" oninput="calcRent()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">每月收入 (HK$)</label>
+      <input class="calc-input" id="calc-income" type="number" placeholder="例如 80000" oninput="calcRent()">
+    </div>
+    <div class="calc-field">
+      <label class="calc-label">實用面積 (呎)</label>
+      <input class="calc-input" id="calc-sqft" type="number" placeholder="例如 200" oninput="calcRent()">
+    </div>
+    <div class="calc-results" id="calc-results">
+      <div class="calc-result-row"><span class="calc-result-label">年租</span><span class="calc-result-val" id="cr-annual">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">每呎月租</span><span class="calc-result-val" id="cr-psf">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">佔收入比例</span><span class="calc-result-val" id="cr-ratio">—</span></div>
+      <div class="calc-result-row"><span class="calc-result-label">建議</span><span class="calc-result-val" id="cr-advice">輸入數據後顯示</span></div>
+    </div>
+  </div>
+</div>

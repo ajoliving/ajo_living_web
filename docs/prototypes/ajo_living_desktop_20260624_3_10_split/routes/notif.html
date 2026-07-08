@@ -1,0 +1,91 @@
+<!--
+ * Route - 通知中心
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-notif">
+  <div class="work-shell">
+    <aside class="work-sidebar">
+      <h1>通知中心</h1>
+      <p>集中查看優惠提醒、物業消息、支付提醒與系統通知。</p>
+      <nav class="work-nav">
+        <button class="work-nav-item on" data-work-tab="notif" data-work-target="notif-all">全部通知 <span class="work-chip brand">8</span></button>
+        <button class="work-nav-item" data-work-tab="notif" data-work-target="notif-offers">優惠提醒 <span class="work-chip">3</span></button>
+        <button class="work-nav-item" data-work-tab="notif" data-work-target="notif-property">物業消息</button>
+        <button class="work-nav-item" data-work-tab="notif" data-work-target="notif-payment">支付提醒 <span class="work-chip warn">1</span></button>
+        <button class="work-nav-item" data-work-tab="notif" data-work-target="notif-system">系統通知</button>
+      </nav>
+    </aside>
+    <main class="work-main">
+      <div class="work-panel on" data-work-panel="notif-all">
+      <section class="work-hero">
+        <div>
+          <div class="work-kicker">Notifications</div>
+          <h2 class="work-title">所有通知</h2>
+          <p class="work-desc">未讀通知會優先顯示，方便業主、租客與職員快速處理待辦。</p>
+        </div>
+        <button class="work-action secondary">全部標為已讀</button>
+      </section>
+      <section class="work-card">
+        <div class="work-card-title">今日</div>
+        <div class="notice-list">
+          <article class="notice-item unread">
+            <div class="notice-dot"></div>
+            <div class="notice-icon">惠</div>
+            <div><div class="notice-title">收藏商品有新優惠</div><div class="notice-desc">高露潔牙刷於 AEON 減價 60%，可前往綜合優惠查看最新價格。</div></div>
+            <div class="notice-time">5 分鐘前</div>
+          </article>
+          <article class="notice-item unread">
+            <div class="notice-dot"></div>
+            <div class="notice-icon">費</div>
+            <div><div class="notice-title">6月管理費待繳提醒</div><div class="notice-desc">截止日期：2026年6月15日，金額 HK$2,800。</div></div>
+            <div class="notice-time">1 小時前</div>
+          </article>
+          <article class="notice-item unread">
+            <div class="notice-dot"></div>
+            <div class="notice-icon">樓</div>
+            <div><div class="notice-title">查看過的物件降價</div><div class="notice-desc">佐敦高級住宅月租由 HK$38,000 降至 HK$36,000。</div></div>
+            <div class="notice-time">3 小時前</div>
+          </article>
+        </div>
+      </section>
+      <section class="work-card">
+        <div class="work-card-title">昨日</div>
+        <div class="notice-list">
+          <article class="notice-item">
+            <div class="notice-dot read"></div>
+            <div class="notice-icon">約</div>
+            <div><div class="notice-title">預約睇樓確認</div><div class="notice-desc">中環甲級寫字樓睇樓時間：6月8日下午2時。</div></div>
+            <div class="notice-time">昨天 14:30</div>
+          </article>
+          <article class="notice-item">
+            <div class="notice-dot read"></div>
+            <div class="notice-icon">告</div>
+            <div><div class="notice-title">社區公告：電梯保養</div><div class="notice-desc">A棟電梯將於 6月8日 上午 9-12 時進行年度保養。</div></div>
+            <div class="notice-time">昨天 09:15</div>
+          </article>
+        </div>
+      </section>
+      </div>
+      <div class="work-panel" data-work-panel="notif-offers">
+      <section class="work-hero"><div><div class="work-kicker">Offers</div><h2 class="work-title">優惠提醒</h2><p class="work-desc">查看收藏商品、優惠價格與到貨提醒。</p></div><button class="work-action secondary">全部標為已讀</button></section>
+      <section class="work-card"><div class="work-card-title">優惠提醒</div><div class="notice-list"><article class="notice-item unread"><div class="notice-dot"></div><div class="notice-icon">惠</div><div><div class="notice-title">收藏商品有新優惠</div><div class="notice-desc">高露潔牙刷於 AEON 減價 60%，可前往綜合優惠查看最新價格。</div></div><div class="notice-time">5 分鐘前</div></article></div></section>
+      </div>
+      <div class="work-panel" data-work-panel="notif-property">
+      <section class="work-hero"><div><div class="work-kicker">Property</div><h2 class="work-title">物業消息</h2><p class="work-desc">查看睇樓、樓盤變動、社區公告與大廈消息。</p></div><button class="work-action secondary">全部標為已讀</button></section>
+      <section class="work-card"><div class="work-card-title">物業消息</div><div class="notice-list"><article class="notice-item unread"><div class="notice-dot"></div><div class="notice-icon">樓</div><div><div class="notice-title">查看過的物件降價</div><div class="notice-desc">佐敦高級住宅月租由 HK$38,000 降至 HK$36,000。</div></div><div class="notice-time">3 小時前</div></article><article class="notice-item"><div class="notice-dot read"></div><div class="notice-icon">約</div><div><div class="notice-title">預約睇樓確認</div><div class="notice-desc">中環甲級寫字樓睇樓時間：6月8日下午2時。</div></div><div class="notice-time">昨天 14:30</div></article><article class="notice-item"><div class="notice-dot read"></div><div class="notice-icon">告</div><div><div class="notice-title">社區公告：電梯保養</div><div class="notice-desc">A棟電梯將於 6月8日 上午 9-12 時進行年度保養。</div></div><div class="notice-time">昨天 09:15</div></article></div></section>
+      </div>
+      <div class="work-panel" data-work-panel="notif-payment">
+      <section class="work-hero"><div><div class="work-kicker">Payment</div><h2 class="work-title">支付提醒</h2><p class="work-desc">查看管理費、賬單與支付狀態提醒。</p></div><button class="work-action secondary">全部標為已讀</button></section>
+      <section class="work-card"><div class="work-card-title">支付提醒</div><div class="notice-list"><article class="notice-item unread"><div class="notice-dot"></div><div class="notice-icon">費</div><div><div class="notice-title">6月管理費待繳提醒</div><div class="notice-desc">截止日期：2026年6月15日，金額 HK$2,800。</div></div><div class="notice-time">1 小時前</div></article></div></section>
+      </div>
+      <div class="work-panel" data-work-panel="notif-system">
+      <section class="work-hero"><div><div class="work-kicker">System</div><h2 class="work-title">系統通知</h2><p class="work-desc">查看平台更新、帳戶安全與系統消息。</p></div></section>
+      <section class="work-card"><div class="work-card-title">系統通知</div><div class="notice-list"><article class="notice-item"><div class="notice-dot read"></div><div class="notice-icon">系</div><div><div class="notice-title">帳戶資料已更新</div><div class="notice-desc">你的聯絡資料已成功保存。</div></div><div class="notice-time">6月5日</div></article></div></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 我的大廈 -->

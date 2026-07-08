@@ -1,0 +1,84 @@
+<!--
+ * Route - 首頁
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-home">
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-bg pat" style="background:linear-gradient(160deg,#1a1a1a 0%,#2e2e2e 100%);">
+      <svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.08" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid slice"><rect x="0" y="280" width="60" height="140" fill="white"/><rect x="70" y="200" width="80" height="220" fill="white"/><rect x="160" y="240" width="55" height="180" fill="white"/><rect x="225" y="160" width="100" height="260" fill="white"/><rect x="335" y="210" width="70" height="210" fill="white"/><rect x="415" y="140" width="110" height="280" fill="white"/><rect x="535" y="190" width="75" height="230" fill="white"/><rect x="620" y="220" width="55" height="200" fill="white"/><rect x="685" y="170" width="90" height="250" fill="white"/><rect x="785" y="200" width="15" height="220" fill="white"/></svg>
+      <div class="hero-content">
+        <div class="hero-eyebrow">AJO LIVING</div>
+        <h1 class="hero-title">理想生活<br>由此出發</h1>
+        <p class="hero-desc">全港最大社區生活平台，搜尋住宅、服務式公寓、家具及生活優惠，一站式滿足您的所有需要。</p>
+        <div class="hero-btns">
+          <button class="hbtn-primary" onclick="go('listing')">搜尋樓盤</button>
+          <button class="hbtn-ghost" onclick="go('service')">了解服務</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- CATEGORIES -->
+  <div class="home-section">
+    <div class="home-sec-title">探索服務</div>
+    <div class="cat-grid">
+      <div class="cat-card" onclick="go('listing')">
+        <div class="cat-icon"></div>
+        <div class="cat-name">樓盤租售</div>
+        <div class="cat-desc">住宅、商廈、車位一應俱全</div>
+      </div>
+      <div class="cat-card" onclick="go('service')">
+        <div class="cat-icon"></div>
+        <div class="cat-name">服務式住宅</div>
+        <div class="cat-desc">短期靈活入住，設施齊備</div>
+      </div>
+      <div class="cat-card" onclick="go('market')">
+        <div class="cat-icon"></div>
+        <div class="cat-name">家具市集</div>
+        <div class="cat-desc">社區二手好物交易平台</div>
+      </div>
+      <div class="cat-card" onclick="go('offers')">
+        <div class="cat-icon"></div>
+        <div class="cat-name">綜合優惠</div>
+        <div class="cat-desc">住戶專屬折扣與生活禮遇</div>
+      </div>
+    </div>
+  </div>
+  <!-- FEATURED -->
+  <div class="home-section" style="background:var(--g1);padding-top:32px;padding-bottom:32px;">
+    <div class="home-sec-title">精選樓盤</div>
+    <div class="feat-grid">
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img tall pat" style="background:linear-gradient(160deg,#e8e8e8,#d0d0d0);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag dark">熱門</span><span class="gtag">九龍</span></div>
+          <div class="gtitle">佐敦 高級住宅</div>
+          <div class="gprice">HK$36,000 <span>/ 月</span></div>
+          <div class="feat-area">實用面積 200呎</div>
+        </div>
+      </div>
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img short pat" style="background:linear-gradient(160deg,#e0e0e8,#c8c8d8);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag">香港島</span><span class="gtag">商廈</span></div>
+          <div class="gtitle">中環甲級寫字樓</div>
+          <div class="gprice">HK$120,000 <span>/ 月</span></div>
+          <div class="feat-area">實用面積 2,400呎</div>
+        </div>
+      </div>
+      <div class="feat-card" onclick="go('detail')">
+        <div class="feat-img tall pat" style="background:linear-gradient(160deg,#e4dcd8,#ccc0bc);"></div>
+        <div class="feat-body">
+          <div class="gtags"><span class="gtag dark">業主盤</span><span class="gtag">新界</span></div>
+          <div class="gtitle">沙田第一城 3房</div>
+          <div class="gprice">HK$18,500 <span>/ 月</span></div>
+          <div class="feat-area">實用面積 650呎</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 服務式住宅 -->

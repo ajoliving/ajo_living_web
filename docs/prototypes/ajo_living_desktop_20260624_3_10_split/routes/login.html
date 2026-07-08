@@ -1,0 +1,102 @@
+<!--
+ * Route - 登入
+ * 1. 由 ajo_living_desktop_20260624(3)(10).html 拆分。
+ * 2. 保留原始 DOM 結構供高保真還原。
+ * 3. 已移除明確重複或桌面版未使用的片段。
+ -->
+<div class="page" id="page-login">
+  <div class="auth-shell">
+    <section class="auth-visual">
+      <div class="auth-visual-main">
+        <div class="auth-kicker">AJO LIVING</div>
+        <div class="auth-title">歡迎回家</div>
+        <div class="auth-desc">開啟您的理想社區生活，管理發佈、聯絡與鄰里交易。</div>
+      </div>
+      <div class="auth-visual-foot">
+        <div>地點<br>Hong Kong</div>
+        <div>圖片<br>AJO Living</div>
+        <div>創立於 2024</div>
+      </div>
+    </section>
+    <section class="auth-panel">
+      <div class="auth-card">
+        <div class="auth-heading" id="auth-heading">住戶登入</div>
+        <div class="auth-copy" id="auth-copy">可使用用戶名、手機號碼或電郵配合密碼登入。</div>
+
+        <div class="auth-form on" id="auth-login-form">
+          <div class="ltabs">
+            <button class="ltab">手機登入</button>
+            <button class="ltab on">用戶名</button>
+            <button class="ltab">郵箱登入</button>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">用戶名 / 手機 / 電郵</label>
+            <div class="form-group" id="fg-phone">
+              <div class="auth-input-wrap">
+                <input class="linput" id="login-phone" placeholder="patrick" oninput="validatePhone()">
+                <span class="auth-icon">人</span>
+              </div>
+              <div class="form-err">請輸入有效登入資料</div>
+              <div class="form-ok">格式正確</div>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">密碼</label>
+            <div class="form-group" id="fg-pwd">
+              <div class="auth-input-wrap">
+                <input class="linput" id="login-pwd" type="password" placeholder="請輸入密碼" oninput="validatePwd()">
+                <span class="auth-icon">眼</span>
+              </div>
+              <div class="form-err">密碼最少需要 6 個字元</div>
+              <div class="form-ok">密碼格式正確</div>
+            </div>
+          </div>
+          <label class="auth-remember"><input type="checkbox" checked>記住我</label>
+          <button class="auth-submit lsubmit" type="button">登入</button>
+          <div class="auth-foot">還沒有帳戶？ <button class="auth-link" type="button" onclick="setAuthMode('register')">註冊</button></div>
+        </div>
+
+        <div class="auth-form" id="auth-register-form">
+          <div class="ltabs">
+            <button class="ltab on">新用戶</button>
+            <button class="ltab">已有 ismart 帳戶</button>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">用戶名</label>
+            <div class="auth-input-wrap"><input class="linput" placeholder="請輸入用戶名"><span class="auth-icon">人</span></div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">手機號碼</label>
+            <div class="auth-input-wrap"><input class="linput" placeholder="例如 +852 6123 4567"><span class="auth-icon">電</span></div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">密碼</label>
+            <div class="auth-input-wrap"><input class="linput" type="password" placeholder="請設定登入密碼"><span class="auth-icon">眼</span></div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">大廈</label>
+            <div class="auth-input-wrap"><select class="linput"><option>請選擇大廈</option><option>康睦庭園第二座</option><option>海景花園</option></select><span class="auth-icon">樓</span></div>
+          </div>
+          <div class="auth-grid-2">
+            <div class="auth-field">
+              <label class="auth-label">樓層</label>
+              <div class="auth-input-wrap"><select class="linput"><option>請選擇樓層</option><option>02</option><option>08</option></select><span class="auth-icon">層</span></div>
+            </div>
+            <div class="auth-field">
+              <label class="auth-label">單位</label>
+              <div class="auth-input-wrap"><select class="linput"><option>請選擇單位</option><option>D</option><option>A</option></select><span class="auth-icon">戶</span></div>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">郵箱</label>
+            <div class="auth-input-wrap"><input class="linput" placeholder="name@example.com"><span class="auth-icon">郵</span></div>
+          </div>
+          <button class="auth-submit" type="button" onclick="showToast('註冊資料已提交','success')">建立帳戶</button>
+          <div class="auth-foot">已經有帳戶？ <button class="auth-link" type="button" onclick="setAuthMode('login')">登入</button></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- 首頁 -->
