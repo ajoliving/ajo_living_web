@@ -226,3 +226,12 @@ go test ./...
 - 是否同步補充測試與文件。
 - 对于我的部署的话，需要参考我的/Users/yangliu/Documents/Code/ajoliving_web/doc copy/server-deployment-ai-prompt.md 文档，以及我的/Users/yangliu/Documents/Code/ajoliving_web/deploy-ajoliving.sh 脚本
 - 部署不要破坏我的已经部署好的项目，可以先ssh链接上服务器后直接查看相关的服务器的配置文件等等，然后再部署，不要新加多余的垃圾
+
+## 子目錄記憶
+- `internal/AGENTS.md` 是後端內部分層與目錄責任的本地記憶入口；新增、移動、重命名 internal 能力或改變主域歸屬時同步更新。
+- API 文檔、錯誤語義、模型契約或 AI 文件生成規範受影響時，同步檢查 `doc/api.md` 與 `../docs/PROMPT_INDEX.md`。
+
+## 變更日誌
+2026-07-08: 補充後端 internal 目錄記憶入口，連接 API 契約與 prompt/context 索引。
+
+[PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.

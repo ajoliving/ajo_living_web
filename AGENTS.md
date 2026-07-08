@@ -173,7 +173,7 @@ const handleSubmit = async () => { ... };
 ## 專案記憶與索引
 
 ### 成員清單
-docs/: 產品、部署、整合、開發規範、原型與 prompt/context 索引。
+docs/: 架構、部署、整合、開發規範、資料與 prompt/context 索引；`docs/archive/` 為歷史資料。
 web-new/: 目前正在開發與維護的 Vue 3 前端子專案。
 http_service/: 目前正在開發與維護的 Go 後端 API 子專案。
 web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能。
@@ -187,5 +187,7 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 
 ### 變更日誌
 2026-07-08: 建立專案 prompt/context 記憶入口，指向 `docs/PROMPT_INDEX.md` 與 `docs/AGENTS.md`。
+2026-07-08: 補充 docs prompt、部署 prompt、前端 pages 與後端 internal 的本地記憶入口。
+2026-07-08: 將 docs product、prototypes、backups 歸入 `docs/archive/`，不作後續 prompt/context 入口。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

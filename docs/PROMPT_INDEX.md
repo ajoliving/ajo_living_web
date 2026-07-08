@@ -8,6 +8,10 @@
 | Backend rules | `http_service/AGENTS.md` | Go service layering, model/API ownership, legacy integration rules, comments, tests, and deployment safeguards. | `go test ./...` when backend behavior changes |
 | Archived frontend rules | `web/AGENTS.md` | Historical frontend reference; not the default target for new work. | Manual review only when user explicitly asks to modify `web` |
 | Docs memory map | `docs/AGENTS.md` | Local ownership map for documentation, prompts, and maintenance protocol. | Manual review |
+| Prompt directory map | `docs/prompts/AGENTS.md` | Local ownership and maintenance rules for reusable UI prompt files. | Manual review |
+| Deployment prompt map | `docs/deployment/AGENTS.md` | Local ownership and safety protocol for deployment prompt files. | Manual server inspection before deployment |
+| Frontend page memory map | `web-new/src/pages/AGENTS.md` | Local page tree ownership, module boundaries, and UI prompt landing rules. | `npm run typecheck`, `npm run test:unit` when frontend behavior changes |
+| Backend internal memory map | `http_service/internal/AGENTS.md` | Local backend layer ownership, domain boundaries, and API contract impact rules. | `go test ./...` when backend behavior changes |
 | Public UI baseline prompt | `docs/prompts/ajo-living-public-ui-style-prompt.md` | Reusable baseline for formal AJO Living public page UI, copy, layout, and visual restrictions. | Manual visual review and responsive check |
 | Page UI prompts | `docs/prompts/home-page-prompt.md`, `docs/prompts/login-page-prompt.md`, `docs/prompts/marketplace-discover-page-prompt.md`, `docs/prompts/marketplace-filter-page-prompt.md`, `docs/prompts/marketplace-publish-page-prompt.md` | Reusable page-specific UI prompts for frontend implementation or redesign work. | Manual visual review and relevant frontend checks |
 | Form dialog prompt | `docs/prompts/global-form-dialog-prompt.md` | Reusable form modal structure, field, state, and acceptance rules. | Manual review and relevant form tests |
@@ -19,8 +23,9 @@
 ## Runtime Prompt Chain
 - Product runtime code currently has no LLM request chain and no model-facing prompt builder.
 - Repository work starts from `AGENTS.md`, then follows the nearest child `AGENTS.md` for touched files.
-- UI prompt work uses `docs/prompts/` plus `web-new/AGENTS.md`, then verifies against the relevant page and responsive states.
-- Deployment work uses `docs/deployment/server-deployment-ai-prompt.md` and must inspect the live server configuration before changing deployment state.
+- UI prompt work uses `docs/prompts/AGENTS.md`, the relevant prompt file, `web-new/AGENTS.md`, and `web-new/src/pages/AGENTS.md`, then verifies against the relevant page and responsive states.
+- Deployment work uses `docs/deployment/AGENTS.md` and `docs/deployment/server-deployment-ai-prompt.md`, then must inspect the live server configuration before changing deployment state.
+- Backend contract work uses `http_service/AGENTS.md` and `http_service/internal/AGENTS.md` before changing handler, service, model, router, or API docs.
 - Form parity work uses `.codex/skills/form-to-view-parity-audit/SKILL.md`, then traces form input, payload, API model, preview, public display, validation, and tests.
 
 ## Tool And Schema Prompts
@@ -44,7 +49,9 @@ No direct prompt regression test currently guards prompt wording or localization
 - Update the nearest `AGENTS.md` when a directory gains, loses, moves, or changes responsibility.
 - Add dated change-log lines in `YYYY-MM-DD: summary` format to changed memory files.
 - Keep prompt docs in 繁體中文 or English unless preserving an existing legacy document.
-- Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, database dumps, or backups as stable prompt surfaces.
+- Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, `docs/archive`, database dumps, or backups as stable prompt surfaces.
 
 ## Change Log
 2026-07-08: Established the project prompt/context index and connected docs, AGENTS files, deployment prompts, and local Codex skill prompts.
+2026-07-08: Added local memory maps for reusable UI prompts, deployment prompts, frontend pages, and backend internal layers.
+2026-07-08: Archived docs product, prototypes, and backups under `docs/archive` and excluded them from prompt/context indexing.

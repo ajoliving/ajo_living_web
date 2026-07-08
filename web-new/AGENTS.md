@@ -253,3 +253,12 @@ const fetchList = async () => { ... };
 - 優先完成列表頁、詳情頁、發布頁、會員中心等主流程。
 - 響應式體驗需同時覆蓋 desktop 與 mobile。
 - 不預設引入重量級抽象與狀態管理。
+
+## 子目錄記憶
+- `src/pages/AGENTS.md` 是前端 page 樹的本地記憶入口；新增、移動、重命名 page 或改變頁面主域歸屬時同步更新。
+- UI prompt 落地前先讀 `src/pages/AGENTS.md`、相關 page 目錄與 `docs/prompts/`，不要只按 prompt 重新發明頁面結構。
+
+## 變更日誌
+2026-07-08: 補充前端 page 目錄記憶入口，連接 UI prompt 與實際頁面邊界。
+
+[PROTOCOL]: When frontend page ownership or prompt-facing behavior changes, check `src/pages/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.
