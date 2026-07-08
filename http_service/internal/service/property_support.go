@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -53,6 +54,10 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 		if err != nil {
 			return err
 		}
+		propertyAttributes, err := marshalJSON(params.PropertyAttributes)
+		if err != nil {
+			return err
+		}
 
 		sale := model.PropertySaleListing{
 			ListingID:            listing.ID,
@@ -63,6 +68,7 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			MultiUnitProject:     params.MultiUnitProject,
 			PropertyType:         strings.TrimSpace(params.PropertyType),
 			RentalType:           strings.TrimSpace(params.RentalType),
+			PropertyAttributes:   propertyAttributes,
 			RenovationType:       normalizePropertyRenovationType(params.RenovationType, params.FeatureTags),
 			AgencyCompanyName:    strings.TrimSpace(params.AgencyCompanyName),
 			EstateName:           strings.TrimSpace(params.EstateName),
@@ -134,13 +140,15 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 // 2. normalizeAnnualPrepayOption normalizes annual prepay discount options.
 func normalizeAnnualPrepayOption(value string, enabled bool) string {
 	switch strings.TrimSpace(value) {
+	case "provided":
+		return "provided"
 	case "95_off":
-		return "95_off"
+		return "provided"
 	case "90_off":
-		return "90_off"
+		return "provided"
 	}
 	if enabled {
-		return "95_off"
+		return "provided"
 	}
 	return "none"
 }
@@ -187,6 +195,10 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 		if err != nil {
 			return err
 		}
+		propertyAttributes, err := marshalJSON(params.PropertyAttributes)
+		if err != nil {
+			return err
+		}
 
 		sale := model.PropertySaleListing{
 			ListingID:            listing.ID,
@@ -197,6 +209,7 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 			MultiUnitProject:     params.MultiUnitProject,
 			PropertyType:         strings.TrimSpace(params.PropertyType),
 			RentalType:           strings.TrimSpace(params.RentalType),
+			PropertyAttributes:   propertyAttributes,
 			RenovationType:       normalizePropertyRenovationType(params.RenovationType, params.FeatureTags),
 			AgencyCompanyName:    strings.TrimSpace(params.AgencyCompanyName),
 			EstateName:           strings.TrimSpace(params.EstateName),
@@ -303,6 +316,10 @@ func (s *PropertyService) upsertServicedApartment(ctx context.Context, params Up
 		if err != nil {
 			return err
 		}
+		projectAttributes, err := marshalJSON(params.ProjectAttributes)
+		if err != nil {
+			return err
+		}
 		roomTypes, err := marshalJSON(params.RoomTypes)
 		if err != nil {
 			return err
@@ -310,39 +327,45 @@ func (s *PropertyService) upsertServicedApartment(ctx context.Context, params Up
 		adPackage := servicedApartmentAdPackage(params.AdPackageCode)
 
 		serviced := model.ServicedApartmentProject{
-			ListingID:            listing.ID,
-			ProjectName:          strings.TrimSpace(params.ProjectName),
-			ProjectNameEn:        strings.TrimSpace(params.ProjectNameEn),
-			AddressText:          strings.TrimSpace(params.AddressText),
-			AddressTextEn:        strings.TrimSpace(params.AddressTextEn),
-			WebsiteURL:           strings.TrimSpace(params.WebsiteURL),
-			WhatsApp:             strings.TrimSpace(params.WhatsApp),
-			Fax:                  strings.TrimSpace(params.Fax),
-			DescriptionEn:        strings.TrimSpace(params.DescriptionEn),
-			ServiceIntro:         strings.TrimSpace(params.ServiceIntro),
-			BenefitsText:         strings.TrimSpace(params.BenefitsText),
-			ExtraChargesText:     strings.TrimSpace(params.ExtraChargesText),
-			LowestMonthlyRentHKD: derived.LowestMonthlyRentHKD,
-			LowestDailyRentHKD:   derived.LowestDailyRentHKD,
-			PriceReferenceOnly:   params.PriceReferenceOnly,
-			PriceNegotiable:      params.PriceNegotiable,
-			MinUsableAreaSqft:    derived.MinUsableAreaSqft,
-			MinLeaseMonths:       derived.MinLeaseMonths,
-			MinStayValue:         derived.MinStayValue,
-			MinStayUnit:          derived.MinStayUnit,
-			LocationScope:        normalizePropertyLocationScope(params.LocationScope),
-			ListingCategory:      normalizePropertyListingCategory(params.ListingCategory),
-			MultiUnitProject:     params.MultiUnitProject,
-			FacilityTags:         facilityTags,
-			ServiceTags:          serviceTags,
-			RoomTypes:            roomTypes,
-			AdPackageCode:        adPackage.Code,
-			AdWeight:             adPackage.Weight,
-			AdPriceHKD:           adPackage.PriceHKD,
-			AdPricePoints:        adPackage.PricePoints,
-			AdDurationDays:       adPackage.DurationDays,
-			ContactMethod:        strings.TrimSpace(params.ContactMethod),
-			PublisherRoleLabel:   publisherRoleLabel(params.PublisherIdentityType),
+			ListingID:             listing.ID,
+			ProjectName:           strings.TrimSpace(params.ProjectName),
+			ProjectNameEn:         strings.TrimSpace(params.ProjectNameEn),
+			ProjectAttributes:     projectAttributes,
+			AddressText:           strings.TrimSpace(params.AddressText),
+			AddressTextEn:         strings.TrimSpace(params.AddressTextEn),
+			WebsiteURL:            strings.TrimSpace(params.WebsiteURL),
+			WhatsApp:              strings.TrimSpace(params.WhatsApp),
+			Fax:                   strings.TrimSpace(params.Fax),
+			DescriptionEn:         strings.TrimSpace(params.DescriptionEn),
+			ServiceIntro:          strings.TrimSpace(params.ServiceIntro),
+			ServiceIntroEn:        strings.TrimSpace(params.ServiceIntroEn),
+			BenefitsText:          strings.TrimSpace(params.BenefitsText),
+			BenefitsTextEn:        strings.TrimSpace(params.BenefitsTextEn),
+			ExtraChargesText:      strings.TrimSpace(params.ExtraChargesText),
+			ExtraChargesTextEn:    strings.TrimSpace(params.ExtraChargesTextEn),
+			LowestMonthlyRentHKD:  derived.LowestMonthlyRentHKD,
+			HighestMonthlyRentHKD: derived.HighestMonthlyRentHKD,
+			LowestDailyRentHKD:    derived.LowestDailyRentHKD,
+			PriceReferenceOnly:    params.PriceReferenceOnly,
+			PriceNegotiable:       params.PriceNegotiable,
+			MinUsableAreaSqft:     derived.MinUsableAreaSqft,
+			MaxUsableAreaSqft:     derived.MaxUsableAreaSqft,
+			MinLeaseMonths:        derived.MinLeaseMonths,
+			MinStayValue:          derived.MinStayValue,
+			MinStayUnit:           derived.MinStayUnit,
+			LocationScope:         normalizePropertyLocationScope(params.LocationScope),
+			ListingCategory:       normalizePropertyListingCategory(params.ListingCategory),
+			MultiUnitProject:      params.MultiUnitProject,
+			FacilityTags:          facilityTags,
+			ServiceTags:           serviceTags,
+			RoomTypes:             roomTypes,
+			AdPackageCode:         adPackage.Code,
+			AdWeight:              adPackage.Weight,
+			AdPriceHKD:            adPackage.PriceHKD,
+			AdPricePoints:         adPackage.PricePoints,
+			AdDurationDays:        adPackage.DurationDays,
+			ContactMethod:         strings.TrimSpace(params.ContactMethod),
+			PublisherRoleLabel:    publisherRoleLabel(params.PublisherIdentityType),
 		}
 		if err := tx.Save(&serviced).Error; err != nil {
 			return err
@@ -404,6 +427,10 @@ func (s *PropertyService) updateServicedApartmentWithCharge(ctx context.Context,
 		if err != nil {
 			return err
 		}
+		projectAttributes, err := marshalJSON(params.ProjectAttributes)
+		if err != nil {
+			return err
+		}
 		roomTypes, err := marshalJSON(params.RoomTypes)
 		if err != nil {
 			return err
@@ -411,39 +438,45 @@ func (s *PropertyService) updateServicedApartmentWithCharge(ctx context.Context,
 		adPackage := servicedApartmentAdPackage(params.AdPackageCode)
 
 		serviced := model.ServicedApartmentProject{
-			ListingID:            listing.ID,
-			ProjectName:          strings.TrimSpace(params.ProjectName),
-			ProjectNameEn:        strings.TrimSpace(params.ProjectNameEn),
-			AddressText:          strings.TrimSpace(params.AddressText),
-			AddressTextEn:        strings.TrimSpace(params.AddressTextEn),
-			WebsiteURL:           strings.TrimSpace(params.WebsiteURL),
-			WhatsApp:             strings.TrimSpace(params.WhatsApp),
-			Fax:                  strings.TrimSpace(params.Fax),
-			DescriptionEn:        strings.TrimSpace(params.DescriptionEn),
-			ServiceIntro:         strings.TrimSpace(params.ServiceIntro),
-			BenefitsText:         strings.TrimSpace(params.BenefitsText),
-			ExtraChargesText:     strings.TrimSpace(params.ExtraChargesText),
-			LowestMonthlyRentHKD: derived.LowestMonthlyRentHKD,
-			LowestDailyRentHKD:   derived.LowestDailyRentHKD,
-			PriceReferenceOnly:   params.PriceReferenceOnly,
-			PriceNegotiable:      params.PriceNegotiable,
-			MinUsableAreaSqft:    derived.MinUsableAreaSqft,
-			MinLeaseMonths:       derived.MinLeaseMonths,
-			MinStayValue:         derived.MinStayValue,
-			MinStayUnit:          derived.MinStayUnit,
-			LocationScope:        normalizePropertyLocationScope(params.LocationScope),
-			ListingCategory:      normalizePropertyListingCategory(params.ListingCategory),
-			MultiUnitProject:     params.MultiUnitProject,
-			FacilityTags:         facilityTags,
-			ServiceTags:          serviceTags,
-			RoomTypes:            roomTypes,
-			AdPackageCode:        adPackage.Code,
-			AdWeight:             adPackage.Weight,
-			AdPriceHKD:           adPackage.PriceHKD,
-			AdPricePoints:        adPackage.PricePoints,
-			AdDurationDays:       adPackage.DurationDays,
-			ContactMethod:        strings.TrimSpace(params.ContactMethod),
-			PublisherRoleLabel:   publisherRoleLabel(params.PublisherIdentityType),
+			ListingID:             listing.ID,
+			ProjectName:           strings.TrimSpace(params.ProjectName),
+			ProjectNameEn:         strings.TrimSpace(params.ProjectNameEn),
+			ProjectAttributes:     projectAttributes,
+			AddressText:           strings.TrimSpace(params.AddressText),
+			AddressTextEn:         strings.TrimSpace(params.AddressTextEn),
+			WebsiteURL:            strings.TrimSpace(params.WebsiteURL),
+			WhatsApp:              strings.TrimSpace(params.WhatsApp),
+			Fax:                   strings.TrimSpace(params.Fax),
+			DescriptionEn:         strings.TrimSpace(params.DescriptionEn),
+			ServiceIntro:          strings.TrimSpace(params.ServiceIntro),
+			ServiceIntroEn:        strings.TrimSpace(params.ServiceIntroEn),
+			BenefitsText:          strings.TrimSpace(params.BenefitsText),
+			BenefitsTextEn:        strings.TrimSpace(params.BenefitsTextEn),
+			ExtraChargesText:      strings.TrimSpace(params.ExtraChargesText),
+			ExtraChargesTextEn:    strings.TrimSpace(params.ExtraChargesTextEn),
+			LowestMonthlyRentHKD:  derived.LowestMonthlyRentHKD,
+			HighestMonthlyRentHKD: derived.HighestMonthlyRentHKD,
+			LowestDailyRentHKD:    derived.LowestDailyRentHKD,
+			PriceReferenceOnly:    params.PriceReferenceOnly,
+			PriceNegotiable:       params.PriceNegotiable,
+			MinUsableAreaSqft:     derived.MinUsableAreaSqft,
+			MaxUsableAreaSqft:     derived.MaxUsableAreaSqft,
+			MinLeaseMonths:        derived.MinLeaseMonths,
+			MinStayValue:          derived.MinStayValue,
+			MinStayUnit:           derived.MinStayUnit,
+			LocationScope:         normalizePropertyLocationScope(params.LocationScope),
+			ListingCategory:       normalizePropertyListingCategory(params.ListingCategory),
+			MultiUnitProject:      params.MultiUnitProject,
+			FacilityTags:          facilityTags,
+			ServiceTags:           serviceTags,
+			RoomTypes:             roomTypes,
+			AdPackageCode:         adPackage.Code,
+			AdWeight:              adPackage.Weight,
+			AdPriceHKD:            adPackage.PriceHKD,
+			AdPricePoints:         adPackage.PricePoints,
+			AdDurationDays:        adPackage.DurationDays,
+			ContactMethod:         strings.TrimSpace(params.ContactMethod),
+			PublisherRoleLabel:    publisherRoleLabel(params.PublisherIdentityType),
 		}
 		if err := tx.Save(&serviced).Error; err != nil {
 			return err
@@ -545,12 +578,29 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 		contact.PhoneEncrypted = existing.PhoneEncrypted
 		contact.PhoneMasked = existing.PhoneMasked
 	}
+	if contact.Phone2Encrypted == "" {
+		contact.Phone2Encrypted = existing.Phone2Encrypted
+		contact.Phone2Masked = existing.Phone2Masked
+	}
 	if contact.WhatsAppEncrypted == "" {
 		contact.WhatsAppEncrypted = existing.WhatsAppEncrypted
 		contact.WhatsAppMasked = existing.WhatsAppMasked
 	}
+	if contact.WeChatEncrypted == "" {
+		contact.WeChatEncrypted = existing.WeChatEncrypted
+		contact.WeChatMasked = existing.WeChatMasked
+	}
 	if contact.EmailEncrypted == "" {
 		contact.EmailEncrypted = existing.EmailEncrypted
+	}
+	if strings.TrimSpace(contact.ContactNameZH) == "" {
+		contact.ContactNameZH = existing.ContactNameZH
+	}
+	if strings.TrimSpace(contact.ContactNameEN) == "" {
+		contact.ContactNameEN = existing.ContactNameEN
+	}
+	if len(contact.ContactAttributes) == 0 || string(contact.ContactAttributes) == "null" {
+		contact.ContactAttributes = existing.ContactAttributes
 	}
 }
 
@@ -558,6 +608,12 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) error {
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.EstateName) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required property fields")
+	}
+	if strings.TrimSpace(params.TitleEn) == "" || strings.TrimSpace(params.DescriptionEn) == "" || strings.TrimSpace(params.AddressTextEn) == "" {
+		return errcode.New(errcode.CodeValidationError, "missing required property english fields")
+	}
+	if err := validatePropertyTextLimits(params.Title, params.TitleEn, params.Description, params.DescriptionEn); err != nil {
+		return err
 	}
 	rawTransactionType := strings.TrimSpace(params.TransactionType)
 	if rawTransactionType != "" && !isAllowedPropertyValue(rawTransactionType, []string{"sale", "rent"}) {
@@ -570,17 +626,35 @@ func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) er
 		return errcode.New(errcode.CodeValidationError, "invalid listing category")
 	}
 	transactionType := normalizePropertyTransactionType(params.TransactionType)
+	propertyType := normalizeSalePropertyType(params.PropertyType)
+	if !isAllowedPropertyValue(propertyType, []string{"residential", "car_park", "industrial", "shop", "land"}) {
+		return errcode.New(errcode.CodeValidationError, "invalid property type")
+	}
 	if transactionType == "sale" && !params.PriceNegotiable && params.AskingPriceHKD <= 0 {
 		return errcode.New(errcode.CodeValidationError, "valid asking price is required")
 	}
 	if transactionType == "rent" && !params.PriceNegotiable && params.MonthlyRentHKD <= 0 {
 		return errcode.New(errcode.CodeValidationError, "valid monthly rent is required")
 	}
-	if params.UsableAreaSqft <= 0 {
+	if (strings.TrimSpace(params.PublisherIdentityType) == "agent" || propertyType == "land") && strings.TrimSpace(params.PropertyNo) == "" {
+		return errcode.New(errcode.CodeValidationError, "property no is required")
+	}
+	if propertyType != "car_park" && params.UsableAreaSqft <= 0 && (params.GrossAreaSqft == nil || *params.GrossAreaSqft <= 0) {
 		return errcode.New(errcode.CodeValidationError, "valid usable area is required")
 	}
-	if strings.TrimSpace(params.FloorRaw) == "" && strings.TrimSpace(params.FloorLevel) == "" {
-		return errcode.New(errcode.CodeValidationError, "valid floor is required")
+	if (propertyType == "industrial" || propertyType == "shop" || propertyType == "land") && (params.GrossAreaSqft == nil || *params.GrossAreaSqft <= 0) {
+		return errcode.New(errcode.CodeValidationError, "valid gross area is required")
+	}
+	if err := validateSaleContactParams(params); err != nil {
+		return err
+	}
+	if propertyType == "residential" {
+		if err := validateResidentialSaleParams(params, transactionType); err != nil {
+			return err
+		}
+	}
+	if propertyType != "industrial" && propertyType != "residential" && !hasAnySaleCategoryTag(propertyType, params.FeatureTags) {
+		return errcode.New(errcode.CodeValidationError, "category tag is required")
 	}
 	rawAreaMode := strings.TrimSpace(params.AreaMode)
 	if rawAreaMode != "" && !isAllowedPropertyValue(rawAreaMode, []string{"usable", "gross"}) {
@@ -595,20 +669,130 @@ func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) er
 	if !isAllowedPropertyDistrict(params.DistrictCode) {
 		return errcode.New(errcode.CodeValidationError, "invalid district code")
 	}
-	if !params.Contact.ShowPhone && !params.Contact.ShowWhatsApp && !params.Contact.ShowChat {
+	if !params.Contact.ShowPhone && !params.Contact.ShowWhatsApp && !params.Contact.ShowChat && !params.Contact.ShowInquiryForm {
 		return errcode.New(errcode.CodeValidationError, "at least one contact channel must be enabled")
 	}
-	if !isAllowedPropertyValue(normalizePropertyAdPackageCode(params.AdPackageCode), []string{"basic", "featured", "premium", "fast_sale"}) {
+	if !isAllowedPropertyValue(normalizePropertyAdPackageCode(params.AdPackageCode), []string{"basic", "featured", "premium"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid ad package")
 	}
 
 	return nil
 }
 
-// 10. validateServicedParams validates serviced apartment payloads.
+// 10. validateSaleContactParams validates owner and agent contact requirements.
+func validateSaleContactParams(params UpsertPropertySaleParams) error {
+	publisherType := strings.TrimSpace(params.PublisherIdentityType)
+	if publisherType != "owner" && publisherType != "agent" {
+		return errcode.New(errcode.CodeValidationError, "invalid publisher identity type")
+	}
+	if publisherType == "agent" {
+		if strings.TrimSpace(params.Contact.ContactAttributes["agency_company_profile"]) == "" ||
+			strings.TrimSpace(params.Contact.ContactAttributes["agency_contact_profile"]) == "" {
+			return errcode.New(errcode.CodeValidationError, "agency company and contact profiles are required")
+		}
+		return nil
+	}
+	if params.ListingPublicID == "" &&
+		(strings.TrimSpace(params.Contact.ContactNameZH) == "" ||
+			strings.TrimSpace(params.Contact.ContactNameEN) == "" ||
+			strings.TrimSpace(params.Contact.Phone) == "") {
+		return errcode.New(errcode.CodeValidationError, "owner contact name and phone are required")
+	}
+
+	return nil
+}
+
+// 11. validateResidentialSaleParams validates the four residential owner or agent sale/rent flows.
+func validateResidentialSaleParams(params UpsertPropertySaleParams, transactionType string) error {
+	publisherType := strings.TrimSpace(params.PublisherIdentityType)
+	if publisherType != "owner" && publisherType != "agent" {
+		return errcode.New(errcode.CodeValidationError, "invalid publisher identity type")
+	}
+	if params.UsableAreaSqft <= 0 {
+		return errcode.New(errcode.CodeValidationError, "valid usable area is required")
+	}
+	if !hasAnyResidentialCategoryTag(params.FeatureTags) {
+		return errcode.New(errcode.CodeValidationError, "residential category tag is required")
+	}
+	if transactionType == "sale" && hasStringValue(params.FeatureTags, "feature_student_friendly") {
+		return errcode.New(errcode.CodeValidationError, "student friendly tag is only available for rental listings")
+	}
+
+	return nil
+}
+
+// 12. hasAnyResidentialCategoryTag checks whether residential category tags are selected.
+func hasAnyResidentialCategoryTag(tags []string) bool {
+	return hasAnyAllowedTag(tags, []string{
+		"residential_private_estate",
+		"residential_hos",
+		"residential_village_house",
+		"residential_detached_house",
+		"residential_public_housing",
+		"residential_tong_lau",
+		"residential_mansion",
+		"residential_single_block",
+	})
+}
+
+// 13. hasAnySaleCategoryTag checks required category tags by sale property type.
+func hasAnySaleCategoryTag(propertyType string, tags []string) bool {
+	allowedByType := map[string][]string{
+		"car_park": {
+			"car_park_lorry",
+			"car_park_motorcycle",
+			"car_park_commercial",
+			"car_park_residential",
+		},
+		"shop": {
+			"shop_mall",
+			"shop_street",
+			"shop_upper_floor",
+			"shop_business_transfer",
+		},
+		"land": {
+			"land_private_residential",
+			"land_village_house",
+			"land_farmland",
+			"land_storage",
+			"land_warehouse",
+			"land_recreation",
+		},
+	}
+
+	return hasAnyAllowedTag(tags, allowedByType[strings.TrimSpace(propertyType)])
+}
+
+// 14. hasAnyAllowedTag checks whether any allowed tag exists.
+func hasAnyAllowedTag(tags []string, allowed []string) bool {
+	for _, tag := range tags {
+		if hasStringValue(allowed, tag) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 15. hasStringValue checks string membership after trimming spaces.
+func hasStringValue(values []string, target string) bool {
+	cleanTarget := strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == cleanTarget {
+			return true
+		}
+	}
+
+	return false
+}
+
+// 13. validateServicedParams validates serviced apartment payloads.
 func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentParams) error {
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.ProjectName) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required serviced apartment fields")
+	}
+	if err := validatePropertyTextLimits(params.Title, "", params.Description, params.DescriptionEn); err != nil {
+		return err
 	}
 	if !isAllowedPropertyValue(normalizePropertyLocationScope(params.LocationScope), []string{"local", "overseas"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid location scope")
@@ -616,8 +800,14 @@ func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentP
 	if !isAllowedPropertyValue(normalizePropertyListingCategory(params.ListingCategory), []string{"standard", "new_development", "developer_project", "multi_unit"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid listing category")
 	}
-	if !isAllowedPropertyValue(normalizePropertyAdPackageCode(params.AdPackageCode), []string{"basic", "featured", "premium", "fast_sale"}) {
+	if !isAllowedPropertyValue(normalizePropertyAdPackageCode(params.AdPackageCode), []string{"basic", "featured", "premium"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid ad package")
+	}
+	if params.MinStayValue <= 0 && params.MinLeaseMonths <= 0 {
+		return errcode.New(errcode.CodeValidationError, "minimum stay is required")
+	}
+	if params.MaxUsableAreaSqft > 0 && params.MinUsableAreaSqft > 0 && params.MaxUsableAreaSqft < params.MinUsableAreaSqft {
+		return errcode.New(errcode.CodeValidationError, "maximum area cannot be lower than minimum area")
 	}
 	if len(params.RoomTypes) == 0 {
 		return errcode.New(errcode.CodeValidationError, "at least one room type is required")
@@ -639,6 +829,10 @@ func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentP
 		if room.UsableAreaSqft < 0 {
 			return errcode.New(errcode.CodeValidationError, "invalid room type area")
 		}
+		areaMin := firstPositiveInt(room.UsableAreaMinSqft, room.UsableAreaSqft)
+		if room.UsableAreaMaxSqft > 0 && areaMin > 0 && room.UsableAreaMaxSqft < areaMin {
+			return errcode.New(errcode.CodeValidationError, "room type maximum area cannot be lower than minimum area")
+		}
 		if strings.TrimSpace(room.MinStayUnit) != "" && normalizeStayUnit(room.MinStayUnit) == "" {
 			return errcode.New(errcode.CodeValidationError, "invalid minimum stay unit")
 		}
@@ -652,8 +846,32 @@ func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentP
 	if !isAllowedPropertyDistrict(params.DistrictCode) {
 		return errcode.New(errcode.CodeValidationError, "invalid district code")
 	}
-	if !params.Contact.ShowPhone && !params.Contact.ShowWhatsApp && !params.Contact.ShowChat {
+	if !params.Contact.ShowPhone && !params.Contact.ShowWhatsApp && !params.Contact.ShowChat && !params.Contact.ShowInquiryForm {
 		return errcode.New(errcode.CodeValidationError, "at least one contact channel must be enabled")
+	}
+	if strings.TrimSpace(params.Contact.Phone) == "" &&
+		strings.TrimSpace(params.Contact.WhatsApp) == "" &&
+		strings.TrimSpace(params.Contact.WeChat) == "" &&
+		strings.TrimSpace(params.Contact.Email) == "" {
+		return errcode.New(errcode.CodeValidationError, "serviced apartment contact is required")
+	}
+
+	return nil
+}
+
+// 11. validatePropertyTextLimits validates xlsx text length rules.
+func validatePropertyTextLimits(title string, titleEn string, description string, descriptionEn string) error {
+	if utf8.RuneCountInString(strings.TrimSpace(title)) > 40 {
+		return errcode.New(errcode.CodeValidationError, "title is too long")
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(titleEn)) > 100 {
+		return errcode.New(errcode.CodeValidationError, "english title is too long")
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(description)) > 1000 {
+		return errcode.New(errcode.CodeValidationError, "description is too long")
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(descriptionEn)) > 2000 {
+		return errcode.New(errcode.CodeValidationError, "english description is too long")
 	}
 
 	return nil
@@ -672,6 +890,7 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 				property_sale_listings.multi_unit_project AS sale_multi_unit_project,
 				property_sale_listings.property_type AS sale_property_type,
 				property_sale_listings.rental_type AS sale_rental_type,
+				property_sale_listings.property_attributes AS sale_property_attributes,
 				property_sale_listings.renovation_type AS sale_renovation_type,
 				property_sale_listings.agency_company_name AS sale_agency_company_name,
 				property_sale_listings.estate_name AS sale_estate_name,
@@ -733,6 +952,7 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 		Select(`listings.*,
 			serviced_apartment_projects.project_name AS serviced_project_name,
 			serviced_apartment_projects.project_name_en AS serviced_project_name_en,
+			serviced_apartment_projects.project_attributes AS serviced_project_attributes,
 			serviced_apartment_projects.address_text AS serviced_address_text,
 			serviced_apartment_projects.address_text_en AS serviced_address_text_en,
 			serviced_apartment_projects.website_url AS serviced_website_url,
@@ -740,13 +960,18 @@ func (s *PropertyService) basePropertyListQuery(ctx context.Context, channel Pro
 			serviced_apartment_projects.fax AS serviced_fax,
 			serviced_apartment_projects.description_en AS serviced_description_en,
 			serviced_apartment_projects.service_intro AS serviced_service_intro,
+			serviced_apartment_projects.service_intro_en AS serviced_service_intro_en,
 			serviced_apartment_projects.benefits_text AS serviced_benefits_text,
-			serviced_apartment_projects.extra_charges_text AS serviced_extra_charges_text,
-			serviced_apartment_projects.lowest_monthly_rent_hkd AS serviced_lowest_monthly_rent_hkd,
-			serviced_apartment_projects.lowest_daily_rent_hkd AS serviced_lowest_daily_rent_hkd,
+			serviced_apartment_projects.benefits_text_en AS serviced_benefits_text_en,
+				serviced_apartment_projects.extra_charges_text AS serviced_extra_charges_text,
+				serviced_apartment_projects.extra_charges_text_en AS serviced_extra_charges_text_en,
+				serviced_apartment_projects.lowest_monthly_rent_hkd AS serviced_lowest_monthly_rent_hkd,
+				serviced_apartment_projects.highest_monthly_rent_hkd AS serviced_highest_monthly_rent_hkd,
+				serviced_apartment_projects.lowest_daily_rent_hkd AS serviced_lowest_daily_rent_hkd,
 			serviced_apartment_projects.price_reference_only AS serviced_price_reference_only,
 			serviced_apartment_projects.price_negotiable AS serviced_price_negotiable,
 			serviced_apartment_projects.min_usable_area_sqft AS serviced_min_usable_area_sqft,
+			serviced_apartment_projects.max_usable_area_sqft AS serviced_max_usable_area_sqft,
 			serviced_apartment_projects.min_lease_months AS serviced_min_lease_months,
 			serviced_apartment_projects.min_stay_value AS serviced_min_stay_value,
 			serviced_apartment_projects.min_stay_unit AS serviced_min_stay_unit,
@@ -971,6 +1196,7 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 			MultiUnitProject:     item.SaleMultiUnitProject,
 			PropertyType:         item.SalePropertyType,
 			RentalType:           item.SaleRentalType,
+			PropertyAttributes:   publicPropertyAttributes(item.SalePropertyAttributes),
 			RenovationType:       item.SaleRenovationType,
 			AgencyCompanyName:    item.SaleAgencyCompanyName,
 			EstateName:           item.SaleEstateName,
@@ -1028,39 +1254,45 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 	}
 
 	summary.ServicedApartment = &ServicedApartmentPayload{
-		ProjectName:          item.ServicedProjectName,
-		ProjectNameEn:        item.ServicedProjectNameEn,
-		AddressText:          item.ServicedAddressText,
-		AddressTextEn:        item.ServicedAddressTextEn,
-		WebsiteURL:           item.ServicedWebsiteURL,
-		WhatsApp:             item.ServicedWhatsApp,
-		Fax:                  item.ServicedFax,
-		DescriptionEn:        item.ServicedDescriptionEn,
-		ServiceIntro:         item.ServicedServiceIntro,
-		BenefitsText:         item.ServicedBenefitsText,
-		ExtraChargesText:     item.ServicedExtraChargesText,
-		LowestMonthlyRentHKD: item.ServicedLowestMonthlyRentHKD,
-		LowestDailyRentHKD:   item.ServicedLowestDailyRentHKD,
-		PriceReferenceOnly:   item.ServicedPriceReferenceOnly,
-		PriceNegotiable:      item.ServicedPriceNegotiable,
-		MinUsableAreaSqft:    item.ServicedMinUsableAreaSqft,
-		MinLeaseMonths:       item.ServicedMinLeaseMonths,
-		MinStayValue:         item.ServicedMinStayValue,
-		MinStayUnit:          item.ServicedMinStayUnit,
-		LocationScope:        normalizePropertyLocationScope(item.ServicedLocationScope),
-		ListingCategory:      normalizePropertyListingCategory(item.ServicedListingCategory),
-		MultiUnitProject:     item.ServicedMultiUnitProject,
-		AdPackageCode:        normalizePropertyAdPackageCode(item.ServicedAdPackageCode),
-		AdWeight:             item.ServicedAdWeight,
-		AdPriceHKD:           item.ServicedAdPriceHKD,
-		AdPricePoints:        item.ServicedAdPricePoints,
-		AdDurationDays:       item.ServicedAdDurationDays,
-		AdExpiresAt:          formatOptionalTime(item.ServicedAdExpiresAt),
-		FacilityTags:         decodeStringSliceBytes(item.ServicedFacilityTags),
-		ServiceTags:          decodeStringSliceBytes(item.ServicedServiceTags),
-		RoomTypes:            decodeRoomTypeBytes(item.ServicedRoomTypes),
-		ContactMethod:        item.ServicedContactMethod,
-		PublisherRoleLabel:   item.ServicedPublisherRoleLabel,
+		ProjectName:           item.ServicedProjectName,
+		ProjectNameEn:         item.ServicedProjectNameEn,
+		ProjectAttributes:     decodeStringMapBytes(item.ServicedProjectAttributes),
+		AddressText:           item.ServicedAddressText,
+		AddressTextEn:         item.ServicedAddressTextEn,
+		WebsiteURL:            item.ServicedWebsiteURL,
+		WhatsApp:              item.ServicedWhatsApp,
+		Fax:                   item.ServicedFax,
+		DescriptionEn:         item.ServicedDescriptionEn,
+		ServiceIntro:          item.ServicedServiceIntro,
+		ServiceIntroEn:        item.ServicedServiceIntroEn,
+		BenefitsText:          item.ServicedBenefitsText,
+		BenefitsTextEn:        item.ServicedBenefitsTextEn,
+		ExtraChargesText:      item.ServicedExtraChargesText,
+		ExtraChargesTextEn:    item.ServicedExtraChargesTextEn,
+		LowestMonthlyRentHKD:  item.ServicedLowestMonthlyRentHKD,
+		HighestMonthlyRentHKD: item.ServicedHighestMonthlyRentHKD,
+		LowestDailyRentHKD:    item.ServicedLowestDailyRentHKD,
+		PriceReferenceOnly:    item.ServicedPriceReferenceOnly,
+		PriceNegotiable:       item.ServicedPriceNegotiable,
+		MinUsableAreaSqft:     item.ServicedMinUsableAreaSqft,
+		MaxUsableAreaSqft:     item.ServicedMaxUsableAreaSqft,
+		MinLeaseMonths:        item.ServicedMinLeaseMonths,
+		MinStayValue:          item.ServicedMinStayValue,
+		MinStayUnit:           item.ServicedMinStayUnit,
+		LocationScope:         normalizePropertyLocationScope(item.ServicedLocationScope),
+		ListingCategory:       normalizePropertyListingCategory(item.ServicedListingCategory),
+		MultiUnitProject:      item.ServicedMultiUnitProject,
+		AdPackageCode:         normalizePropertyAdPackageCode(item.ServicedAdPackageCode),
+		AdWeight:              item.ServicedAdWeight,
+		AdPriceHKD:            item.ServicedAdPriceHKD,
+		AdPricePoints:         item.ServicedAdPricePoints,
+		AdDurationDays:        item.ServicedAdDurationDays,
+		AdExpiresAt:           formatOptionalTime(item.ServicedAdExpiresAt),
+		FacilityTags:          decodeStringSliceBytes(item.ServicedFacilityTags),
+		ServiceTags:           decodeStringSliceBytes(item.ServicedServiceTags),
+		RoomTypes:             decodeRoomTypeBytes(item.ServicedRoomTypes),
+		ContactMethod:         item.ServicedContactMethod,
+		PublisherRoleLabel:    item.ServicedPublisherRoleLabel,
 	}
 	return summary
 }
@@ -1111,13 +1343,20 @@ func (s *PropertyService) loadOwnedPropertyListingWithTx(ctx context.Context, tx
 
 // 17. buildPropertyContact builds the encrypted contact record.
 func (s *PropertyService) buildPropertyContact(listingID int64, input PropertyContactInput, contactMethod string) (*model.ListingContact, error) {
+	contactAttributes, err := marshalJSON(input.ContactAttributes)
+	if err != nil {
+		return nil, err
+	}
 	contact := &model.ListingContact{
-		ListingID:       listingID,
-		ShowPhone:       input.ShowPhone,
-		ShowWhatsApp:    input.ShowWhatsApp,
-		ShowChat:        input.ShowChat,
-		ShowInquiryForm: input.ShowInquiryForm,
-		ContactMode:     strings.TrimSpace(contactMethod),
+		ListingID:         listingID,
+		ContactNameZH:     strings.TrimSpace(input.ContactNameZH),
+		ContactNameEN:     strings.TrimSpace(input.ContactNameEN),
+		ContactAttributes: contactAttributes,
+		ShowPhone:         input.ShowPhone,
+		ShowWhatsApp:      input.ShowWhatsApp,
+		ShowChat:          input.ShowChat,
+		ShowInquiryForm:   input.ShowInquiryForm,
+		ContactMode:       strings.TrimSpace(contactMethod),
 	}
 	if input.Phone != "" {
 		encrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, input.Phone)
@@ -1127,6 +1366,14 @@ func (s *PropertyService) buildPropertyContact(listingID int64, input PropertyCo
 		contact.PhoneEncrypted = encrypted
 		contact.PhoneMasked = utils.MaskPhone(input.Phone)
 	}
+	if input.Phone2 != "" {
+		encrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, input.Phone2)
+		if err != nil {
+			return nil, err
+		}
+		contact.Phone2Encrypted = encrypted
+		contact.Phone2Masked = utils.MaskPhone(input.Phone2)
+	}
 	if input.WhatsApp != "" {
 		encrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, input.WhatsApp)
 		if err != nil {
@@ -1134,6 +1381,14 @@ func (s *PropertyService) buildPropertyContact(listingID int64, input PropertyCo
 		}
 		contact.WhatsAppEncrypted = encrypted
 		contact.WhatsAppMasked = utils.MaskPhone(input.WhatsApp)
+	}
+	if input.WeChat != "" {
+		encrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, input.WeChat)
+		if err != nil {
+			return nil, err
+		}
+		contact.WeChatEncrypted = encrypted
+		contact.WeChatMasked = input.WeChat
 	}
 	if input.Email != "" {
 		encrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, input.Email)
@@ -1317,7 +1572,7 @@ func (s *PropertyService) validatePropertyReadyWithTx(ctx context.Context, tx *g
 	if err := tx.WithContext(ctx).Where("listing_id = ?", listingID).First(&contact).Error; err != nil {
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing contacts")
 	}
-	if !contact.ShowPhone && !contact.ShowWhatsApp && !contact.ShowChat {
+	if !contact.ShowPhone && !contact.ShowWhatsApp && !contact.ShowChat && !contact.ShowInquiryForm {
 		return errcode.New(errcode.CodeValidationError, "at least one contact channel must be enabled")
 	}
 
@@ -1338,7 +1593,21 @@ func decodeStringSliceBytes(value []byte) []string {
 	return result
 }
 
-// 26. decodeRoomTypeBytes decodes JSON bytes into room type slice.
+// 26. decodeStringMapBytes decodes JSON bytes into a string map.
+func decodeStringMapBytes(value []byte) map[string]string {
+	if len(value) == 0 {
+		return map[string]string{}
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(value, &result); err != nil {
+		return map[string]string{}
+	}
+
+	return result
+}
+
+// 27. decodeRoomTypeBytes decodes JSON bytes into room type slice.
 func decodeRoomTypeBytes(value []byte) []ServicedApartmentRoomTypeInput {
 	if len(value) == 0 {
 		return []ServicedApartmentRoomTypeInput{}
@@ -1355,36 +1624,55 @@ func decodeRoomTypeBytes(value []byte) []ServicedApartmentRoomTypeInput {
 	return result
 }
 
-// 27. servicedApartmentDerivedFields stores calculated project values.
+// 27. publicPropertyAttributes removes private property attributes from public payloads.
+func publicPropertyAttributes(value []byte) map[string]string {
+	result := decodeStringMapBytes(value)
+	delete(result, "prn")
+
+	return result
+}
+
+// 28. servicedApartmentDerivedFields stores calculated project values.
 type servicedApartmentDerivedFields struct {
-	LowestMonthlyRentHKD float64
-	LowestDailyRentHKD   float64
-	MinUsableAreaSqft    int
-	MinLeaseMonths       int
-	MinStayValue         int
-	MinStayUnit          string
+	LowestMonthlyRentHKD  float64
+	HighestMonthlyRentHKD float64
+	LowestDailyRentHKD    float64
+	MinUsableAreaSqft     int
+	MaxUsableAreaSqft     int
+	MinLeaseMonths        int
+	MinStayValue          int
+	MinStayUnit           string
 }
 
 // 28. deriveServicedApartmentFields calculates searchable values from room types.
 func deriveServicedApartmentFields(params UpsertServicedApartmentParams) servicedApartmentDerivedFields {
 	result := servicedApartmentDerivedFields{
-		LowestMonthlyRentHKD: params.LowestMonthlyRentHKD,
-		LowestDailyRentHKD:   params.LowestDailyRentHKD,
-		MinUsableAreaSqft:    params.MinUsableAreaSqft,
-		MinLeaseMonths:       firstPositiveInt(params.MinLeaseMonths, 1),
-		MinStayValue:         firstPositiveInt(params.MinStayValue, params.MinLeaseMonths, 1),
-		MinStayUnit:          normalizeStayUnit(params.MinStayUnit),
+		LowestMonthlyRentHKD:  params.LowestMonthlyRentHKD,
+		HighestMonthlyRentHKD: params.HighestMonthlyRentHKD,
+		LowestDailyRentHKD:    params.LowestDailyRentHKD,
+		MinUsableAreaSqft:     params.MinUsableAreaSqft,
+		MaxUsableAreaSqft:     params.MaxUsableAreaSqft,
+		MinLeaseMonths:        firstPositiveInt(params.MinLeaseMonths, 1),
+		MinStayValue:          firstPositiveInt(params.MinStayValue, params.MinLeaseMonths, 1),
+		MinStayUnit:           normalizeStayUnit(params.MinStayUnit),
 	}
 	for index := range params.RoomTypes {
 		normalizeServicedRoomType(&params.RoomTypes[index])
 		if params.RoomTypes[index].MonthlyRentMinHKD > 0 && (result.LowestMonthlyRentHKD <= 0 || params.RoomTypes[index].MonthlyRentMinHKD < result.LowestMonthlyRentHKD) {
 			result.LowestMonthlyRentHKD = params.RoomTypes[index].MonthlyRentMinHKD
 		}
+		if params.RoomTypes[index].MonthlyRentMaxHKD > 0 && params.RoomTypes[index].MonthlyRentMaxHKD > result.HighestMonthlyRentHKD {
+			result.HighestMonthlyRentHKD = params.RoomTypes[index].MonthlyRentMaxHKD
+		}
 		if params.RoomTypes[index].DailyRentMinHKD > 0 && (result.LowestDailyRentHKD <= 0 || params.RoomTypes[index].DailyRentMinHKD < result.LowestDailyRentHKD) {
 			result.LowestDailyRentHKD = params.RoomTypes[index].DailyRentMinHKD
 		}
 		if params.RoomTypes[index].UsableAreaSqft > 0 && (result.MinUsableAreaSqft <= 0 || params.RoomTypes[index].UsableAreaSqft < result.MinUsableAreaSqft) {
 			result.MinUsableAreaSqft = params.RoomTypes[index].UsableAreaSqft
+		}
+		roomMaxArea := firstPositiveInt(params.RoomTypes[index].UsableAreaMaxSqft, params.RoomTypes[index].UsableAreaSqft)
+		if roomMaxArea > 0 && roomMaxArea > result.MaxUsableAreaSqft {
+			result.MaxUsableAreaSqft = roomMaxArea
 		}
 		if params.RoomTypes[index].MinStayValue > 0 && (result.MinStayValue <= 0 || compareStay(params.RoomTypes[index].MinStayValue, params.RoomTypes[index].MinStayUnit, result.MinStayValue, result.MinStayUnit) < 0) {
 			result.MinStayValue = params.RoomTypes[index].MinStayValue
@@ -1407,11 +1695,25 @@ func normalizeServicedRoomType(room *ServicedApartmentRoomTypeInput) {
 		return
 	}
 	room.Name = strings.TrimSpace(room.Name)
+	room.NameEn = strings.TrimSpace(room.NameEn)
 	room.RoomCategory = strings.TrimSpace(room.RoomCategory)
+	room.ImageMediaAssetID = strings.TrimSpace(room.ImageMediaAssetID)
+	room.PageURL = strings.TrimSpace(room.PageURL)
+	room.UsableAreaMinSqft = firstPositiveInt(room.UsableAreaMinSqft, room.UsableAreaSqft)
+	room.UsableAreaSqft = room.UsableAreaMinSqft
+	room.UsableAreaMaxSqft = firstPositiveInt(room.UsableAreaMaxSqft, room.UsableAreaSqft)
 	room.MonthlyRentMinHKD = firstPositive(room.MonthlyRentMinHKD, room.MonthlyRentHKD)
 	room.MonthlyRentHKD = room.MonthlyRentMinHKD
 	if room.MonthlyRentMaxHKD <= 0 {
 		room.MonthlyRentMaxHKD = room.MonthlyRentMinHKD
+	}
+	room.RentUnit = normalizeStayUnit(room.RentUnit)
+	if room.RentUnit == "" {
+		if room.DailyRentMinHKD > 0 && room.MonthlyRentMinHKD <= 0 {
+			room.RentUnit = "day"
+		} else {
+			room.RentUnit = "month"
+		}
 	}
 	room.MinStayUnit = normalizeStayUnit(room.MinStayUnit)
 	if room.MinStayUnit == "" {
@@ -1424,7 +1726,7 @@ func normalizeServicedRoomType(room *ServicedApartmentRoomTypeInput) {
 // 30. normalizeStayUnit keeps supported minimum stay units.
 func normalizeStayUnit(value string) string {
 	switch strings.TrimSpace(value) {
-	case "day", "month":
+	case "day", "week", "month":
 		return strings.TrimSpace(value)
 	default:
 		return ""
@@ -1434,10 +1736,16 @@ func normalizeStayUnit(value string) string {
 // 31. compareStay compares stay values by approximate days.
 func compareStay(leftValue int, leftUnit string, rightValue int, rightUnit string) int {
 	leftDays := leftValue
+	if leftUnit == "week" {
+		leftDays = leftValue * 7
+	}
 	if leftUnit == "month" {
 		leftDays = leftValue * 30
 	}
 	rightDays := rightValue
+	if rightUnit == "week" {
+		rightDays = rightValue * 7
+	}
 	if rightUnit == "month" {
 		rightDays = rightValue * 30
 	}
@@ -1518,18 +1826,7 @@ func propertyAreaColumn(areaMode string) string {
 
 // 39. propertyDistrictsForRegion returns accepted district codes for property regions.
 func propertyDistrictsForRegion(value string) ([]string, bool) {
-	switch strings.TrimSpace(value) {
-	case "hong_kong_island":
-		return []string{"hong_kong_island", "central_western", "wan_chai", "eastern", "southern"}, true
-	case "kowloon":
-		return []string{"kowloon", "yau_tsim_mong", "sham_shui_po", "kowloon_city", "wong_tai_sin", "kwun_tong"}, true
-	case "new_territories":
-		return []string{"new_territories", "kwai_tsing", "tsuen_wan", "tuen_mun", "yuen_long", "north", "tai_po", "sha_tin", "sai_kung"}, true
-	case "outlying_islands":
-		return []string{"outlying_islands", "islands"}, true
-	default:
-		return nil, false
-	}
+	return propertyLocationDistrictsForRegion(strings.TrimSpace(value))
 }
 
 // 40. normalizePropertyTransactionType defaults legacy listings to sale.
@@ -1539,6 +1836,20 @@ func normalizePropertyTransactionType(value string) string {
 	}
 
 	return "sale"
+}
+
+// 41. normalizeSalePropertyType maps legacy UI values to the current xlsx categories.
+func normalizeSalePropertyType(value string) string {
+	switch strings.TrimSpace(value) {
+	case "residential", "private_residential", "private_flat", "estate", "house":
+		return "residential"
+	case "office":
+		return "industrial"
+	case "car_park", "industrial", "shop", "land":
+		return strings.TrimSpace(value)
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 // 33. normalizePropertyAreaMode defaults area filtering to usable area.
@@ -1585,8 +1896,6 @@ func propertyAdPackage(code string) propertyAdPackageConfig {
 		return propertyAdPackageConfig{Code: "featured", Weight: 1, PriceHKD: 800, PricePoints: 800, DurationDays: 30}
 	case "premium":
 		return propertyAdPackageConfig{Code: "premium", Weight: 2, PriceHKD: 1500, PricePoints: 1500, DurationDays: 30}
-	case "fast_sale":
-		return propertyAdPackageConfig{Code: "fast_sale", Weight: 3, PriceHKD: 1200, PricePoints: 1200, DurationDays: 15}
 	default:
 		return propertyAdPackageConfig{Code: "basic", Weight: 0, PriceHKD: 600, PricePoints: 600, DurationDays: 30}
 	}
@@ -1602,7 +1911,7 @@ func servicedApartmentAdPackage(code string) propertyAdPackageConfig {
 // 39. normalizePropertyAdPackageCode defaults package code to basic.
 func normalizePropertyAdPackageCode(value string) string {
 	switch strings.TrimSpace(value) {
-	case "featured", "premium", "fast_sale":
+	case "featured", "premium":
 		return strings.TrimSpace(value)
 	default:
 		return "basic"
@@ -1738,6 +2047,8 @@ func publisherRoleLabel(identity string) string {
 	switch strings.TrimSpace(identity) {
 	case "agent", "professional_seller":
 		return "代理人"
+	case "operator":
+		return "營運商"
 	default:
 		return "業主"
 	}
@@ -1755,9 +2066,9 @@ func isAllowedPropertyValue(value string, allowedValues []string) bool {
 	return false
 }
 
-// 48. isAllowedPropertyDistrict validates district input with existing marketplace set.
+// 48. isAllowedPropertyDistrict validates property location input.
 func isAllowedPropertyDistrict(value string) bool {
-	return isAllowedSecondhandDistrict(value)
+	return isAllowedPropertyLocationCode(value)
 }
 
 // 49. buildPropertyWhatsAppURL creates a WhatsApp deep link from an international phone number.

@@ -100,10 +100,11 @@ type ListingImageResponse struct {
 
 // 8. ListingContactSummary defines contact channel summary.
 type ListingContactSummary struct {
-	ShowPhone    bool `json:"show_phone"`
-	ShowWhatsApp bool `json:"show_whatsapp"`
-	ShowChat     bool `json:"show_chat"`
-	ShowInquiry  bool `json:"show_inquiry_form"`
+	ShowPhone         bool              `json:"show_phone"`
+	ShowWhatsApp      bool              `json:"show_whatsapp"`
+	ShowChat          bool              `json:"show_chat"`
+	ShowInquiry       bool              `json:"show_inquiry_form"`
+	ContactAttributes map[string]string `json:"contact_attributes,omitempty"`
 }
 
 // 9. SecondhandListingSummary defines public list payload.

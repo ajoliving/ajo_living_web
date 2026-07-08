@@ -83,6 +83,9 @@ func (s *PropertyService) ListSimilarProperties(ctx context.Context, listingPubl
 	if err != nil {
 		return nil, err
 	}
+	if err := validatePublicPropertySale(listing); err != nil {
+		return nil, err
+	}
 	rows, err := s.loadPropertyRowsByIDs(ctx, PropertyChannelSale, []int64{listing.ID})
 	if err != nil {
 		return nil, err
@@ -142,6 +145,9 @@ func (s *PropertyService) CreatePropertyAppointment(ctx context.Context, params 
 func (s *PropertyService) ReportProperty(ctx context.Context, params PropertyReportParams) (*PropertyReportResponse, error) {
 	listing, _, err := s.loadPropertyListingByPublicID(ctx, PropertyChannelSale, strings.TrimSpace(params.ListingPublicID))
 	if err != nil {
+		return nil, err
+	}
+	if err := validatePublicPropertySale(listing); err != nil {
 		return nil, err
 	}
 	reason := strings.TrimSpace(params.Reason)

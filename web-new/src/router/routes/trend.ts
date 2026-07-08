@@ -5,7 +5,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import TrendPage from '@/pages/trend/TrendPage.vue';
+const TrendPage = () => import('@/pages/trend/TrendPage.vue');
 
 // 1. 輸出走勢路由
 export const trendRoutes: RouteRecordRaw[] = [

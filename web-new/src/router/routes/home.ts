@@ -5,7 +5,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import HomePage from '@/pages/home/HomePage.vue';
+const HomePage = () => import('@/pages/home/HomePage.vue');
 
 // 1. 輸出首頁路由
 export const homeRoutes: RouteRecordRaw[] = [

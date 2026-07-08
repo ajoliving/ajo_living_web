@@ -40,6 +40,7 @@ export default {
     avatarUrlUnavailable: 'No avatar URL set',
     displayName: 'Display name',
     localPassword: 'Login password',
+    passwordManaged: 'Can be updated from profile',
     email: 'Email address',
     emailUnavailable: 'No email linked',
     phone: 'Phone number',

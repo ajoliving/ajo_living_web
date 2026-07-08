@@ -111,7 +111,6 @@ type IsmartMessage struct {
 	Username                           string   `json:"username"`
 	Email                              string   `json:"email,omitempty"`
 	Phone                              string   `json:"phone,omitempty"`
-	Password                           string   `json:"password,omitempty"`
 	IsStaff                            bool     `json:"is_staff"`
 	Building                           []string `json:"building"`
 	StaffBuildingPermissions           []string `json:"staff_building_permissions"`
@@ -171,8 +170,14 @@ type accessTokenClaims struct {
 	MemberType string `json:"member_type"`
 	IsStaff    bool   `json:"is_staff"`
 	Role       string `json:"role"`
+	TokenType  string `json:"token_type"`
 	jwt.RegisteredClaims
 }
+
+const (
+	tokenTypeAccess  = "access"
+	tokenTypeRefresh = "refresh"
+)
 
 // 16. NewAuthService creates an auth service instance.
 func NewAuthService(runtime *Runtime) *AuthService {
@@ -210,7 +215,7 @@ func (s *AuthService) RequestOTP(ctx context.Context, params RequestOTPParams) (
 		ExpiresIn: int(time.Until(expiresAt).Seconds()),
 	}
 
-	if s.runtime.Config.OTPProvider == "mock" {
+	if s.runtime.Config.OTPProvider == "mock" && otpMockDisclosureAllowed(s.runtime.Config.AppEnv) {
 		result.MockCode = code
 	}
 
@@ -263,7 +268,7 @@ func (s *AuthService) RequestEmailOTP(ctx context.Context, params EmailOTPParams
 	}
 
 	result := &RequestOTPResult{ExpiresIn: int(time.Until(expiresAt).Seconds())}
-	if !s.runtime.Config.MailEnabled {
+	if !s.runtime.Config.MailEnabled && otpMockDisclosureAllowed(s.runtime.Config.AppEnv) {
 		result.MockCode = code
 	}
 
@@ -756,7 +761,7 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 	}
 
 	claims, ok := token.Claims.(*accessTokenClaims)
-	if !ok {
+	if !ok || claims.TokenType != tokenTypeAccess {
 		return nil, errcode.New(errcode.CodeAuthRequired, "invalid access token")
 	}
 
@@ -1069,12 +1074,12 @@ func (s *AuthService) issueAuthResult(ctx context.Context, user *model.User, pro
 
 // 33. issueTokens creates access and refresh JWT tokens.
 func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool) (string, string, error) {
-	accessToken, err := s.signToken(userID, memberType, isStaff, accessTokenTTL)
+	accessToken, err := s.signToken(userID, memberType, isStaff, tokenTypeAccess, accessTokenTTL)
 	if err != nil {
 		return "", "", err
 	}
 
-	refreshToken, err := s.signToken(userID, memberType, isStaff, 7*24*time.Hour)
+	refreshToken, err := s.signToken(userID, memberType, isStaff, tokenTypeRefresh, 7*24*time.Hour)
 	if err != nil {
 		return "", "", err
 	}
@@ -1082,14 +1087,15 @@ func (s *AuthService) issueTokens(userID int64, memberType string, isStaff bool)
 	return accessToken, refreshToken, nil
 }
 
-// 34. signToken signs a JWT token with the configured secret.
-func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, ttl time.Duration) (string, error) {
+// 34. signToken signs a JWT token with the configured token type.
+func (s *AuthService) signToken(userID int64, memberType string, isStaff bool, tokenType string, ttl time.Duration) (string, error) {
 	now := s.runtime.Now()
 	claims := &accessTokenClaims{
 		UserID:     userID,
 		MemberType: normalizeMemberType(memberType),
 		IsStaff:    isStaff,
 		Role:       resolveUserRole(memberType, isStaff),
+		TokenType:  tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("%d", userID),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -1632,7 +1638,6 @@ func (s *AuthService) loadIsmartMessage(ctx context.Context, userID int64) *Isma
 		Username:                           account.Username,
 		Email:                              account.Email,
 		Phone:                              account.Phone,
-		Password:                           s.loadIsmartPassword(account.PasswordEncrypted),
 		IsStaff:                            account.IsStaff,
 		Building:                           unmarshalStringSlice(account.Building),
 		StaffBuildingPermissions:           unmarshalStringSlice(account.StaffBuildingPermissions),
@@ -1641,21 +1646,7 @@ func (s *AuthService) loadIsmartMessage(ctx context.Context, userID int64) *Isma
 	}
 }
 
-// 53. loadIsmartPassword returns the stored POS password when available.
-func (s *AuthService) loadIsmartPassword(encrypted string) string {
-	if strings.TrimSpace(encrypted) == "" {
-		return ""
-	}
-
-	password, err := utils.DecryptString(s.runtime.Config.EncryptionKey, encrypted)
-	if err != nil {
-		return ""
-	}
-
-	return password
-}
-
-// 54. normalizeIsmartMessage keeps POS Web array fields non-null.
+// 53. normalizeIsmartMessage keeps POS Web array fields non-null.
 func normalizeIsmartMessage(message *IsmartMessage) *IsmartMessage {
 	if message == nil {
 		return nil
@@ -1876,12 +1867,22 @@ func buildEmailOTPContent(code string, scene string) (string, string) {
 	return subject, body
 }
 
-// 71. otpKey builds the in-memory OTP lookup key.
+// 71. otpMockDisclosureAllowed allows mock code output only in local test environments.
+func otpMockDisclosureAllowed(appEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "", "development", "dev", "local", "test", "testing":
+		return true
+	default:
+		return false
+	}
+}
+
+// 72. otpKey builds the in-memory OTP lookup key.
 func otpKey(countryCode string, phoneNumber string, scene string) string {
 	return strings.TrimSpace(countryCode) + ":" + strings.TrimSpace(phoneNumber) + ":" + normalizeAuthScene(scene)
 }
 
-// 72. emailOTPKey builds the in-memory email OTP lookup key.
+// 73. emailOTPKey builds the in-memory email OTP lookup key.
 func emailOTPKey(email string, scene string) string {
 	return "email:" + normalizeEmail(email) + ":" + normalizeAuthScene(scene)
 }

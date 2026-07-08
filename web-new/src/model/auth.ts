@@ -7,7 +7,6 @@
 // 1. OTP 申請結果
 export interface RequestOtpResult {
   expires_in: number;
-  mock_code?: string;
 }
 
 // 2. OTP 驗證結果

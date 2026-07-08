@@ -70,12 +70,9 @@ const handleRequestCode = async (): Promise<void> => {
 
   requestingCode.value = true;
   try {
-    const result = await sessionStore.sendPasswordResetEmail(formState.email.trim());
+    await sessionStore.sendPasswordResetEmail(formState.email.trim());
     codeSent.value = true;
     feedbackStore.pushToast(t('auth.passwordResetCodeSent'), 'success');
-    if (result.mock_code) {
-      feedbackStore.pushToast(t('auth.otpPreview', { code: result.mock_code }), 'info');
-    }
   } catch (error) {
     feedbackStore.pushToast(readErrorMessage(error), 'error');
   } finally {

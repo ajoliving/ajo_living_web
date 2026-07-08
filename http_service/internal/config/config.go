@@ -24,6 +24,7 @@ type Config struct {
 	AppPublicBaseURL            string
 	AppAPIPublicBaseURL         string
 	CORSAllowedOrigins          string
+	StrictProductionConfig      bool
 	DBDriver                    string
 	DBDSN                       string
 	JWTSecret                   string
@@ -79,6 +80,7 @@ type Config struct {
 	StoragePresignExpires       time.Duration
 	OSSCallbackEnabled          bool
 	OSSCallbackURL              string
+	OSSCallbackSecret           string
 	OSSAllowedOrigins           string
 	MediaBaseURL                string
 	SeedCommunities             bool
@@ -119,6 +121,7 @@ func Load() *Config {
 		AppPublicBaseURL:            getEnv("APP_PUBLIC_BASE_URL", "http://localhost:5173"),
 		AppAPIPublicBaseURL:         getEnv("APP_API_PUBLIC_BASE_URL", "http://localhost:8081"),
 		CORSAllowedOrigins:          getEnv("CORS_ALLOWED_ORIGINS", ""),
+		StrictProductionConfig:      getBoolEnv("STRICT_PRODUCTION_CONFIG", false),
 		DBDriver:                    getEnv("DB_DRIVER", "postgres"),
 		DBDSN:                       getEnv("DB_DSN", "host=127.0.0.1 user=postgres password=postgres dbname=ajoliving port=5432 sslmode=disable TimeZone=Asia/Shanghai"),
 		JWTSecret:                   getEnv("JWT_SECRET", "dev-secret-key"),
@@ -173,6 +176,7 @@ func Load() *Config {
 		StorageDisableSSL:           getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
 		StoragePresignExpires:       getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
 		OSSCallbackEnabled:          getBoolEnv("OSS_CALLBACK_ENABLED", false),
+		OSSCallbackSecret:           strings.TrimSpace(os.Getenv("OSS_CALLBACK_SECRET")),
 		OSSAllowedOrigins:           getEnv("OSS_ALLOWED_ORIGINS", ""),
 		SeedCommunities:             getBoolEnv("SEED_COMMUNITIES", true),
 		SeedHomeContent:             getBoolEnv("SEED_HOME_CONTENT", true),
@@ -251,7 +255,50 @@ func Load() *Config {
 	return cfg
 }
 
-// 3. getEnv returns env value or fallback.
+// 3. Validate rejects unsafe production-like runtime settings when strict mode is enabled.
+func (c *Config) Validate() error {
+	if c == nil || !c.StrictProductionConfig || !isProductionLikeEnv(c.AppEnv) {
+		return nil
+	}
+	if isUnsafeSecret(c.JWTSecret, "dev-secret-key") {
+		return fmt.Errorf("JWT_SECRET must be set to a strong production value")
+	}
+	if isUnsafeSecret(c.EncryptionKey, "dev-encryption-key") {
+		return fmt.Errorf("ENCRYPTION_KEY must be set to a strong production value")
+	}
+	if strings.EqualFold(strings.TrimSpace(c.OTPProvider), "mock") {
+		return fmt.Errorf("OTP_PROVIDER=mock is not allowed when APP_ENV=%s", c.AppEnv)
+	}
+	if strings.TrimSpace(c.OTPMockCode) == "" || strings.TrimSpace(c.OTPMockCode) == "123456" {
+		return fmt.Errorf("OTP_MOCK_CODE must not use the default value when APP_ENV=%s", c.AppEnv)
+	}
+	if !c.MailEnabled {
+		return fmt.Errorf("MAIL_ENABLED=false is not allowed when APP_ENV=%s", c.AppEnv)
+	}
+	if c.OSSCallbackEnabled && strings.TrimSpace(c.OSSCallbackSecret) == "" {
+		return fmt.Errorf("OSS_CALLBACK_SECRET is required when OSS_CALLBACK_ENABLED=true")
+	}
+
+	return nil
+}
+
+// 4. isProductionLikeEnv reports whether strict runtime safety checks apply.
+func isProductionLikeEnv(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "production", "prod", "staging":
+		return true
+	default:
+		return false
+	}
+}
+
+// 5. isUnsafeSecret rejects empty, default, and short production secrets.
+func isUnsafeSecret(value string, defaultValue string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed == "" || trimmed == defaultValue || len(trimmed) < 32
+}
+
+// 6. getEnv returns env value or fallback.
 func getEnv(key string, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

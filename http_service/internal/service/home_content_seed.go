@@ -186,7 +186,10 @@ func (s *HomeContentService) ensureDefaultMediaAsset(ctx context.Context, operat
 // 9. loadMediaAssetByObjectKey loads one media asset by object key.
 func (s *HomeContentService) loadMediaAssetByObjectKey(ctx context.Context, objectKey string) (*model.MediaAsset, error) {
 	var media model.MediaAsset
-	if err := s.runtime.DB.WithContext(ctx).Where("object_key = ?", objectKey).Limit(1).Find(&media).Error; err != nil {
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("bucket_name = ? AND object_key = ?", s.runtime.Config.StorageBucket, objectKey).
+		Limit(1).
+		Find(&media).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load default media asset")
 	}
 	if media.ID == 0 {

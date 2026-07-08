@@ -124,6 +124,7 @@ export const useLoginHeroSettingsPage = () => {
       }
       const completeResponse = await completeUpload({
         object_key: presign.object_key,
+        upload_token: presign.upload_token,
         mime_type: file.type,
         file_size: file.size,
       });

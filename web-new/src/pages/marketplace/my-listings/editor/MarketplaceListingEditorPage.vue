@@ -11,6 +11,8 @@ import EditorFormPanel from './widgets/EditorFormPanel.vue';
 import EditorPreviewPanel from './widgets/EditorPreviewPanel.vue';
 
 const {
+  activeEditorStep,
+  activeEditorStepIndex,
   areaOptions,
   businessStatusOptions,
   categoryOptions,
@@ -18,13 +20,18 @@ const {
   checklist,
   conditionOptions,
   coverImage,
+  editorSteps,
   formState,
+  goNextEditorStep,
+  goPreviousEditorStep,
   handleLeavePromptDecision,
   handleDroppedImageFiles,
   handleImageFileChange,
   handleImageFilesChange,
   imageSlots,
   isEditing,
+  isFirstEditorStep,
+  isLastEditorStep,
   isLeavePromptOpen,
   isLoading,
   isPublishing,
@@ -38,6 +45,7 @@ const {
   readyToSaveDraft,
   removeImageSlot,
   saveAndBackToList,
+  selectEditorStep,
   selectCoverImage,
   submitListing,
   visibilityOptions,
@@ -63,7 +71,28 @@ const {
     </div>
 
     <section class="listing-editor-workspace">
+      <div
+        class="listing-editor-progress"
+        aria-label="發布步驟"
+      >
+        <button
+          v-for="(step, stepIndex) in editorSteps"
+          :key="step.key"
+          type="button"
+          class="listing-editor-progress__step"
+          :class="{
+            'listing-editor-progress__step--active': activeEditorStep === step.key,
+            'listing-editor-progress__step--done': stepIndex < activeEditorStepIndex,
+          }"
+          :aria-current="activeEditorStep === step.key ? 'step' : undefined"
+          @click="selectEditorStep(step.key)"
+        >
+          {{ stepIndex + 1 }}
+        </button>
+      </div>
+
       <EditorFormPanel
+        :active-step="activeEditorStep"
         :area-options="areaOptions"
         :business-status-options="businessStatusOptions"
         :category-options="categoryOptions"
@@ -84,6 +113,8 @@ const {
         :checklist="checklist"
         :charge-hint="chargeHint"
         :cover-image="coverImage"
+        :is-first-step="isFirstEditorStep"
+        :is-last-step="isLastEditorStep"
         :is-publishing="isPublishing"
         :is-saving="isSaving"
         :is-editing="isEditing"
@@ -92,7 +123,9 @@ const {
         :preview-title="previewTitle"
         :ready-to-publish="readyToPublish"
         :ready-to-save-draft="readyToSaveDraft"
+        @next-step="goNextEditorStep"
         @publish="submitListing"
+        @previous-step="goPreviousEditorStep"
         @save-draft="saveAndBackToList"
       />
     </section>
@@ -166,6 +199,62 @@ const {
   align-items: start;
   margin-top: 1rem;
   min-width: 0;
+}
+
+.listing-editor-progress {
+  position: relative;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  padding: 0.25rem 0.375rem;
+}
+
+.listing-editor-progress::before {
+  position: absolute;
+  top: 50%;
+  right: 1.25rem;
+  left: 1.25rem;
+  height: 1px;
+  background: rgb(var(--color-border));
+  content: "";
+  transform: translateY(-50%);
+}
+
+.listing-editor-progress__step {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 9999px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.listing-editor-progress__step:hover,
+.listing-editor-progress__step--active {
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
+}
+
+.listing-editor-progress__step--active,
+.listing-editor-progress__step--done {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.listing-editor-progress__step--active:hover,
+.listing-editor-progress__step--done:hover {
+  color: rgb(var(--color-primary-contrast));
 }
 
 @media (max-width: 767px) {

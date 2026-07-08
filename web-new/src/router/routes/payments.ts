@@ -5,8 +5,8 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import PaymentsPage from '@/pages/payments/Page.vue';
-import PaymentPayPage from '@/pages/payments/pay/Page.vue';
+const PaymentPayPage = () => import('@/pages/payments/pay/Page.vue');
+const PaymentsPage = () => import('@/pages/payments/Page.vue');
 
 // 1. 輸出支付路由
 export const paymentRoutes: RouteRecordRaw[] = [

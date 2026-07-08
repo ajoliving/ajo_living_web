@@ -22,13 +22,18 @@ type PropertyHandler struct {
 
 // 2. propertyContactRequest defines contact payload.
 type propertyContactRequest struct {
-	Phone           string `json:"phone"`
-	WhatsApp        string `json:"whatsapp"`
-	Email           string `json:"email"`
-	ShowPhone       bool   `json:"show_phone"`
-	ShowWhatsApp    bool   `json:"show_whatsapp"`
-	ShowChat        bool   `json:"show_chat"`
-	ShowInquiryForm bool   `json:"show_inquiry_form"`
+	ContactNameZH     string            `json:"contact_name_zh"`
+	ContactNameEN     string            `json:"contact_name_en"`
+	Phone             string            `json:"phone"`
+	Phone2            string            `json:"phone_2"`
+	WhatsApp          string            `json:"whatsapp"`
+	WeChat            string            `json:"wechat"`
+	Email             string            `json:"email"`
+	ContactAttributes map[string]string `json:"contact_attributes"`
+	ShowPhone         bool              `json:"show_phone"`
+	ShowWhatsApp      bool              `json:"show_whatsapp"`
+	ShowChat          bool              `json:"show_chat"`
+	ShowInquiryForm   bool              `json:"show_inquiry_form"`
 }
 
 // 3. propertySaleRequest defines sale listing create and update payload.
@@ -48,6 +53,7 @@ type propertySaleRequest struct {
 	MultiUnitProject      bool                        `json:"multi_unit_project"`
 	PropertyType          string                      `json:"property_type" binding:"required"`
 	RentalType            string                      `json:"rental_type"`
+	PropertyAttributes    map[string]string           `json:"property_attributes"`
 	RenovationType        string                      `json:"renovation_type"`
 	AgencyCompanyName     string                      `json:"agency_company_name"`
 	EstateName            string                      `json:"estate_name"`
@@ -67,7 +73,7 @@ type propertySaleRequest struct {
 	LeaseStartDate        string                      `json:"lease_start_date"`
 	RentIncluded          string                      `json:"rent_included"`
 	AreaMode              string                      `json:"area_mode"`
-	UsableAreaSqft        int                         `json:"usable_area_sqft" binding:"required"`
+	UsableAreaSqft        int                         `json:"usable_area_sqft"`
 	GrossAreaSqft         *int                        `json:"gross_area_sqft"`
 	BedroomCount          int                         `json:"bedroom_count"`
 	LivingRoomCount       int                         `json:"living_room_count"`
@@ -122,19 +128,25 @@ type servicedApartmentRequest struct {
 	PublisherIdentityType string                                   `json:"publisher_identity_type"`
 	ProjectName           string                                   `json:"project_name" binding:"required"`
 	ProjectNameEn         string                                   `json:"project_name_en"`
+	ProjectAttributes     map[string]string                        `json:"project_attributes"`
 	AddressText           string                                   `json:"address_text" binding:"required"`
 	AddressTextEn         string                                   `json:"address_text_en"`
 	WebsiteURL            string                                   `json:"website_url"`
 	WhatsApp              string                                   `json:"whatsapp"`
 	Fax                   string                                   `json:"fax"`
 	ServiceIntro          string                                   `json:"service_intro"`
+	ServiceIntroEn        string                                   `json:"service_intro_en"`
 	BenefitsText          string                                   `json:"benefits_text"`
+	BenefitsTextEn        string                                   `json:"benefits_text_en"`
 	ExtraChargesText      string                                   `json:"extra_charges_text"`
+	ExtraChargesTextEn    string                                   `json:"extra_charges_text_en"`
 	LowestMonthlyRentHKD  float64                                  `json:"lowest_monthly_rent_hkd"`
+	HighestMonthlyRentHKD float64                                  `json:"highest_monthly_rent_hkd"`
 	LowestDailyRentHKD    float64                                  `json:"lowest_daily_rent_hkd"`
 	PriceReferenceOnly    bool                                     `json:"price_reference_only"`
 	PriceNegotiable       bool                                     `json:"price_negotiable"`
 	MinUsableAreaSqft     int                                      `json:"min_usable_area_sqft"`
+	MaxUsableAreaSqft     int                                      `json:"max_usable_area_sqft"`
 	MinLeaseMonths        int                                      `json:"min_lease_months"`
 	MinStayValue          int                                      `json:"min_stay_value"`
 	MinStayUnit           string                                   `json:"min_stay_unit"`

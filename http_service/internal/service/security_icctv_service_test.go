@@ -68,10 +68,10 @@ func TestSecurityICCTVRewritesCameraURLs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get public cameras: %v", err)
 	}
-	if result.Cameras[0].URL != "https://icctv.skylinedances.com/opi/29005/channel1?token=hidden" {
+	if result.Cameras[0].URL != "https://icctv.skylinedances.com/opi/29005/channel1" {
 		t.Fatalf("unexpected rewritten camera url: %s", result.Cameras[0].URL)
 	}
-	if result.Cameras[1].URL != "http://47.83.21.100:20042/channel1?token=hidden" {
+	if result.Cameras[1].URL != "http://47.83.21.100:20042/channel1" {
 		t.Fatalf("unexpected non-stream camera url: %s", result.Cameras[1].URL)
 	}
 }

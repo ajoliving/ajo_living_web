@@ -60,6 +60,7 @@ export interface PropertySalePayload {
   multi_unit_project?: boolean;
   rental_type?: string;
   property_type: string;
+  property_attributes?: Record<string, string>;
   renovation_type?: string;
   agency_company_name?: string;
   estate_name: string;
@@ -135,13 +136,18 @@ export interface PropertyAddressSuggestion {
 // 5. 定義服務式住宅房型
 export interface ServicedApartmentRoomType {
   name: string;
+  name_en?: string;
   room_category?: string;
   usable_area_sqft: number;
+  usable_area_min_sqft?: number;
+  usable_area_max_sqft?: number;
   monthly_rent_hkd: number;
   monthly_rent_min_hkd?: number;
   monthly_rent_max_hkd?: number;
   daily_rent_min_hkd?: number;
   daily_rent_max_hkd?: number;
+  rent_unit?: string;
+  rent_suffix_plus?: boolean;
   included_fees: boolean;
   included_fee_items?: string[];
   min_lease_months: number;
@@ -149,12 +155,14 @@ export interface ServicedApartmentRoomType {
   min_stay_unit?: string;
   feature_tags: string[];
   image_media_asset_id?: string;
+  page_url?: string;
 }
 
 // 6. 定義服務式住宅欄位
 export interface ServicedApartmentPayload {
   project_name: string;
   project_name_en?: string;
+  project_attributes?: Record<string, string>;
   address_text: string;
   address_text_en?: string;
   website_url?: string;
@@ -162,13 +170,18 @@ export interface ServicedApartmentPayload {
   fax?: string;
   description_en?: string;
   service_intro?: string;
+  service_intro_en?: string;
   benefits_text?: string;
+  benefits_text_en?: string;
   extra_charges_text?: string;
+  extra_charges_text_en?: string;
   lowest_monthly_rent_hkd: number;
+  highest_monthly_rent_hkd?: number;
   lowest_daily_rent_hkd?: number;
   price_reference_only?: boolean;
   price_negotiable?: boolean;
   min_usable_area_sqft?: number;
+  max_usable_area_sqft?: number;
   min_lease_months: number;
   min_stay_value?: number;
   min_stay_unit?: string;
@@ -221,9 +234,14 @@ export interface PropertyListingDetailResponse extends PropertyListingSummaryRes
 
 // 9. 定義共用聯絡輸入
 export interface PropertyContactPayload {
+  contact_name_zh?: string;
+  contact_name_en?: string;
   phone: string;
+  phone_2?: string;
   whatsapp: string;
+  wechat?: string;
   email: string;
+  contact_attributes?: Record<string, string>;
   show_phone: boolean;
   show_whatsapp: boolean;
   show_chat: boolean;
@@ -253,6 +271,7 @@ export interface UpsertPropertySalePayload {
   listing_category?: string;
   multi_unit_project?: boolean;
   property_type: string;
+  property_attributes?: Record<string, string>;
   rental_type?: string;
   renovation_type?: string;
   agency_company_name?: string;
@@ -343,19 +362,25 @@ export interface UpsertServicedApartmentPayload {
   publisher_identity_type: string;
   project_name: string;
   project_name_en?: string;
+  project_attributes?: Record<string, string>;
   address_text: string;
   address_text_en?: string;
   website_url?: string;
   whatsapp?: string;
   fax?: string;
   service_intro?: string;
+  service_intro_en?: string;
   benefits_text?: string;
+  benefits_text_en?: string;
   extra_charges_text?: string;
+  extra_charges_text_en?: string;
   lowest_monthly_rent_hkd: number;
+  highest_monthly_rent_hkd?: number;
   lowest_daily_rent_hkd?: number;
   price_reference_only?: boolean;
   price_negotiable?: boolean;
   min_usable_area_sqft?: number;
+  max_usable_area_sqft?: number;
   min_lease_months: number;
   min_stay_value?: number;
   min_stay_unit?: string;

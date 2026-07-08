@@ -26,6 +26,9 @@ import (
 // 1. main wires the application dependencies and starts the HTTP server.
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatal(err)
+	}
 	logg := logger.New(cfg)
 
 	db, err := database.Open(cfg)
@@ -34,6 +37,10 @@ func main() {
 	}
 
 	if err := database.Migrate(db); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := database.SeedAccessControl(context.Background(), db); err != nil {
 		log.Fatal(err)
 	}
 

@@ -52,6 +52,9 @@ func (s *SecondhandService) GrantContactAccess(ctx context.Context, userID int64
 	if listing.PublicationStatus != "active" {
 		return nil, errcode.New(errcode.CodeExpired, "listing is not active")
 	}
+	if listing.ModerationStatus != "approved" {
+		return nil, errcode.New(errcode.CodeNotFound, "listing not found")
+	}
 	if listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available")
 	}

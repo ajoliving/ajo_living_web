@@ -5,7 +5,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import NotFoundPage from '@/pages/not-found/NotFoundPage.vue';
+const NotFoundPage = () => import('@/pages/not-found/NotFoundPage.vue');
 
 // 1. 輸出系統兜底路由
 export const systemRoutes: RouteRecordRaw[] = [

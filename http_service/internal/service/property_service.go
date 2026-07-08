@@ -31,100 +31,107 @@ type PropertyService struct {
 // 2. propertyListingRow defines common list query fields.
 type propertyListingRow struct {
 	model.Listing
-	SalePropertyNo               string
-	SaleTransactionType          string
-	SaleLocationScope            string
-	SaleListingCategory          string
-	SaleMultiUnitProject         bool
-	SalePropertyType             string
-	SaleRentalType               string
-	SaleRenovationType           string
-	SaleAgencyCompanyName        string
-	SaleEstateName               string
-	SaleAddressText              string
-	SaleAddressTextEn            string
-	SaleBlockName                string
-	SaleUnitName                 string
-	SaleShowUnit                 bool
-	SaleLatitude                 *float64
-	SaleLongitude                *float64
-	SaleAskingPriceHKD           float64
-	SaleMonthlyRentHKD           float64
-	SalePriceReferenceOnly       bool
-	SalePriceNegotiable          bool
-	SaleAnnualPrepayDiscount     bool
-	SaleAnnualPrepayOption       string
-	SaleLeaseStartDate           string
-	SaleRentIncluded             string
-	SaleAreaMode                 string
-	SaleUsableAreaSqft           int
-	SaleGrossAreaSqft            *int
-	SaleBedroomCount             int
-	SaleLivingRoomCount          int
-	SaleBathroomCount            int
-	SaleFloorLevel               string
-	SaleFloorRaw                 string
-	SaleFloorZone                string
-	SaleFloorDisplayRange        string
-	SaleTotalFloors              int
-	SalePublicLocationText       string
-	SaleDirection                string
-	SaleBuildingAge              string
-	SaleCompletionYear           int
-	SaleBuildingTotalFloors      int
-	SaleManagementCompany        string
-	SaleKitchenType              string
-	SaleCookingMode              string
-	SaleManagementFeeHKD         float64
-	SaleVideoURL                 string
-	SaleVRURL                    string
-	SalePrivateNote              string
-	SaleTitleEn                  string
-	SaleDescriptionEn            string
-	SaleAdPackageCode            string
-	SaleAdWeight                 int
-	SaleAdPriceHKD               float64
-	SaleAdPricePoints            int64
-	SaleAdDurationDays           int
-	SaleAdExpiresAt              *time.Time
-	SaleFeatureTags              []byte
-	SaleContactMethod            string
-	SalePublisherRoleLabel       string
-	SaleViewCount                int64
-	SaleInquiryCount             int64
-	ServicedProjectName          string
-	ServicedProjectNameEn        string
-	ServicedAddressText          string
-	ServicedAddressTextEn        string
-	ServicedWebsiteURL           string
-	ServicedWhatsApp             string
-	ServicedFax                  string
-	ServicedDescriptionEn        string
-	ServicedServiceIntro         string
-	ServicedBenefitsText         string
-	ServicedExtraChargesText     string
-	ServicedLowestMonthlyRentHKD float64
-	ServicedLowestDailyRentHKD   float64
-	ServicedPriceReferenceOnly   bool
-	ServicedPriceNegotiable      bool
-	ServicedMinUsableAreaSqft    int
-	ServicedMinLeaseMonths       int
-	ServicedMinStayValue         int
-	ServicedMinStayUnit          string
-	ServicedLocationScope        string
-	ServicedListingCategory      string
-	ServicedMultiUnitProject     bool
-	ServicedFacilityTags         []byte
-	ServicedServiceTags          []byte
-	ServicedRoomTypes            []byte
-	ServicedAdPackageCode        string
-	ServicedAdWeight             int
-	ServicedAdPriceHKD           float64
-	ServicedAdPricePoints        int64
-	ServicedAdDurationDays       int
-	ServicedAdExpiresAt          *time.Time
-	ServicedContactMethod        string
-	ServicedPublisherRoleLabel   string
+	SalePropertyNo                string
+	SaleTransactionType           string
+	SaleLocationScope             string
+	SaleListingCategory           string
+	SaleMultiUnitProject          bool
+	SalePropertyType              string
+	SaleRentalType                string
+	SalePropertyAttributes        []byte
+	SaleRenovationType            string
+	SaleAgencyCompanyName         string
+	SaleEstateName                string
+	SaleAddressText               string
+	SaleAddressTextEn             string
+	SaleBlockName                 string
+	SaleUnitName                  string
+	SaleShowUnit                  bool
+	SaleLatitude                  *float64
+	SaleLongitude                 *float64
+	SaleAskingPriceHKD            float64
+	SaleMonthlyRentHKD            float64
+	SalePriceReferenceOnly        bool
+	SalePriceNegotiable           bool
+	SaleAnnualPrepayDiscount      bool
+	SaleAnnualPrepayOption        string
+	SaleLeaseStartDate            string
+	SaleRentIncluded              string
+	SaleAreaMode                  string
+	SaleUsableAreaSqft            int
+	SaleGrossAreaSqft             *int
+	SaleBedroomCount              int
+	SaleLivingRoomCount           int
+	SaleBathroomCount             int
+	SaleFloorLevel                string
+	SaleFloorRaw                  string
+	SaleFloorZone                 string
+	SaleFloorDisplayRange         string
+	SaleTotalFloors               int
+	SalePublicLocationText        string
+	SaleDirection                 string
+	SaleBuildingAge               string
+	SaleCompletionYear            int
+	SaleBuildingTotalFloors       int
+	SaleManagementCompany         string
+	SaleKitchenType               string
+	SaleCookingMode               string
+	SaleManagementFeeHKD          float64
+	SaleVideoURL                  string
+	SaleVRURL                     string
+	SalePrivateNote               string
+	SaleTitleEn                   string
+	SaleDescriptionEn             string
+	SaleAdPackageCode             string
+	SaleAdWeight                  int
+	SaleAdPriceHKD                float64
+	SaleAdPricePoints             int64
+	SaleAdDurationDays            int
+	SaleAdExpiresAt               *time.Time
+	SaleFeatureTags               []byte
+	SaleContactMethod             string
+	SalePublisherRoleLabel        string
+	SaleViewCount                 int64
+	SaleInquiryCount              int64
+	ServicedProjectName           string
+	ServicedProjectNameEn         string
+	ServicedProjectAttributes     []byte
+	ServicedAddressText           string
+	ServicedAddressTextEn         string
+	ServicedWebsiteURL            string
+	ServicedWhatsApp              string
+	ServicedFax                   string
+	ServicedDescriptionEn         string
+	ServicedServiceIntro          string
+	ServicedServiceIntroEn        string
+	ServicedBenefitsText          string
+	ServicedBenefitsTextEn        string
+	ServicedExtraChargesText      string
+	ServicedExtraChargesTextEn    string
+	ServicedLowestMonthlyRentHKD  float64
+	ServicedHighestMonthlyRentHKD float64
+	ServicedLowestDailyRentHKD    float64
+	ServicedPriceReferenceOnly    bool
+	ServicedPriceNegotiable       bool
+	ServicedMinUsableAreaSqft     int
+	ServicedMaxUsableAreaSqft     int
+	ServicedMinLeaseMonths        int
+	ServicedMinStayValue          int
+	ServicedMinStayUnit           string
+	ServicedLocationScope         string
+	ServicedListingCategory       string
+	ServicedMultiUnitProject      bool
+	ServicedFacilityTags          []byte
+	ServicedServiceTags           []byte
+	ServicedRoomTypes             []byte
+	ServicedAdPackageCode         string
+	ServicedAdWeight              int
+	ServicedAdPriceHKD            float64
+	ServicedAdPricePoints         int64
+	ServicedAdDurationDays        int
+	ServicedAdExpiresAt           *time.Time
+	ServicedContactMethod         string
+	ServicedPublisherRoleLabel    string
 }
 
 // 3. NewPropertyService creates a property service instance.
@@ -293,7 +300,7 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		return nil, errcode.New(errcode.CodeHidden, "listing is hidden")
 	}
 	if viewerUserID == nil || *viewerUserID != listing.OwnerUserID {
-		if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+		if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 			return nil, errcode.New(errcode.CodeNotFound, "listing not found")
 		}
 		if channel == PropertyChannelSale {
@@ -317,6 +324,7 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
 		summaries[0].PropertySale.FloorRaw = rows[0].SaleFloorRaw
 		summaries[0].PropertySale.PrivateNote = rows[0].SalePrivateNote
+		summaries[0].PropertySale.PropertyAttributes = decodeStringMapBytes(rows[0].SalePropertyAttributes)
 	}
 	if channel == PropertyChannelSale && viewerUserID != nil && len(summaries) > 0 {
 		summaries[0].IsFavorite = s.isFavoriteProperty(ctx, *viewerUserID, listing.ID)
@@ -327,16 +335,21 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		return nil, err
 	}
 
+	contactSummary := ListingContactSummary{
+		ShowPhone:    contact.ShowPhone,
+		ShowWhatsApp: contact.ShowWhatsApp,
+		ShowChat:     contact.ShowChat,
+		ShowInquiry:  contact.ShowInquiryForm,
+	}
+	if viewerUserID != nil && *viewerUserID == listing.OwnerUserID {
+		contactSummary.ContactAttributes = decodeStringMapBytes(contact.ContactAttributes)
+	}
+
 	return &PropertyListingDetail{
 		PropertyListingSummary: summaries[0],
 		Description:            listing.Description,
 		Images:                 images[listing.ID],
-		ContactSummary: ListingContactSummary{
-			ShowPhone:    contact.ShowPhone,
-			ShowWhatsApp: contact.ShowWhatsApp,
-			ShowChat:     contact.ShowChat,
-			ShowInquiry:  contact.ShowInquiryForm,
-		},
+		ContactSummary:         contactSummary,
 	}, nil
 }
 
@@ -479,6 +492,9 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 	if listing.PublicationStatus != "active" {
 		return nil, errcode.New(errcode.CodeExpired, "listing is not active")
 	}
+	if listing.ModerationStatus != "approved" {
+		return nil, errcode.New(errcode.CodeNotFound, "listing not found")
+	}
 	if listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available")
 	}
@@ -486,9 +502,17 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 	payload := map[string]string{}
 	channels := map[string]bool{
 		"phone":        false,
+		"phone_2":      false,
 		"whatsapp":     false,
+		"wechat":       false,
 		"chat":         contact.ShowChat,
 		"inquiry_form": contact.ShowInquiryForm,
+	}
+	if strings.TrimSpace(contact.ContactNameZH) != "" {
+		payload["contact_name_zh"] = strings.TrimSpace(contact.ContactNameZH)
+	}
+	if strings.TrimSpace(contact.ContactNameEN) != "" {
+		payload["contact_name_en"] = strings.TrimSpace(contact.ContactNameEN)
 	}
 
 	if contact.ShowPhone && contact.PhoneEncrypted != "" {
@@ -498,6 +522,14 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 		}
 		payload["phone"] = phone
 		channels["phone"] = true
+	}
+	if contact.ShowPhone && contact.Phone2Encrypted != "" {
+		phone2, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.Phone2Encrypted)
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt secondary phone")
+		}
+		payload["phone_2"] = phone2
+		channels["phone_2"] = true
 	}
 
 	if contact.ShowWhatsApp && contact.WhatsAppEncrypted != "" {
@@ -510,6 +542,14 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 	} else if phone := strings.TrimSpace(payload["phone"]); phone != "" {
 		payload["whatsapp_url"] = buildPropertyWhatsAppURL(phone, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL, channel)
 		channels["whatsapp"] = true
+	}
+	if contact.ShowWhatsApp && contact.WeChatEncrypted != "" {
+		wechat, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.WeChatEncrypted)
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt wechat")
+		}
+		payload["wechat"] = wechat
+		channels["wechat"] = true
 	}
 
 	grantedChannels, err := marshalJSON(channels)

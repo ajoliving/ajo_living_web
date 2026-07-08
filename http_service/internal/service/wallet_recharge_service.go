@@ -534,16 +534,19 @@ func (s *WalletService) toRechargeResponse(order model.WalletRechargeOrder) *Wal
 
 // 17. buildRechargeReturnURL builds the member-facing return URL.
 func (s *WalletService) buildRechargeReturnURL(returnPath string, mchOrderNo string, payChannel string) (string, error) {
-	var target *url.URL
-	var err error
-	if strings.HasPrefix(strings.TrimSpace(returnPath), "http://") || strings.HasPrefix(strings.TrimSpace(returnPath), "https://") {
-		target, err = url.Parse(returnPath)
-	} else {
-		target, err = url.Parse(strings.TrimSpace(s.runtime.Config.PaymentReturnBaseURL))
-		if err == nil {
-			target, err = target.Parse(paymentFirstNonEmpty(returnPath, "/account/profile/wallet"))
-		}
+	normalizedReturnPath := paymentFirstNonEmpty(strings.TrimSpace(returnPath), "/account/profile/wallet")
+	if strings.HasPrefix(normalizedReturnPath, "http://") ||
+		strings.HasPrefix(normalizedReturnPath, "https://") ||
+		strings.HasPrefix(normalizedReturnPath, "//") ||
+		!strings.HasPrefix(normalizedReturnPath, "/") {
+		return "", errcode.New(errcode.CodeValidationError, "invalid payment return path")
 	}
+
+	baseURL, err := url.Parse(strings.TrimSpace(s.runtime.Config.PaymentReturnBaseURL))
+	if err != nil {
+		return "", err
+	}
+	target, err := baseURL.Parse(normalizedReturnPath)
 	if err != nil {
 		return "", err
 	}

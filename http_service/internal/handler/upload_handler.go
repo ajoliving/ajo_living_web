@@ -30,6 +30,7 @@ type presignRequest struct {
 // 3. completeUploadRequest defines the upload completion payload.
 type completeUploadRequest struct {
 	ObjectKey      string `json:"object_key" binding:"required"`
+	UploadToken    string `json:"upload_token" binding:"required"`
 	MimeType       string `json:"mime_type" binding:"required"`
 	FileSize       int64  `json:"file_size" binding:"required"`
 	Width          *int   `json:"width"`
@@ -39,11 +40,12 @@ type completeUploadRequest struct {
 
 // 4. uploadCallbackRequest defines the OSS callback payload.
 type uploadCallbackRequest struct {
-	BucketName string `json:"bucket_name" binding:"required"`
-	ObjectKey  string `json:"object_key" binding:"required"`
-	MimeType   string `json:"mime_type" binding:"required"`
-	FileSize   int64  `json:"file_size" binding:"required"`
-	ETag       string `json:"etag"`
+	BucketName    string `json:"bucket_name" binding:"required"`
+	ObjectKey     string `json:"object_key" binding:"required"`
+	MimeType      string `json:"mime_type" binding:"required"`
+	FileSize      int64  `json:"file_size" binding:"required"`
+	ETag          string `json:"etag"`
+	CallbackToken string `json:"callback_token"`
 }
 
 // 5. NewUploadHandler creates an upload handler instance.
@@ -97,6 +99,7 @@ func (h *UploadHandler) CompleteUpload(c *gin.Context) {
 	result, err := h.uploadService.CompleteUpload(c.Request.Context(), service.CompleteUploadParams{
 		UserID:         user.UserID,
 		ObjectKey:      strings.TrimSpace(request.ObjectKey),
+		UploadToken:    strings.TrimSpace(request.UploadToken),
 		MimeType:       strings.TrimSpace(request.MimeType),
 		FileSize:       request.FileSize,
 		Width:          request.Width,
@@ -120,11 +123,12 @@ func (h *UploadHandler) UploadCallback(c *gin.Context) {
 	}
 
 	result, err := h.uploadService.AcceptUploadCallback(c.Request.Context(), service.UploadCallbackParams{
-		BucketName: strings.TrimSpace(request.BucketName),
-		ObjectKey:  strings.TrimSpace(request.ObjectKey),
-		MimeType:   strings.TrimSpace(request.MimeType),
-		FileSize:   request.FileSize,
-		ETag:       strings.TrimSpace(request.ETag),
+		BucketName:    strings.TrimSpace(request.BucketName),
+		ObjectKey:     strings.TrimSpace(request.ObjectKey),
+		MimeType:      strings.TrimSpace(request.MimeType),
+		FileSize:      request.FileSize,
+		ETag:          strings.TrimSpace(request.ETag),
+		CallbackToken: strings.TrimSpace(request.CallbackToken),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)

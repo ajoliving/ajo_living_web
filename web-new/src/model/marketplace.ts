@@ -43,6 +43,7 @@ export interface ListingContactSummary {
   show_whatsapp: boolean;
   show_chat: boolean;
   show_inquiry_form: boolean;
+  contact_attributes?: Record<string, string>;
 }
 
 // 5. 定義帖子列表項回應
@@ -182,6 +183,7 @@ export interface PresignUploadPayload {
 export interface PresignUploadResult {
   upload_url: string;
   object_key: string;
+  upload_token: string;
   headers: Record<string, string>;
 }
 

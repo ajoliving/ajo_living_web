@@ -5,10 +5,10 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import MarketplacePage from '@/pages/marketplace/MarketplacePage.vue';
-import MarketplaceFilterPage from '@/pages/marketplace/filter/MarketplaceFilterPage.vue';
-import MarketplaceListingPage from '@/pages/marketplace/listing/MarketplaceListingPage.vue';
-import MarketplaceSellerPage from '@/pages/marketplace/seller/MarketplaceSellerPage.vue';
+const MarketplacePage = () => import('@/pages/marketplace/MarketplacePage.vue');
+const MarketplaceFilterPage = () => import('@/pages/marketplace/filter/MarketplaceFilterPage.vue');
+const MarketplaceListingPage = () => import('@/pages/marketplace/listing/MarketplaceListingPage.vue');
+const MarketplaceSellerPage = () => import('@/pages/marketplace/seller/MarketplaceSellerPage.vue');
 
 // 1. 取得舊路徑剩餘片段
 const normalizeLegacyRestPath = (value: string | string[] | undefined): string =>

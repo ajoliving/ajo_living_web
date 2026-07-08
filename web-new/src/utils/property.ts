@@ -98,6 +98,12 @@ export const resolvePropertyPriceText = (
   if (flags.referenceOnly && price <= 1) {
     return locale === 'en' ? 'Reference price' : '價格僅供參考';
   }
+  if (listing.serviced_apartment && priceMode === 'monthly') {
+    const highestPrice = Number(listing.serviced_apartment.highest_monthly_rent_hkd || 0);
+    if (highestPrice > price && price > 0) {
+      return `${formatPrice(price, locale)}-${formatPrice(highestPrice, locale)}`;
+    }
+  }
 
   const priceText = formatPrice(price, locale);
   return flags.referenceOnly ? `${priceText}${locale === 'en' ? ' from' : ' 起'}` : priceText;
@@ -115,7 +121,9 @@ export const resolvePropertyRooms = (listing: PropertyListingSummaryResponse) =>
   const sale = listing.property_sale;
   if (sale) {
     const location = sale.public_location_text ? `${sale.public_location_text} · ` : '';
-    return `${location}${sale.bedroom_count}房 ${sale.living_room_count}廳 ${sale.bathroom_count}廁`;
+    const bedroomText = sale.bedroom_count < 0 ? 'N/A' : `${sale.bedroom_count}房`;
+    const bathroomLabel = ['industrial', 'shop'].includes(sale.property_type) ? '廁' : '浴室';
+    return `${location}${bedroomText} ${sale.bathroom_count}${bathroomLabel}`;
   }
 
   const roomCount = listing.serviced_apartment?.room_types.length ?? 0;

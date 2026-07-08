@@ -142,7 +142,10 @@ func importSupermarketImage(ctx context.Context, runtime *service.Runtime, local
 	}
 
 	var existing model.MediaAsset
-	err = runtime.DB.WithContext(ctx).Where("object_key = ?", objectKey).Limit(1).Find(&existing).Error
+	err = runtime.DB.WithContext(ctx).
+		Where("bucket_name = ? AND object_key = ?", runtime.Config.StorageBucket, objectKey).
+		Limit(1).
+		Find(&existing).Error
 	if err != nil {
 		return false, fmt.Errorf("load media asset: %w", err)
 	}

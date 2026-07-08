@@ -229,6 +229,7 @@ func bindPropertySaleRequestFromContext(c *gin.Context, listingID string) (servi
 		MultiUnitProject:      request.MultiUnitProject,
 		PropertyType:          strings.TrimSpace(request.PropertyType),
 		RentalType:            strings.TrimSpace(request.RentalType),
+		PropertyAttributes:    normalizePropertyAttributeMap(request.PropertyAttributes),
 		RenovationType:        strings.TrimSpace(request.RenovationType),
 		AgencyCompanyName:     strings.TrimSpace(request.AgencyCompanyName),
 		EstateName:            strings.TrimSpace(request.EstateName),
@@ -277,7 +278,22 @@ func bindPropertySaleRequestFromContext(c *gin.Context, listingID string) (servi
 	}, true
 }
 
-// 11. bindServicedApartmentRequest maps a serviced apartment request body.
+// 11. normalizePropertyAttributeMap trims dynamic sale attributes.
+func normalizePropertyAttributeMap(input map[string]string) map[string]string {
+	result := make(map[string]string)
+	for key, value := range input {
+		cleanKey := strings.TrimSpace(key)
+		cleanValue := strings.TrimSpace(value)
+		if cleanKey == "" || cleanValue == "" || len(cleanKey) > 80 || len(cleanValue) > 500 {
+			continue
+		}
+		result[cleanKey] = cleanValue
+	}
+
+	return result
+}
+
+// 12. bindServicedApartmentRequest maps a serviced apartment request body.
 func (h *PropertyHandler) bindServicedApartmentRequest(c *gin.Context, listingID string) (service.UpsertServicedApartmentParams, bool) {
 	return bindServicedApartmentRequestFromContext(c, listingID)
 }
@@ -301,19 +317,25 @@ func bindServicedApartmentRequestFromContext(c *gin.Context, listingID string) (
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
 		ProjectName:           strings.TrimSpace(request.ProjectName),
 		ProjectNameEn:         strings.TrimSpace(request.ProjectNameEn),
+		ProjectAttributes:     normalizePropertyAttributeMap(request.ProjectAttributes),
 		AddressText:           strings.TrimSpace(request.AddressText),
 		AddressTextEn:         strings.TrimSpace(request.AddressTextEn),
 		WebsiteURL:            strings.TrimSpace(request.WebsiteURL),
 		WhatsApp:              strings.TrimSpace(request.WhatsApp),
 		Fax:                   strings.TrimSpace(request.Fax),
 		ServiceIntro:          strings.TrimSpace(request.ServiceIntro),
+		ServiceIntroEn:        strings.TrimSpace(request.ServiceIntroEn),
 		BenefitsText:          strings.TrimSpace(request.BenefitsText),
+		BenefitsTextEn:        strings.TrimSpace(request.BenefitsTextEn),
 		ExtraChargesText:      strings.TrimSpace(request.ExtraChargesText),
+		ExtraChargesTextEn:    strings.TrimSpace(request.ExtraChargesTextEn),
 		LowestMonthlyRentHKD:  request.LowestMonthlyRentHKD,
+		HighestMonthlyRentHKD: request.HighestMonthlyRentHKD,
 		LowestDailyRentHKD:    request.LowestDailyRentHKD,
 		PriceReferenceOnly:    request.PriceReferenceOnly,
 		PriceNegotiable:       request.PriceNegotiable,
 		MinUsableAreaSqft:     request.MinUsableAreaSqft,
+		MaxUsableAreaSqft:     request.MaxUsableAreaSqft,
 		MinLeaseMonths:        request.MinLeaseMonths,
 		MinStayValue:          request.MinStayValue,
 		MinStayUnit:           strings.TrimSpace(request.MinStayUnit),
@@ -331,15 +353,20 @@ func bindServicedApartmentRequestFromContext(c *gin.Context, listingID string) (
 	}, true
 }
 
-// 12. toPropertyContactInput maps contact fields.
+// 13. toPropertyContactInput maps contact fields.
 func toPropertyContactInput(request propertyContactRequest) service.PropertyContactInput {
 	return service.PropertyContactInput{
-		Phone:           strings.TrimSpace(request.Phone),
-		WhatsApp:        strings.TrimSpace(request.WhatsApp),
-		Email:           strings.TrimSpace(request.Email),
-		ShowPhone:       request.ShowPhone,
-		ShowWhatsApp:    request.ShowWhatsApp,
-		ShowChat:        request.ShowChat,
-		ShowInquiryForm: request.ShowInquiryForm,
+		ContactNameZH:     strings.TrimSpace(request.ContactNameZH),
+		ContactNameEN:     strings.TrimSpace(request.ContactNameEN),
+		Phone:             strings.TrimSpace(request.Phone),
+		Phone2:            strings.TrimSpace(request.Phone2),
+		WhatsApp:          strings.TrimSpace(request.WhatsApp),
+		WeChat:            strings.TrimSpace(request.WeChat),
+		Email:             strings.TrimSpace(request.Email),
+		ContactAttributes: normalizePropertyAttributeMap(request.ContactAttributes),
+		ShowPhone:         request.ShowPhone,
+		ShowWhatsApp:      request.ShowWhatsApp,
+		ShowChat:          request.ShowChat,
+		ShowInquiryForm:   request.ShowInquiryForm,
 	}
 }

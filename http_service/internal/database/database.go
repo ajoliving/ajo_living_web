@@ -19,6 +19,12 @@ import (
 	"ajoliving_web/http_service/internal/utils"
 )
 
+type duplicateMediaAssetGroup struct {
+	BucketName string
+	ObjectKey  string
+	KeepID     int64
+}
+
 // 1. Open creates a gorm database instance for the configured driver.
 func Open(cfg *config.Config) (*gorm.DB, error) {
 	var dialector gorm.Dialector
@@ -35,6 +41,10 @@ func Open(cfg *config.Config) (*gorm.DB, error) {
 
 // 2. Migrate runs the required schema migration set.
 func Migrate(db *gorm.DB) error {
+	if err := mergeDuplicateMediaAssets(db); err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.UserCredential{},
@@ -75,6 +85,10 @@ func Migrate(db *gorm.DB) error {
 		&model.SupermarketPriceAlert{},
 		&model.SupermarketPriceAlertEvent{},
 	); err != nil {
+		return err
+	}
+
+	if err := migrateDistrictCodeColumnSize(db); err != nil {
 		return err
 	}
 
@@ -134,7 +148,97 @@ func SeedCommunities(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-// 4. migrateDistrictCodes folds legacy district codes into the current area tags.
+// 4. mergeDuplicateMediaAssets folds legacy duplicate media rows before unique index migration.
+func mergeDuplicateMediaAssets(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&model.MediaAsset{}) {
+		return nil
+	}
+
+	var groups []duplicateMediaAssetGroup
+	if err := db.Table("media_assets").
+		Select("bucket_name, object_key, MIN(id) AS keep_id").
+		Group("bucket_name, object_key").
+		Having("COUNT(*) > 1").
+		Scan(&groups).Error; err != nil {
+		return fmt.Errorf("find duplicate media assets: %w", err)
+	}
+	if len(groups) == 0 {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, group := range groups {
+			var duplicateIDs []int64
+			if err := tx.Table("media_assets").
+				Where("bucket_name = ? AND object_key = ? AND id <> ?", group.BucketName, group.ObjectKey, group.KeepID).
+				Order("id").
+				Pluck("id", &duplicateIDs).Error; err != nil {
+				return fmt.Errorf("load duplicate media asset ids: %w", err)
+			}
+			if len(duplicateIDs) == 0 {
+				continue
+			}
+			if err := reassignMediaAssetReferences(tx, duplicateIDs, group.KeepID); err != nil {
+				return err
+			}
+			if err := tx.Where("id IN ?", duplicateIDs).Delete(&model.MediaAsset{}).Error; err != nil {
+				return fmt.Errorf("delete duplicate media assets: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// 5. reassignMediaAssetReferences points legacy duplicate references at the kept asset row.
+func reassignMediaAssetReferences(tx *gorm.DB, duplicateIDs []int64, keepID int64) error {
+	references := []struct {
+		model  any
+		table  string
+		column string
+	}{
+		{model: &model.ListingImage{}, table: "listing_images", column: "media_asset_id"},
+		{model: &model.HomeContentPlacement{}, table: "home_content_placements", column: "media_asset_id"},
+		{model: &model.UserProfile{}, table: "user_profiles", column: "avatar_asset_id"},
+	}
+
+	for _, reference := range references {
+		if !tx.Migrator().HasTable(reference.model) || !tx.Migrator().HasColumn(reference.model, reference.column) {
+			continue
+		}
+		if err := tx.Table(reference.table).
+			Where(reference.column+" IN ?", duplicateIDs).
+			Update(reference.column, keepID).Error; err != nil {
+			return fmt.Errorf("reassign %s.%s media asset references: %w", reference.table, reference.column, err)
+		}
+	}
+
+	return nil
+}
+
+// 6. migrateDistrictCodeColumnSize expands location code columns for subdistrict codes.
+func migrateDistrictCodeColumnSize(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+
+	statements := []string{
+		"ALTER TABLE listings ALTER COLUMN district_code TYPE varchar(64)",
+		"ALTER TABLE communities ALTER COLUMN district_code TYPE varchar(64)",
+		"ALTER TABLE user_profiles ALTER COLUMN district_code TYPE varchar(64)",
+		"ALTER TABLE property_addresses ALTER COLUMN region_code TYPE varchar(64)",
+		"ALTER TABLE property_addresses ALTER COLUMN district_code TYPE varchar(64)",
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement).Error; err != nil {
+			return fmt.Errorf("expand district code column size: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// 7. migrateDistrictCodes folds legacy secondhand pickup district codes into area tags.
 func migrateDistrictCodes(db *gorm.DB) error {
 	districtGroups := map[string][]string{
 		"hong_kong_island": {
@@ -166,15 +270,6 @@ func migrateDistrictCodes(db *gorm.DB) error {
 	}
 
 	for currentCode, legacyCodes := range districtGroups {
-		if err := db.Model(&model.Listing{}).Where("district_code IN ?", legacyCodes).Update("district_code", currentCode).Error; err != nil {
-			return fmt.Errorf("migrate listing district codes: %w", err)
-		}
-		if err := db.Model(&model.Community{}).Where("district_code IN ?", legacyCodes).Update("district_code", currentCode).Error; err != nil {
-			return fmt.Errorf("migrate community district codes: %w", err)
-		}
-		if err := db.Model(&model.UserProfile{}).Where("district_code IN ?", legacyCodes).Update("district_code", currentCode).Error; err != nil {
-			return fmt.Errorf("migrate user profile district codes: %w", err)
-		}
 		if err := db.Model(&model.SecondhandListing{}).Where("pickup_region_code IN ?", legacyCodes).Update("pickup_region_code", currentCode).Error; err != nil {
 			return fmt.Errorf("migrate secondhand pickup region codes: %w", err)
 		}
@@ -183,7 +278,7 @@ func migrateDistrictCodes(db *gorm.DB) error {
 	return nil
 }
 
-// 5. migrateSecondhandOptionCodes folds legacy furniture option codes into current enums.
+// 8. migrateSecondhandOptionCodes folds legacy furniture option codes into current enums.
 func migrateSecondhandOptionCodes(db *gorm.DB) error {
 	categoryGroups := map[string][]string{
 		"home_furniture": {

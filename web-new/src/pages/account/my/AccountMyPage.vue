@@ -166,7 +166,7 @@ const accountProfile = computed(() => ({
   ),
   email: displayText(sessionStore.me?.email, '尚未綁定電郵'),
   phone: memberPhoneText.value,
-  password: sessionStore.me?.local_password ? '已設定' : unsetText,
+  password: sessionStore.me ? '可於個人資料中更新' : unsetText,
   publisherRole: displayText(sessionStore.me?.publisher_identity_type),
   regionCode: displayText(sessionStore.me?.district_code),
   managedBuildings: managedBuildingNameText.value,

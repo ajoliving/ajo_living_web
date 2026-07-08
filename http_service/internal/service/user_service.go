@@ -49,8 +49,6 @@ type MeResponse struct {
 	IsmartLinked      bool                          `json:"ismart_linked"`
 	IsmartUsername    string                        `json:"ismart_username"`
 	IsmartBoundPhone  string                        `json:"ismart_bound_phone"`
-	IsmartPassword    string                        `json:"ismart_password"`
-	LocalPassword     string                        `json:"local_password"`
 	IsmartMsg         *IsmartMessage                `json:"ismart_msg,omitempty"`
 	IsmartAccount     *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
 }
@@ -159,14 +157,12 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		BoundFlatUnitIDs:  s.profileBoundFlatUnits(&profile, ismartMsg),
 		ProfileCompleted:  isProfileCompleted(&profile),
 		IsmartLinked:      ismartMsg != nil,
-		LocalPassword:     s.userLocalPassword(ctx, user.ID),
 		IsmartMsg:         ismartMsg,
 		IsmartAccount:     s.loadIsmartAccountProfile(ctx, user.ID),
 	}
 	if ismartMsg != nil {
 		response.IsmartUsername = ismartMsg.Username
 		response.IsmartBoundPhone = ismartMsg.Phone
-		response.IsmartPassword = ismartMsg.Password
 	}
 
 	if profile.PrimaryCommunity != nil {
@@ -476,25 +472,7 @@ func (s *UserService) userEmail(ctx context.Context, userID int64) string {
 	return *credential.Email
 }
 
-// 17. userLocalPassword returns the editable local password value.
-func (s *UserService) userLocalPassword(ctx context.Context, userID int64) string {
-	var credential model.UserCredential
-	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error; err != nil {
-		return ""
-	}
-	if strings.TrimSpace(credential.PasswordEncrypted) == "" {
-		return ""
-	}
-
-	password, err := utils.DecryptString(s.runtime.Config.EncryptionKey, credential.PasswordEncrypted)
-	if err != nil {
-		return ""
-	}
-
-	return password
-}
-
-// 18. profileEmailUpdate validates email OTP when the email is changed.
+// 17. profileEmailUpdate validates email OTP when the email is changed.
 func (s *UserService) profileEmailUpdate(ctx context.Context, userID int64, params UpdateProfileParams) (string, bool, error) {
 	email := normalizeEmail(params.Email)
 	if email == "" {

@@ -48,9 +48,10 @@ type PresignUploadInput struct {
 
 // 4. PresignUploadResult defines the upload target payload.
 type PresignUploadResult struct {
-	UploadURL string            `json:"upload_url"`
-	ObjectKey string            `json:"object_key"`
-	Headers   map[string]string `json:"headers"`
+	UploadURL   string            `json:"upload_url"`
+	ObjectKey   string            `json:"object_key"`
+	UploadToken string            `json:"upload_token"`
+	Headers     map[string]string `json:"headers"`
 }
 
 // 5. PutObjectInput defines a direct server-side object upload.
@@ -86,23 +87,39 @@ func (p *MockOTPProvider) SendCode(_ context.Context, _ string, _ string, _ stri
 	return nil
 }
 
-// 8. MockStorageProvider creates deterministic local-style upload targets.
+// 8. DisabledOTPProvider fails closed when a real provider is not implemented.
+type DisabledOTPProvider struct {
+	name string
+}
+
+// 9. SendCode rejects OTP delivery for unsupported provider names.
+func (p *DisabledOTPProvider) SendCode(context.Context, string, string, string) error {
+	return fmt.Errorf("OTP provider %q is not available", p.name)
+}
+
+// 10. MockStorageProvider creates deterministic local-style upload targets.
 type MockStorageProvider struct {
 	config *config.Config
 }
 
-// 9. OSSStorageProvider creates presigned upload URLs through Alibaba Cloud OSS.
+// 11. OSSStorageProvider creates presigned upload URLs through Alibaba Cloud OSS.
 type OSSStorageProvider struct {
 	config *config.Config
 	client *oss.Client
 }
 
-// 10. NewOTPProvider returns the configured OTP provider.
-func NewOTPProvider(_ *config.Config) OTPProvider {
-	return &MockOTPProvider{}
+// 12. NewOTPProvider returns the configured OTP provider.
+func NewOTPProvider(cfg *config.Config) OTPProvider {
+	provider := strings.ToLower(strings.TrimSpace(cfg.OTPProvider))
+	switch provider {
+	case "", "mock":
+		return &MockOTPProvider{}
+	default:
+		return &DisabledOTPProvider{name: provider}
+	}
 }
 
-// 11. NewStorageProvider returns the configured storage provider.
+// 13. NewStorageProvider returns the configured storage provider.
 func NewStorageProvider(cfg *config.Config) (StorageProvider, error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.StorageProvider)) {
 	case "", "mock":
@@ -220,15 +237,22 @@ func buildOSSUploadCallback(cfg *config.Config, input PresignUploadInput, object
 		return ""
 	}
 	callbackURL := strings.TrimSpace(cfg.OSSCallbackURL)
-	if callbackURL == "" {
+	callbackSecret := strings.TrimSpace(cfg.OSSCallbackSecret)
+	if callbackURL == "" || callbackSecret == "" {
 		return ""
 	}
+	callbackBody := `{"object_key":"${object}","bucket_name":"${bucket}","mime_type":"${mimeType}","file_size":${size},"etag":"${etag}"}`
+	token, err := json.Marshal(ossCallbackToken(callbackSecret, cfg.StorageBucket, objectKey))
+	if err != nil {
+		return ""
+	}
+	callbackBody = strings.TrimSuffix(callbackBody, "}") + `,"callback_token":` + string(token) + `}`
 
 	payload := map[string]string{
 		"callbackUrl":      callbackURL,
 		"callbackHost":     callbackHost(callbackURL),
 		"callbackBodyType": "application/json",
-		"callbackBody":     `{"object_key":"${object}","bucket_name":"${bucket}","mime_type":"${mimeType}","file_size":${size},"etag":"${etag}"}`,
+		"callbackBody":     callbackBody,
 	}
 	if strings.TrimSpace(input.MimeType) != "" {
 		payload["callbackBody"] = strings.ReplaceAll(payload["callbackBody"], "${mimeType}", input.MimeType)

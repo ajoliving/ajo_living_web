@@ -7,7 +7,12 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +40,7 @@ type PresignParams struct {
 type CompleteUploadParams struct {
 	UserID         int64
 	ObjectKey      string
+	UploadToken    string
 	MimeType       string
 	FileSize       int64
 	Width          *int
@@ -44,11 +50,12 @@ type CompleteUploadParams struct {
 
 // 4. UploadCallbackParams defines the OSS upload callback payload.
 type UploadCallbackParams struct {
-	BucketName string
-	ObjectKey  string
-	MimeType   string
-	FileSize   int64
-	ETag       string
+	BucketName    string
+	ObjectKey     string
+	MimeType      string
+	FileSize      int64
+	ETag          string
+	CallbackToken string
 }
 
 // 5. UploadCallbackResult defines the callback acknowledgement payload.
@@ -74,6 +81,14 @@ type CompleteUploadResult struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+type uploadTokenClaims struct {
+	UserID    int64  `json:"user_id"`
+	ObjectKey string `json:"object_key"`
+	MimeType  string `json:"mime_type"`
+	FileSize  int64  `json:"file_size"`
+	ExpiresAt int64  `json:"exp"`
+}
+
 // 7. NewUploadService creates an upload service instance.
 func NewUploadService(runtime *Runtime) *UploadService {
 	return &UploadService{runtime: runtime}
@@ -89,12 +104,30 @@ func (s *UploadService) Presign(ctx context.Context, params PresignParams) (*Pre
 		return nil, errcode.New(errcode.CodeValidationError, "only image or video uploads are supported")
 	}
 
-	return s.runtime.StorageProvider.PresignUpload(ctx, PresignUploadInput{
+	result, err := s.runtime.StorageProvider.PresignUpload(ctx, PresignUploadInput{
 		FileName:     params.FileName,
 		MimeType:     params.MimeType,
 		FileSize:     params.FileSize,
 		ObjectPrefix: params.ObjectPrefix,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	expiresAt := s.runtime.Now().Add(s.uploadTokenTTL()).Unix()
+	token, err := s.signUploadToken(uploadTokenClaims{
+		UserID:    params.UserID,
+		ObjectKey: strings.TrimSpace(result.ObjectKey),
+		MimeType:  strings.TrimSpace(params.MimeType),
+		FileSize:  params.FileSize,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare upload token")
+	}
+	result.UploadToken = token
+
+	return result, nil
 }
 
 // 9. isSupportedPresignUpload validates browser direct upload media types and target directory.
@@ -117,6 +150,9 @@ func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploa
 	if !strings.HasPrefix(strings.TrimSpace(params.ObjectKey), mediaObjectPrefix) {
 		return nil, errcode.New(errcode.CodeValidationError, "object_key is invalid")
 	}
+	if err := s.verifyUploadToken(params); err != nil {
+		return nil, err
+	}
 
 	objectInfo, err := s.runtime.StorageProvider.HeadObject(ctx, params.ObjectKey)
 	if err != nil {
@@ -134,9 +170,12 @@ func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploa
 
 	var existing model.MediaAsset
 	err = s.runtime.DB.WithContext(ctx).
-		Where("bucket_name = ? AND object_key = ? AND created_by = ?", s.runtime.Config.StorageBucket, params.ObjectKey, params.UserID).
+		Where("bucket_name = ? AND object_key = ?", s.runtime.Config.StorageBucket, params.ObjectKey).
 		First(&existing).Error
 	if err == nil {
+		if existing.CreatedBy == nil || *existing.CreatedBy != params.UserID {
+			return nil, errcode.New(errcode.CodeAuthForbidden, "media object belongs to another account")
+		}
 		return s.buildMediaAssetResult(ctx, &existing)
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -165,6 +204,16 @@ func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploa
 
 // 11. AcceptUploadCallback validates and acknowledges an OSS upload callback.
 func (s *UploadService) AcceptUploadCallback(_ context.Context, params UploadCallbackParams) (*UploadCallbackResult, error) {
+	if !s.runtime.Config.OSSCallbackEnabled {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "upload callback is disabled")
+	}
+	if strings.TrimSpace(s.runtime.Config.OSSCallbackSecret) == "" {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "upload callback secret is required")
+	}
+	expectedToken := ossCallbackToken(s.runtime.Config.OSSCallbackSecret, params.BucketName, params.ObjectKey)
+	if !hmac.Equal([]byte(strings.TrimSpace(params.CallbackToken)), []byte(expectedToken)) {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "upload callback token is invalid")
+	}
 	if strings.TrimSpace(params.BucketName) != strings.TrimSpace(s.runtime.Config.StorageBucket) {
 		return nil, errcode.New(errcode.CodeValidationError, "bucket_name is invalid")
 	}
@@ -192,4 +241,82 @@ func isSupportedCompleteUpload(mimeType string, objectKey string) bool {
 		return true
 	}
 	return strings.HasPrefix(normalized, "video/") && strings.HasPrefix(strings.TrimSpace(objectKey), advertisementVideoObjectPrefix)
+}
+
+// 13. signUploadToken signs the expected upload completion values.
+func (s *UploadService) signUploadToken(claims uploadTokenClaims) (string, error) {
+	raw, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	payload := base64.RawURLEncoding.EncodeToString(raw)
+	signature := s.signUploadTokenPayload(payload)
+	return payload + "." + signature, nil
+}
+
+// 14. verifyUploadToken verifies ownership and object metadata before completion.
+func (s *UploadService) verifyUploadToken(params CompleteUploadParams) error {
+	parts := strings.Split(strings.TrimSpace(params.UploadToken), ".")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return errcode.New(errcode.CodeValidationError, "upload_token is invalid")
+	}
+	if !hmac.Equal([]byte(parts[1]), []byte(s.signUploadTokenPayload(parts[0]))) {
+		return errcode.New(errcode.CodeValidationError, "upload_token is invalid")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return errcode.New(errcode.CodeValidationError, "upload_token is invalid")
+	}
+
+	var claims uploadTokenClaims
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		return errcode.New(errcode.CodeValidationError, "upload_token is invalid")
+	}
+	if claims.ExpiresAt <= s.runtime.Now().Unix() {
+		return errcode.New(errcode.CodeExpired, "upload_token is expired")
+	}
+	if claims.UserID != params.UserID ||
+		strings.TrimSpace(claims.ObjectKey) != strings.TrimSpace(params.ObjectKey) ||
+		!strings.EqualFold(strings.TrimSpace(claims.MimeType), strings.TrimSpace(params.MimeType)) ||
+		claims.FileSize != params.FileSize {
+		return errcode.New(errcode.CodeValidationError, "upload_token does not match upload payload")
+	}
+
+	return nil
+}
+
+// 15. signUploadTokenPayload signs one encoded upload token payload.
+func (s *UploadService) signUploadTokenPayload(payload string) string {
+	mac := hmac.New(sha256.New, []byte(s.uploadTokenSecret()))
+	mac.Write([]byte(payload))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// 16. uploadTokenSecret returns stable key material for upload tokens.
+func (s *UploadService) uploadTokenSecret() string {
+	for _, value := range []string{s.runtime.Config.JWTSecret, s.runtime.Config.EncryptionKey, strconv.FormatInt(s.runtime.Config.SystemUserID, 10)} {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return "ajo-living-upload-token"
+}
+
+// 17. uploadTokenTTL returns the presign token lifetime.
+func (s *UploadService) uploadTokenTTL() time.Duration {
+	ttl := s.runtime.Config.StoragePresignExpires
+	if ttl <= 0 {
+		return 15 * time.Minute
+	}
+
+	return ttl
+}
+
+// 18. ossCallbackToken signs the expected OSS callback object identity.
+func ossCallbackToken(secret string, bucketName string, objectKey string) string {
+	mac := hmac.New(sha256.New, []byte(strings.TrimSpace(secret)))
+	mac.Write([]byte(strings.TrimSpace(bucketName)))
+	mac.Write([]byte("\n"))
+	mac.Write([]byte(strings.TrimSpace(objectKey)))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }

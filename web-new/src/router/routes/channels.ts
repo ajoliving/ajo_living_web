@@ -5,10 +5,10 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import FurnitureDetailPage from '@/pages/furniture/detail/FurnitureDetailPage.vue';
-import FurniturePage from '@/pages/furniture/Page.vue';
-import SupermarketOfferDetailPage from '@/pages/offers/detail/Page.vue';
-import SupermarketOffersPage from '@/pages/offers/Page.vue';
+const FurnitureDetailPage = () => import('@/pages/furniture/detail/FurnitureDetailPage.vue');
+const FurniturePage = () => import('@/pages/furniture/Page.vue');
+const SupermarketOfferDetailPage = () => import('@/pages/offers/detail/Page.vue');
+const SupermarketOffersPage = () => import('@/pages/offers/Page.vue');
 
 // 1. 輸出新前台頻道路由
 export const channelRoutes: RouteRecordRaw[] = [

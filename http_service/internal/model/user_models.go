@@ -53,7 +53,7 @@ type UserProfile struct {
 	BoundFlatUnitIDs      datatypes.JSON `gorm:"type:jsonb" json:"bound_flat_unit_ids"`
 	ResidenceFloor        string         `gorm:"type:varchar(32)" json:"residence_floor"`
 	ResidenceUnit         string         `gorm:"type:varchar(32)" json:"residence_unit"`
-	DistrictCode          string         `gorm:"type:varchar(32)" json:"district_code"`
+	DistrictCode          string         `gorm:"type:varchar(64)" json:"district_code"`
 	AvatarAssetID         *int64         `json:"avatar_asset_id"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
@@ -67,7 +67,7 @@ type Community struct {
 	CommunityType     string     `gorm:"type:varchar(32);not null" json:"community_type"`
 	NameZH            string     `gorm:"type:varchar(200);not null;index" json:"name_zh"`
 	NameEN            string     `gorm:"type:varchar(200)" json:"name_en"`
-	DistrictCode      string     `gorm:"type:varchar(32);not null;index" json:"district_code"`
+	DistrictCode      string     `gorm:"type:varchar(64);not null;index" json:"district_code"`
 	ParentCommunityID *int64     `gorm:"index" json:"parent_community_id"`
 	AddressText       string     `gorm:"type:varchar(500)" json:"address_text"`
 	CreatedAt         time.Time  `json:"created_at"`

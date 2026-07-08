@@ -5,7 +5,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import NotificationsPage from '@/pages/notifications/Page.vue';
+const NotificationsPage = () => import('@/pages/notifications/Page.vue');
 
 // 1. 輸出通知中心路由
 export const notificationRoutes: RouteRecordRaw[] = [

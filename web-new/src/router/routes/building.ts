@@ -5,9 +5,9 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import BuildingPage from '@/pages/building/BuildingPage.vue';
-import PropertyDetailPage from '@/pages/property/detail/PropertyDetailPage.vue';
-import PropertyListPage from '@/pages/property/list/PropertyListPage.vue';
+const BuildingPage = () => import('@/pages/building/BuildingPage.vue');
+const PropertyDetailPage = () => import('@/pages/property/detail/PropertyDetailPage.vue');
+const PropertyListPage = () => import('@/pages/property/list/PropertyListPage.vue');
 
 // 1. 輸出樓盤放售路由
 export const buildingRoutes: RouteRecordRaw[] = [
@@ -19,7 +19,7 @@ export const buildingRoutes: RouteRecordRaw[] = [
     path: '/building',
     name: 'Building',
     component: BuildingPage,
-    meta: { titleKey: 'nav.building' },
+    meta: { titleKey: 'nav.building', requiresAuth: true },
   },
   {
     path: '/building/:section',

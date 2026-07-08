@@ -1,7 +1,7 @@
 /*
  * Staff management business logic.
- * 1. Provide staff-only user listing and account creation APIs.
- * 2. Keep staff access controlled by the is_staff flag only.
+ * 1. Provide staff-only user listing, role catalog, and account creation APIs.
+ * 2. Persist staff-managed role bindings while legacy access stays behind is_staff.
  */
 package service
 
@@ -46,21 +46,34 @@ type StaffUserSummary struct {
 	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
-// 3. StaffUserListFilters defines staff user list filters.
+// 3. RoleCatalogItem defines one staff-visible role catalog item.
+type RoleCatalogItem struct {
+	Code        string   `json:"code"`
+	Scope       string   `json:"scope"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+// 4. StaffUserListFilters defines staff user list filters.
 type StaffUserListFilters struct {
-	Page     int
-	PageSize int
-	Keyword  string
-	Status   string
-	IsStaff  *bool
+	Page       int
+	PageSize   int
+	Keyword    string
+	Status     string
+	MemberType string
+	RoleCode   string
+	IsStaff    *bool
 }
 
-// 4. StaffUserRoleUpdateParams defines staff flag update input.
+// 5. StaffUserRoleUpdateParams defines staff role update input.
 type StaffUserRoleUpdateParams struct {
-	IsStaff *bool
+	MemberType string
+	RoleCodes  []string
+	IsStaff    *bool
 }
 
-// 5. StaffUserCreateParams defines staff-created account input.
+// 6. StaffUserCreateParams defines staff-created account input.
 type StaffUserCreateParams struct {
 	Email                 string
 	Password              string
@@ -73,15 +86,17 @@ type StaffUserCreateParams struct {
 	ResidenceFloor        string
 	ResidenceUnit         string
 	DistrictCode          string
-	IsStaff               bool
+	MemberType            string
+	RoleCodes             []string
+	IsStaff               *bool
 }
 
-// 6. NewStaffService creates a staff service instance.
+// 7. NewStaffService creates a staff service instance.
 func NewStaffService(runtime *Runtime) *StaffService {
 	return &StaffService{runtime: runtime}
 }
 
-// 7. GetStaffMe returns the current staff account payload.
+// 8. GetStaffMe returns the current staff account payload.
 func (s *StaffService) GetStaffMe(ctx context.Context, userID int64) (*StaffUserSummary, error) {
 	user, profile, err := s.loadUserWithProfile(ctx, userID)
 	if err != nil {
@@ -98,10 +113,15 @@ func (s *StaffService) GetStaffMe(ctx context.Context, userID int64) (*StaffUser
 		return nil, err
 	}
 
-	return s.toStaffUserSummary(user, profile, emails[user.ID], balances[user.ID]), nil
+	accessByUserID, err := s.loadAccessSnapshotsByUserIDs(ctx, []model.User{*user})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.toStaffUserSummary(user, profile, emails[user.ID], balances[user.ID], accessByUserID[user.ID]), nil
 }
 
-// 8. ListUsers returns paginated user records for staff operations.
+// 9. ListUsers returns paginated user records for staff operations.
 func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilters) ([]StaffUserSummary, *model.Pagination, error) {
 	page, pageSize := normalizePagination(filters.Page, filters.PageSize)
 	query := s.runtime.DB.WithContext(ctx).Model(&model.User{})
@@ -118,6 +138,19 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 
 	if status := strings.TrimSpace(filters.Status); status != "" {
 		query = query.Where("member_status = ?", status)
+	}
+
+	if memberType := strings.TrimSpace(filters.MemberType); memberType != "" {
+		query = query.Where("member_type = ?", normalizeStaffManagedMemberType(memberType))
+	}
+
+	if roleCode := strings.ToLower(strings.TrimSpace(filters.RoleCode)); roleCode != "" {
+		roleSubquery := s.runtime.DB.WithContext(ctx).
+			Table("user_role_bindings").
+			Select("user_role_bindings.user_id").
+			Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
+			Where("roles.code = ?", roleCode)
+		query = query.Where("id IN (?)", roleSubquery)
 	}
 
 	if filters.IsStaff != nil {
@@ -149,19 +182,51 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 		return nil, nil, err
 	}
 
+	accessByUserID, err := s.loadAccessSnapshotsByUserIDs(ctx, users)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	items := make([]StaffUserSummary, 0, len(users))
 	for _, user := range users {
 		profile := profiles[user.ID]
-		items = append(items, *s.toStaffUserSummary(&user, profile, emails[user.ID], balances[user.ID]))
+		items = append(items, *s.toStaffUserSummary(&user, profile, emails[user.ID], balances[user.ID], accessByUserID[user.ID]))
 	}
 
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 9. CreateUser creates a staff-managed email password account.
-func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, params StaffUserCreateParams) (*StaffUserSummary, error) {
-	_ = operatorUserID
+// 10. ListRoles returns the staff-visible role catalog.
+func (s *StaffService) ListRoles(ctx context.Context) ([]RoleCatalogItem, error) {
+	var roles []model.Role
+	if err := s.runtime.DB.WithContext(ctx).Order("scope asc, code asc").Find(&roles).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load roles")
+	}
+	if len(roles) == 0 {
+		return defaultRoleCatalogItems(), nil
+	}
 
+	permissionsByRoleID, err := s.loadPermissionsByRoleIDs(ctx, roles)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]RoleCatalogItem, 0, len(roles))
+	for _, role := range roles {
+		items = append(items, RoleCatalogItem{
+			Code:        role.Code,
+			Scope:       role.Scope,
+			Name:        role.Name,
+			Description: role.Description,
+			Permissions: permissionsByRoleID[role.ID],
+		})
+	}
+
+	return items, nil
+}
+
+// 11. CreateUser creates a staff-managed email password account.
+func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, params StaffUserCreateParams) (*StaffUserSummary, error) {
 	email := normalizeEmail(params.Email)
 	password := strings.TrimSpace(params.Password)
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
@@ -174,6 +239,10 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 	if err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare password")
 	}
+
+	roleCodes := normalizeStaffRoleCodes(params.RoleCodes)
+	memberType := normalizeStaffManagedMemberType(params.MemberType)
+	isStaff := resolveStaffManagedIsStaff(params.IsStaff, roleCodes)
 
 	var user model.User
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -196,8 +265,8 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 			PhoneCountryCode: phoneCountryCode,
 			PhoneNumber:      phoneNumber,
 			MemberStatus:     "active",
-			MemberType:       MemberTypeUser,
-			IsStaff:          params.IsStaff,
+			MemberType:       memberType,
+			IsStaff:          isStaff,
 			IsVerifiedPhone:  false,
 		}
 		if err := tx.Create(&user).Error; err != nil {
@@ -238,7 +307,7 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 			return err
 		}
 
-		return nil
+		return s.replaceUserRoleBindings(ctx, tx, user.ID, operatorUserID, roleCodes, isStaff)
 	})
 	if err != nil {
 		var appErr *errcode.AppError
@@ -251,7 +320,7 @@ func (s *StaffService) CreateUser(ctx context.Context, operatorUserID int64, par
 	return s.GetStaffMe(ctx, user.ID)
 }
 
-// 9.1 resolveStaffCreateCommunity loads or mirrors a POS building for staff-created users.
+// 11.1 resolveStaffCreateCommunity loads or mirrors a POS building for staff-created users.
 func (s *StaffService) resolveStaffCreateCommunity(ctx context.Context, tx *gorm.DB, publicID string, name string) (*model.Community, error) {
 	trimmedPublicID := strings.TrimSpace(publicID)
 	var community model.Community
@@ -286,10 +355,11 @@ func (s *StaffService) resolveStaffCreateCommunity(ctx context.Context, tx *gorm
 	return &community, nil
 }
 
-// 10. UpdateUserRole updates a target user's staff flag.
+// 12. UpdateUserRole updates a target user's staff role bindings.
 func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64, targetPublicID string, params StaffUserRoleUpdateParams) (*StaffUserSummary, error) {
-	if params.IsStaff == nil {
-		return nil, errcode.New(errcode.CodeValidationError, "is_staff is required")
+	roleCodes := normalizeStaffRoleCodes(params.RoleCodes)
+	if params.IsStaff == nil && strings.TrimSpace(params.MemberType) == "" && len(roleCodes) == 0 {
+		return nil, errcode.New(errcode.CodeValidationError, "role update payload is required")
 	}
 
 	var user model.User
@@ -300,9 +370,10 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load user")
 	}
 
-	_ = operatorUserID
-	user.MemberType = MemberTypeUser
-	user.IsStaff = *params.IsStaff
+	user.MemberType = normalizeStaffManagedMemberType(paymentFirstNonEmpty(params.MemberType, user.MemberType))
+	if params.IsStaff != nil || len(roleCodes) > 0 {
+		user.IsStaff = resolveStaffManagedIsStaff(params.IsStaff, roleCodes)
+	}
 
 	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
@@ -312,7 +383,7 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 			return errcode.New(errcode.CodeInternalError, "failed to update user role")
 		}
 
-		return nil
+		return s.replaceUserRoleBindings(ctx, tx, user.ID, operatorUserID, roleCodes, user.IsStaff)
 	}); err != nil {
 		return nil, err
 	}
@@ -320,7 +391,7 @@ func (s *StaffService) UpdateUserRole(ctx context.Context, operatorUserID int64,
 	return s.GetStaffMe(ctx, user.ID)
 }
 
-// 11. loadUserWithProfile loads a user record with profile and community data.
+// 13. loadUserWithProfile loads a user record with profile and community data.
 func (s *StaffService) loadUserWithProfile(ctx context.Context, userID int64) (*model.User, *model.UserProfile, error) {
 	var user model.User
 	if err := s.runtime.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
@@ -343,7 +414,7 @@ func (s *StaffService) loadUserWithProfile(ctx context.Context, userID int64) (*
 	return &user, &profile, nil
 }
 
-// 12. loadProfilesByUserIDs loads profile data for a batch of users.
+// 14. loadProfilesByUserIDs loads profile data for a batch of users.
 func (s *StaffService) loadProfilesByUserIDs(ctx context.Context, users []model.User) (map[int64]*model.UserProfile, error) {
 	if len(users) == 0 {
 		return map[int64]*model.UserProfile{}, nil
@@ -368,7 +439,7 @@ func (s *StaffService) loadProfilesByUserIDs(ctx context.Context, users []model.
 	return result, nil
 }
 
-// 13. loadCredentialEmailsByUserIDs loads login email data for a batch of users.
+// 15. loadCredentialEmailsByUserIDs loads login email data for a batch of users.
 func (s *StaffService) loadCredentialEmailsByUserIDs(ctx context.Context, users []model.User) (map[int64]string, error) {
 	if len(users) == 0 {
 		return map[int64]string{}, nil
@@ -394,7 +465,7 @@ func (s *StaffService) loadCredentialEmailsByUserIDs(ctx context.Context, users 
 	return result, nil
 }
 
-// 14. loadWalletBalancesByUserIDs loads current AJO Point balances for staff lists.
+// 16. loadWalletBalancesByUserIDs loads current AJO Point balances for staff lists.
 func (s *StaffService) loadWalletBalancesByUserIDs(ctx context.Context, users []model.User) (map[int64]int64, error) {
 	if len(users) == 0 {
 		return map[int64]int64{}, nil
@@ -418,13 +489,147 @@ func (s *StaffService) loadWalletBalancesByUserIDs(ctx context.Context, users []
 	return result, nil
 }
 
-// 15. toStaffUserSummary maps a user model to the staff-facing payload.
-func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserProfile, email string, ajoBalance int64) *StaffUserSummary {
+// 17. loadAccessSnapshotsByUserIDs resolves role bindings for staff payloads.
+func (s *StaffService) loadAccessSnapshotsByUserIDs(ctx context.Context, users []model.User) (map[int64]*AccessSnapshot, error) {
+	result := make(map[int64]*AccessSnapshot, len(users))
+	if len(users) == 0 {
+		return result, nil
+	}
+
+	userIDs := make([]int64, 0, len(users))
+	usersByID := make(map[int64]model.User, len(users))
+	for _, user := range users {
+		userIDs = append(userIDs, user.ID)
+		usersByID[user.ID] = user
+	}
+
+	type accessBindingRow struct {
+		UserID         int64
+		RoleCode       string
+		RoleScope      string
+		PermissionCode string
+	}
+	var rows []accessBindingRow
+	if err := s.runtime.DB.WithContext(ctx).
+		Table("user_role_bindings").
+		Select("user_role_bindings.user_id, roles.code AS role_code, roles.scope AS role_scope, permissions.code AS permission_code").
+		Joins("JOIN roles ON roles.id = user_role_bindings.role_id").
+		Joins("LEFT JOIN role_permissions ON role_permissions.role_id = roles.id").
+		Joins("LEFT JOIN permissions ON permissions.id = role_permissions.permission_id").
+		Where("user_role_bindings.user_id IN ?", userIDs).
+		Order("roles.code asc, permissions.code asc").
+		Scan(&rows).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load role bindings")
+	}
+
+	for _, row := range rows {
+		access := result[row.UserID]
+		if access == nil {
+			access = &AccessSnapshot{RoleCodes: []string{}, Permissions: []string{}}
+			result[row.UserID] = access
+		}
+		access.RoleCodes = appendUniqueString(access.RoleCodes, row.RoleCode)
+		if row.PermissionCode != "" {
+			access.Permissions = appendUniqueString(access.Permissions, row.PermissionCode)
+		}
+		if row.RoleScope == model.RoleScopeStaff || row.RoleCode == model.RoleCodeStaff || row.RoleCode == model.RoleCodeSuperAdmin {
+			access.IsStaff = true
+		}
+	}
+
+	for _, user := range usersByID {
+		if result[user.ID] == nil {
+			result[user.ID] = buildAccessSnapshot(user.IsStaff)
+		}
+	}
+
+	return result, nil
+}
+
+// 18. loadPermissionsByRoleIDs loads catalog permission codes for role responses.
+func (s *StaffService) loadPermissionsByRoleIDs(ctx context.Context, roles []model.Role) (map[int64][]string, error) {
+	result := make(map[int64][]string, len(roles))
+	if len(roles) == 0 {
+		return result, nil
+	}
+
+	roleIDs := make([]int64, 0, len(roles))
+	for _, role := range roles {
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	type rolePermissionRow struct {
+		RoleID         int64
+		PermissionCode string
+	}
+	var rows []rolePermissionRow
+	if err := s.runtime.DB.WithContext(ctx).
+		Table("role_permissions").
+		Select("role_permissions.role_id, permissions.code AS permission_code").
+		Joins("JOIN permissions ON permissions.id = role_permissions.permission_id").
+		Where("role_permissions.role_id IN ?", roleIDs).
+		Order("permissions.code asc").
+		Scan(&rows).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load role permissions")
+	}
+
+	for _, row := range rows {
+		result[row.RoleID] = appendUniqueString(result[row.RoleID], row.PermissionCode)
+	}
+
+	return result, nil
+}
+
+// 19. replaceUserRoleBindings overwrites role bindings for a staff-managed user.
+func (s *StaffService) replaceUserRoleBindings(ctx context.Context, tx *gorm.DB, userID int64, operatorUserID int64, roleCodes []string, isStaff bool) error {
+	effectiveRoleCodes := roleCodes
+	if len(effectiveRoleCodes) == 0 {
+		effectiveRoleCodes = []string{model.RoleCodeMember}
+		if isStaff {
+			effectiveRoleCodes = []string{model.RoleCodeStaff}
+		}
+	}
+
+	var roles []model.Role
+	if err := tx.WithContext(ctx).Where("code IN ?", effectiveRoleCodes).Find(&roles).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to load roles")
+	}
+	if len(roles) != len(effectiveRoleCodes) {
+		return errcode.New(errcode.CodeValidationError, "invalid role codes")
+	}
+
+	if err := tx.WithContext(ctx).Where("user_id = ?", userID).Delete(&model.UserRoleBinding{}).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to reset user role bindings")
+	}
+
+	assignedAt := s.runtime.Now()
+	var assignedBy *int64
+	if operatorUserID > 0 {
+		assignedBy = &operatorUserID
+	}
+	for _, role := range roles {
+		if err := tx.WithContext(ctx).Create(&model.UserRoleBinding{
+			UserID:     userID,
+			RoleID:     role.ID,
+			AssignedBy: assignedBy,
+			AssignedAt: assignedAt,
+		}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to save user role binding")
+		}
+	}
+
+	return nil
+}
+
+// 20. toStaffUserSummary maps a user model to the staff-facing payload.
+func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserProfile, email string, ajoBalance int64, access *AccessSnapshot) *StaffUserSummary {
 	if user == nil {
 		return nil
 	}
 
-	access := buildAccessSnapshot(user.IsStaff)
+	if access == nil {
+		access = buildAccessSnapshot(user.IsStaff)
+	}
 
 	summary := &StaffUserSummary{
 		PublicID:         user.PublicID,
@@ -452,4 +657,68 @@ func (s *StaffService) toStaffUserSummary(user *model.User, profile *model.UserP
 	}
 
 	return summary
+}
+
+// 21. normalizeStaffRoleCodes cleans role codes from staff payloads.
+func normalizeStaffRoleCodes(roleCodes []string) []string {
+	result := make([]string, 0, len(roleCodes))
+	for _, roleCode := range roleCodes {
+		normalized := strings.ToLower(strings.TrimSpace(roleCode))
+		if normalized != "" {
+			result = appendUniqueString(result, normalized)
+		}
+	}
+	return result
+}
+
+// 22. normalizeStaffManagedMemberType keeps staff-created accounts on the current member model.
+func normalizeStaffManagedMemberType(memberType string) string {
+	normalized := strings.TrimSpace(memberType)
+	if normalized == "" {
+		return MemberTypeUser
+	}
+	return normalizeMemberType(normalized)
+}
+
+// 23. resolveStaffManagedIsStaff derives the legacy staff flag from explicit input and roles.
+func resolveStaffManagedIsStaff(isStaff *bool, roleCodes []string) bool {
+	for _, roleCode := range roleCodes {
+		if roleCode == model.RoleCodeStaff || roleCode == model.RoleCodeSuperAdmin {
+			return true
+		}
+	}
+	if isStaff != nil {
+		return *isStaff
+	}
+	return false
+}
+
+// 24. defaultRoleCatalogItems returns role catalog data before the seed has run.
+func defaultRoleCatalogItems() []RoleCatalogItem {
+	matrix := model.DefaultRolePermissionMatrix()
+	definitions := model.DefaultRoleDefinitions()
+	items := make([]RoleCatalogItem, 0, len(definitions))
+	for _, definition := range definitions {
+		items = append(items, RoleCatalogItem{
+			Code:        definition.Code,
+			Scope:       definition.Scope,
+			Name:        definition.Name,
+			Description: definition.Description,
+			Permissions: matrix[definition.Code],
+		})
+	}
+	return items
+}
+
+// 25. appendUniqueString appends a string once while preserving order.
+func appendUniqueString(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }

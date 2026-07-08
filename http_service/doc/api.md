@@ -3348,6 +3348,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   "estate_name": "康怡花園",
   "address_text": "鰂魚涌康山道",
   "address_text_en": "Kornhill Road, Quarry Bay",
+  "property_attributes": {
+    "prn": "PRN-PRIVATE-001",
+    "new_completion": "yes",
+    "rent_included_items": "rates_government_rent,management_fee"
+  },
   "block_name": "3座",
   "floor_raw": "25/F",
   "floor_zone": "high",
@@ -3358,13 +3363,25 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   "monthly_rent_hkd": 0,
   "price_reference_only": true,
   "price_negotiable": false,
+  "annual_prepay_discount": true,
+  "annual_prepay_option": "provided",
   "usable_area_sqft": 620,
-  "ad_package_code": "featured"
+  "ad_package_code": "featured",
+  "contact": {
+    "phone": "61234567",
+    "whatsapp": "61234567",
+    "contact_attributes": {
+      "phone_country_code": "+852",
+      "phone_whatsapp_enabled": "yes",
+      "default_avatar_gender": "male"
+    }
+  }
 }
 ```
-- **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低月租或日租。
+- **必填規則**: 樓盤租售建立與更新需提交 `title_en`、`description_en`、`address_text_en`，長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。
+- **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低周租或月租。
 - **公開回應規則**: `floor_raw` 只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
-- **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天；`fast_sale` 權重 3 / 1200 / 15 天。
+- **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天。
 - **會員狀態操作**: `publish` 僅支援草稿；`republish` 支援過期或已下架樓盤重新上架；`deactivate` 會將樓盤設為已下架。
 - **地址聯想**
 ```json
@@ -3374,6 +3391,68 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   "limit": 8
 }
 ```
+
+---
+
+### /api/v1/serviced-apartments [POST/PATCH]
+- **簡介**: 建立或更新服務式住宅草稿。前端按 xlsx 暫不開放本地/海外、放盤類別、多於一伙或發展商項目、置頂、黃金置頂與即走盤；API 仍保留兼容欄位。
+- **主要請求欄位**
+```json
+{
+  "title": "AJO Residence",
+  "summary": "鄰近港鐵的服務式住宅",
+  "description": "鄰近港鐵的服務式住宅",
+  "description_en": "Serviced residence near MTR",
+  "district_code": "hk_east",
+  "publisher_identity_type": "operator",
+  "project_name": "AJO Residence",
+  "project_name_en": "AJO Residence",
+  "project_attributes": {
+    "address_street": "英皇道",
+    "address_doorplate": "100號",
+    "summary_en": "Serviced residence near MTR",
+    "facility_custom_text": "24小時自助洗衣",
+    "service_custom_text": "每週清潔"
+  },
+  "address_text": "英皇道 100號",
+  "website_url": "https://example.com",
+	  "whatsapp": "85261234567",
+	  "fax": "30000000",
+	  "lowest_monthly_rent_hkd": 18000,
+	  "highest_monthly_rent_hkd": 22000,
+	  "min_stay_value": 1,
+  "min_stay_unit": "month",
+  "facility_tags": ["gym", "laundry"],
+  "service_tags": ["housekeeping", "wifi"],
+  "room_types": [
+    {
+      "name": "開放式",
+      "name_en": "Studio",
+      "room_category": "studio",
+      "usable_area_min_sqft": 180,
+      "usable_area_max_sqft": 260,
+      "monthly_rent_min_hkd": 18000,
+      "monthly_rent_max_hkd": 22000,
+      "rent_unit": "month",
+      "rent_suffix_plus": true,
+      "min_stay_value": 1,
+      "min_stay_unit": "month",
+      "included_fee_items": ["appliance_tv", "appliance_microwave"]
+    }
+  ],
+  "contact": {
+    "phone": "30000000",
+    "whatsapp": "85261234567",
+    "wechat": "ajo-residence",
+    "email": "info@example.com",
+    "show_phone": true,
+    "show_whatsapp": true,
+    "show_chat": true
+  }
+}
+```
+- **房型租金規則**: `rent_unit` 目前前端只開放 `week` 或 `month`；`rent_suffix_plus=true` 時前台可顯示 `XXX+`。
+- **圖片欄位**: xlsx 內的房型圖片與相片標籤暫不納入本輪欄位契約。
 
 ---
 

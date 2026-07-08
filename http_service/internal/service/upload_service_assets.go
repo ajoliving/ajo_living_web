@@ -66,7 +66,14 @@ func (s *UploadService) DeleteMediaAsset(ctx context.Context, userID int64, medi
 		return nil, err
 	}
 	if usageMap[asset.ID] {
-		return nil, errcode.New(errcode.CodeValidationError, "media asset is already referenced by a listing")
+		return nil, errcode.New(errcode.CodeValidationError, "media asset is already referenced")
+	}
+	referenceCount, err := s.mediaObjectReferenceCount(ctx, asset.BucketName, asset.ObjectKey)
+	if err != nil {
+		return nil, err
+	}
+	if referenceCount > 1 {
+		return nil, errcode.New(errcode.CodeValidationError, "media object is referenced by another asset")
 	}
 
 	result, err := s.buildMediaAssetResult(ctx, asset)
@@ -173,5 +180,42 @@ func (s *UploadService) loadMediaUsageMap(ctx context.Context, assetIDs []int64)
 		result[row.MediaAssetID] = true
 	}
 
+	var profileRows []usageRow
+	if err := s.runtime.DB.WithContext(ctx).
+		Model(&model.UserProfile{}).
+		Distinct("avatar_asset_id AS media_asset_id").
+		Where("avatar_asset_id IN ?", assetIDs).
+		Scan(&profileRows).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load media asset usage")
+	}
+	for _, row := range profileRows {
+		result[row.MediaAssetID] = true
+	}
+
+	var homeRows []usageRow
+	if err := s.runtime.DB.WithContext(ctx).
+		Model(&model.HomeContentPlacement{}).
+		Distinct("media_asset_id").
+		Where("media_asset_id IN ?", assetIDs).
+		Scan(&homeRows).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load media asset usage")
+	}
+	for _, row := range homeRows {
+		result[row.MediaAssetID] = true
+	}
+
 	return result, nil
+}
+
+// 9. mediaObjectReferenceCount counts database rows pointing at one object key.
+func (s *UploadService) mediaObjectReferenceCount(ctx context.Context, bucketName string, objectKey string) (int64, error) {
+	var count int64
+	if err := s.runtime.DB.WithContext(ctx).
+		Model(&model.MediaAsset{}).
+		Where("bucket_name = ? AND object_key = ?", bucketName, objectKey).
+		Count(&count).Error; err != nil {
+		return 0, errcode.New(errcode.CodeInternalError, "failed to load media object references")
+	}
+
+	return count, nil
 }

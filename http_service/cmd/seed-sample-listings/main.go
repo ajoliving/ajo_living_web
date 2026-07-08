@@ -1150,7 +1150,7 @@ func replaceListingImages(tx *gorm.DB, cfg *config.Config, listingID int64, owne
 // 11. ensureMediaAsset creates or reuses one media asset.
 func ensureMediaAsset(tx *gorm.DB, cfg *config.Config, ownerUserID int64, objectKey string, mimeType string) (int64, error) {
 	var asset model.MediaAsset
-	if err := tx.Where("bucket_name = ? AND object_key = ? AND created_by = ?", cfg.StorageBucket, objectKey, ownerUserID).Limit(1).Find(&asset).Error; err != nil {
+	if err := tx.Where("bucket_name = ? AND object_key = ?", cfg.StorageBucket, objectKey).Limit(1).Find(&asset).Error; err != nil {
 		return 0, err
 	}
 	if asset.ID > 0 {

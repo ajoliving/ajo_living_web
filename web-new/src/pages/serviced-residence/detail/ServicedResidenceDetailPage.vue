@@ -15,6 +15,10 @@ import {
   fetchServicedApartmentDetail,
   fetchServicedApartmentListings,
 } from '@/httpapis/properties';
+import {
+  getPropertyOptionLabel,
+  servicedRoomCategoryOptions,
+} from '@/constants/property';
 import type { ContactAccessResult } from '@/model/marketplace';
 import type {
   PropertyListingDetailResponse,
@@ -77,9 +81,32 @@ const contactRows = computed<ContactRow[]>(() =>
       key,
       label: resolveContactLabel(key),
       value,
-      href: isWhatsAppContact(key) ? buildWhatsAppHref(value) : buildPhoneHref(value),
+      href: buildContactHref(key, value),
     })),
 );
+const serviceContentSections = computed(() => {
+  if (!serviced.value) {
+    return [];
+  }
+
+  return [
+    {
+      title: '服務介紹',
+      body: serviced.value.service_intro,
+      bodyEn: serviced.value.service_intro_en,
+    },
+    {
+      title: '設施簡介',
+      body: serviced.value.benefits_text,
+      bodyEn: serviced.value.benefits_text_en,
+    },
+    {
+      title: '額外收費',
+      body: serviced.value.extra_charges_text,
+      bodyEn: serviced.value.extra_charges_text_en,
+    },
+  ].filter((item) => item.body || item.bodyEn);
+});
 const tags = computed(() => {
   if (!listing.value) {
     return [];
@@ -98,7 +125,7 @@ const stats = computed<DetailStat[]>(() => {
 
   return [
     {
-      value: resolvePropertyArea(listing.value) > 0 ? String(resolvePropertyArea(listing.value)) : '-',
+      value: formatProjectArea(),
       label: '實用呎數起',
     },
     {
@@ -115,18 +142,36 @@ const stats = computed<DetailStat[]>(() => {
     },
   ];
 });
-const facilityLabels = computed(() => listing.value
-  ? resolvePropertyTagLabels(listing.value, preferenceStore.locale, 20)
-  : [],
-);
+const facilityLabels = computed(() => {
+  if (!listing.value) {
+    return [];
+  }
+
+  const projectAttributes = serviced.value?.project_attributes ?? {};
+  return [
+    ...resolvePropertyTagLabels(listing.value, preferenceStore.locale, 20),
+    projectAttributes.facility_custom_text,
+    projectAttributes.service_custom_text,
+  ].filter((item): item is string => Boolean(item));
+});
 const hasDailyRent = computed(() => Number(serviced.value?.lowest_daily_rent_hkd || 0) > 0);
+const hasMonthlyRentRange = computed(() =>
+  Number(serviced.value?.highest_monthly_rent_hkd || 0) >
+  Number(serviced.value?.lowest_monthly_rent_hkd || 0),
+);
 const mapSrc = computed(() => {
   const address = serviced.value?.address_text || resolvePropertyTitle(listing.value as PropertyListingSummaryResponse);
 
   return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
 });
 
-// 1. 建立電話連結
+// 1. 解析房型分類
+const resolveRoomCategory = (category = ''): string => {
+  const option = servicedRoomCategoryOptions.find((item) => item.value === category);
+  return option ? getPropertyOptionLabel(option, preferenceStore.locale) : category || '房型';
+};
+
+// 2. 建立電話連結
 const buildPhoneHref = (phone: string): string => {
   const normalizedPhone = phone.replace(/\s+/g, '');
 
@@ -148,10 +193,34 @@ const buildWhatsAppHref = (value: string): string => {
 const isWhatsAppContact = (key: string): boolean =>
   key === 'whatsapp_url' || key === 'whatsapp';
 
-// 4. 輸出聯絡欄位標籤
+// 4. 建立聯絡欄位連結
+const buildContactHref = (key: string, value: string): string => {
+  if (isWhatsAppContact(key)) {
+    return buildWhatsAppHref(value);
+  }
+  if (key === 'phone' || key === 'phone_2') {
+    return buildPhoneHref(value);
+  }
+
+  return '';
+};
+
+// 5. 輸出聯絡欄位標籤
 const resolveContactLabel = (key: string): string => {
+  if (key === 'contact_name_zh') {
+    return '中文名';
+  }
+  if (key === 'contact_name_en') {
+    return '英文名';
+  }
   if (key === 'phone') {
     return '電話';
+  }
+  if (key === 'phone_2') {
+    return '電話2';
+  }
+  if (key === 'wechat') {
+    return 'WeChat';
   }
   if (isWhatsAppContact(key)) {
     return 'WhatsApp';
@@ -160,39 +229,68 @@ const resolveContactLabel = (key: string): string => {
   return key;
 };
 
-// 5. 格式化最短入住
+// 6. 格式化最短入住
 const formatMinimumStay = (value?: number, unit?: string): string => {
   const safeValue = Number(value || 1);
+  if (unit === 'week') {
+    return `${safeValue}周`;
+  }
 
   return unit === 'day' ? `${safeValue}日` : `${safeValue}個月`;
 };
 
-// 6. 格式化房型租金
+// 7. 格式化項目面積
+const formatProjectArea = (): string => {
+  const minArea = Number(serviced.value?.min_usable_area_sqft || 0);
+  const maxArea = Number(serviced.value?.max_usable_area_sqft || 0);
+  if (minArea <= 0) {
+    return '-';
+  }
+  if (maxArea > minArea) {
+    return `${minArea}-${maxArea}`;
+  }
+
+  return String(minArea);
+};
+
+// 8. 格式化房型租金
 const formatRoomPrice = (room: ServicedApartmentRoomType): string => {
   const dailyMin = Number(room.daily_rent_min_hkd || 0);
   const dailyMax = Number(room.daily_rent_max_hkd || 0);
   const monthlyMin = Number(room.monthly_rent_min_hkd || room.monthly_rent_hkd || 0);
   const monthlyMax = Number(room.monthly_rent_max_hkd || 0);
+  const rentUnitLabel = room.rent_unit === 'week' ? '周' : '月';
+  const rentSuffix = room.rent_suffix_plus ? '+' : '';
 
   if (dailyMin > 0) {
     return dailyMax > dailyMin
       ? `${formatPrice(dailyMin, preferenceStore.locale)}-${formatPrice(dailyMax, preferenceStore.locale)} / 日`
-      : `${formatPrice(dailyMin, preferenceStore.locale)} / 日起`;
+      : `${formatPrice(dailyMin, preferenceStore.locale)}${rentSuffix} / 日${rentSuffix ? '' : '起'}`;
   }
   if (monthlyMin > 0) {
     return monthlyMax > monthlyMin
-      ? `${formatPrice(monthlyMin, preferenceStore.locale)}-${formatPrice(monthlyMax, preferenceStore.locale)} / 月`
-      : `${formatPrice(monthlyMin, preferenceStore.locale)} / 月起`;
+      ? `${formatPrice(monthlyMin, preferenceStore.locale)}-${formatPrice(monthlyMax, preferenceStore.locale)} / ${rentUnitLabel}`
+      : `${formatPrice(monthlyMin, preferenceStore.locale)}${rentSuffix} / ${rentUnitLabel}${rentSuffix ? '' : '起'}`;
   }
 
   return serviced.value?.price_negotiable ? '面議' : '價格僅供參考';
 };
 
-// 7. 格式化房型面積
-const formatRoomArea = (room: ServicedApartmentRoomType): string =>
-  room.usable_area_sqft > 0 ? `${room.usable_area_sqft}呎` : '-';
+// 9. 格式化房型面積
+const formatRoomArea = (room: ServicedApartmentRoomType): string => {
+  const minArea = Number(room.usable_area_min_sqft || room.usable_area_sqft || 0);
+  const maxArea = Number(room.usable_area_max_sqft || 0);
+  if (minArea <= 0) {
+    return '-';
+  }
+  if (maxArea > minArea) {
+    return `${minArea}-${maxArea}呎`;
+  }
 
-// 8. 讀取詳情
+  return `${minArea}呎`;
+};
+
+// 10. 讀取詳情
 const loadDetail = async (): Promise<void> => {
   if (!listingId.value) {
     return;
@@ -220,7 +318,7 @@ const loadDetail = async (): Promise<void> => {
   }
 };
 
-// 9. 讀取同區推薦
+// 11. 讀取同區推薦
 const loadSimilarResidences = async (detail: PropertyListingDetailResponse): Promise<void> => {
   loadingSimilar.value = true;
 
@@ -240,12 +338,12 @@ const loadSimilarResidences = async (detail: PropertyListingDetailResponse): Pro
   }
 };
 
-// 10. 選擇圖片
+// 12. 選擇圖片
 const selectImage = (index: number): void => {
   selectedImageIndex.value = index;
 };
 
-// 11. 解鎖聯絡方式
+// 13. 解鎖聯絡方式
 const revealContact = async (): Promise<void> => {
   if (!listing.value || loadingContact.value || contactRows.value.length > 0) {
     return;
@@ -276,7 +374,7 @@ const revealContact = async (): Promise<void> => {
   }
 };
 
-// 12. 建立或開啟服務住宅聊天
+// 14. 建立或開啟服務住宅聊天
 const openChat = async (): Promise<void> => {
   if (!listing.value || openingChat.value) {
     return;
@@ -306,7 +404,7 @@ const openChat = async (): Promise<void> => {
   }
 };
 
-// 13. 前往相似住宅
+// 15. 前往相似住宅
 const goSimilar = async (id: string): Promise<void> => {
   await router.push(`/serviced-residences/${id}`);
 };
@@ -380,7 +478,7 @@ onMounted(() => {
             <div class="detail-price-row">
               <div class="detail-price-main">
                 {{ resolvePropertyPriceText(listing, preferenceStore.locale) }}
-                <span class="detail-price-suffix"> / 月起</span>
+                <span class="detail-price-suffix">{{ hasMonthlyRentRange ? ' / 月' : ' / 月起' }}</span>
               </div>
               <div
                 v-if="hasDailyRent"
@@ -443,8 +541,14 @@ onMounted(() => {
                 >
                   <div>
                     <div class="service-room-type">{{ room.name }}</div>
+                    <div
+                      v-if="room.name_en"
+                      class="service-room-area"
+                    >
+                      {{ room.name_en }}
+                    </div>
                     <div class="service-room-area">
-                      {{ room.room_category || '房型' }} · {{ formatRoomArea(room) }}
+                      {{ resolveRoomCategory(room.room_category) }} · {{ formatRoomArea(room) }}
                     </div>
                   </div>
                   <div class="service-room-price">{{ formatRoomPrice(room) }}</div>
@@ -461,22 +565,18 @@ onMounted(() => {
             </section>
 
             <section
-              v-if="serviced.service_intro || serviced.benefits_text || serviced.extra_charges_text"
+              v-if="serviceContentSections.length > 0"
               class="detail-section"
             >
-              <div class="detail-section-title">服務內容</div>
+              <div class="detail-section-title">服務內容與設施</div>
               <div class="detail-copy-grid">
-                <article v-if="serviced.service_intro">
-                  <strong>服務介紹</strong>
-                  <p>{{ serviced.service_intro }}</p>
-                </article>
-                <article v-if="serviced.benefits_text">
-                  <strong>服務</strong>
-                  <p>{{ serviced.benefits_text }}</p>
-                </article>
-                <article v-if="serviced.extra_charges_text">
-                  <strong>額外收費</strong>
-                  <p>{{ serviced.extra_charges_text }}</p>
+                <article
+                  v-for="section in serviceContentSections"
+                  :key="section.title"
+                >
+                  <strong>{{ section.title }}</strong>
+                  <p v-if="section.body">{{ section.body }}</p>
+                  <p v-if="section.bodyEn">{{ section.bodyEn }}</p>
                 </article>
               </div>
             </section>
@@ -548,17 +648,28 @@ onMounted(() => {
                 v-if="contactRows.length > 0"
                 class="detail-contact-list"
               >
-                <a
+                <template
                   v-for="row in contactRows"
                   :key="row.key"
-                  class="detail-contact-row"
-                  :href="row.href"
-                  :target="isWhatsAppContact(row.key) ? '_blank' : undefined"
-                  :rel="isWhatsAppContact(row.key) ? 'noopener' : undefined"
                 >
-                  <span>{{ row.label }}</span>
-                  <strong>{{ row.label === 'WhatsApp' ? '開啟 WhatsApp' : row.value }}</strong>
-                </a>
+                  <a
+                    v-if="row.href"
+                    class="detail-contact-row"
+                    :href="row.href"
+                    :target="isWhatsAppContact(row.key) ? '_blank' : undefined"
+                    :rel="isWhatsAppContact(row.key) ? 'noopener' : undefined"
+                  >
+                    <span>{{ row.label }}</span>
+                    <strong>{{ row.label === 'WhatsApp' ? '開啟 WhatsApp' : row.value }}</strong>
+                  </a>
+                  <div
+                    v-else
+                    class="detail-contact-row"
+                  >
+                    <span>{{ row.label }}</span>
+                    <strong>{{ row.value }}</strong>
+                  </div>
+                </template>
               </div>
 
               <div class="detail-agent-actions">

@@ -106,6 +106,12 @@ func TestAuthServiceRegisterAndLoginWithUsername(t *testing.T) {
 	if registered.AccessToken == "" || registered.RefreshToken == "" {
 		t.Fatalf("expected tokens after registration")
 	}
+	if _, err := authService.AuthenticateToken(context.Background(), registered.AccessToken); err != nil {
+		t.Fatalf("access token should authenticate: %v", err)
+	}
+	if _, err := authService.AuthenticateToken(context.Background(), registered.RefreshToken); err == nil {
+		t.Fatal("refresh token must not authenticate as an access token")
+	}
 	var registeredUser model.User
 	if err := runtimeValue.DB.Where("public_id = ?", registered.User.PublicID).First(&registeredUser).Error; err != nil {
 		t.Fatalf("load registered user: %v", err)

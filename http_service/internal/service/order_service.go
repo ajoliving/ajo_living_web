@@ -119,7 +119,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, params CreateOrderParams
 	if listing.OwnerUserID == params.BuyerUserID {
 		return nil, errcode.New(errcode.CodeValidationError, "seller cannot create an order on the same listing")
 	}
-	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeValidationError, "listing is not available for ordering")
 	}
 	if !s.secondhandService.canViewListing(listing, secondhand, params.BuyerCommunityID) {
@@ -244,6 +244,9 @@ func (s *OrderService) ConfirmOrder(ctx context.Context, userID int64, orderPubl
 	}
 	if order.OrderStatus != OrderStatusPendingConfirm {
 		return nil, errcode.New(errcode.CodeValidationError, "only pending orders can be confirmed")
+	}
+	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
+		return nil, errcode.New(errcode.CodeValidationError, "listing is not available for ordering")
 	}
 
 	now := s.runtime.Now()

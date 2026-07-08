@@ -45,6 +45,7 @@ import { formatAjoPoints, resolveWalletChargeCost, resolveWalletDraftChargeCost 
 
 export type ListingEditorVisibility = 'public' | 'building_only';
 export type ListingEditorBusinessStatus = 'available' | 'sold';
+export type ListingEditorStepKey = 'category' | 'ad' | 'details' | 'contact';
 
 type EditorStepStatus = 'done' | 'current' | 'idle';
 type EditorLeaveDecision = 'save' | 'discard' | 'stay';
@@ -69,6 +70,10 @@ export interface EditorWorkflowStep {
   label: string;
   description: string;
   status: EditorStepStatus;
+}
+
+export interface ListingEditorWizardStep {
+  key: ListingEditorStepKey;
 }
 
 export interface EditorMetric {
@@ -340,6 +345,7 @@ export const useMarketplaceListingEditorPage = () => {
   const savedSnapshot = ref('');
   const retainedContactSummary = ref<SecondhandListingDetailResponse['contact_summary'] | null>(null);
   const isProgrammaticNavigation = ref(false);
+  const activeEditorStep = ref<ListingEditorStepKey>('category');
   let resolveLeavePrompt: ((decision: EditorLeaveDecision) => void) | null = null;
 
   const isEditing = computed(() => listingId.value.trim().length > 0);
@@ -472,6 +478,18 @@ export const useMarketplaceListingEditorPage = () => {
   );
   const canAffordPublish = computed(() => walletBalance.value >= chargeCost.value);
 
+  const editorSteps = computed<ListingEditorWizardStep[]>(() => [
+    { key: 'category' },
+    { key: 'ad' },
+    { key: 'details' },
+    { key: 'contact' },
+  ]);
+  const activeEditorStepIndex = computed(() =>
+    Math.max(0, editorSteps.value.findIndex((step) => step.key === activeEditorStep.value)),
+  );
+  const isFirstEditorStep = computed(() => activeEditorStepIndex.value <= 0);
+  const isLastEditorStep = computed(() => activeEditorStepIndex.value >= editorSteps.value.length - 1);
+
   const workflowSteps = computed<EditorWorkflowStep[]>(() => [
     {
       label: t('marketplace.editor.stepContent'),
@@ -507,7 +525,28 @@ export const useMarketplaceListingEditorPage = () => {
     currentSnapshot.value !== savedSnapshot.value,
   );
 
-  // 14.1 更新離開提示基準
+  // 14.1 切換發布步驟
+  const selectEditorStep = (step: ListingEditorStepKey): void => {
+    activeEditorStep.value = step;
+  };
+
+  // 14.2 前往上一步
+  const goPreviousEditorStep = (): void => {
+    const previousStep = editorSteps.value[activeEditorStepIndex.value - 1];
+    if (previousStep) {
+      activeEditorStep.value = previousStep.key;
+    }
+  };
+
+  // 14.3 前往下一步
+  const goNextEditorStep = (): void => {
+    const nextStep = editorSteps.value[activeEditorStepIndex.value + 1];
+    if (nextStep) {
+      activeEditorStep.value = nextStep.key;
+    }
+  };
+
+  // 14.4 更新離開提示基準
   const markCurrentStateSaved = (): void => {
     savedSnapshot.value = currentSnapshot.value;
   };
@@ -679,6 +718,7 @@ export const useMarketplaceListingEditorPage = () => {
 
       const completeResponse = await completeUpload({
         object_key: presign.object_key,
+        upload_token: presign.upload_token,
         mime_type: file.type,
         file_size: file.size,
       });
@@ -1000,6 +1040,8 @@ export const useMarketplaceListingEditorPage = () => {
 
   return {
     areaOptions,
+    activeEditorStep,
+    activeEditorStepIndex,
     businessStatusOptions,
     categoryOptions,
     checklist,
@@ -1007,6 +1049,9 @@ export const useMarketplaceListingEditorPage = () => {
     conditionOptions,
     coverImage,
     formState,
+    editorSteps,
+    goNextEditorStep,
+    goPreviousEditorStep,
     handleLeavePromptDecision,
     handleDroppedImageFiles,
     handleImageFileChange,
@@ -1015,6 +1060,8 @@ export const useMarketplaceListingEditorPage = () => {
     isEditing,
     isLeavePromptOpen,
     isLoading,
+    isFirstEditorStep,
+    isLastEditorStep,
     isPublishing,
     isSaving,
     metrics,
@@ -1029,6 +1076,7 @@ export const useMarketplaceListingEditorPage = () => {
     saveDraft,
     saveAndBackToList,
     selectCoverImage,
+    selectEditorStep,
     selectedAreaLabel,
     selectedCategoryLabel,
     selectedConditionLabel,

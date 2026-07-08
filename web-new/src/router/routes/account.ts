@@ -5,26 +5,35 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import ForgotPasswordPage from '@/pages/account/forgot-password/Page.vue';
-import LoginPage from '@/pages/account/login/LoginPage.vue';
-import AccountMyPage from '@/pages/account/my/AccountMyPage.vue';
-import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
-import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
-import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
-import MarketplaceChatPage from '@/pages/marketplace/chat/MarketplaceChatPage.vue';
-import MarketplaceMyFavoritesPage from '@/pages/marketplace/my/favorites/MarketplaceMyFavoritesPage.vue';
-import MarketplaceMyProfilePage from '@/pages/marketplace/my/profile/MarketplaceMyProfilePage.vue';
-import MarketplaceMyPage from '@/pages/marketplace/my/MarketplaceMyPage.vue';
-import MarketplaceMyListingsPage from '@/pages/marketplace/my-listings/MarketplaceMyListingsPage.vue';
-import MarketplaceListingEditorPage from '@/pages/marketplace/my-listings/editor/MarketplaceListingEditorPage.vue';
-import MarketplaceMyListingPreviewPage from '@/pages/marketplace/my-listings/preview/MarketplaceMyListingPreviewPage.vue';
-import MarketplaceSettingsPage from '@/pages/marketplace/settings/Page.vue';
-import MarketplaceSettingsDisplayAdsPage from '@/pages/marketplace/settings/display-ads/Page.vue';
-import MarketplaceSettingsHomeHeroCardsPage from '@/pages/marketplace/settings/home-hero-cards/Page.vue';
-import MarketplaceSettingsLoginHeroPage from '@/pages/marketplace/settings/login-hero/Page.vue';
-import MarketplaceSettingsNoticePage from '@/pages/marketplace/settings/notice/Page.vue';
-import MarketplaceManagementPage from '@/pages/marketplace/management/Page.vue';
-import MarketplaceManagementRewardAdEditorPage from '@/pages/marketplace/management/reward-ad-editor/Page.vue';
+const AccountMyPage = () => import('@/pages/account/my/AccountMyPage.vue');
+const AccountWalletPage = () => import('@/pages/account/my/profile/wallet/Page.vue');
+const ForgotPasswordPage = () => import('@/pages/account/forgot-password/Page.vue');
+const LoginPage = () => import('@/pages/account/login/LoginPage.vue');
+const MarketplaceChatPage = () => import('@/pages/marketplace/chat/MarketplaceChatPage.vue');
+const MarketplaceListingEditorPage = () =>
+  import('@/pages/marketplace/my-listings/editor/MarketplaceListingEditorPage.vue');
+const MarketplaceManagementPage = () => import('@/pages/marketplace/management/Page.vue');
+const MarketplaceManagementRewardAdEditorPage = () =>
+  import('@/pages/marketplace/management/reward-ad-editor/Page.vue');
+const MarketplaceMyFavoritesPage = () =>
+  import('@/pages/marketplace/my/favorites/MarketplaceMyFavoritesPage.vue');
+const MarketplaceMyListingPreviewPage = () =>
+  import('@/pages/marketplace/my-listings/preview/MarketplaceMyListingPreviewPage.vue');
+const MarketplaceMyListingsPage = () =>
+  import('@/pages/marketplace/my-listings/MarketplaceMyListingsPage.vue');
+const MarketplaceMyPage = () => import('@/pages/marketplace/my/MarketplaceMyPage.vue');
+const MarketplaceMyProfilePage = () =>
+  import('@/pages/marketplace/my/profile/MarketplaceMyProfilePage.vue');
+const MarketplaceSettingsDisplayAdsPage = () =>
+  import('@/pages/marketplace/settings/display-ads/Page.vue');
+const MarketplaceSettingsHomeHeroCardsPage = () =>
+  import('@/pages/marketplace/settings/home-hero-cards/Page.vue');
+const MarketplaceSettingsLoginHeroPage = () =>
+  import('@/pages/marketplace/settings/login-hero/Page.vue');
+const MarketplaceSettingsNoticePage = () => import('@/pages/marketplace/settings/notice/Page.vue');
+const MarketplaceSettingsPage = () => import('@/pages/marketplace/settings/Page.vue');
+const PropertyEditorPage = () => import('@/pages/property/editor/PropertyEditorPage.vue');
+const PropertyMyPage = () => import('@/pages/property/my/PropertyMyPage.vue');
 
 // 1. 管理中心舊子路徑對應真實管理分頁
 const managementTabRoute = (tab: string) => ({

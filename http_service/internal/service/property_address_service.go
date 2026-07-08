@@ -28,16 +28,16 @@ func (s *PropertyService) SearchPropertyAddresses(ctx context.Context, keyword s
 		limit = 10
 	}
 
-	query := s.runtime.DB.WithContext(ctx).Model(&model.PropertyAddress{})
-	if strings.TrimSpace(districtCode) != "" {
-		query = query.Where("district_code = ?", strings.TrimSpace(districtCode))
+	districtCodes := propertyDistrictSearchCodes(districtCode)
+	rows, err := s.searchPropertyAddressRows(ctx, normalizedKeyword, districtCodes, limit)
+	if err != nil {
+		return nil, err
 	}
-	likeKeyword := "%" + normalizedKeyword + "%"
-	query = query.Where("(estate_name LIKE ? OR estate_name_en ILIKE ? OR address_text LIKE ? OR address_text_en ILIKE ? OR search_text ILIKE ?)", likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
-
-	var rows []model.PropertyAddress
-	if err := query.Order("estate_name asc, id asc").Limit(limit).Find(&rows).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to search property addresses")
+	if len(rows) == 0 && len(districtCodes) > 0 {
+		rows, err = s.searchPropertyAddressRows(ctx, normalizedKeyword, nil, limit)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	result := make([]PropertyAddressSuggestion, 0, len(rows))
@@ -47,7 +47,23 @@ func (s *PropertyService) SearchPropertyAddresses(ctx context.Context, keyword s
 	return result, nil
 }
 
-// 2. ImportPropertyAddressRows upserts cleaned address rows.
+// 2. searchPropertyAddressRows queries imported address rows.
+func (s *PropertyService) searchPropertyAddressRows(ctx context.Context, keyword string, districtCodes []string, limit int) ([]model.PropertyAddress, error) {
+	query := s.runtime.DB.WithContext(ctx).Model(&model.PropertyAddress{})
+	if len(districtCodes) > 0 {
+		query = query.Where("district_code IN ?", districtCodes)
+	}
+	likeKeyword := "%" + strings.TrimSpace(keyword) + "%"
+	query = query.Where("(estate_name LIKE ? OR estate_name_en ILIKE ? OR address_text LIKE ? OR address_text_en ILIKE ? OR search_text ILIKE ?)", likeKeyword, likeKeyword, likeKeyword, likeKeyword, likeKeyword)
+
+	var rows []model.PropertyAddress
+	if err := query.Order("estate_name asc, id asc").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to search property addresses")
+	}
+	return rows, nil
+}
+
+// 3. ImportPropertyAddressRows upserts cleaned address rows.
 func (s *PropertyService) ImportPropertyAddressRows(ctx context.Context, rows []PropertyAddressSuggestion, sourceFile string) (int, error) {
 	if len(rows) == 0 {
 		return 0, nil
@@ -98,7 +114,7 @@ func (s *PropertyService) ImportPropertyAddressRows(ctx context.Context, rows []
 	return imported, nil
 }
 
-// 3. toPropertyAddressSuggestion maps a model row to API output.
+// 4. toPropertyAddressSuggestion maps a model row to API output.
 func toPropertyAddressSuggestion(row model.PropertyAddress) PropertyAddressSuggestion {
 	return PropertyAddressSuggestion{
 		AddressID:      row.PublicID,

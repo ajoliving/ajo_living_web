@@ -63,7 +63,7 @@ func TestPropertyDistrictsForRegion(t *testing.T) {
 	if !ok {
 		t.Fatal("expected kowloon region to be supported")
 	}
-	for _, expected := range []string{"kowloon", "yau_tsim_mong", "kwun_tong"} {
+	for _, expected := range []string{"kowloon", "yau_tsim_mong", "kwun_tong", "tsim_sha_tsui", "kowloon_bay"} {
 		found := false
 		for _, district := range districts {
 			if district == expected {
@@ -77,6 +77,33 @@ func TestPropertyDistrictsForRegion(t *testing.T) {
 	}
 	if _, ok := propertyDistrictsForRegion("unknown"); ok {
 		t.Fatal("unknown region should not be supported")
+	}
+	if !isAllowedPropertyDistrict("tseung_kwan_o") {
+		t.Fatal("expected property subdistrict code to be accepted")
+	}
+	if isAllowedPropertyDistrict("unknown") {
+		t.Fatal("unknown property district should not be accepted")
+	}
+	for _, testcase := range []struct {
+		value    string
+		expected []string
+	}{
+		{value: "kwun_tong", expected: []string{"kwun_tong", "kowloon"}},
+		{value: "kowloon_bay", expected: []string{"kowloon_bay", "kowloon"}},
+	} {
+		codes := propertyDistrictSearchCodes(testcase.value)
+		for _, expected := range testcase.expected {
+			found := false
+			for _, code := range codes {
+				if code == expected {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected search code %s for %s, got %#v", expected, testcase.value, codes)
+			}
+		}
 	}
 }
 

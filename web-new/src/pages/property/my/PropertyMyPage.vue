@@ -62,6 +62,11 @@ const props = defineProps<{
 
 type MyPropertyTab = 'all' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
 type MyPropertyAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+interface PropertyEditorDialogStepPayload {
+  activeIndex: number;
+  total: number;
+}
+
 type PropertyEditorDialogInstance = InstanceType<typeof PropertyEditorPage> & {
   requestCloseEditor: () => Promise<void>;
 };
@@ -82,6 +87,8 @@ const pagination = ref<PaginationMeta>({
 });
 const isEditorOpen = ref(false);
 const editorListingId = ref('');
+const editorStepIndex = ref(0);
+const editorStepTotal = ref(4);
 const propertyEditorDialog = ref<PropertyEditorDialogInstance | null>(null);
 
 const pageTitle = computed(() =>
@@ -104,6 +111,27 @@ const editorDialogTitle = computed(() => {
     ? t('property.sale.publishTitle')
     : t('property.serviced.publishTitle');
 });
+const editorDialogModeLabel = computed(() =>
+  editorListingId.value ? t('property.editor.editMode') : t('property.editor.publishMode'),
+);
+const editorDialogSteps = computed(() => [
+  {
+    key: 'category',
+    label: props.channel === 'sale' ? t('property.editor.stepCategory') : t('property.editor.servicedStepCategory'),
+  },
+  {
+    key: 'ad',
+    label: t('property.editor.adPackageField'),
+  },
+  {
+    key: 'details',
+    label: props.channel === 'sale' ? t('property.editor.saleTitle') : t('property.editor.servicedTitle'),
+  },
+  {
+    key: 'contact',
+    label: t('property.editor.contact'),
+  },
+]);
 const editorDialogKey = computed(() =>
   `${props.channel}-${editorListingId.value || 'new'}-${isEditorOpen.value ? 'open' : 'closed'}`,
 );
@@ -136,6 +164,12 @@ const paginationText = computed(() => {
     total: pagination.value.total,
   });
 });
+
+// 1.1 重置彈窗步驟狀態
+const resetEditorStepState = (): void => {
+  editorStepIndex.value = 0;
+  editorStepTotal.value = 4;
+};
 
 // 1. 讀取我的發布
 const loadMyListings = async (targetPage = pagination.value.page): Promise<void> => {
@@ -207,12 +241,14 @@ const loadNextPage = async (): Promise<void> => {
 
 // 6. 開啟新增發布彈窗
 const openCreateEditor = (): void => {
+  resetEditorStepState();
   editorListingId.value = '';
   isEditorOpen.value = true;
 };
 
 // 7. 開啟編輯發布彈窗
 const openEditEditor = (listingId: string): void => {
+  resetEditorStepState();
   editorListingId.value = listingId;
   isEditorOpen.value = true;
 };
@@ -221,11 +257,18 @@ const openEditEditor = (listingId: string): void => {
 const closeEditor = (): void => {
   isEditorOpen.value = false;
   editorListingId.value = '';
+  resetEditorStepState();
 };
 
 // 9. 請求關閉發布彈窗
 const requestCloseEditor = (): void => {
   void propertyEditorDialog.value?.requestCloseEditor();
+};
+
+// 9.1 同步彈窗步驟狀態
+const handleEditorStepChange = (payload: PropertyEditorDialogStepPayload): void => {
+  editorStepIndex.value = payload.activeIndex;
+  editorStepTotal.value = payload.total;
 };
 
 // 10. 處理草稿儲存完成
@@ -609,11 +652,25 @@ onMounted(() => {
         >
           <section class="property-editor-dialog__panel">
             <header class="property-editor-dialog__header">
-              <div>
-                <p class="property-kicker">
-                  {{ editorListingId ? t('property.editor.editMode') : t('property.editor.publishMode') }}
-                </p>
-                <h2>{{ editorDialogTitle }}</h2>
+              <span class="property-editor-dialog__title">
+                {{ editorDialogModeLabel }}
+              </span>
+              <div
+                class="property-editor-dialog__progress"
+                aria-label="發布步驟"
+              >
+                <span
+                  v-for="(step, stepIndex) in editorDialogSteps.slice(0, editorStepTotal)"
+                  :key="step.key"
+                  class="property-editor-dialog__progress-step"
+                  :class="{
+                    'property-editor-dialog__progress-step--active': stepIndex === editorStepIndex,
+                    'property-editor-dialog__progress-step--done': stepIndex < editorStepIndex,
+                  }"
+                >
+                  <span class="property-editor-dialog__progress-number">{{ stepIndex + 1 }}</span>
+                  <span class="property-editor-dialog__progress-label">{{ step.label }}</span>
+                </span>
               </div>
               <button
                 type="button"
@@ -637,9 +694,11 @@ onMounted(() => {
                 :return-path="currentBasePath"
                 embedded
                 hide-header
+                hide-progress
                 @cancel="closeEditor"
                 @saved="handleEditorSaved"
                 @published="handleEditorPublished"
+                @step-change="handleEditorStepChange"
               />
             </div>
           </section>
@@ -673,7 +732,7 @@ onMounted(() => {
   color: rgb(var(--color-primary));
   font-size: 0.75rem;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -934,37 +993,115 @@ onMounted(() => {
   z-index: 110;
   inset: 0;
   display: grid;
-  background: rgb(15 23 42 / 0.28);
-  padding: 18px;
+  place-items: center;
+  background: rgb(15 23 42 / 0.34);
+  padding: 16px;
+  backdrop-filter: blur(2px);
 }
 
 .property-editor-dialog__panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(100%, 1180px);
-  max-height: calc(100vh - 36px);
+  width: min(96vw, 1260px);
+  height: min(820px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  box-shadow: 0 20px 60px rgb(15 23 42 / 0.18);
+  box-shadow: 0 24px 70px rgb(15 23 42 / 0.24);
   justify-self: center;
 }
 
 .property-editor-dialog__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 34rem) auto;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid rgb(var(--color-border));
+  background: rgb(var(--color-surface));
   padding: 14px 16px;
 }
 
-.property-editor-dialog__header h2 {
-  margin: 4px 0 0;
+.property-editor-dialog__title {
+  color: rgb(var(--color-text));
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.property-editor-dialog__progress {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+  width: 100%;
+  justify-self: center;
+  padding: 0;
+}
+
+.property-editor-dialog__progress::before {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  left: 20px;
+  height: 1px;
+  background: rgb(var(--color-border));
+  content: "";
+}
+
+.property-editor-dialog__progress-step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 6px;
+  color: rgb(var(--color-text-muted));
+}
+
+.property-editor-dialog__progress-number {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 999px;
+  background: rgb(var(--color-surface));
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.property-editor-dialog__progress-label {
+  overflow: hidden;
+  max-width: min(7rem, 100%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-editor-dialog__progress-step--active .property-editor-dialog__progress-number,
+.property-editor-dialog__progress-step--done .property-editor-dialog__progress-number {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.property-editor-dialog__progress-step--active .property-editor-dialog__progress-number {
+  box-shadow: 0 0 0 4px rgb(var(--color-primary) / 0.12);
+}
+
+.property-editor-dialog__progress-step--active .property-editor-dialog__progress-label,
+.property-editor-dialog__progress-step--done .property-editor-dialog__progress-label {
   color: rgb(var(--color-primary));
-  font-size: 20px;
-  font-weight: 600;
 }
 
 .property-editor-dialog__close {
@@ -973,22 +1110,29 @@ onMounted(() => {
   height: 34px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  color: rgb(var(--color-text-muted));
   cursor: pointer;
+}
+
+.property-editor-dialog__close:hover {
+  border-color: rgb(var(--color-border));
+  background: rgb(var(--color-surface-muted));
+  color: rgb(var(--color-text));
 }
 
 .property-editor-dialog__body {
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  background: rgb(var(--color-surface-muted));
+  padding: 16px;
 }
 
 .property-editor-dialog__body :deep(.property-editor-page) {
   max-width: none;
-  padding: 0 0 12px;
+  padding: 0;
 }
 
 .property-editor-dialog-enter-active,
@@ -1037,7 +1181,7 @@ onMounted(() => {
 .property-kicker {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.18em;
+  letter-spacing: 0;
 }
 
 .property-my-heading h1 {
@@ -1118,17 +1262,25 @@ onMounted(() => {
 
   .property-editor-dialog__panel {
     width: 100%;
+    height: 100vh;
     max-height: 100vh;
     border-right: 0;
+    border-radius: 0;
     border-left: 0;
   }
 
   .property-editor-dialog__header {
-    padding: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
   }
 
   .property-editor-dialog__body {
-    padding: 10px;
+    padding: 12px;
+  }
+
+  .property-editor-dialog__progress-label {
+    display: none;
   }
 }
 </style>

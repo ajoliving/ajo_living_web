@@ -8,12 +8,17 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { EditorChecklistItem, EditorImageSlot } from '../editor';
+import type {
+  EditorChecklistItem,
+  EditorImageSlot,
+} from '../editor';
 
 interface EditorPreviewPanelProps {
   checklist: EditorChecklistItem[];
   chargeHint: string;
   coverImage?: EditorImageSlot;
+  isFirstStep: boolean;
+  isLastStep: boolean;
   isEditing: boolean;
   isPublishing: boolean;
   isSaving: boolean;
@@ -27,7 +32,9 @@ interface EditorPreviewPanelProps {
 const props = defineProps<EditorPreviewPanelProps>();
 
 const emit = defineEmits<{
+  nextStep: [];
   publish: [];
+  previousStep: [];
   saveDraft: [];
 }>();
 
@@ -38,7 +45,17 @@ const saveDraft = (): void => {
   emit('saveDraft');
 };
 
-// 2. 觸發主要操作
+// 2. 觸發下一步
+const goNextStep = (): void => {
+  emit('nextStep');
+};
+
+// 3. 觸發上一步
+const goPreviousStep = (): void => {
+  emit('previousStep');
+};
+
+// 4. 觸發主要操作
 const runPrimaryAction = (): void => {
   if (props.isEditing) {
     emit('saveDraft');
@@ -109,7 +126,27 @@ const runPrimaryAction = (): void => {
       <p class="editor-charge-hint">
         {{ props.chargeHint }}
       </p>
+      <div class="editor-step-actions">
+        <button
+          type="button"
+          class="editor-action editor-action--secondary"
+          :disabled="props.isFirstStep || props.isSaving || props.isPublishing"
+          @click="goPreviousStep"
+        >
+          上一步
+        </button>
+        <button
+          v-if="!props.isLastStep"
+          type="button"
+          class="editor-action editor-action--primary"
+          :disabled="props.isSaving || props.isPublishing"
+          @click="goNextStep"
+        >
+          下一步
+        </button>
+      </div>
       <button
+        v-if="props.isLastStep"
         type="button"
         class="editor-action editor-action--primary"
         :disabled="props.isEditing ? !props.readyToSaveDraft || props.isSaving || props.isPublishing : !props.readyToPublish || props.isSaving || props.isPublishing"
@@ -130,7 +167,7 @@ const runPrimaryAction = (): void => {
         </span>
       </button>
       <button
-        v-if="!props.isEditing"
+        v-if="props.isLastStep && !props.isEditing"
         type="button"
         class="editor-action editor-action--secondary"
         :disabled="props.isSaving || props.isPublishing"
@@ -257,6 +294,12 @@ const runPrimaryAction = (): void => {
   display: grid;
   gap: 0.6rem;
   margin-top: 0.25rem;
+}
+
+.editor-step-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .editor-charge-hint {

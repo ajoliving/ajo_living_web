@@ -1,7 +1,7 @@
 <!--
  * 全域頂部導航。
  * 1. 嚴格對齊 HTML 設計稿 chrome.html 的 .nav 結構與樣式。
- * 2. 對齊設計稿 11 個導航項：首頁 + 9 個主模組入口 + 通知中心鈴鐺。
+ * 2. 按登入態輸出公開入口、會員入口與通知中心鈴鐺。
  * 3. 整合主題切換按鈕（月亮/太陽）與登入入口。
  * 4. 保留 mobile 全屏導航與底部主入口。
 -->
@@ -20,6 +20,8 @@ interface NavigationItem {
   to: string;
   label: string;
   match: string[];
+  requiresAuth?: boolean;
+  requiresStaff?: boolean;
 }
 
 const route = useRoute();
@@ -36,35 +38,53 @@ const mobileDrawerOpen = computed({
 });
 const accountPath = computed(() => (sessionStore.isAuthenticated ? '/profile' : '/login'));
 const isDarkTheme = computed(() => preferenceStore.theme === 'dark-neutral');
+const isNavigationItemVisible = (item: NavigationItem): boolean => {
+  if (item.requiresAuth && !sessionStore.isAuthenticated) {
+    return false;
+  }
 
-// 1. 建立主導航入口，對齊 HTML 設計稿 10 個文字導航項（首頁 + 9 個主模組）
-const primaryNavigationItems = computed<NavigationItem[]>(() => [
+  if (item.requiresStaff && !sessionStore.currentUser.is_staff) {
+    return false;
+  }
+
+  return true;
+};
+
+// 1. 建立主導航入口
+const allPrimaryNavigationItems = computed<NavigationItem[]>(() => [
   { key: 'home', to: '/', label: '首頁', match: ['/'] },
   { key: 'listing', to: '/properties', label: '樓盤租售', match: ['/properties'] },
   { key: 'service', to: '/serviced-residences', label: '服務式住宅', match: ['/serviced-residence', '/serviced-residences'] },
   { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'] },
   { key: 'offers', to: '/supermarket-offers', label: '綜合優惠', match: ['/offers', '/supermarket-offers'] },
-  { key: 'payment', to: '/payments', label: 'AJO Pay', match: ['/payments'] },
-  { key: 'affairs', to: '/building', label: '我的大廈', match: ['/building'] },
-  { key: 'profile', to: '/profile', label: '會員中心', match: ['/profile', '/account', '/login'] },
-  { key: 'management', to: '/account/marketplace/management', label: '管理', match: ['/account/marketplace/management'] },
+  { key: 'payment', to: '/payments', label: 'AJO Pay', match: ['/payments'], requiresAuth: true },
+  { key: 'affairs', to: '/building', label: '我的大廈', match: ['/building'], requiresAuth: true },
+  { key: 'profile', to: '/profile', label: '會員中心', match: ['/profile', '/account'], requiresAuth: true },
+  { key: 'management', to: '/account/marketplace/management', label: '管理', match: ['/account/marketplace/management'], requiresAuth: true, requiresStaff: true },
   { key: 'trend', to: '/trend', label: '走勢', match: ['/trend'] },
 ]);
+const primaryNavigationItems = computed<NavigationItem[]>(() =>
+  allPrimaryNavigationItems.value.filter(isNavigationItemVisible),
+);
 
-// 2. mobile 全屏導航項（首頁 + 9 個主模組 + 通知中心）
+// 2. mobile 全屏導航項
 const mobileNavigationItems = computed<NavigationItem[]>(() => [
   ...primaryNavigationItems.value,
-  { key: 'notification', to: '/notifications', label: '通知中心', match: ['/notifications', '/account/notifications'] },
+  ...(
+    sessionStore.isAuthenticated
+      ? [{ key: 'notification', to: '/notifications', label: '通知中心', match: ['/notifications', '/account/notifications'] }]
+      : []
+  ),
 ]);
 
-// 3. 底部導航 5 個入口（縮寫標籤對齊設計稿 bottom-nav）
+// 3. 底部導航入口
 const bottomNavigationItems = computed<NavigationItem[]>(() => [
   { key: 'home', to: '/', label: '首頁', match: ['/'] },
   { key: 'listing', to: '/properties', label: '樓盤', match: ['/properties'] },
   { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'] },
   { key: 'offers', to: '/supermarket-offers', label: '格價', match: ['/offers', '/supermarket-offers'] },
-  { key: 'profile', to: '/profile', label: '我的', match: ['/profile', '/account', '/login'] },
-]);
+  { key: 'profile', to: '/profile', label: '我的', match: ['/profile', '/account'], requiresAuth: true },
+].filter(isNavigationItemVisible));
 
 // 4. 判斷目前路由是否命中導航項
 const isRouteActive = (item: NavigationItem): boolean => {
@@ -143,6 +163,7 @@ watch(
         {{ item.label }}
       </RouterLink>
       <RouterLink
+        v-if="sessionStore.isAuthenticated"
         to="/notifications"
         class="nl nav-bell"
         :class="{ on: isNotificationActive }"

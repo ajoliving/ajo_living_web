@@ -45,13 +45,18 @@ type PropertyListFilters struct {
 
 // 5. PropertyContactInput defines contact binding payload.
 type PropertyContactInput struct {
-	Phone           string
-	WhatsApp        string
-	Email           string
-	ShowPhone       bool
-	ShowWhatsApp    bool
-	ShowChat        bool
-	ShowInquiryForm bool
+	ContactNameZH     string
+	ContactNameEN     string
+	Phone             string
+	Phone2            string
+	WhatsApp          string
+	WeChat            string
+	Email             string
+	ContactAttributes map[string]string
+	ShowPhone         bool
+	ShowWhatsApp      bool
+	ShowChat          bool
+	ShowInquiryForm   bool
 }
 
 // 6. UpsertPropertySaleParams defines create and update input for sale listings.
@@ -73,6 +78,7 @@ type UpsertPropertySaleParams struct {
 	MultiUnitProject      bool
 	PropertyType          string
 	RentalType            string
+	PropertyAttributes    map[string]string
 	RenovationType        string
 	AgencyCompanyName     string
 	EstateName            string
@@ -123,13 +129,18 @@ type UpsertPropertySaleParams struct {
 // 7. ServicedApartmentRoomTypeInput defines one room type input.
 type ServicedApartmentRoomTypeInput struct {
 	Name              string   `json:"name"`
+	NameEn            string   `json:"name_en"`
 	RoomCategory      string   `json:"room_category"`
 	UsableAreaSqft    int      `json:"usable_area_sqft"`
+	UsableAreaMinSqft int      `json:"usable_area_min_sqft"`
+	UsableAreaMaxSqft int      `json:"usable_area_max_sqft"`
 	MonthlyRentHKD    float64  `json:"monthly_rent_hkd"`
 	MonthlyRentMinHKD float64  `json:"monthly_rent_min_hkd"`
 	MonthlyRentMaxHKD float64  `json:"monthly_rent_max_hkd"`
 	DailyRentMinHKD   float64  `json:"daily_rent_min_hkd"`
 	DailyRentMaxHKD   float64  `json:"daily_rent_max_hkd"`
+	RentUnit          string   `json:"rent_unit"`
+	RentSuffixPlus    bool     `json:"rent_suffix_plus"`
 	IncludedFees      bool     `json:"included_fees"`
 	IncludedFeeItems  []string `json:"included_fee_items"`
 	MinLeaseMonths    int      `json:"min_lease_months"`
@@ -137,6 +148,7 @@ type ServicedApartmentRoomTypeInput struct {
 	MinStayUnit       string   `json:"min_stay_unit"`
 	FeatureTags       []string `json:"feature_tags"`
 	ImageMediaAssetID string   `json:"image_media_asset_id"`
+	PageURL           string   `json:"page_url"`
 }
 
 // 8. UpsertServicedApartmentParams defines create and update input for serviced apartments.
@@ -151,6 +163,7 @@ type UpsertServicedApartmentParams struct {
 	PublisherIdentityType string
 	ProjectName           string
 	ProjectNameEn         string
+	ProjectAttributes     map[string]string
 	AddressText           string
 	AddressTextEn         string
 	WebsiteURL            string
@@ -158,13 +171,18 @@ type UpsertServicedApartmentParams struct {
 	Fax                   string
 	DescriptionEn         string
 	ServiceIntro          string
+	ServiceIntroEn        string
 	BenefitsText          string
+	BenefitsTextEn        string
 	ExtraChargesText      string
+	ExtraChargesTextEn    string
 	LowestMonthlyRentHKD  float64
+	HighestMonthlyRentHKD float64
 	LowestDailyRentHKD    float64
 	PriceReferenceOnly    bool
 	PriceNegotiable       bool
 	MinUsableAreaSqft     int
+	MaxUsableAreaSqft     int
 	MinLeaseMonths        int
 	MinStayValue          int
 	MinStayUnit           string
@@ -183,67 +201,68 @@ type UpsertServicedApartmentParams struct {
 
 // 9. PropertySalePayload defines sale-specific response fields.
 type PropertySalePayload struct {
-	PropertyNo           string   `json:"property_no"`
-	TransactionType      string   `json:"transaction_type"`
-	LocationScope        string   `json:"location_scope"`
-	ListingCategory      string   `json:"listing_category"`
-	MultiUnitProject     bool     `json:"multi_unit_project"`
-	PropertyType         string   `json:"property_type"`
-	RentalType           string   `json:"rental_type"`
-	RenovationType       string   `json:"renovation_type"`
-	AgencyCompanyName    string   `json:"agency_company_name"`
-	EstateName           string   `json:"estate_name"`
-	AddressText          string   `json:"address_text"`
-	AddressTextEn        string   `json:"address_text_en"`
-	BlockName            string   `json:"block_name"`
-	UnitName             string   `json:"unit_name,omitempty"`
-	ShowUnit             bool     `json:"show_unit"`
-	Latitude             *float64 `json:"latitude,omitempty"`
-	Longitude            *float64 `json:"longitude,omitempty"`
-	AskingPriceHKD       float64  `json:"asking_price_hkd"`
-	MonthlyRentHKD       float64  `json:"monthly_rent_hkd"`
-	PriceReferenceOnly   bool     `json:"price_reference_only"`
-	PriceNegotiable      bool     `json:"price_negotiable"`
-	AnnualPrepayDiscount bool     `json:"annual_prepay_discount"`
-	AnnualPrepayOption   string   `json:"annual_prepay_option"`
-	LeaseStartDate       string   `json:"lease_start_date"`
-	RentIncluded         string   `json:"rent_included"`
-	AreaMode             string   `json:"area_mode"`
-	UsableAreaSqft       int      `json:"usable_area_sqft"`
-	GrossAreaSqft        *int     `json:"gross_area_sqft,omitempty"`
-	BedroomCount         int      `json:"bedroom_count"`
-	LivingRoomCount      int      `json:"living_room_count"`
-	BathroomCount        int      `json:"bathroom_count"`
-	FloorLevel           string   `json:"floor_level"`
-	FloorRaw             string   `json:"floor_raw,omitempty"`
-	FloorZone            string   `json:"floor_zone"`
-	FloorDisplayRange    string   `json:"floor_display_range"`
-	TotalFloors          int      `json:"total_floors"`
-	PublicLocationText   string   `json:"public_location_text"`
-	Direction            string   `json:"direction"`
-	BuildingAge          string   `json:"building_age"`
-	CompletionYear       int      `json:"completion_year"`
-	BuildingTotalFloors  int      `json:"building_total_floors"`
-	ManagementCompany    string   `json:"management_company"`
-	KitchenType          string   `json:"kitchen_type"`
-	CookingMode          string   `json:"cooking_mode"`
-	ManagementFeeHKD     float64  `json:"management_fee_hkd"`
-	VideoURL             string   `json:"video_url"`
-	VRURL                string   `json:"vr_url"`
-	PrivateNote          string   `json:"private_note"`
-	TitleEn              string   `json:"title_en"`
-	DescriptionEn        string   `json:"description_en"`
-	AdPackageCode        string   `json:"ad_package_code"`
-	AdWeight             int      `json:"ad_weight"`
-	AdPriceHKD           float64  `json:"ad_price_hkd"`
-	AdPricePoints        int64    `json:"ad_price_points"`
-	AdDurationDays       int      `json:"ad_duration_days"`
-	AdExpiresAt          *string  `json:"ad_expires_at,omitempty"`
-	FeatureTags          []string `json:"feature_tags"`
-	ContactMethod        string   `json:"contact_method"`
-	PublisherRoleLabel   string   `json:"publisher_role_label"`
-	ViewCount            int64    `json:"view_count"`
-	InquiryCount         int64    `json:"inquiry_count"`
+	PropertyNo           string            `json:"property_no"`
+	TransactionType      string            `json:"transaction_type"`
+	LocationScope        string            `json:"location_scope"`
+	ListingCategory      string            `json:"listing_category"`
+	MultiUnitProject     bool              `json:"multi_unit_project"`
+	PropertyType         string            `json:"property_type"`
+	RentalType           string            `json:"rental_type"`
+	PropertyAttributes   map[string]string `json:"property_attributes"`
+	RenovationType       string            `json:"renovation_type"`
+	AgencyCompanyName    string            `json:"agency_company_name"`
+	EstateName           string            `json:"estate_name"`
+	AddressText          string            `json:"address_text"`
+	AddressTextEn        string            `json:"address_text_en"`
+	BlockName            string            `json:"block_name"`
+	UnitName             string            `json:"unit_name,omitempty"`
+	ShowUnit             bool              `json:"show_unit"`
+	Latitude             *float64          `json:"latitude,omitempty"`
+	Longitude            *float64          `json:"longitude,omitempty"`
+	AskingPriceHKD       float64           `json:"asking_price_hkd"`
+	MonthlyRentHKD       float64           `json:"monthly_rent_hkd"`
+	PriceReferenceOnly   bool              `json:"price_reference_only"`
+	PriceNegotiable      bool              `json:"price_negotiable"`
+	AnnualPrepayDiscount bool              `json:"annual_prepay_discount"`
+	AnnualPrepayOption   string            `json:"annual_prepay_option"`
+	LeaseStartDate       string            `json:"lease_start_date"`
+	RentIncluded         string            `json:"rent_included"`
+	AreaMode             string            `json:"area_mode"`
+	UsableAreaSqft       int               `json:"usable_area_sqft"`
+	GrossAreaSqft        *int              `json:"gross_area_sqft,omitempty"`
+	BedroomCount         int               `json:"bedroom_count"`
+	LivingRoomCount      int               `json:"living_room_count"`
+	BathroomCount        int               `json:"bathroom_count"`
+	FloorLevel           string            `json:"floor_level"`
+	FloorRaw             string            `json:"floor_raw,omitempty"`
+	FloorZone            string            `json:"floor_zone"`
+	FloorDisplayRange    string            `json:"floor_display_range"`
+	TotalFloors          int               `json:"total_floors"`
+	PublicLocationText   string            `json:"public_location_text"`
+	Direction            string            `json:"direction"`
+	BuildingAge          string            `json:"building_age"`
+	CompletionYear       int               `json:"completion_year"`
+	BuildingTotalFloors  int               `json:"building_total_floors"`
+	ManagementCompany    string            `json:"management_company"`
+	KitchenType          string            `json:"kitchen_type"`
+	CookingMode          string            `json:"cooking_mode"`
+	ManagementFeeHKD     float64           `json:"management_fee_hkd"`
+	VideoURL             string            `json:"video_url"`
+	VRURL                string            `json:"vr_url"`
+	PrivateNote          string            `json:"private_note"`
+	TitleEn              string            `json:"title_en"`
+	DescriptionEn        string            `json:"description_en"`
+	AdPackageCode        string            `json:"ad_package_code"`
+	AdWeight             int               `json:"ad_weight"`
+	AdPriceHKD           float64           `json:"ad_price_hkd"`
+	AdPricePoints        int64             `json:"ad_price_points"`
+	AdDurationDays       int               `json:"ad_duration_days"`
+	AdExpiresAt          *string           `json:"ad_expires_at,omitempty"`
+	FeatureTags          []string          `json:"feature_tags"`
+	ContactMethod        string            `json:"contact_method"`
+	PublisherRoleLabel   string            `json:"publisher_role_label"`
+	ViewCount            int64             `json:"view_count"`
+	InquiryCount         int64             `json:"inquiry_count"`
 }
 
 // 10. PropertyAddressSuggestion defines one building address autocomplete result.
@@ -264,39 +283,45 @@ type PropertyAddressSuggestion struct {
 
 // 11. ServicedApartmentPayload defines serviced-specific response fields.
 type ServicedApartmentPayload struct {
-	ProjectName          string                           `json:"project_name"`
-	ProjectNameEn        string                           `json:"project_name_en"`
-	AddressText          string                           `json:"address_text"`
-	AddressTextEn        string                           `json:"address_text_en"`
-	WebsiteURL           string                           `json:"website_url"`
-	WhatsApp             string                           `json:"whatsapp"`
-	Fax                  string                           `json:"fax"`
-	DescriptionEn        string                           `json:"description_en"`
-	ServiceIntro         string                           `json:"service_intro"`
-	BenefitsText         string                           `json:"benefits_text"`
-	ExtraChargesText     string                           `json:"extra_charges_text"`
-	LowestMonthlyRentHKD float64                          `json:"lowest_monthly_rent_hkd"`
-	LowestDailyRentHKD   float64                          `json:"lowest_daily_rent_hkd"`
-	PriceReferenceOnly   bool                             `json:"price_reference_only"`
-	PriceNegotiable      bool                             `json:"price_negotiable"`
-	MinUsableAreaSqft    int                              `json:"min_usable_area_sqft"`
-	MinLeaseMonths       int                              `json:"min_lease_months"`
-	MinStayValue         int                              `json:"min_stay_value"`
-	MinStayUnit          string                           `json:"min_stay_unit"`
-	LocationScope        string                           `json:"location_scope"`
-	ListingCategory      string                           `json:"listing_category"`
-	MultiUnitProject     bool                             `json:"multi_unit_project"`
-	AdPackageCode        string                           `json:"ad_package_code"`
-	AdWeight             int                              `json:"ad_weight"`
-	AdPriceHKD           float64                          `json:"ad_price_hkd"`
-	AdPricePoints        int64                            `json:"ad_price_points"`
-	AdDurationDays       int                              `json:"ad_duration_days"`
-	AdExpiresAt          *string                          `json:"ad_expires_at,omitempty"`
-	FacilityTags         []string                         `json:"facility_tags"`
-	ServiceTags          []string                         `json:"service_tags"`
-	RoomTypes            []ServicedApartmentRoomTypeInput `json:"room_types"`
-	ContactMethod        string                           `json:"contact_method"`
-	PublisherRoleLabel   string                           `json:"publisher_role_label"`
+	ProjectName           string                           `json:"project_name"`
+	ProjectNameEn         string                           `json:"project_name_en"`
+	ProjectAttributes     map[string]string                `json:"project_attributes"`
+	AddressText           string                           `json:"address_text"`
+	AddressTextEn         string                           `json:"address_text_en"`
+	WebsiteURL            string                           `json:"website_url"`
+	WhatsApp              string                           `json:"whatsapp"`
+	Fax                   string                           `json:"fax"`
+	DescriptionEn         string                           `json:"description_en"`
+	ServiceIntro          string                           `json:"service_intro"`
+	ServiceIntroEn        string                           `json:"service_intro_en"`
+	BenefitsText          string                           `json:"benefits_text"`
+	BenefitsTextEn        string                           `json:"benefits_text_en"`
+	ExtraChargesText      string                           `json:"extra_charges_text"`
+	ExtraChargesTextEn    string                           `json:"extra_charges_text_en"`
+	LowestMonthlyRentHKD  float64                          `json:"lowest_monthly_rent_hkd"`
+	HighestMonthlyRentHKD float64                          `json:"highest_monthly_rent_hkd"`
+	LowestDailyRentHKD    float64                          `json:"lowest_daily_rent_hkd"`
+	PriceReferenceOnly    bool                             `json:"price_reference_only"`
+	PriceNegotiable       bool                             `json:"price_negotiable"`
+	MinUsableAreaSqft     int                              `json:"min_usable_area_sqft"`
+	MaxUsableAreaSqft     int                              `json:"max_usable_area_sqft"`
+	MinLeaseMonths        int                              `json:"min_lease_months"`
+	MinStayValue          int                              `json:"min_stay_value"`
+	MinStayUnit           string                           `json:"min_stay_unit"`
+	LocationScope         string                           `json:"location_scope"`
+	ListingCategory       string                           `json:"listing_category"`
+	MultiUnitProject      bool                             `json:"multi_unit_project"`
+	AdPackageCode         string                           `json:"ad_package_code"`
+	AdWeight              int                              `json:"ad_weight"`
+	AdPriceHKD            float64                          `json:"ad_price_hkd"`
+	AdPricePoints         int64                            `json:"ad_price_points"`
+	AdDurationDays        int                              `json:"ad_duration_days"`
+	AdExpiresAt           *string                          `json:"ad_expires_at,omitempty"`
+	FacilityTags          []string                         `json:"facility_tags"`
+	ServiceTags           []string                         `json:"service_tags"`
+	RoomTypes             []ServicedApartmentRoomTypeInput `json:"room_types"`
+	ContactMethod         string                           `json:"contact_method"`
+	PublisherRoleLabel    string                           `json:"publisher_role_label"`
 }
 
 // 12. PropertyListingSummary defines public list payload for property channels.

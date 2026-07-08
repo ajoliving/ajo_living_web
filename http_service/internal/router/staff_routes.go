@@ -23,6 +23,7 @@ func registerStaffRoutes(
 ) {
 	// 1.1 Staff account and user management routes.
 	api.GET("/staff/me", requireStaff, staffHandler.GetMe)
+	api.GET("/staff/roles", requireStaff, staffHandler.ListRoles)
 	api.GET("/staff/users", requireStaff, staffHandler.ListUsers)
 	api.POST("/staff/users", requireStaff, staffHandler.CreateUser)
 	api.PATCH("/staff/users/:userId/role", requireStaff, staffHandler.UpdateUserRole)

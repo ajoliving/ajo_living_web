@@ -20,7 +20,7 @@ type Listing struct {
 	Title                 string     `gorm:"type:varchar(300);not null" json:"title"`
 	Summary               string     `gorm:"type:varchar(500)" json:"summary"`
 	Description           string     `gorm:"type:text" json:"description"`
-	DistrictCode          string     `gorm:"type:varchar(32);not null" json:"district_code"`
+	DistrictCode          string     `gorm:"type:varchar(64);not null" json:"district_code"`
 	CommunityID           *int64     `gorm:"index" json:"community_id"`
 	PublisherIdentityType string     `gorm:"type:varchar(32);not null" json:"publisher_identity_type"`
 	PublicationStatus     string     `gorm:"type:varchar(32);not null;index:idx_listings_module_status,priority:2;index:idx_listings_expire_at,priority:1;index:idx_listings_owner_module_status,priority:3" json:"publication_status"`
@@ -36,19 +36,26 @@ type Listing struct {
 
 // 2. ListingContact stores encrypted contact values.
 type ListingContact struct {
-	ListingID         int64     `gorm:"primaryKey" json:"listing_id"`
-	PhoneEncrypted    string    `gorm:"type:text" json:"phone_encrypted"`
-	PhoneMasked       string    `gorm:"type:varchar(64)" json:"phone_masked"`
-	WhatsAppEncrypted string    `gorm:"type:text" json:"whatsapp_encrypted"`
-	WhatsAppMasked    string    `gorm:"type:varchar(64)" json:"whatsapp_masked"`
-	EmailEncrypted    string    `gorm:"type:text" json:"email_encrypted"`
-	ShowPhone         bool      `gorm:"not null" json:"show_phone"`
-	ShowWhatsApp      bool      `gorm:"not null" json:"show_whatsapp"`
-	ShowChat          bool      `gorm:"not null" json:"show_chat"`
-	ShowInquiryForm   bool      `gorm:"not null" json:"show_inquiry_form"`
-	ContactMode       string    `gorm:"type:varchar(32);not null" json:"contact_mode"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ListingID         int64          `gorm:"primaryKey" json:"listing_id"`
+	ContactNameZH     string         `gorm:"type:varchar(120)" json:"contact_name_zh"`
+	ContactNameEN     string         `gorm:"type:varchar(120)" json:"contact_name_en"`
+	PhoneEncrypted    string         `gorm:"type:text" json:"phone_encrypted"`
+	PhoneMasked       string         `gorm:"type:varchar(64)" json:"phone_masked"`
+	Phone2Encrypted   string         `gorm:"type:text" json:"phone_2_encrypted"`
+	Phone2Masked      string         `gorm:"type:varchar(64)" json:"phone_2_masked"`
+	WhatsAppEncrypted string         `gorm:"type:text" json:"whatsapp_encrypted"`
+	WhatsAppMasked    string         `gorm:"type:varchar(64)" json:"whatsapp_masked"`
+	WeChatEncrypted   string         `gorm:"type:text" json:"wechat_encrypted"`
+	WeChatMasked      string         `gorm:"type:varchar(64)" json:"wechat_masked"`
+	EmailEncrypted    string         `gorm:"type:text" json:"email_encrypted"`
+	ContactAttributes datatypes.JSON `gorm:"type:jsonb" json:"contact_attributes"`
+	ShowPhone         bool           `gorm:"not null" json:"show_phone"`
+	ShowWhatsApp      bool           `gorm:"not null" json:"show_whatsapp"`
+	ShowChat          bool           `gorm:"not null" json:"show_chat"`
+	ShowInquiryForm   bool           `gorm:"not null" json:"show_inquiry_form"`
+	ContactMode       string         `gorm:"type:varchar(32);not null" json:"contact_mode"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
 }
 
 // 3. MediaAsset stores uploaded media metadata.
@@ -56,8 +63,8 @@ type MediaAsset struct {
 	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	PublicID        string    `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
 	StorageProvider string    `gorm:"type:varchar(32);not null" json:"storage_provider"`
-	BucketName      string    `gorm:"type:varchar(120);not null" json:"bucket_name"`
-	ObjectKey       string    `gorm:"type:varchar(500);not null;index" json:"object_key"`
+	BucketName      string    `gorm:"type:varchar(120);not null;uniqueIndex:idx_media_assets_bucket_object" json:"bucket_name"`
+	ObjectKey       string    `gorm:"type:varchar(500);not null;uniqueIndex:idx_media_assets_bucket_object" json:"object_key"`
 	MimeType        string    `gorm:"type:varchar(100);not null" json:"mime_type"`
 	Width           *int      `json:"width"`
 	Height          *int      `json:"height"`
@@ -125,6 +132,7 @@ type PropertySaleListing struct {
 	MultiUnitProject     bool           `gorm:"not null;default:false" json:"multi_unit_project"`
 	PropertyType         string         `gorm:"type:varchar(64);not null" json:"property_type"`
 	RentalType           string         `gorm:"type:varchar(64)" json:"rental_type"`
+	PropertyAttributes   datatypes.JSON `gorm:"type:jsonb" json:"property_attributes"`
 	RenovationType       string         `gorm:"type:varchar(64);index" json:"renovation_type"`
 	AgencyCompanyName    string         `gorm:"type:varchar(200)" json:"agency_company_name"`
 	EstateName           string         `gorm:"type:varchar(200)" json:"estate_name"`
@@ -186,8 +194,8 @@ type PropertyAddress struct {
 	ID             int64          `gorm:"primaryKey;autoIncrement" json:"id"`
 	PublicID       string         `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
 	SourceFile     string         `gorm:"type:varchar(120);not null;uniqueIndex:uk_property_address_source_name_address,priority:1" json:"source_file"`
-	RegionCode     string         `gorm:"type:varchar(32);index" json:"region_code"`
-	DistrictCode   string         `gorm:"type:varchar(32);index" json:"district_code"`
+	RegionCode     string         `gorm:"type:varchar(64);index" json:"region_code"`
+	DistrictCode   string         `gorm:"type:varchar(64);index" json:"district_code"`
 	EstateName     string         `gorm:"type:varchar(200);not null;index;uniqueIndex:uk_property_address_source_name_address,priority:2" json:"estate_name"`
 	EstateNameEn   string         `gorm:"type:varchar(200)" json:"estate_name_en"`
 	DisplayName    string         `gorm:"type:varchar(300)" json:"display_name"`
@@ -203,40 +211,46 @@ type PropertyAddress struct {
 
 // 11. ServicedApartmentProject stores serviced apartment project fields.
 type ServicedApartmentProject struct {
-	ListingID            int64          `gorm:"primaryKey" json:"listing_id"`
-	ProjectName          string         `gorm:"type:varchar(200);not null" json:"project_name"`
-	ProjectNameEn        string         `gorm:"type:varchar(200)" json:"project_name_en"`
-	AddressText          string         `gorm:"type:varchar(500);not null" json:"address_text"`
-	AddressTextEn        string         `gorm:"type:varchar(500)" json:"address_text_en"`
-	WebsiteURL           string         `gorm:"type:varchar(500)" json:"website_url"`
-	WhatsApp             string         `gorm:"column:whatsapp;type:varchar(80)" json:"whatsapp"`
-	Fax                  string         `gorm:"type:varchar(80)" json:"fax"`
-	DescriptionEn        string         `gorm:"type:text" json:"description_en"`
-	ServiceIntro         string         `gorm:"type:text" json:"service_intro"`
-	BenefitsText         string         `gorm:"type:text" json:"benefits_text"`
-	ExtraChargesText     string         `gorm:"type:text" json:"extra_charges_text"`
-	LowestMonthlyRentHKD float64        `gorm:"type:numeric(12,2);not null" json:"lowest_monthly_rent_hkd"`
-	LowestDailyRentHKD   float64        `gorm:"type:numeric(12,2);not null;default:0" json:"lowest_daily_rent_hkd"`
-	PriceReferenceOnly   bool           `gorm:"not null;default:false" json:"price_reference_only"`
-	PriceNegotiable      bool           `gorm:"not null;default:false" json:"price_negotiable"`
-	MinUsableAreaSqft    int            `gorm:"not null;default:0;index" json:"min_usable_area_sqft"`
-	MinLeaseMonths       int            `gorm:"not null;default:1" json:"min_lease_months"`
-	MinStayValue         int            `gorm:"not null;default:1" json:"min_stay_value"`
-	MinStayUnit          string         `gorm:"type:varchar(16);not null;default:'month'" json:"min_stay_unit"`
-	LocationScope        string         `gorm:"type:varchar(32);not null;default:'local'" json:"location_scope"`
-	ListingCategory      string         `gorm:"type:varchar(64);not null;default:'standard'" json:"listing_category"`
-	MultiUnitProject     bool           `gorm:"not null;default:false" json:"multi_unit_project"`
-	FacilityTags         datatypes.JSON `gorm:"type:jsonb" json:"facility_tags"`
-	ServiceTags          datatypes.JSON `gorm:"type:jsonb" json:"service_tags"`
-	RoomTypes            datatypes.JSON `gorm:"type:jsonb" json:"room_types"`
-	AdPackageCode        string         `gorm:"type:varchar(32);not null;default:'basic';index" json:"ad_package_code"`
-	AdWeight             int            `gorm:"not null;default:0;index" json:"ad_weight"`
-	AdPriceHKD           float64        `gorm:"type:numeric(12,2);not null;default:600" json:"ad_price_hkd"`
-	AdPricePoints        int64          `gorm:"not null;default:800" json:"ad_price_points"`
-	AdDurationDays       int            `gorm:"not null;default:30" json:"ad_duration_days"`
-	AdExpiresAt          *time.Time     `json:"ad_expires_at"`
-	ContactMethod        string         `gorm:"type:varchar(32);not null" json:"contact_method"`
-	PublisherRoleLabel   string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
+	ListingID             int64          `gorm:"primaryKey" json:"listing_id"`
+	ProjectName           string         `gorm:"type:varchar(200);not null" json:"project_name"`
+	ProjectNameEn         string         `gorm:"type:varchar(200)" json:"project_name_en"`
+	ProjectAttributes     datatypes.JSON `gorm:"type:jsonb" json:"project_attributes"`
+	AddressText           string         `gorm:"type:varchar(500);not null" json:"address_text"`
+	AddressTextEn         string         `gorm:"type:varchar(500)" json:"address_text_en"`
+	WebsiteURL            string         `gorm:"type:varchar(500)" json:"website_url"`
+	WhatsApp              string         `gorm:"column:whatsapp;type:varchar(80)" json:"whatsapp"`
+	Fax                   string         `gorm:"type:varchar(80)" json:"fax"`
+	DescriptionEn         string         `gorm:"type:text" json:"description_en"`
+	ServiceIntro          string         `gorm:"type:text" json:"service_intro"`
+	ServiceIntroEn        string         `gorm:"type:text" json:"service_intro_en"`
+	BenefitsText          string         `gorm:"type:text" json:"benefits_text"`
+	BenefitsTextEn        string         `gorm:"type:text" json:"benefits_text_en"`
+	ExtraChargesText      string         `gorm:"type:text" json:"extra_charges_text"`
+	ExtraChargesTextEn    string         `gorm:"type:text" json:"extra_charges_text_en"`
+	LowestMonthlyRentHKD  float64        `gorm:"type:numeric(12,2);not null" json:"lowest_monthly_rent_hkd"`
+	HighestMonthlyRentHKD float64        `gorm:"type:numeric(12,2);not null;default:0" json:"highest_monthly_rent_hkd"`
+	LowestDailyRentHKD    float64        `gorm:"type:numeric(12,2);not null;default:0" json:"lowest_daily_rent_hkd"`
+	PriceReferenceOnly    bool           `gorm:"not null;default:false" json:"price_reference_only"`
+	PriceNegotiable       bool           `gorm:"not null;default:false" json:"price_negotiable"`
+	MinUsableAreaSqft     int            `gorm:"not null;default:0;index" json:"min_usable_area_sqft"`
+	MaxUsableAreaSqft     int            `gorm:"not null;default:0" json:"max_usable_area_sqft"`
+	MinLeaseMonths        int            `gorm:"not null;default:1" json:"min_lease_months"`
+	MinStayValue          int            `gorm:"not null;default:1" json:"min_stay_value"`
+	MinStayUnit           string         `gorm:"type:varchar(16);not null;default:'month'" json:"min_stay_unit"`
+	LocationScope         string         `gorm:"type:varchar(32);not null;default:'local'" json:"location_scope"`
+	ListingCategory       string         `gorm:"type:varchar(64);not null;default:'standard'" json:"listing_category"`
+	MultiUnitProject      bool           `gorm:"not null;default:false" json:"multi_unit_project"`
+	FacilityTags          datatypes.JSON `gorm:"type:jsonb" json:"facility_tags"`
+	ServiceTags           datatypes.JSON `gorm:"type:jsonb" json:"service_tags"`
+	RoomTypes             datatypes.JSON `gorm:"type:jsonb" json:"room_types"`
+	AdPackageCode         string         `gorm:"type:varchar(32);not null;default:'basic';index" json:"ad_package_code"`
+	AdWeight              int            `gorm:"not null;default:0;index" json:"ad_weight"`
+	AdPriceHKD            float64        `gorm:"type:numeric(12,2);not null;default:600" json:"ad_price_hkd"`
+	AdPricePoints         int64          `gorm:"not null;default:800" json:"ad_price_points"`
+	AdDurationDays        int            `gorm:"not null;default:30" json:"ad_duration_days"`
+	AdExpiresAt           *time.Time     `json:"ad_expires_at"`
+	ContactMethod         string         `gorm:"type:varchar(32);not null" json:"contact_method"`
+	PublisherRoleLabel    string         `gorm:"type:varchar(64)" json:"publisher_role_label"`
 }
 
 // 12. PropertyViewingAppointment stores member viewing requests.

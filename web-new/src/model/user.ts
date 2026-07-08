@@ -77,14 +77,11 @@ export interface CurrentMemberProfile {
   ismart_linked?: boolean;
   ismart_username?: string;
   ismart_bound_phone?: string;
-  ismart_password?: string;
-  local_password?: string;
   ismart_msg?: {
     user_id?: number;
     username?: string;
     email?: string;
     phone?: string;
-    password?: string;
     is_staff?: boolean;
     building?: string[];
     staff_building_permissions?: string[];

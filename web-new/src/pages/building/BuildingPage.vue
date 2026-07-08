@@ -1,7 +1,7 @@
 <!--
  * 我的大廈頁。
  * 1. 高保真還原 HTML 設計稿 page-affairs 雙欄布局（左側大廈導航 + 右側面板）。
- * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控、設備監測九個面板。
+ * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控八個面板。
  * 3. 意見提供面板包含最近記錄（可展開內容）、入口卡片、引導式四步提交流程。
  * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
 -->
@@ -35,8 +35,7 @@ type AffairsTab =
   | 'affairs-forms'
   | 'affairs-feedback'
   | 'affairs-access'
-  | 'affairs-icctv'
-  | 'affairs-equipment';
+  | 'affairs-icctv';
 
 type FinanceSubTab = 'acct-overview' | 'acct-finance' | 'acct-audit';
 type AffairsMode = 'repair' | 'feedback';
@@ -116,14 +115,6 @@ interface FeedbackRecord {
   content: string;
 }
 
-interface EquipmentRow {
-  device: string;
-  location: string;
-  status: 'good' | 'warn';
-  statusText: string;
-  updatedAt: string;
-}
-
 interface AccessQRPanel {
   doorID: string;
   doorTitle: string;
@@ -188,7 +179,6 @@ const navItems: NavItem[] = [
   { target: 'affairs-feedback', label: '意見提供/維修報修', needsApi: true },
   { target: 'affairs-access', label: '智能門禁' },
   { target: 'affairs-icctv', label: '視像監控' },
-  { target: 'affairs-equipment', label: '設備監測', needsApi: true },
 ];
 
 // 6. 最新通告 mock 資料
@@ -523,13 +513,6 @@ const feedbackRecords: FeedbackRecord[] = [
   },
 ];
 
-// 11. 設備監測 mock 資料
-const equipmentRows: EquipmentRow[] = [
-  { device: '升降機 1 號', location: '大堂', status: 'good', statusText: '正常', updatedAt: '今天 10:20' },
-  { device: '水泵房', location: '地庫', status: 'warn', statusText: '需檢查', updatedAt: '今天 09:40' },
-  { device: '照明系統', location: '公共走廊', status: 'good', statusText: '正常', updatedAt: '昨天 18:10' },
-];
-
 // 12. 讀取目前會員綁定大廈資料
 const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
   buildingInfoLoading.value = true;
@@ -768,11 +751,6 @@ const toggleICCTVCamera = (cameraID: string) => {
 const openIcctvWindow = (camera: ICCTVCameraSummary) => {
   if (!camera.url) return;
   window.open(camera.url, '_blank', 'noopener');
-};
-
-// 31. 重新整理設備監測
-const refreshEquipment = () => {
-  // 靜態 mock，無需操作
 };
 
 // 32. 跳轉至通告詳情
@@ -2190,57 +2168,6 @@ onMounted(() => {
           </section>
         </div>
 
-        <!-- 設備監測 -->
-        <div
-          v-show="activeTab === 'affairs-equipment'"
-          class="work-panel"
-          :class="{ on: activeTab === 'affairs-equipment' }"
-          data-work-panel="affairs-equipment"
-        >
-          <section class="work-hero">
-            <div>
-              <div class="work-kicker">Equipment</div>
-              <h2 class="work-title">設備監測</h2>
-              <p class="work-desc">查看大廈設備狀態、巡檢紀錄與異常提醒。</p>
-            </div>
-            <button
-              type="button"
-              class="work-action secondary"
-              @click="refreshEquipment"
-            >
-              重新整理
-            </button>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">設備狀態</div>
-            <table class="work-table">
-              <thead>
-                <tr>
-                  <th>設備</th>
-                  <th>位置</th>
-                  <th>狀態</th>
-                  <th>更新時間</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(r, i) in equipmentRows"
-                  :key="i"
-                >
-                  <td>{{ r.device }}</td>
-                  <td>{{ r.location }}</td>
-                  <td>
-                    <span
-                      class="work-chip"
-                      :class="r.status"
-                    >{{ r.statusText }}</span>
-                  </td>
-                  <td>{{ r.updatedAt }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-        </div>
       </main>
     </div>
   </div>

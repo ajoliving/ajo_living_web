@@ -1,6 +1,6 @@
 /*
  * Payment route registration.
- * 1. Register POS building lookup, POS bill, fee, order, history, and accounting routes.
+ * 1. Register POS bill, fee, order, history, accounting, and public callback routes.
  * 2. Register payment callback routes that must stay publicly reachable.
  */
 package router
@@ -11,14 +11,13 @@ import (
 	"ajoliving_web/http_service/internal/handler"
 )
 
-// 1. registerPublicPOSPaymentRoutes registers public POS lookup and payment callback routes.
+// 1. registerPublicPOSPaymentRoutes registers payment callback routes that must stay public.
 func registerPublicPOSPaymentRoutes(
 	api *gin.RouterGroup,
 	posBuildingHandler *handler.POSBuildingHandler,
 	walletHandler *handler.WalletHandler,
 ) {
-	api.GET("/pos/buildings", posBuildingHandler.ListBuildings)
-	api.GET("/pos/buildings/:buildingId/units", posBuildingHandler.ListUnits)
+	_ = posBuildingHandler
 	api.POST("/payments/easylink/notify", walletHandler.HandlePaymentNotify)
 }
 

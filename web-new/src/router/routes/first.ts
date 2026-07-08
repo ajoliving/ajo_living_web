@@ -5,8 +5,10 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
-import ServicedResidenceDetailPage from '@/pages/serviced-residence/detail/ServicedResidenceDetailPage.vue';
-import ServicedResidenceListPage from '@/pages/serviced-residence/list/ServicedResidenceListPage.vue';
+const ServicedResidenceDetailPage = () =>
+  import('@/pages/serviced-residence/detail/ServicedResidenceDetailPage.vue');
+const ServicedResidenceListPage = () =>
+  import('@/pages/serviced-residence/list/ServicedResidenceListPage.vue');
 
 // 1. 輸出服務住宅路由
 export const firstRoutes: RouteRecordRaw[] = [

@@ -40,6 +40,7 @@ export default {
     avatarUrlUnavailable: '尚未設定頭像 URL',
     displayName: '顯示名稱',
     localPassword: '登入密碼',
+    passwordManaged: '可於個人資料中更新',
     email: '電郵地址',
     emailUnavailable: '尚未綁定電郵',
     phone: '電話號碼',

@@ -560,9 +560,9 @@ export const useAccountProfilePage = () => {
         value: phoneDisplay.value,
       },
       {
-        key: 'local_password',
+        key: 'login_password',
         label: t('account.profile.localPassword'),
-        value: sessionStore.me?.local_password?.trim() || fallbackValue.value,
+        value: t('account.profile.passwordManaged'),
       },
       {
         key: 'publisher_identity_type',
@@ -736,6 +736,7 @@ export const useAccountProfilePage = () => {
 
       const completeResponse = await completeUpload({
         object_key: presign.object_key,
+        upload_token: presign.upload_token,
         mime_type: file.type,
         file_size: file.size,
       });

@@ -23,6 +23,12 @@ import {
 } from '@/httpapis/properties';
 import type { ContactAccessResult, PropertyListingDetailResponse, PropertyListingSummaryResponse } from '@/model/property';
 import {
+  getPropertyOptionLabel,
+  propertyCookingModeOptions,
+  propertyKitchenTypeOptions,
+  getPropertySaleFieldProfile,
+} from '@/constants/property';
+import {
   resolvePropertyArea,
   resolvePropertyCommunityName,
   resolvePropertyCoverImage,
@@ -51,6 +57,21 @@ const appointmentOpen = ref(route.query.action === 'appointment');
 const reportOpen = ref(false);
 const openingChat = ref(false);
 
+const saleFieldProfile = computed(() =>
+  getPropertySaleFieldProfile(listing.value?.property_sale?.property_type || 'residential'),
+);
+const saleUsesToiletLabel = computed(() => ['industrial', 'shop'].includes(saleFieldProfile.value.value));
+
+const resolveKitchenLabel = (value = ''): string => {
+  const option = propertyKitchenTypeOptions.find((item) => item.value === value);
+  return option ? getPropertyOptionLabel(option, 'zh-HK') : value;
+};
+
+const resolveCookingModeLabel = (value = ''): string => {
+  const option = propertyCookingModeOptions.find((item) => item.value === value);
+  return option ? getPropertyOptionLabel(option, 'zh-HK') : value;
+};
+
 // 2. 物件標籤
 interface PropertyTag {
   label: string;
@@ -75,12 +96,27 @@ interface DetailStat {
 }
 const stats = computed<DetailStat[]>(() => {
   const sale = listing.value?.property_sale;
-  return [
-    { value: resolvePropertyArea(listing.value as PropertyListingSummaryResponse || emptyListing()).toLocaleString('zh-HK'), label: '實用呎數' },
-    { value: String(sale?.bedroom_count ?? 0), label: '睡房' },
-    { value: String(sale?.bathroom_count ?? 0), label: '浴室' },
-    { value: sale?.floor_level || '-', label: '樓層' },
-  ];
+  if (!sale) {
+    return [];
+  }
+  const profile = saleFieldProfile.value;
+  const result: DetailStat[] = [];
+  if (profile.showUsableArea || profile.showGrossArea) {
+    const areaLabel = profile.requiredArea === 'gross' ? '建築呎數' : '實用呎數';
+    const areaValue = profile.requiredArea === 'gross' && sale.gross_area_sqft
+      ? sale.gross_area_sqft
+      : resolvePropertyArea(listing.value as PropertyListingSummaryResponse || emptyListing());
+    result.push({ value: areaValue.toLocaleString('zh-HK'), label: areaLabel });
+  }
+  if (profile.showRooms) {
+    result.push({ value: sale.bedroom_count < 0 ? 'N/A' : String(sale.bedroom_count ?? 0), label: '房間' });
+    result.push({ value: String(sale.bathroom_count ?? 0), label: saleUsesToiletLabel.value ? '廁所' : '浴室' });
+  }
+  if (profile.showFloor) {
+    result.push({ value: sale.floor_level || '-', label: '樓層' });
+  }
+
+  return result;
 });
 
 // 4. 設施配套
@@ -90,17 +126,70 @@ const facilities = computed(() => listing.value ? resolvePropertyTagLabels(listi
 interface BuildingInfo {
   label: string;
   value: string;
+  href?: string;
 }
 const buildingInfo = computed<BuildingInfo[]>(() => {
   const sale = listing.value?.property_sale;
-  return [
-    { label: '落成年份', value: sale?.completion_year ? `${sale.completion_year}年` : '-' },
-    { label: '樓層數目', value: sale?.building_total_floors ? `${sale.building_total_floors}層` : sale?.total_floors ? `${sale.total_floors}層` : '-' },
-    { label: '管理公司', value: sale?.management_company || '-' },
-    { label: '管理費', value: sale?.management_fee_hkd ? `${formatHKD(sale.management_fee_hkd)}/月` : '-' },
-    { label: '瀏覽', value: String(sale?.view_count ?? 0) },
-    { label: '查詢', value: String(sale?.inquiry_count ?? 0) },
+  if (!sale) {
+    return [];
+  }
+  const profile = saleFieldProfile.value;
+  const result: BuildingInfo[] = [
+    { label: '參考編號', value: sale.property_no || '-' },
   ];
+  if (sale.property_attributes?.lot_number) {
+    result.push({ label: '地段編號', value: sale.property_attributes.lot_number });
+  }
+  if (sale.property_attributes?.area_unverified === 'yes') {
+    result.push({ label: '面積資料', value: '未核實' });
+  }
+  if (sale.property_attributes?.new_completion === 'yes') {
+    result.push({ label: '新落成樓盤', value: '是' });
+  }
+  if (sale.property_attributes?.extra_bathroom_toilet === 'yes') {
+    result.push({ label: '另有沐浴廁所', value: '是' });
+  }
+  if (sale.rent_included) {
+    result.push({ label: '租金包含', value: sale.rent_included });
+  }
+  if (profile.showDirection) {
+    result.push({ label: '座向', value: sale.direction || '-' });
+  }
+  if (profile.showBuildingDetails) {
+    result.push({ label: '樓齡', value: sale.building_age || '-' });
+  }
+  if (profile.showKitchen) {
+    result.push(
+      { label: '廚房類型', value: resolveKitchenLabel(sale.kitchen_type || '') || '-' },
+      { label: '廚房煮食模式', value: resolveCookingModeLabel(sale.cooking_mode || '') || '-' },
+    );
+  }
+  result.push(
+    { label: '管理費', value: sale.management_fee_hkd ? `${formatHKD(sale.management_fee_hkd)}/月` : '-' },
+    { label: '瀏覽', value: String(sale.view_count ?? 0) },
+    { label: '查詢', value: String(sale.inquiry_count ?? 0) },
+  );
+  if (sale.video_url) {
+    result.push({ label: '影片連結', value: '開啟', href: sale.video_url });
+  }
+  if (sale.vr_url) {
+    result.push({ label: 'VR連結', value: '開啟', href: sale.vr_url });
+  }
+
+  return result;
+});
+const infoSectionTitle = computed(() => {
+  switch (saleFieldProfile.value.value) {
+    case 'land':
+      return '土地資料';
+    case 'car_park':
+      return '車位資料';
+    case 'shop':
+    case 'industrial':
+      return '工商資料';
+    default:
+      return '大廈資料';
+  }
 });
 
 // 6. 圖集資料
@@ -150,6 +239,9 @@ const unitPriceText = computed(() => {
   if (!listing.value) {
     return '-';
   }
+  if (saleFieldProfile.value.requiredArea === 'none') {
+    return '';
+  }
   const area = resolvePropertyArea(listing.value);
   const price = resolvePropertyPrice(listing.value);
   return area > 0 && price > 0 ? `約 ${formatHKD(Math.round(price / area))} / 呎` : '-';
@@ -169,6 +261,19 @@ const ownerName = computed(() =>
 );
 const contactPhone = computed(() => contactAccess.value?.contact_payload?.phone || '');
 const whatsappURL = computed(() => contactAccess.value?.contact_payload?.whatsapp_url || '');
+interface ContactDetailRow {
+  label: string;
+  value: string;
+}
+const unlockedContactDetails = computed<ContactDetailRow[]>(() => {
+  const payload = contactAccess.value?.contact_payload ?? {};
+  return [
+    { label: '中文名', value: payload.contact_name_zh || '' },
+    { label: '英文名', value: payload.contact_name_en || '' },
+    { label: '電話2', value: payload.phone_2 || '' },
+    { label: 'WeChat', value: payload.wechat || '' },
+  ].filter((item) => item.value.trim() !== '');
+});
 const appointmentForm = reactive({
   contactName: '',
   contactPhone: '',
@@ -422,7 +527,7 @@ onMounted(() => {
 
             <section class="detail-section">
               <div class="detail-section-title detail-section-title--label">
-                大廈資料
+                {{ infoSectionTitle }}
               </div>
               <div class="binfo-grid">
                 <div
@@ -431,7 +536,21 @@ onMounted(() => {
                   class="binfo-card"
                 >
                   <div class="binfo-label">{{ info.label }}</div>
-                  <div class="binfo-val">{{ info.value }}</div>
+                  <a
+                    v-if="info.href"
+                    class="binfo-val"
+                    :href="info.href"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    {{ info.value }}
+                  </a>
+                  <div
+                    v-else
+                    class="binfo-val"
+                  >
+                    {{ info.value }}
+                  </div>
                 </div>
               </div>
             </section>
@@ -555,6 +674,19 @@ onMounted(() => {
                 <div class="detail-agent-label">發布資料</div>
                 <div class="detail-agent-value">{{ resolvePropertyCommunityName(listing) }}</div>
                 <div class="detail-agent-note">{{ resolvePropertyRooms(listing) }}</div>
+              </div>
+              <div
+                v-if="unlockedContactDetails.length > 0"
+                class="detail-agent-time"
+              >
+                <div class="detail-agent-label">聯絡資料</div>
+                <div
+                  v-for="item in unlockedContactDetails"
+                  :key="item.label"
+                  class="detail-agent-note"
+                >
+                  {{ item.label }}：{{ item.value }}
+                </div>
               </div>
               <div class="detail-agent-actions">
                 <a

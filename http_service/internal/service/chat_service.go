@@ -69,7 +69,7 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 	if listing.OwnerUserID == userID {
 		return nil, errcode.New(errcode.CodeValidationError, "publisher cannot start a chat with the same listing")
 	}
-	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for chat")
 	}
 	if !s.secondhandService.canViewListing(listing, secondhand, communityID) {
@@ -91,7 +91,7 @@ func (s *ChatService) CreateOrReusePropertyChat(ctx context.Context, channel Pro
 	if listing.OwnerUserID == userID {
 		return nil, errcode.New(errcode.CodeValidationError, "publisher cannot start a chat with the same listing")
 	}
-	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for chat")
 	}
 	if !contact.ShowChat {
@@ -312,7 +312,7 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	if err != nil {
 		return nil, err
 	}
-	if listing.PublicationStatus != "active" || listing.BusinessStatus != "available" {
+	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for messaging")
 	}
 

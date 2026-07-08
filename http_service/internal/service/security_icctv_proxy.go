@@ -14,30 +14,31 @@ import (
 
 // 1. icctvProxyURL rewrites FRP camera URLs to the public HTTPS proxy.
 func (s *SecurityICCTVService) icctvProxyURL(rawURL string) string {
-	proxyBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.ICCTVStreamProxyBaseURL), "/")
-	if proxyBaseURL == "" {
-		return rawURL
-	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {
 		return rawURL
 	}
+	sanitizedURL := icctvURLWithoutQuery(parsed)
+	proxyBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.ICCTVStreamProxyBaseURL), "/")
+	if proxyBaseURL == "" {
+		return sanitizedURL
+	}
 	parsedPort := parsed.Port()
 	if parsedPort == "" || !icctvStreamPortAllowed(parsedPort) {
-		return rawURL
+		return sanitizedURL
 	}
 
 	proxyBase, err := url.Parse(proxyBaseURL)
 	if err != nil || proxyBase.Scheme == "" || proxyBase.Host == "" {
-		return rawURL
+		return sanitizedURL
 	}
 	proxyPath := strings.TrimRight(proxyBase.EscapedPath(), "/")
 	cameraPath := strings.TrimLeft(parsed.EscapedPath(), "/")
 	if cameraPath == "" {
-		return rawURL
+		return sanitizedURL
 	}
 
-	return proxyBase.Scheme + "://" + proxyBase.Host + proxyPath + "/opi/" + parsedPort + "/" + cameraPath + icctvRawQuery(parsed.RawQuery)
+	return proxyBase.Scheme + "://" + proxyBase.Host + proxyPath + "/opi/" + parsedPort + "/" + cameraPath
 }
 
 // 2. icctvStreamPortAllowed checks the configured FRP stream port range.
@@ -50,12 +51,10 @@ func icctvStreamPortAllowed(portValue string) bool {
 	return port >= 29000 && port <= 29999
 }
 
-// 3. icctvRawQuery returns one URL query suffix.
-func icctvRawQuery(rawQuery string) string {
-	value := strings.TrimSpace(rawQuery)
-	if value == "" {
-		return ""
-	}
-
-	return "?" + value
+// 3. icctvURLWithoutQuery removes upstream tokens from browser-visible URLs.
+func icctvURLWithoutQuery(parsed *url.URL) string {
+	value := *parsed
+	value.RawQuery = ""
+	value.Fragment = ""
+	return value.String()
 }

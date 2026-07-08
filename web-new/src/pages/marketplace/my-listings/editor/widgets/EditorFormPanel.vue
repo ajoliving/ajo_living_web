@@ -15,10 +15,12 @@ import type {
   EditorOption,
   ListingEditorBusinessStatus,
   ListingEditorFormState,
+  ListingEditorStepKey,
   ListingEditorVisibility,
 } from '../editor';
 
 interface EditorFormPanelProps {
+  activeStep: ListingEditorStepKey;
   areaOptions: EditorOption[];
   businessStatusOptions: EditorOption<ListingEditorBusinessStatus>[];
   categoryOptions: EditorOption[];
@@ -131,14 +133,70 @@ onBeforeUnmount(() => {
     class="editor-form-panel"
     @submit.prevent
   >
-    <section class="editor-section">
+    <section
+      v-if="props.activeStep === 'category'"
+      class="editor-section"
+    >
       <header class="editor-section-heading">
         <span class="editor-step-number">1</span>
         <div>
           <p class="editor-kicker">
-            {{ t('marketplace.editor.basicInfo') }}
+            放盤類別
           </p>
-          <h2>{{ t('marketplace.editor.basicStepTitle') }}</h2>
+          <h2>選擇家具分類</h2>
+        </div>
+      </header>
+
+      <div class="editor-field-grid">
+        <div class="editor-field">
+          <span>{{ t('marketplace.editor.categoryField') }}</span>
+          <AppGlassSelect
+            v-model="props.formState.categoryCode"
+            :options="props.categoryOptions"
+          />
+        </div>
+
+        <div class="editor-field">
+          <span>{{ t('marketplace.editor.businessStatus') }}</span>
+          <AppGlassSelect
+            v-model="props.formState.businessStatus"
+            :options="props.businessStatusOptions"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section
+      v-if="props.activeStep === 'ad'"
+      class="editor-section"
+    >
+      <header class="editor-section-heading">
+        <span class="editor-step-number">2</span>
+        <div>
+          <p class="editor-kicker">
+            廣告等級
+          </p>
+          <h2>選擇刊登等級</h2>
+        </div>
+      </header>
+
+      <div class="editor-ad-package">
+        <strong>普通</strong>
+        <span>{{ t('marketplace.editor.publishChargeHint') }}</span>
+      </div>
+    </section>
+
+    <section
+      v-if="props.activeStep === 'details'"
+      class="editor-section"
+    >
+      <header class="editor-section-heading">
+        <span class="editor-step-number">3</span>
+        <div>
+          <p class="editor-kicker">
+            基本資料及相片
+          </p>
+          <h2>填寫商品資料</h2>
         </div>
       </header>
 
@@ -151,14 +209,6 @@ onBeforeUnmount(() => {
             :placeholder="t('marketplace.editor.titlePlaceholder')"
           />
         </label>
-
-        <div class="editor-field">
-          <span>{{ t('marketplace.editor.categoryField') }}</span>
-          <AppGlassSelect
-            v-model="props.formState.categoryCode"
-            :options="props.categoryOptions"
-          />
-        </div>
 
         <div class="editor-field">
           <span>{{ t('marketplace.editor.priceMode') }}</span>
@@ -202,28 +252,6 @@ onBeforeUnmount(() => {
           <span>{{ t('marketplace.editor.donationAvailable') }}</span>
         </label>
 
-        <div class="editor-field">
-          <span>{{ t('marketplace.editor.businessStatus') }}</span>
-          <AppGlassSelect
-            v-model="props.formState.businessStatus"
-            :options="props.businessStatusOptions"
-          />
-        </div>
-      </div>
-    </section>
-
-    <section class="editor-section">
-      <header class="editor-section-heading">
-        <span class="editor-step-number">2</span>
-        <div>
-          <p class="editor-kicker">
-            {{ t('marketplace.editor.detailsStepKicker') }}
-          </p>
-          <h2>{{ t('marketplace.editor.detailsStepTitle') }}</h2>
-        </div>
-      </header>
-
-      <div class="editor-field-grid">
         <label class="editor-field editor-field--wide">
           <span>{{ t('marketplace.editor.summaryField') }}</span>
           <input
@@ -292,18 +320,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-    </section>
-
-    <section class="editor-section">
-      <header class="editor-section-heading">
-        <span class="editor-step-number">3</span>
-        <div>
-          <p class="editor-kicker">
-            {{ t('marketplace.editor.mediaStepKicker') }}
-          </p>
-          <h2>{{ t('marketplace.editor.mediaStepTitle') }}</h2>
-        </div>
-      </header>
 
       <input
         id="editor-media-upload"
@@ -388,14 +404,17 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="editor-section">
+    <section
+      v-if="props.activeStep === 'contact'"
+      class="editor-section"
+    >
       <header class="editor-section-heading">
         <span class="editor-step-number">4</span>
         <div>
           <p class="editor-kicker">
-            {{ t('marketplace.editor.visibilityTitle') }}
+            聯絡人資料
           </p>
-          <h2>{{ t('marketplace.editor.visibilityStepTitle') }}</h2>
+          <h2>設定聯絡方式</h2>
         </div>
       </header>
 
@@ -649,6 +668,29 @@ onBeforeUnmount(() => {
 .editor-measurement-grid {
   display: grid;
   gap: 0.75rem;
+}
+
+.editor-ad-package {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid rgb(var(--color-primary));
+  border-radius: 2px;
+  background: rgb(var(--color-primary) / 0.08);
+  padding: 0.85rem;
+}
+
+.editor-ad-package strong {
+  color: rgb(var(--color-primary));
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.editor-ad-package span {
+  color: rgb(var(--color-text-muted));
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .editor-field input,

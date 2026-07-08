@@ -18,6 +18,7 @@ interface ListMediaAssetsParams {
 
 interface CompleteUploadPayload {
   object_key: string;
+  upload_token: string;
   mime_type: string;
   file_size: number;
   width?: number;
