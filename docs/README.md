@@ -5,6 +5,7 @@
 ## 目錄索引
 
 - `architecture/`: 系統架構與模組邊界文件。
+- `development/`: Vue、React、Go 與 API 文件生成等開發規範。
 - `deployment/`: 部署、運維與環境交付文件。
 - `product/`: 產品需求、驗收、稽核與頁面規格。
 - `product/legacy-requirements/`: 早期樓盤、服務住宅與二手交易需求草案。
