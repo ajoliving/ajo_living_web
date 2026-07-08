@@ -169,3 +169,23 @@ const handleSubmit = async () => { ... };
 - 我会在其他的terminal中自己运行我的前端和后端，不要帮我直接运行。
 - 我的一切的功能等尽量是能做减法，然后ui上也是最好是简约，不要复杂逻辑啥的
 - /Users/yangliu/Documents/Code/ajoliving_web/doc copy/server-deployment-ai-prompt.md部署的话，帮我读这个文件后部署
+
+## 專案記憶與索引
+
+### 成員清單
+docs/: 產品、部署、整合、開發規範、原型與 prompt/context 索引。
+web-new/: 目前正在開發與維護的 Vue 3 前端子專案。
+http_service/: 目前正在開發與維護的 Go 後端 API 子專案。
+web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能。
+.codex/skills/: 本專案可複用 Codex skill 與其 agent prompt。
+.github/: GitHub 助手與自動化相關指令入口。
+
+### 架構決策
+- `docs/PROMPT_INDEX.md` 是本倉庫 prompt/context 主索引；不要另建平行索引。
+- 新增、移動或修改 prompt、agent 規則、AI 文件生成規範、工具描述或本地 skill 時，同步更新最近的 `AGENTS.md` 與 `docs/PROMPT_INDEX.md`。
+- `.claude/worktrees/`、`dist`、`node_modules`、`.uploads`、資料庫備份與 HTML 備份不是穩定上下文入口，除非使用者明確要求追溯。
+
+### 變更日誌
+2026-07-08: 建立專案 prompt/context 記憶入口，指向 `docs/PROMPT_INDEX.md` 與 `docs/AGENTS.md`。
+
+[PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

@@ -4,6 +4,8 @@
 
 ## 目錄索引
 
+- `AGENTS.md`: docs 目錄的 agent 記憶邊界與維護協議。
+- `PROMPT_INDEX.md`: AI prompt、agent 規則、工具描述與維護協議索引。
 - `architecture/`: 系統架構與模組邊界文件。
 - `development/`: Vue、React、Go 與 API 文件生成等開發規範。
 - `deployment/`: 部署、運維與環境交付文件。
