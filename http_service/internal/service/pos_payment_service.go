@@ -490,10 +490,16 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 	if profile.PrimaryCommunity != nil {
 		profileBuildingID = strings.TrimSpace(profile.PrimaryCommunity.PublicID)
 	}
+	unitID := strings.TrimSpace(selection.UnitID)
 	if buildingID == "" && containsString(buildingOptions, profileBuildingID) {
 		buildingID = profileBuildingID
 	}
-	unitID := strings.TrimSpace(selection.UnitID)
+	if buildingID == "" && unitID != "" {
+		unitBuildingID := posUnitBuildingID(unitID)
+		if containsString(buildingOptions, unitBuildingID) {
+			buildingID = unitBuildingID
+		}
+	}
 	if unitID == "" && len(unitOptions) == 1 {
 		unitID = unitOptions[0]
 	}
@@ -503,14 +509,13 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 	if !containsString(buildingOptions, buildingID) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
 	}
-	if unitID != "" && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, unitID, unitOptions) && !isStaff {
-		return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
-	}
-
 	units, err := s.memberPOSUnits(ctx, userID, buildingID)
 	if err != nil {
 		if unitID == "" {
 			return nil, err
+		}
+		if !isStaff && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, unitID, unitOptions) {
+			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		return &POSUnitContext{
 			BuildingID:   buildingID,
@@ -524,27 +529,48 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 
 	floor := strings.TrimSpace(profile.ResidenceFloor)
 	unitName := strings.TrimSpace(profile.ResidenceUnit)
+	var profileMatchedUnit *POSUnitSummary
 	for _, item := range units {
 		itemUnitID := posUnitID(item)
+		if itemUnitID == "" {
+			continue
+		}
+		matchesProfile := posUnitMatchesProfile(item, floor, unitName)
+		if matchesProfile && profileMatchedUnit == nil {
+			itemCopy := item
+			profileMatchedUnit = &itemCopy
+		}
 		if unitID != "" && itemUnitID != unitID {
 			continue
 		}
-		if unitID == "" && !posUnitMatchesProfile(item, floor, unitName) {
+		if unitID == "" && !matchesProfile {
 			continue
 		}
-		if unitID != "" && len(unitOptions) == 0 && !isStaff && !posUnitMatchesProfile(item, floor, unitName) {
+		if unitID != "" && len(unitOptions) == 0 && !isStaff && !matchesProfile {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
-
-		selectedUnitID := itemUnitID
-		if selectedUnitID == "" {
-			continue
-		}
-		if !isStaff && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, selectedUnitID, unitOptions) {
+		if !isStaff && len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, item, unitOptions) {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		selectedFloor := paymentFirstNonEmpty(posUnitFloor(item), floor)
 		selectedUnit := paymentFirstNonEmpty(posUnitName(item), unitName)
+
+		return &POSUnitContext{
+			BuildingID:   buildingID,
+			BuildingName: posPaymentBuildingName(profile.PrimaryCommunity, buildingID),
+			UnitID:       itemUnitID,
+			Floor:        selectedFloor,
+			Unit:         selectedUnit,
+			UnitLabel:    posUnitLabel(selectedFloor, selectedUnit),
+		}, nil
+	}
+	if profileMatchedUnit != nil {
+		selectedUnitID := posUnitID(*profileMatchedUnit)
+		if !isStaff && len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, *profileMatchedUnit, unitOptions) {
+			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
+		}
+		selectedFloor := paymentFirstNonEmpty(posUnitFloor(*profileMatchedUnit), floor)
+		selectedUnit := paymentFirstNonEmpty(posUnitName(*profileMatchedUnit), unitName)
 
 		return &POSUnitContext{
 			BuildingID:   buildingID,

@@ -7,6 +7,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -357,5 +358,108 @@ func TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness(t *testing.T) {
 	}
 	if overview.Context == nil || overview.Context.BuildingID != "BLG-001" || overview.Context.UnitID != "BLG-0010000101" {
 		t.Fatalf("expected synced POS context, got %+v", overview.Context)
+	}
+}
+
+// 11. TestPOSPaymentHistoryCanonicalizesMemberUnitID verifies POS history uses the real relay unit id.
+func TestPOSPaymentHistoryCanonicalizesMemberUnitID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/building/0241100/units":
+			_, _ = response.Write([]byte(`[{"unit_id":"02411000313","floor":"03","unit":"C"}]`))
+		case request.Method == http.MethodPost && request.URL.Path == "/transactions/flat_units":
+			var payload map[string][]string
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode history payload: %v", err)
+			}
+			unitIDs := payload["unit_id_list"]
+			if len(unitIDs) != 1 || unitIDs[0] != "02411000313" {
+				t.Fatalf("expected canonical POS unit id, got %#v", payload)
+			}
+			_, _ = response.Write([]byte(`{"payment_objs":{"payment_objs":[{"payment_id":"PAY-001","receipt_id":"20135605","input_time":"2026-04-21 11:35:38","tran_time":"2026-04-16 03:35:00","trs_val":6200,"status":"confirmed"}]}}`))
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	runtimeValue := newAuthTestRuntime(
+		t,
+		&config.Config{POSAPIBaseURL: server.URL, POSLoginTimeout: time.Second},
+		&model.User{},
+		&model.UserCredential{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	tokenEncrypted, err := utils.EncryptString(runtimeValue.Config.EncryptionKey, "relay-token")
+	if err != nil {
+		t.Fatalf("encrypt relay token: %v", err)
+	}
+	user := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234568",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	building := model.Community{
+		PublicID:      "0241100",
+		CommunityType: "building",
+		NameZH:        "協和大廈",
+		DistrictCode:  "unknown",
+		AddressText:   "協和大廈",
+	}
+	if err := runtimeValue.DB.Create(&building).Error; err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	buildingJSON, err := marshalJSON([]string{"0241100"})
+	if err != nil {
+		t.Fatalf("marshal building json: %v", err)
+	}
+	unitJSON, err := marshalJSON([]string{"03/C"})
+	if err != nil {
+		t.Fatalf("marshal unit json: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserProfile{
+		UserID:             user.ID,
+		PrimaryCommunityID: &building.ID,
+		BoundBuildingIDs:   buildingJSON,
+		BoundFlatUnitIDs:   unitJSON,
+		ResidenceFloor:     "03",
+		ResidenceUnit:      "C",
+	}).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             user.ID,
+		IsmartUserID:                       89,
+		Username:                           "owner-c",
+		ClientBuildingPermissions:          buildingJSON,
+		ClientBuildingFlatUnitsPermissions: unitJSON,
+		Building:                           []byte("[]"),
+		StaffBuildingPermissions:           []byte("[]"),
+		RawMessage:                         []byte("{}"),
+		RelayTokenEncrypted:                tokenEncrypted,
+	}).Error; err != nil {
+		t.Fatalf("create ismart account: %v", err)
+	}
+
+	result, err := NewPOSPaymentService(runtimeValue).ListHistoryByQuery(context.Background(), user.ID, POSPaymentHistoryQuery{
+		Selection: POSPaymentSelection{UnitID: "02411000313"},
+	})
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+	if result.Context == nil || result.Context.UnitID != "02411000313" {
+		t.Fatalf("expected canonical context, got %+v", result.Context)
+	}
+	if len(result.Items) != 1 || result.Items[0]["payment_id"] != "PAY-001" {
+		t.Fatalf("expected nested history row, got %#v", result.Items)
 	}
 }

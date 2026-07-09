@@ -10,6 +10,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
@@ -111,7 +112,16 @@ func posDigitsOnly(value string) string {
 	return posPermissionDigitsPattern.ReplaceAllString(strings.TrimSpace(value), "")
 }
 
-// 10.2 posUnitIDVisibleForPermissions checks unit id against POS permission ids.
+// 10.2 posUnitBuildingID returns the building id prefix from a POS unit id.
+func posUnitBuildingID(unitID string) string {
+	value := posDigitsOnly(unitID)
+	if len(value) < 7 {
+		return ""
+	}
+	return value[:7]
+}
+
+// 10.3 posUnitIDVisibleForPermissions checks unit id against POS permission ids.
 func posUnitIDVisibleForPermissions(buildingID string, unitID string, permissions []string) bool {
 	if len(permissions) == 0 {
 		return true
@@ -148,10 +158,13 @@ func posUnitIDVisibleForPermissions(buildingID string, unitID string, permission
 	return false
 }
 
-// 10.3 posUnitVisibleForPermissions checks one POS unit row against permissions.
+// 10.4 posUnitVisibleForPermissions checks one POS unit row against permissions.
 func posUnitVisibleForPermissions(buildingID string, item POSUnitSummary, permissions []string) bool {
 	unitID := posUnitID(item)
 	if unitID != "" && posUnitIDVisibleForPermissions(buildingID, unitID, permissions) {
+		return true
+	}
+	if posUnitLabelVisibleForPermissions(buildingID, item, permissions) {
 		return true
 	}
 
@@ -174,7 +187,58 @@ func posUnitVisibleForPermissions(buildingID string, item POSUnitSummary, permis
 	return posUnitIDVisibleForPermissions(buildingID, code, permissions)
 }
 
-// 10.4 posUnitsFromFlatUnitPermissions builds unit rows from permission ids.
+// 10.5 posUnitLabelVisibleForPermissions checks text permissions such as 03/C.
+func posUnitLabelVisibleForPermissions(buildingID string, item POSUnitSummary, permissions []string) bool {
+	floor := posAlphaNumericOnly(posUnitFloor(item))
+	unit := posAlphaNumericOnly(posUnitName(item))
+	if floor == "" || unit == "" {
+		return false
+	}
+	trimmedFloor := strings.TrimLeft(floor, "0")
+	if trimmedFloor == "" {
+		trimmedFloor = floor
+	}
+	buildingDigits := posDigitsOnly(buildingID)
+	if len(buildingDigits) > 7 {
+		buildingDigits = buildingDigits[:7]
+	}
+	candidates := []string{
+		floor + unit,
+		trimmedFloor + unit,
+	}
+	if buildingDigits != "" {
+		candidates = append(candidates, buildingDigits+floor+unit, buildingDigits+trimmedFloor+unit)
+	}
+
+	for _, rawPermission := range permissions {
+		permission := posAlphaNumericOnly(rawPermission)
+		if permission == "" {
+			continue
+		}
+		compactPermission := strings.ReplaceAll(permission, "0", "")
+		for _, candidate := range candidates {
+			compactCandidate := strings.ReplaceAll(candidate, "0", "")
+			if permission == candidate || compactPermission == compactCandidate {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// 10.6 posAlphaNumericOnly keeps upper-case letters and digits.
+func posAlphaNumericOnly(value string) string {
+	var builder strings.Builder
+	for _, char := range strings.TrimSpace(value) {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) {
+			builder.WriteRune(unicode.ToUpper(char))
+		}
+	}
+	return builder.String()
+}
+
+// 10.7 posUnitsFromFlatUnitPermissions builds unit rows from permission ids.
 func posUnitsFromFlatUnitPermissions(buildingID string, permissions []string) []POSUnitSummary {
 	normalizedBuildingID := posDigitsOnly(buildingID)
 	if len(normalizedBuildingID) > 7 {
@@ -228,7 +292,7 @@ func posUnitsFromFlatUnitPermissions(buildingID string, permissions []string) []
 	return units
 }
 
-// 10.5 posBuildingSummariesFromIDs builds fallback building rows.
+// 10.8 posBuildingSummariesFromIDs builds fallback building rows.
 func posBuildingSummariesFromIDs(buildingIDs []string) []POSBuildingSummary {
 	rows := make([]POSBuildingSummary, 0, len(buildingIDs))
 	for _, buildingID := range buildingIDs {
@@ -246,7 +310,7 @@ func posBuildingSummariesFromIDs(buildingIDs []string) []POSBuildingSummary {
 	return rows
 }
 
-// 10.6 leftPadPOSCode pads POS numeric permission fragments.
+// 10.9 leftPadPOSCode pads POS numeric permission fragments.
 func leftPadPOSCode(value string, size int) string {
 	value = posDigitsOnly(value)
 	for len(value) < size {
@@ -258,7 +322,7 @@ func leftPadPOSCode(value string, size int) string {
 	return value
 }
 
-// 10.7 minInt returns the smaller integer.
+// 10.10 minInt returns the smaller integer.
 func minInt(left int, right int) int {
 	if left < right {
 		return left
