@@ -4,6 +4,8 @@
  * 2. 保持 AJO Pay 前端只依賴 AJO API，不直接連接舊 POS 服務。
  * 3. 串接 AJO 受控會員態 POS 未繳賬單與交易紀錄查詢介面。
  */
+import type { AxiosResponse } from 'axios';
+
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
 import type {
@@ -24,6 +26,25 @@ export interface POSPaymentQuery {
 // 1. 將 AJO POS 列表資料轉成 iSmart 帳目資料列
 const toIntegrationTransactionRows = (items: POSPaymentListPayload['items'] | undefined): POSIntegrationPaymentTransaction[] =>
   (items ?? []) as POSIntegrationPaymentTransaction[];
+
+// 1.1 彙總多個單位歷史，避免單一無效單位拖垮整頁
+const collectPOSHistoryResponses = async (
+  requests: Array<Promise<AxiosResponse<ApiResponse<POSPaymentListPayload>>>>,
+): Promise<POSIntegrationTransactionsPayload> => {
+  const results = await Promise.allSettled(requests);
+  const fulfilled = results.filter((result): result is PromiseFulfilledResult<AxiosResponse<ApiResponse<POSPaymentListPayload>>> =>
+    result.status === 'fulfilled',
+  );
+
+  if (fulfilled.length === 0) {
+    const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    throw rejected?.reason ?? new Error('payment history request failed');
+  }
+
+  return {
+    payment_objs: fulfilled.flatMap(({ value }) => toIntegrationTransactionRows(value.data.data.items)),
+  };
+};
 
 // 2. 取得 POS 賬單
 export const fetchPOSPaymentBills = (params: POSPaymentQuery = {}) =>
@@ -76,16 +97,13 @@ export const fetchPOSIntegrationTransactionsByUnit = async (
     return { payment_objs: [] };
   }
 
-  const responses = await Promise.all(
+  return collectPOSHistoryResponses(
     unitIDs.map((unitID) =>
       httpClient.get<ApiResponse<POSPaymentListPayload>>('/me/payments/pos/history', {
         params: { unit_id: unitID },
       }),
     ),
   );
-  return {
-    payment_objs: responses.flatMap(({ data }) => toIntegrationTransactionRows(data.data.items)),
-  };
 };
 
 // 12. 按日期查詢交易
@@ -93,37 +111,34 @@ export const fetchPOSIntegrationTransactionsByDate = async (
   query: POSIntegrationTransactionDateQuery,
   unitIDs: string[] = [],
 ): Promise<POSIntegrationTransactionsPayload> => {
-  const buildParams = (unitID?: string) => ({
-    building_id: query.building_id,
-    unit_id: unitID,
-    from_date: query.from_date,
-    to_date: query.to_date,
-    date_type: query.date_type,
-    pay_method: query.pay_method ?? 'all',
-  });
+  const buildParams = (unitID?: string) => {
+    const params: POSPaymentQuery & Omit<POSIntegrationTransactionDateQuery, 'building_id'> = {
+      from_date: query.from_date,
+      to_date: query.to_date,
+      date_type: query.date_type,
+      pay_method: query.pay_method ?? 'all',
+    };
+    if (unitID) {
+      params.unit_id = unitID;
+    } else {
+      params.building_id = query.building_id;
+    }
+    return params;
+  };
 
   const normalizedUnitIDs = unitIDs.map((item) => item.trim()).filter(Boolean);
   if (normalizedUnitIDs.length > 0) {
-    const responses = await Promise.all(
+    return collectPOSHistoryResponses(
       normalizedUnitIDs.map((unitID) =>
         httpClient.get<ApiResponse<POSPaymentListPayload>>('/me/payments/pos/history', {
           params: buildParams(unitID),
         }),
       ),
     );
-    return {
-      payment_objs: responses.flatMap(({ data }) => toIntegrationTransactionRows(data.data.items)),
-    };
   }
 
   const { data } = await httpClient.get<ApiResponse<POSPaymentListPayload>>('/me/payments/pos/history', {
-    params: {
-      building_id: query.building_id,
-      from_date: query.from_date,
-      to_date: query.to_date,
-      date_type: query.date_type,
-      pay_method: query.pay_method ?? 'all',
-    },
+    params: buildParams(),
   });
   return { payment_objs: toIntegrationTransactionRows(data.data.items) };
 };

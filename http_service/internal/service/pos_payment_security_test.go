@@ -463,3 +463,107 @@ func TestPOSPaymentHistoryCanonicalizesMemberUnitID(t *testing.T) {
 		t.Fatalf("expected nested history row, got %#v", result.Items)
 	}
 }
+
+// 12. TestPOSPaymentHistoryInfersStaffBuildingFromUnitID verifies Staff unit history does not use the first building.
+func TestPOSPaymentHistoryInfersStaffBuildingFromUnitID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/building/0999900/units":
+			_, _ = response.Write([]byte(`[{"unit_id":"09999000211","floor":"02","unit":"A"}]`))
+		case request.Method == http.MethodPost && request.URL.Path == "/transactions/flat_units":
+			var payload map[string][]string
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode history payload: %v", err)
+			}
+			unitIDs := payload["unit_id_list"]
+			if len(unitIDs) != 1 || unitIDs[0] != "09999000211" {
+				t.Fatalf("expected requested Staff unit id, got %#v", payload)
+			}
+			_, _ = response.Write([]byte(`{"payment_objs":{"payment_objs":[{"payment_id":"PAY-STAFF-001","receipt_id":"RCPT-STAFF-001"}]}}`))
+		default:
+			t.Fatalf("unexpected POS request %s %s", request.Method, request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runtimeValue := newAuthTestRuntime(
+		t,
+		&config.Config{POSAPIBaseURL: server.URL, POSLoginTimeout: time.Second},
+		&model.User{},
+		&model.UserCredential{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	tokenEncrypted, err := utils.EncryptString(runtimeValue.Config.EncryptionKey, "relay-token")
+	if err != nil {
+		t.Fatalf("encrypt relay token: %v", err)
+	}
+	user := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234569",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	building := model.Community{
+		PublicID:      "0999900",
+		CommunityType: "building",
+		NameZH:        "測試1大廈",
+		DistrictCode:  "unknown",
+		AddressText:   "測試1大廈",
+	}
+	if err := runtimeValue.DB.Create(&building).Error; err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	buildingJSON, err := marshalJSON([]string{"0031300", "0999900"})
+	if err != nil {
+		t.Fatalf("marshal building json: %v", err)
+	}
+	unitJSON, err := marshalJSON([]string{"09999000211"})
+	if err != nil {
+		t.Fatalf("marshal unit json: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserProfile{
+		UserID:             user.ID,
+		PrimaryCommunityID: &building.ID,
+		BoundBuildingIDs:   buildingJSON,
+		BoundFlatUnitIDs:   unitJSON,
+		ResidenceFloor:     "02",
+		ResidenceUnit:      "A",
+	}).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             user.ID,
+		IsmartUserID:                       90,
+		Username:                           "staff-owner-a",
+		IsStaff:                            true,
+		Building:                           buildingJSON,
+		StaffBuildingPermissions:           buildingJSON,
+		ClientBuildingPermissions:          []byte("[]"),
+		ClientBuildingFlatUnitsPermissions: []byte("[]"),
+		RawMessage:                         []byte("{}"),
+		RelayTokenEncrypted:                tokenEncrypted,
+	}).Error; err != nil {
+		t.Fatalf("create ismart account: %v", err)
+	}
+
+	result, err := NewPOSPaymentService(runtimeValue).ListHistoryByQuery(context.Background(), user.ID, POSPaymentHistoryQuery{
+		Selection: POSPaymentSelection{UnitID: "09999000211"},
+	})
+	if err != nil {
+		t.Fatalf("load staff unit history: %v", err)
+	}
+	if result.Context == nil || result.Context.BuildingID != "0999900" || result.Context.UnitID != "09999000211" {
+		t.Fatalf("expected unit-derived Staff context, got %+v", result.Context)
+	}
+	if len(result.Items) != 1 || result.Items[0]["payment_id"] != "PAY-STAFF-001" {
+		t.Fatalf("expected Staff unit history row, got %#v", result.Items)
+	}
+}

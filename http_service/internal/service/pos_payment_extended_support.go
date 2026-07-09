@@ -30,6 +30,14 @@ func (s *POSPaymentService) resolveHistoryAccess(ctx context.Context, userID int
 		return contextValue, token, []string{contextValue.UnitID}, nil
 	}
 
+	if strings.TrimSpace(query.Selection.UnitID) != "" && len(normalizeStringSlice(query.UnitIDs)) == 0 {
+		contextValue, token, err := s.memberPOSAccess(ctx, userID, query.Selection)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		return contextValue, token, []string{contextValue.UnitID}, nil
+	}
+
 	contextValue, token, err := s.staffBuildingAccess(ctx, userID, query.Selection)
 	if err != nil {
 		return nil, "", nil, err

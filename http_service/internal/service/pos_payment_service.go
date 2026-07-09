@@ -452,6 +452,12 @@ func (s *POSPaymentService) staffBuildingAccess(ctx context.Context, userID int6
 		return nil, "", err
 	}
 	buildingID := strings.TrimSpace(selection.BuildingID)
+	if buildingID == "" && strings.TrimSpace(selection.UnitID) != "" {
+		unitBuildingID := posUnitBuildingID(selection.UnitID)
+		if containsString(buildingOptions, unitBuildingID) {
+			buildingID = unitBuildingID
+		}
+	}
 	if buildingID == "" && len(buildingOptions) > 0 {
 		buildingID = buildingOptions[0]
 	}
