@@ -10,8 +10,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,17 +32,47 @@ func (s *IsmartExternalService) postRoot(ctx context.Context, path string, paylo
 
 // 3. postJSON sends one JSON request to iSmart and decodes the response.
 func (s *IsmartExternalService) postJSON(ctx context.Context, requestURL string, payload map[string]any) (*ismartProxyResult, error) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
+	return s.requestJSON(ctx, http.MethodPost, requestURL, nil, payload)
+}
+
+// 4. getIntegration sends one GET request to the iSmart integration API.
+func (s *IsmartExternalService) getIntegration(ctx context.Context, path string, query url.Values) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodGet, s.integrationURL(path), query, nil)
+}
+
+// 5. postIntegration sends one POST request to the iSmart integration API.
+func (s *IsmartExternalService) postIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodPost, s.integrationURL(path), nil, payload)
+}
+
+// 6. requestJSON sends one JSON request to iSmart and decodes the response.
+func (s *IsmartExternalService) requestJSON(ctx context.Context, method string, requestURL string, query url.Values, payload any) (*ismartProxyResult, error) {
+	var requestBody io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
+		}
+		requestBody = bytes.NewReader(raw)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(raw))
+	request, err := http.NewRequestWithContext(ctx, method, requestURL, requestBody)
 	if err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
 	}
+	if len(query) > 0 {
+		values := request.URL.Query()
+		for key, entries := range query {
+			for _, entry := range entries {
+				values.Add(key, entry)
+			}
+		}
+		request.URL.RawQuery = values.Encode()
+	}
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Content-Type", "application/json")
+	if payload != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := s.httpClient().Do(request)
 	if err != nil {
@@ -48,15 +80,15 @@ func (s *IsmartExternalService) postJSON(ctx context.Context, requestURL string,
 	}
 	defer response.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, 8*1024*1024))
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 8*1024*1024))
 	if err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to read ismart response")
 	}
 
-	return decodeIsmartProxyResponse(response.StatusCode, body)
+	return decodeIsmartProxyResponse(response.StatusCode, responseBody)
 }
 
-// 4. externalURL builds an iSmart external app API URL.
+// 7. externalURL builds an iSmart external app API URL.
 func (s *IsmartExternalService) externalURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppAPIBaseURL), "/")
 	if baseURL == "" {
@@ -66,7 +98,17 @@ func (s *IsmartExternalService) externalURL(path string) string {
 	return baseURL + "/" + strings.TrimLeft(path, "/")
 }
 
-// 5. rootURL builds an iSmart root API URL.
+// 8. integrationURL builds an iSmart integration API URL.
+func (s *IsmartExternalService) integrationURL(path string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
+	if baseURL == "" {
+		baseURL = "https://ismart.ajoliving.com/api/v1/integration"
+	}
+
+	return baseURL + "/" + strings.TrimLeft(path, "/")
+}
+
+// 9. rootURL builds an iSmart root API URL.
 func (s *IsmartExternalService) rootURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppBaseURL), "/")
 	if baseURL == "" {
@@ -76,7 +118,7 @@ func (s *IsmartExternalService) rootURL(path string) string {
 	return baseURL + "/" + strings.TrimLeft(path, "/")
 }
 
-// 6. httpClient returns the iSmart HTTP client.
+// 10. httpClient returns the iSmart HTTP client.
 func (s *IsmartExternalService) httpClient() *http.Client {
 	timeout := s.runtime.Config.IsmartExternalAppTimeout
 	if timeout <= 0 {
@@ -86,15 +128,15 @@ func (s *IsmartExternalService) httpClient() *http.Client {
 	return &http.Client{Timeout: timeout}
 }
 
-// 7. ismartProxyResult stores a normalized iSmart response.
+// 11. ismartProxyResult stores a normalized iSmart response.
 type ismartProxyResult struct {
-	Payload map[string]any
+	Payload any
 	Message string
 }
 
-// 8. decodeIsmartProxyResponse normalizes iSmart success and error payloads.
+// 12. decodeIsmartProxyResponse normalizes iSmart success and error payloads.
 func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult, error) {
-	payload := map[string]any{}
+	var payload any = map[string]any{}
 	if len(strings.TrimSpace(string(body))) > 0 {
 		decoder := json.NewDecoder(bytes.NewReader(body))
 		decoder.UseNumber()
@@ -103,7 +145,8 @@ func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult,
 		}
 	}
 
-	message := strings.TrimSpace(paymentStringValue(payload["message"]))
+	payloadMap := paymentMapValue(payload)
+	message := strings.TrimSpace(paymentStringValue(payloadMap["message"]))
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
 		if message == "" {
 			message = "ismart service request failed"
@@ -111,30 +154,30 @@ func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult,
 		return nil, errcode.New(ismartHTTPErrorCode(statusCode), message)
 	}
 
-	if strings.EqualFold(paymentStringValue(payload["status"]), "error") {
+	if strings.EqualFold(paymentStringValue(payloadMap["status"]), "error") {
 		if message == "" {
 			message = "ismart service request failed"
 		}
 		return nil, errcode.New(errcode.CodeInternalError, message)
 	}
-	if code := strings.TrimSpace(paymentStringValue(payload["code"])); code != "" && code != "200" && !strings.EqualFold(code, errcode.CodeOK) {
+	if code := strings.TrimSpace(paymentStringValue(payloadMap["code"])); code != "" && code != "200" && !strings.EqualFold(code, errcode.CodeOK) {
 		if message == "" {
 			message = "ismart service request failed"
 		}
 		return nil, errcode.New(errcode.CodeInternalError, message)
 	}
 
-	if data, ok := payload["data"]; ok {
+	if data, ok := payloadMap["data"]; ok {
 		if dataMap := paymentMapValue(data); len(dataMap) > 0 {
 			return &ismartProxyResult{Payload: dataMap, Message: message}, nil
 		}
-		return &ismartProxyResult{Payload: map[string]any{"result": data}, Message: message}, nil
+		return &ismartProxyResult{Payload: data, Message: message}, nil
 	}
 
 	return &ismartProxyResult{Payload: payload, Message: message}, nil
 }
 
-// 9. ismartHTTPErrorCode maps upstream status into AJO error codes.
+// 13. ismartHTTPErrorCode maps upstream status into AJO error codes.
 func ismartHTTPErrorCode(statusCode int) string {
 	switch statusCode {
 	case http.StatusBadRequest:
@@ -146,4 +189,16 @@ func ismartHTTPErrorCode(statusCode int) string {
 	default:
 		return errcode.CodeInternalError
 	}
+}
+
+// 14. ismartFallbackAllowed keeps write fallback conservative.
+func ismartFallbackAllowed(err error, isWrite bool) bool {
+	var appErr *errcode.AppError
+	if !errors.As(err, &appErr) {
+		return false
+	}
+	if appErr.Code == errcode.CodeNotFound {
+		return true
+	}
+	return !isWrite && appErr.Code == errcode.CodeInternalError
 }

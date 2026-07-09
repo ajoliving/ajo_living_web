@@ -7,7 +7,6 @@
 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import { useSessionStore } from '@/stores/session';
@@ -15,6 +14,9 @@ import {
   fetchMemberICCTVPublicCameras,
   fetchMemberIsmartBuildingAccess,
   fetchMemberIsmartBuildingInfo,
+  fetchMemberIsmartManagementFees,
+  fetchMemberIsmartBuildingNotices,
+  fetchMemberIsmartOtherFees,
   generateMemberIsmartDoorQRCode,
   openMemberIsmartDoor,
   type ICCTVCameraSummary,
@@ -23,8 +25,22 @@ import {
   type IsmartBuildingDocument,
   type IsmartBuildingAccessResponse,
   type IsmartBuildingInfoResponse,
+  type IsmartBuildingNotice,
+  type IsmartBuildingNoticesResponse,
+  type IsmartManagementFeeTableRow,
+  type IsmartOtherFeeRow,
   type IsmartRecentAccessGroup,
 } from '@/httpapis/building';
+import {
+  fetchPOSIntegrationTransactionsByDate,
+  fetchPOSIntegrationTransactionsByUnit,
+  fetchPOSIntegrationUnpaidInvoices,
+} from '@/httpapis/payments';
+import type {
+  POSIntegrationPaymentDetail,
+  POSIntegrationPaymentTransaction,
+  POSIntegrationUnpaidInvoice,
+} from '@/model/payments';
 
 // 1. 型別定義
 type AffairsTab =
@@ -37,9 +53,9 @@ type AffairsTab =
   | 'affairs-access'
   | 'affairs-icctv';
 
-type FinanceSubTab = 'acct-overview' | 'acct-finance' | 'acct-audit';
 type AffairsMode = 'repair' | 'feedback';
-type PayStatus = 'paid' | 'due';
+type FinanceSubTab = 'management-overview' | 'financial-reports' | 'audit-reports';
+type OwnerAccountTab = 'owner-unpaid' | 'owner-records';
 
 interface NavItem {
   target: AffairsTab;
@@ -48,11 +64,13 @@ interface NavItem {
 }
 
 interface NoticeRow {
+  key: string;
   code: string;
   title: string;
   type: string;
   publishDate: string;
   expireDate: string;
+  fileUrl: string;
 }
 
 interface BuildingField {
@@ -67,41 +85,12 @@ interface BuildingDocCard {
   empty: string;
 }
 
-interface FloorPlanRow {
-  title: string;
-  date: string;
-  month: string;
-  url: string;
-}
-
 interface BuildingFileRow {
   key: string;
   title: string;
   date: string;
   month: string;
   url: string;
-}
-
-interface FinanceOverRow {
-  unit: string;
-  m11: string;
-  m10: string;
-  m09: string;
-  mBefore: string;
-  m11Status: PayStatus;
-  m10Status: PayStatus;
-  m09Status: PayStatus;
-  mBeforeStatus: PayStatus;
-}
-
-interface FinanceReportRow {
-  date: string;
-  title: string;
-}
-
-interface AuditRow {
-  date: string;
-  item: string;
 }
 
 interface FeedbackRecord {
@@ -132,17 +121,77 @@ interface AccessRecordRow {
   statusText: string;
 }
 
-// 2. 路由
-const router = useRouter();
+interface OwnerUnitContext {
+  buildingID: string;
+  buildingName: string;
+  floor: string;
+  unit: string;
+  unitID: string;
+}
+
+interface OwnerPaymentRecordRow {
+  key: string;
+  receiptID: string;
+  paymentID: string;
+  inputTime: string;
+  tranTime: string;
+  unit: string;
+  item: string;
+  term: string;
+  amount: number;
+  payType: string;
+  status: string;
+  statusClass: string;
+  remark: string;
+}
+
+// 2. 會員狀態
 const sessionStore = useSessionStore();
+
+// 2.1 建立日期查詢預設值
+const formatDateInputValue = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const currentMonthStart = (): string => {
+  const date = new Date();
+  return formatDateInputValue(new Date(date.getFullYear(), date.getMonth(), 1));
+};
+
+const currentDateValue = (): string => formatDateInputValue(new Date());
 
 // 3. 主面板與子面板狀態
 const activeTab = ref<AffairsTab>('affairs-feedback');
-const financeSubTab = ref<FinanceSubTab>('acct-overview');
 const buildingInfoLoading = ref(false);
 const buildingInfoError = ref('');
 const selectedBuildingID = ref('');
 const ismartBuildingProfile = ref<IsmartBuildingInfoResponse | null>(null);
+const financeSubTab = ref<FinanceSubTab>('management-overview');
+const financeReceivableLoading = ref(false);
+const financeReceivableLoaded = ref(false);
+const financeReceivableError = ref('');
+const managementFeeRows = ref<IsmartManagementFeeTableRow[]>([]);
+const otherFeeRows = ref<IsmartOtherFeeRow[]>([]);
+const noticeLoading = ref(false);
+const noticeError = ref('');
+const selectedNoticeBuildingID = ref('');
+const ismartNoticeProfile = ref<IsmartBuildingNoticesResponse | null>(null);
+const ownerAccountTab = ref<OwnerAccountTab>('owner-unpaid');
+const ownerUnpaidLoading = ref(false);
+const ownerUnpaidLoaded = ref(false);
+const ownerUnpaidError = ref('');
+const ownerUnpaidInvoices = ref<POSIntegrationUnpaidInvoice[]>([]);
+const ownerRecordsLoading = ref(false);
+const ownerRecordsLoaded = ref(false);
+const ownerRecordsError = ref('');
+const ownerRecordsDateSearched = ref(false);
+const ownerPaymentRecords = ref<POSIntegrationPaymentTransaction[]>([]);
+const ownerRecordFromDate = ref(currentMonthStart());
+const ownerRecordToDate = ref(currentDateValue());
+const ownerRecordDateType = ref<'input_date' | 'tran_date'>('input_date');
 const accessLoading = ref(false);
 const accessError = ref('');
 const accessMessage = ref('');
@@ -171,28 +220,66 @@ const mediaFileName = ref('');
 
 // 5. 左側導航項目
 const navItems: NavItem[] = [
-  { target: 'affairs-notices', label: '最新通告', needsApi: true },
+  { target: 'affairs-notices', label: '最新通告' },
   { target: 'affairs-building', label: '大廈資料' },
-  { target: 'affairs-finance', label: '大廈財務', needsApi: true },
-  { target: 'affairs-owner-account', label: '業戶帳目', needsApi: true },
+  { target: 'affairs-finance', label: '大廈財務' },
+  { target: 'affairs-owner-account', label: '業戶帳目' },
   { target: 'affairs-forms', label: '申請表格' },
   { target: 'affairs-feedback', label: '意見提供/維修報修', needsApi: true },
   { target: 'affairs-access', label: '智能門禁' },
   { target: 'affairs-icctv', label: '視像監控' },
 ];
 
-// 6. 最新通告 mock 資料
-const noticeBuildings = ['仁美大廈', '康睦庭園第二座'];
-const selectedNoticeBuilding = ref('仁美大廈');
-const notices: NoticeRow[] = [
-  {
-    code: 'bulk/0145100_90c1340f10e849bd9c69',
-    title: '清潔員大年初一休假一天',
-    type: '一般',
-    publishDate: 'Jan. 24, 2025',
-    expireDate: 'Jan. 31, 2025',
-  },
-];
+// 6. 最新通告資料
+const rawNotices = computed<IsmartBuildingNotice[]>(() => ismartNoticeProfile.value?.result ?? []);
+const noticeBuildingOptions = computed<string[]>(() => {
+  const options = [
+    ...(ismartNoticeProfile.value?.building_options ?? []),
+    ...(ismartBuildingProfile.value?.building_options ?? []),
+    ...(ismartAccessProfile.value?.building_options ?? []),
+    ...(icctvProfile.value?.building_options ?? []),
+    selectedNoticeBuildingID.value,
+    selectedBuildingID.value,
+  ];
+  return Array.from(new Set(options.map((item) => String(item ?? '').trim()).filter(Boolean)));
+});
+
+const noticeBuildingLabel = (buildingID: string): string => {
+  const id = String(buildingID ?? '').trim();
+  if (!id) return '未選擇大廈';
+  if (id === selectedBuildingID.value && buildingName.value !== '-') {
+    return `${buildingName.value}（${id}）`;
+  }
+  return id;
+};
+
+const currentNoticeBuildingText = computed(() => {
+  const buildingID = selectedNoticeBuildingID.value || ismartNoticeProfile.value?.selected_building_id || selectedBuildingID.value;
+  return buildingID ? noticeBuildingLabel(buildingID) : '未選擇大廈';
+});
+
+const notices = computed<NoticeRow[]>(() =>
+  rawNotices.value.map((item, index) => {
+    const id = textValue(item.id);
+    const code = textValue(item.mess_code);
+    return {
+      key: `${id}-${code}-${index}`,
+      code,
+      title: textValue(item.mess_title),
+      type: textValue(item.mess_type),
+      publishDate: textValue(item.mess_date),
+      expireDate: textValue(item.mess_down),
+      fileUrl: String(item.mess_file ?? '').trim(),
+    };
+  }),
+);
+
+const noticeEmptyText = computed(() => {
+  if (noticeLoading.value) return '通告載入中。';
+  if (noticeError.value) return noticeError.value;
+  if (!selectedNoticeBuildingID.value && noticeBuildingOptions.value.length === 0) return '目前未有可選大廈。';
+  return '目前未有有效通告。';
+});
 
 // 7. 大廈資料
 const textValue = (value: string | number | null | undefined): string => {
@@ -209,6 +296,12 @@ const fileRows = (rows: IsmartBuildingDocument[] | undefined): BuildingFileRow[]
     month: textValue(item.file_month),
     url: String(item.file_url ?? '').trim(),
   }));
+
+const documentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): BuildingFileRow[] => {
+  const rows = groups.find((group) => Array.isArray(group) && group.length > 0)
+    ?? groups.find((group) => Array.isArray(group));
+  return fileRows(rows);
+};
 
 const normalizeMapEmbedURL = (value: string | null | undefined): string => {
   const raw = String(value ?? '').trim();
@@ -230,10 +323,23 @@ const buildingName = computed(() => textValue(currentBuilding.value.buildname_ch
 const organizationName = computed(() => textValue(currentBuildingInfo.value.owners_corporation_name));
 const buildingForms = computed(() => fileRows(ismartBuildingProfile.value?.documents?.forms));
 const buildingInfoFiles = computed(() => fileRows(ismartBuildingProfile.value?.documents?.building_info_files));
-const floorPlans = computed<FloorPlanRow[]>(() => fileRows(ismartBuildingProfile.value?.documents?.floorplan));
+const floorPlans = computed(() => documentRows(
+  ismartBuildingProfile.value?.documents?.floorplans,
+  ismartBuildingProfile.value?.documents?.floorplan,
+));
+const financialReports = computed(() => documentRows(
+  ismartBuildingProfile.value?.documents?.financial_reports,
+  ismartBuildingProfile.value?.documents?.mfinreport,
+));
+const auditReports = computed(() => documentRows(
+  ismartBuildingProfile.value?.documents?.audit_reports,
+  ismartBuildingProfile.value?.documents?.auditreport,
+  ismartBuildingProfile.value?.documents?.audition,
+));
 const buildingMapURL = computed(() => String(currentBuildingInfo.value.google_map_url ?? '').trim());
 const buildingMapEmbedURL = computed(() => normalizeMapEmbedURL(currentBuildingInfo.value.google_map_url));
 const buildingFileCount = computed(() => buildingForms.value.length + buildingInfoFiles.value.length + floorPlans.value.length);
+const financeDocumentCount = computed(() => financialReports.value.length + auditReports.value.length);
 const buildingStatusText = computed(() => {
   if (buildingInfoLoading.value) return '載入中';
   if (buildingInfoError.value) return '未能載入';
@@ -260,6 +366,82 @@ const buildingFields = computed<BuildingField[]>(() => [
   { label: '民政事務處電話', value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
   { label: '資料來源', value: ismartBuildingProfile.value ? 'iSmart 基本資料' : '-' },
 ]);
+
+const managementOverviewFields = computed<BuildingField[]>(() => [
+  { label: '大廈名稱', value: buildingName.value },
+  { label: '大廈編號', value: textValue(currentBuilding.value.building_id || selectedBuildingID.value) },
+  { label: '大廈類型', value: textValue(currentBuilding.value.building_type) },
+  { label: '區域', value: textValue(currentBuilding.value.area) },
+  { label: '地區', value: textValue(currentBuilding.value.district) },
+  { label: '街道', value: textValue(currentBuilding.value.street) },
+  { label: '街號', value: textValue(currentBuilding.value.street_no) },
+  { label: '座數', value: textValue(currentBuilding.value.block || currentBuilding.value.court) },
+  { label: '法團名稱', value: textValue(currentBuildingInfo.value.owners_corporation_name) },
+  { label: '管理處電話', value: textValue(currentBuildingInfo.value.management_office_phone) },
+  { label: '管理公司名稱', value: textValue(currentBuildingInfo.value.management_company_name) },
+  { label: '管理公司電話', value: textValue(currentBuildingInfo.value.management_company_phone) },
+  { label: '管理公司電郵', value: textValue(currentBuildingInfo.value.management_company_email) },
+  { label: '管理公司傳真', value: textValue(currentBuildingInfo.value.management_company_fax) },
+  { label: '民政事務處電話', value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
+  { label: '文件總數', value: `${financeDocumentCount.value} 份` },
+]);
+
+const financeLoading = computed(() => buildingInfoLoading.value || financeReceivableLoading.value);
+const financeReceivableStatusText = computed(() => {
+  if (financeReceivableLoading.value) return '載入中';
+  if (financeReceivableError.value) return '部分資料未能載入';
+  return financeReceivableLoaded.value ? '已同步' : '未載入';
+});
+const managementFeePreviewRows = computed(() => managementFeeRows.value.slice(0, 10));
+const otherFeePreviewRows = computed(() => otherFeeRows.value.slice(0, 10));
+const managementFeeColumns = computed(() => {
+  const keys: string[] = [];
+  managementFeePreviewRows.value.forEach((row) => {
+    Object.keys(row).forEach((key) => {
+      if (!keys.includes(key)) {
+        keys.push(key);
+      }
+    });
+  });
+
+  const unitColumns = ['單位', 'flat_code', 'unit_id'].filter((key) => keys.includes(key));
+  const otherColumns = keys.filter((key) => !unitColumns.includes(key));
+  return [...unitColumns, ...otherColumns];
+});
+const managementFeeColumnSpan = computed(() => Math.max(managementFeeColumns.value.length, 1));
+const otherFeeTotal = computed(() =>
+  otherFeeRows.value.reduce((sum, item) => sum + ownerAmountValue(item.trs_val), 0),
+);
+const financeReceivableFields = computed<BuildingField[]>(() => [
+  { label: '管理費應收列數', value: `${managementFeeRows.value.length} 項` },
+  { label: '其他費用項目', value: `${otherFeeRows.value.length} 項` },
+  { label: '其他費用合計', value: formatOwnerHKD(otherFeeTotal.value) },
+  { label: '應收資料狀態', value: financeReceivableStatusText.value },
+]);
+const managementFeeEmptyText = computed(() => {
+  if (financeReceivableLoading.value) return '正在讀取管理費應收資料。';
+  if (financeReceivableError.value && managementFeeRows.value.length === 0) return financeReceivableError.value;
+  return '目前未有管理費應收資料。';
+});
+const otherFeeEmptyText = computed(() => {
+  if (financeReceivableLoading.value) return '正在讀取其他費用資料。';
+  if (financeReceivableError.value && otherFeeRows.value.length === 0) return financeReceivableError.value;
+  return '目前未有其他費用資料。';
+});
+const financeCellText = (value: unknown): string => {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  const text = String(value).trim();
+  return text || '-';
+};
+const financeRowKeyText = (values: unknown[]): string => {
+  const key = values.map((item) => financeCellText(item)).join('|');
+  return key.replace(/[\s|-]/g, '') ? key : JSON.stringify(values);
+};
+const managementFeeRowKey = (row: IsmartManagementFeeTableRow): string =>
+  financeRowKeyText(managementFeeColumns.value.map((column) => row[column]));
+const otherFeeRowKey = (row: IsmartOtherFeeRow): string =>
+  financeRowKeyText([row.invoice_no, row.flat_code, row.item_id, row.trs_to, row.trs_val, row.remark]);
 
 const buildingDocCards = computed<BuildingDocCard[]>(() => [
   {
@@ -377,53 +559,209 @@ const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is
 const icctvCameraFrameTitle = (camera: ICCTVCameraSummary, index: number): string => `${icctvCameraName(camera, index)} 即時監控`;
 const isICCTVCameraExpanded = (cameraID: string): boolean => expandedICCTVCameraIDs.value.includes(cameraID);
 
-// 8. 大廈財務 mock 資料（管理費總覽）
-const financeOverview: FinanceOverRow[] = [
-  { unit: 'G樓 01', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: 'G樓 02', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: 'G樓 03', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: 'G樓 04', m11: '-463.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: 'G樓 5A', m11: '已付', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'paid', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: 'G樓 5B', m11: '-543.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '01樓 A', m11: '-476.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '01樓 B', m11: '-476.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '01樓 E', m11: '-1427.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '02樓 B', m11: '-476.0', m10: '-476.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '02樓 E', m11: '-1427.0', m10: '-1427.0', m09: '-1427.0', mBefore: '-1427.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '03樓 A', m11: '-619.0', m10: '-619.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '04樓 A', m11: '-1162.0', m10: '-1162.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '05樓 D', m11: '-1006.0', m10: '-1006.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '06樓 A', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'paid' },
-  { unit: '07樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-5030.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '09樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-2012.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '10樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-6038.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '11樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-6036.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '13樓 D', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-7042.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '14樓 C', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-7042.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '15樓 B', m11: '-1006.0', m10: '-1006.0', m09: '-1006.0', mBefore: '-1006.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '18樓 A', m11: '-1006.0', m10: '-1006.0', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'due', m09Status: 'paid', mBeforeStatus: 'paid' },
-  { unit: '20樓 B', m11: '-697.0', m10: '-697.0', m09: '-697.0', mBefore: '-3485.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '21樓 C', m11: '-619.0', m10: '-619.0', m09: '-619.0', mBefore: '-16713.0', m11Status: 'due', m10Status: 'due', m09Status: 'due', mBeforeStatus: 'due' },
-  { unit: '22樓 B', m11: '-1006.0', m10: '已付', m09: '已付', mBefore: '已付', m11Status: 'due', m10Status: 'paid', m09Status: 'paid', mBeforeStatus: 'paid' },
-];
+// 8. 大廈財務子面板
+const switchFinanceSub = (target: FinanceSubTab) => {
+  financeSubTab.value = target;
+};
 
-const financeReports: FinanceReportRow[] = [
-  { date: '2027-07', title: 'YIG 財務報告 2022-07' },
-  { date: '2023-03', title: 'YIG 財務報告 2023-03' },
-  { date: '2023-03', title: 'YIG 財務報告 2023-03' },
-  { date: '2023-02', title: 'YIG 財務報告 2023-02' },
-  { date: '2023-02', title: 'YIG 財務報告 2023-01' },
-  { date: '2022-12', title: 'YIG 財務報告 2022-12' },
-  { date: '2022-11', title: 'YIG 財務報告 2022-11' },
-];
+// 8.1 業戶帳目資料
+const normalizeOwnerTextList = (values: string[] | undefined): string[] => {
+  const result: string[] = [];
+  values?.forEach((item) => {
+    String(item ?? '')
+      .split(/[,，\n\r]+/)
+      .forEach((part) => {
+        const value = part.trim();
+        if (value && !result.includes(value)) {
+          result.push(value);
+        }
+      });
+  });
+  return result;
+};
 
-const auditReports: AuditRow[] = [
-  { date: '2021-11', item: 'YIG 財務報告 2021-11' },
-  { date: '2018', item: '仁英大廈核數報告 2018' },
-  { date: '2017', item: '仁英大廈核數報告 2017' },
-  { date: '2016', item: '仁英大廈核數報告 2016' },
-  { date: '2015', item: '仁英大廈核數報告 2015' },
-];
+const ownerDigitsOnly = (value: unknown): string =>
+  String(value ?? '').replace(/\D/g, '');
+
+const normalizeOwnerCompareValue = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const digits = ownerDigitsOnly(raw);
+  if (digits && digits.length === raw.replace(/\s/g, '').length) {
+    return digits.replace(/^0+/, '') || '0';
+  }
+  return raw.toUpperCase();
+};
+
+const ownerTextValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '-';
+  const text = String(value).trim();
+  return text || '-';
+};
+
+const ownerAmountValue = (value: unknown): number => {
+  const numeric = Number(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const formatOwnerHKD = (value: number): string =>
+  `HK$${value.toLocaleString('en-HK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const readOwnerPaymentText = (row: Partial<Record<string, unknown>>, keys: string[]): string => {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim();
+    }
+  }
+  return '';
+};
+
+const ownerBoundUnitIDs = computed(() => {
+  const savedUnits = normalizeOwnerTextList(sessionStore.me?.bound_flat_unit_ids);
+  if (savedUnits.length > 0) {
+    return savedUnits;
+  }
+  return normalizeOwnerTextList(sessionStore.me?.ismart_msg?.client_building_flat_units_permissions);
+});
+const ownerUnitContext = computed<OwnerUnitContext>(() => {
+  const unitID = ownerBoundUnitIDs.value[0] ?? '';
+  const unitDigits = ownerDigitsOnly(unitID);
+  const primaryBuildingID = String(sessionStore.me?.primary_community?.public_id ?? '').trim();
+  const buildingID = unitDigits.length >= 7 ? unitDigits.slice(0, 7) : primaryBuildingID;
+  const buildingNameText = memberBoundCommunityName.value || buildingName.value;
+  const fallbackFloor = unitDigits.length >= 9 ? unitDigits.slice(7, 9) : '';
+  const fallbackUnit = unitDigits.length >= 11 ? unitDigits.slice(9, 11).replace(/^0+/, '') : '';
+
+  return {
+    buildingID,
+    buildingName: buildingNameText && buildingNameText !== '-' ? buildingNameText : buildingID,
+    floor: String(sessionStore.me?.residence_floor ?? '').trim() || fallbackFloor,
+    unit: String(sessionStore.me?.residence_unit ?? '').trim() || fallbackUnit,
+    unitID,
+  };
+});
+const ownerHasBoundUnit = computed(() => ownerBoundUnitIDs.value.length > 0 && ownerUnitContext.value.unitID !== '');
+const ownerBoundUnitLabel = computed(() => {
+  if (!ownerHasBoundUnit.value) {
+    return '尚未綁定單位';
+  }
+
+  const context = ownerUnitContext.value;
+  return [
+    context.buildingName,
+    context.floor,
+    context.unit,
+  ].filter(Boolean).join(' / ');
+});
+const ownerAccountLoading = computed(() => ownerUnpaidLoading.value || ownerRecordsLoading.value);
+const ownerUnpaidTotal = computed(() =>
+  ownerUnpaidInvoices.value.reduce((sum, item) => sum + ownerAmountValue(item.net_amount), 0),
+);
+const ownerUnpaidEmptyText = computed(() => {
+  if (ownerUnpaidLoading.value) return '正在讀取未繳賬單。';
+  if (ownerUnpaidError.value) return ownerUnpaidError.value;
+  if (!ownerHasBoundUnit.value) return '請先於會員中心儲存綁定單位。';
+  return '目前未有未繳賬單。';
+});
+
+const ownerUnpaidInvoiceKey = (invoice: POSIntegrationUnpaidInvoice, index: number): string =>
+  [
+    invoice.invoice_no,
+    invoice.flat_code,
+    invoice.item_id,
+    invoice.trs_to,
+    invoice.bill_dt,
+    index,
+  ].map((item) => ownerTextValue(item)).join('|');
+
+const ownerPaymentStatusText = (value: string): string => {
+  const status = value.trim();
+  if (!status) return '-';
+  if (status === 'confirmed' || status === 'validated_by_ismart' || status === 'payment_captured') return '已確認';
+  if (status === 'in_cashier') return '收銀台中';
+  if (status === 'pending_validation') return '待核對';
+  if (status === 'init') return '待處理';
+  return status;
+};
+
+const ownerPaymentStatusClass = (value: string): string => {
+  const status = value.trim();
+  if (status === 'confirmed' || status === 'validated_by_ismart' || status === 'payment_captured') return 'acct-paid';
+  if (status === 'in_cashier' || status === 'pending_validation' || status === 'init') return 'acct-pending';
+  return '';
+};
+
+const ownerPaymentDetailBelongsToBoundUnit = (detail: POSIntegrationPaymentDetail): boolean => {
+  const context = ownerUnitContext.value;
+  const detailUnitID = readOwnerPaymentText(detail, ['flat_code', 'unit_id', 'unitID']);
+  if (detailUnitID && context.unitID) {
+    return ownerDigitsOnly(detailUnitID) === ownerDigitsOnly(context.unitID);
+  }
+
+  const detailFloor = readOwnerPaymentText(detail, ['floor']);
+  const detailUnit = readOwnerPaymentText(detail, ['unit', 'unit_name']);
+  return (
+    normalizeOwnerCompareValue(detailFloor) === normalizeOwnerCompareValue(context.floor) &&
+    normalizeOwnerCompareValue(detailUnit) === normalizeOwnerCompareValue(context.unit)
+  );
+};
+
+const filterOwnerTransactionsForBoundUnit = (
+  records: POSIntegrationPaymentTransaction[],
+): POSIntegrationPaymentTransaction[] =>
+  records.flatMap((record) => {
+    const details = record.payment_detail_objs ?? [];
+    if (details.length === 0) {
+      return [];
+    }
+
+    const matchedDetails = details.filter(ownerPaymentDetailBelongsToBoundUnit);
+    return matchedDetails.length > 0
+      ? [{ ...record, payment_detail_objs: matchedDetails }]
+      : [];
+  });
+
+const ownerPaymentRecordRows = computed<OwnerPaymentRecordRow[]>(() =>
+  ownerPaymentRecords.value.flatMap((record, recordIndex) => {
+    const details = record.payment_detail_objs && record.payment_detail_objs.length > 0
+      ? record.payment_detail_objs
+      : [undefined];
+
+    return details.map((detail, detailIndex) => {
+      const detailRow = detail ?? {};
+      const floor = readOwnerPaymentText(detailRow, ['floor']);
+      const unit = readOwnerPaymentText(detailRow, ['unit', 'unit_name']);
+      const paymentID = ownerTextValue(record.payment_id);
+      const receiptID = ownerTextValue(record.receipt_id);
+      return {
+        key: `${paymentID}-${receiptID}-${recordIndex}-${detailIndex}`,
+        receiptID,
+        paymentID,
+        inputTime: ownerTextValue(record.input_time),
+        tranTime: ownerTextValue(record.tran_time),
+        unit: [floor, unit].filter(Boolean).join(' / ') || ownerBoundUnitLabel.value,
+        item: ownerTextValue(readOwnerPaymentText(detailRow, ['item_id', 'item_name', 'name'])),
+        term: ownerTextValue(readOwnerPaymentText(detailRow, ['term', 'trs_to', 'period'])),
+        amount: ownerAmountValue(detail?.trs_val ?? record.trs_val),
+        payType: ownerTextValue(record.pay_type),
+        status: ownerPaymentStatusText(String(record.status ?? '')),
+        statusClass: ownerPaymentStatusClass(String(record.status ?? '')),
+        remark: ownerTextValue(readOwnerPaymentText(detailRow, ['remark'])),
+      };
+    });
+  }),
+);
+const ownerPaymentRecordTotal = computed(() =>
+  ownerPaymentRecordRows.value.reduce((sum, row) => sum + row.amount, 0),
+);
+const ownerRecordsEmptyText = computed(() => {
+  if (ownerRecordsLoading.value) return '正在讀取繳費記錄。';
+  if (ownerRecordsError.value) return ownerRecordsError.value;
+  if (!ownerHasBoundUnit.value) return '請先於會員中心儲存綁定單位。';
+  if (ownerRecordsDateSearched.value) return '日期範圍內未有繳費記錄。';
+  return '目前未有繳費記錄。';
+});
 
 // 9. 申請表格 mock 資料
 const selectedFormOrg = computed(() => organizationName.value);
@@ -521,6 +859,9 @@ const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
     const result = await fetchMemberIsmartBuildingInfo(buildingID || undefined);
     ismartBuildingProfile.value = result;
     selectedBuildingID.value = result.selected_building_id || result.building?.building_id || buildingID || '';
+    if (!selectedNoticeBuildingID.value) {
+      selectedNoticeBuildingID.value = selectedBuildingID.value;
+    }
   } catch (error) {
     console.error(error);
     buildingInfoError.value = '大廈資料載入失敗';
@@ -529,7 +870,210 @@ const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
   }
 };
 
-// 13. 讀取目前會員智能門禁資料
+// 12.1 讀取目前會員大廈應收資料
+const loadBuildingFinanceReceivables = async (buildingID = selectedBuildingID.value) => {
+  financeReceivableLoading.value = true;
+  financeReceivableError.value = '';
+  try {
+    const targetBuildingID = String(buildingID || selectedBuildingID.value).trim();
+    if (!targetBuildingID) {
+      managementFeeRows.value = [];
+      otherFeeRows.value = [];
+      financeReceivableLoaded.value = true;
+      financeReceivableError.value = '未能取得大廈 ID。';
+      return;
+    }
+
+    const [managementResult, otherResult] = await Promise.allSettled([
+      fetchMemberIsmartManagementFees(targetBuildingID, 'table'),
+      fetchMemberIsmartOtherFees(targetBuildingID, 'list'),
+    ]);
+
+    if (managementResult.status === 'fulfilled') {
+      managementFeeRows.value = managementResult.value.result ?? [];
+    } else {
+      console.error(managementResult.reason);
+      managementFeeRows.value = [];
+    }
+    if (otherResult.status === 'fulfilled') {
+      otherFeeRows.value = otherResult.value.result ?? [];
+    } else {
+      console.error(otherResult.reason);
+      otherFeeRows.value = [];
+    }
+
+    financeReceivableLoaded.value = true;
+    if (managementResult.status === 'rejected' && otherResult.status === 'rejected') {
+      financeReceivableError.value = '應收資料載入失敗';
+    } else if (managementResult.status === 'rejected' || otherResult.status === 'rejected') {
+      financeReceivableError.value = '部分應收資料載入失敗';
+    }
+  } finally {
+    financeReceivableLoading.value = false;
+  }
+};
+
+// 12.2 讀取大廈財務整合資料
+const loadBuildingFinance = async () => {
+  await loadBuildingInfo();
+  await loadBuildingFinanceReceivables(selectedBuildingID.value);
+};
+
+// 12.3 讀取目前會員大廈有效通告
+const loadBuildingNotices = async (buildingID = selectedNoticeBuildingID.value || selectedBuildingID.value) => {
+  noticeLoading.value = true;
+  noticeError.value = '';
+  try {
+    const result = await fetchMemberIsmartBuildingNotices(buildingID || undefined);
+    ismartNoticeProfile.value = result;
+    selectedNoticeBuildingID.value = result.selected_building_id || buildingID || selectedBuildingID.value || '';
+    if (!selectedBuildingID.value) {
+      selectedBuildingID.value = selectedNoticeBuildingID.value;
+    }
+  } catch (error) {
+    console.error(error);
+    noticeError.value = '通告載入失敗';
+    ismartNoticeProfile.value = null;
+  } finally {
+    noticeLoading.value = false;
+  }
+};
+
+// 13. 讀取目前會員綁定單位未繳賬單
+const loadOwnerUnpaidInvoices = async () => {
+  ownerUnpaidLoading.value = true;
+  ownerUnpaidError.value = '';
+  try {
+    if (!ownerHasBoundUnit.value) {
+      ownerUnpaidInvoices.value = [];
+      ownerUnpaidLoaded.value = true;
+      return;
+    }
+
+    const result = await Promise.all(
+      ownerBoundUnitIDs.value.map((unitID) => fetchPOSIntegrationUnpaidInvoices(unitID)),
+    );
+    ownerUnpaidInvoices.value = result.flat();
+    ownerUnpaidLoaded.value = true;
+  } catch (error) {
+    console.error(error);
+    ownerUnpaidInvoices.value = [];
+    ownerUnpaidLoaded.value = true;
+    ownerUnpaidError.value = '未繳賬單載入失敗';
+  } finally {
+    ownerUnpaidLoading.value = false;
+  }
+};
+
+// 13.1 讀取目前會員綁定單位繳費記錄
+const loadOwnerPaymentRecords = async () => {
+  ownerRecordsLoading.value = true;
+  ownerRecordsError.value = '';
+  ownerRecordsDateSearched.value = false;
+  try {
+    if (!ownerHasBoundUnit.value) {
+      ownerPaymentRecords.value = [];
+      ownerRecordsLoaded.value = true;
+      return;
+    }
+
+    const result = await fetchPOSIntegrationTransactionsByUnit(ownerBoundUnitIDs.value);
+    ownerPaymentRecords.value = result.payment_objs ?? [];
+    ownerRecordsLoaded.value = true;
+  } catch (error) {
+    console.error(error);
+    ownerPaymentRecords.value = [];
+    ownerRecordsLoaded.value = true;
+    ownerRecordsError.value = '繳費記錄載入失敗';
+  } finally {
+    ownerRecordsLoading.value = false;
+  }
+};
+
+// 13.2 按日期查詢目前會員綁定單位繳費記錄
+const searchOwnerPaymentRecordsByDate = async () => {
+  ownerRecordsError.value = '';
+  if (!ownerHasBoundUnit.value) {
+    ownerPaymentRecords.value = [];
+    ownerRecordsLoaded.value = true;
+    ownerRecordsError.value = '請先於會員中心儲存綁定單位。';
+    return;
+  }
+  if (!ownerRecordFromDate.value || !ownerRecordToDate.value) {
+    ownerRecordsError.value = '請選擇起始及結束日期。';
+    return;
+  }
+  if (ownerRecordFromDate.value > ownerRecordToDate.value) {
+    ownerRecordsError.value = '起始日期不可晚於結束日期。';
+    return;
+  }
+  if (!ownerUnitContext.value.buildingID) {
+    ownerRecordsError.value = '未能取得綁定單位的大廈 ID。';
+    return;
+  }
+
+  ownerRecordsLoading.value = true;
+  try {
+    const result = await fetchPOSIntegrationTransactionsByDate({
+      building_id: ownerUnitContext.value.buildingID,
+      from_date: ownerRecordFromDate.value,
+      to_date: ownerRecordToDate.value,
+      date_type: ownerRecordDateType.value,
+      pay_method: 'all',
+    }, ownerBoundUnitIDs.value);
+    ownerPaymentRecords.value = filterOwnerTransactionsForBoundUnit(result.payment_objs ?? []);
+    ownerRecordsDateSearched.value = true;
+    ownerRecordsLoaded.value = true;
+  } catch (error) {
+    console.error(error);
+    ownerPaymentRecords.value = [];
+    ownerRecordsLoaded.value = true;
+    ownerRecordsError.value = '日期繳費記錄查詢失敗';
+  } finally {
+    ownerRecordsLoading.value = false;
+  }
+};
+
+// 13.3 讀取業戶帳目資料
+const loadOwnerAccount = async () => {
+  await Promise.all([
+    loadOwnerUnpaidInvoices(),
+    loadOwnerPaymentRecords(),
+  ]);
+};
+
+// 13.4 切換業戶帳目子面板
+const switchOwnerAccountTab = (target: OwnerAccountTab) => {
+  ownerAccountTab.value = target;
+  if (target === 'owner-unpaid' && !ownerUnpaidLoaded.value && !ownerUnpaidLoading.value) {
+    void loadOwnerUnpaidInvoices();
+  }
+  if (target === 'owner-records' && !ownerRecordsLoaded.value && !ownerRecordsLoading.value) {
+    void loadOwnerPaymentRecords();
+  }
+};
+
+// 13.5 重新整理目前業戶帳目子面板
+const refreshOwnerAccount = () => {
+  if (ownerAccountTab.value === 'owner-unpaid') {
+    void loadOwnerUnpaidInvoices();
+    return;
+  }
+  if (ownerRecordsDateSearched.value) {
+    void searchOwnerPaymentRecordsByDate();
+    return;
+  }
+  void loadOwnerPaymentRecords();
+};
+
+// 13.6 顯示全部繳費記錄
+const resetOwnerPaymentRecordSearch = () => {
+  ownerRecordFromDate.value = currentMonthStart();
+  ownerRecordToDate.value = currentDateValue();
+  void loadOwnerPaymentRecords();
+};
+
+// 14. 讀取目前會員智能門禁資料
 const loadBuildingAccess = async (clearMessage = true) => {
   accessLoading.value = true;
   accessError.value = '';
@@ -552,7 +1096,7 @@ const loadBuildingAccess = async (clearMessage = true) => {
   }
 };
 
-// 14. 讀取目前會員視像監控資料
+// 15. 讀取目前會員視像監控資料
 const loadICCTV = async () => {
   icctvLoading.value = true;
   icctvError.value = '';
@@ -571,9 +1115,22 @@ const loadICCTV = async () => {
   }
 };
 
-// 15. 切換主面板
+// 16. 切換主面板
 const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
+  if (target === 'affairs-notices' && !ismartNoticeProfile.value && !noticeLoading.value) {
+    void loadBuildingNotices();
+  }
+  if (
+    target === 'affairs-finance'
+    && (!ismartBuildingProfile.value || buildingInfoError.value || !financeReceivableLoaded.value || financeReceivableError.value)
+    && !financeReceivableLoading.value
+  ) {
+    void loadBuildingFinance();
+  }
+  if (target === 'affairs-owner-account' && (!ownerUnpaidLoaded.value || !ownerRecordsLoaded.value) && !ownerAccountLoading.value) {
+    void loadOwnerAccount();
+  }
   if (target === 'affairs-access' && !ismartAccessProfile.value && !accessLoading.value) {
     void loadBuildingAccess();
   }
@@ -582,7 +1139,7 @@ const switchTab = (target: AffairsTab) => {
   }
 };
 
-// 16. 取得門禁操作用大廈 ID
+// 17. 取得門禁操作用大廈 ID
 const accessPayloadBuildingID = (door?: IsmartAccessDoor): string | undefined => {
   const buildingID = selectedBuildingID.value
     || ismartAccessProfile.value?.selected_building_id
@@ -591,7 +1148,7 @@ const accessPayloadBuildingID = (door?: IsmartAccessDoor): string | undefined =>
   return buildingID || undefined;
 };
 
-// 17. 切換門禁密碼可見狀態
+// 18. 切換門禁密碼可見狀態
 const toggleAccessPassword = (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   if (!doorID) return;
@@ -600,7 +1157,7 @@ const toggleAccessPassword = (door: IsmartAccessDoor) => {
     : [...visiblePasswordDoorIDs.value, doorID];
 };
 
-// 18. 發送開門指令
+// 19. 發送開門指令
 const openAccessDoor = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const doorNumber = accessDoorNumber(door);
@@ -626,7 +1183,7 @@ const openAccessDoor = async (door: IsmartAccessDoor) => {
   }
 };
 
-// 19. 生成門禁二維碼
+// 20. 生成門禁二維碼
 const generateAccessQRCode = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const recordID = accessQRCodeRecordNumber(door);
@@ -659,11 +1216,6 @@ const generateAccessQRCode = async (door: IsmartAccessDoor) => {
   } finally {
     qrLoadingDoorID.value = '';
   }
-};
-
-// 20. 切換財務子面板
-const switchFinanceSub = (target: FinanceSubTab) => {
-  financeSubTab.value = target;
 };
 
 // 21. 切換意見提供模式
@@ -737,7 +1289,12 @@ const reviewMedia = computed(() => mediaFileName.value || '未選擇檔案');
 
 // 28. 重新整理通告
 const refreshNotices = () => {
-  // 靜態 mock，無需操作
+  void loadBuildingNotices();
+};
+
+// 28.1 切換通告大廈
+const handleNoticeBuildingChange = () => {
+  void loadBuildingNotices(selectedNoticeBuildingID.value);
 };
 
 // 29. 展開或收起視像監控鏡頭
@@ -753,9 +1310,10 @@ const openIcctvWindow = (camera: ICCTVCameraSummary) => {
   window.open(camera.url, '_blank', 'noopener');
 };
 
-// 32. 跳轉至通告詳情
-const goNoticeDetail = () => {
-  router.push('/building/notices');
+// 32. 開啟通告文件
+const goNoticeDetail = (notice: NoticeRow) => {
+  if (!notice.fileUrl) return;
+  window.open(notice.fileUrl, '_blank', 'noopener');
 };
 
 onMounted(() => {
@@ -807,28 +1365,37 @@ onMounted(() => {
               <h3>大廈選擇</h3>
               <label class="notice-admin-label">選擇大廈:</label>
               <select
-                v-model="selectedNoticeBuilding"
+                v-model="selectedNoticeBuildingID"
                 class="notice-select"
+                :disabled="noticeLoading || noticeBuildingOptions.length === 0"
+                @change="handleNoticeBuildingChange"
               >
                 <option
-                  v-for="b in noticeBuildings"
+                  v-if="noticeBuildingOptions.length === 0"
+                  value=""
+                >
+                  未有可選大廈
+                </option>
+                <option
+                  v-for="b in noticeBuildingOptions"
                   :key="b"
                   :value="b"
                 >
-                  {{ b }}
+                  {{ noticeBuildingLabel(b) }}
                 </option>
               </select>
             </div>
           </section>
           <section class="work-card">
             <div class="notice-current">
-              <span>目前顯示: 所有通告</span>
+              <span>目前顯示: {{ currentNoticeBuildingText }}</span>
               <button
                 type="button"
                 class="notice-action-btn"
+                :disabled="noticeLoading"
                 @click="refreshNotices"
               >
-                重新整理
+                {{ noticeLoading ? '載入中' : '重新整理' }}
               </button>
             </div>
             <table class="work-table notice-table">
@@ -843,27 +1410,38 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr
-                  v-for="n in notices"
-                  :key="n.code"
-                >
-                  <td>{{ n.code }}</td>
-                  <td>{{ n.title }}</td>
-                  <td>{{ n.type }}</td>
-                  <td>{{ n.publishDate }}</td>
-                  <td>{{ n.expireDate }}</td>
-                  <td>
-                    <div class="notice-table-actions">
-                      <button
-                        type="button"
-                        class="notice-action-btn"
-                        @click="goNoticeDetail"
-                      >
-                        查閱
-                      </button>
-                    </div>
+                <tr v-if="noticeLoading || noticeError || notices.length === 0">
+                  <td
+                    class="building-empty-row"
+                    colspan="6"
+                  >
+                    {{ noticeEmptyText }}
                   </td>
                 </tr>
+                <template v-else>
+                  <tr
+                    v-for="n in notices"
+                    :key="n.key"
+                  >
+                    <td>{{ n.code }}</td>
+                    <td>{{ n.title }}</td>
+                    <td>{{ n.type }}</td>
+                    <td>{{ n.publishDate }}</td>
+                    <td>{{ n.expireDate }}</td>
+                    <td>
+                      <div class="notice-table-actions">
+                        <button
+                          type="button"
+                          class="notice-action-btn"
+                          :disabled="!n.fileUrl"
+                          @click="goNoticeDetail(n)"
+                        >
+                          查閱
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </section>
@@ -1100,7 +1678,7 @@ onMounted(() => {
               <tbody>
                 <tr
                   v-for="p in floorPlans"
-                  :key="p.title"
+                  :key="p.key"
                 >
                   <td class="building-file-title-cell">{{ p.title }}</td>
                   <td class="building-file-meta-cell">{{ p.date }}</td>
@@ -1140,168 +1718,293 @@ onMounted(() => {
             <div>
               <div class="work-kicker">Building Finance</div>
               <h2 class="work-title">大廈財務</h2>
-              <p class="work-desc">按大廈查看管理費、財務報表及核數報告。</p>
+              <p class="work-desc">按大廈查看管理處資料、財務報表及核數報表。</p>
             </div>
+            <button
+              type="button"
+              class="work-action"
+              :disabled="financeLoading"
+              @click="loadBuildingFinance"
+            >
+              {{ financeLoading ? '載入中' : '重新整理' }}
+            </button>
           </section>
           <section class="work-card acct-card-wrap">
             <div class="acct-tabs">
               <button
                 type="button"
                 class="acct-tab"
-                :class="{ on: financeSubTab === 'acct-overview' }"
-                @click="switchFinanceSub('acct-overview')"
+                :class="{ on: financeSubTab === 'management-overview' }"
+                @click="switchFinanceSub('management-overview')"
               >
-                管理費總覽
+                管理處總覽
               </button>
               <button
                 type="button"
                 class="acct-tab"
-                :class="{ on: financeSubTab === 'acct-finance' }"
-                @click="switchFinanceSub('acct-finance')"
+                :class="{ on: financeSubTab === 'financial-reports' }"
+                @click="switchFinanceSub('financial-reports')"
               >
-                財務報表
+                財務報表（{{ financialReports.length }}）
               </button>
               <button
                 type="button"
                 class="acct-tab"
-                :class="{ on: financeSubTab === 'acct-audit' }"
-                @click="switchFinanceSub('acct-audit')"
+                :class="{ on: financeSubTab === 'audit-reports' }"
+                @click="switchFinanceSub('audit-reports')"
               >
-                核數報告
+                核數報表（{{ auditReports.length }}）
               </button>
             </div>
             <div class="acct-body">
-              <!-- 管理費總覽 -->
+              <!-- 管理處總覽 -->
               <div
-                v-show="financeSubTab === 'acct-overview'"
+                v-show="financeSubTab === 'management-overview'"
                 class="acct-subpanel"
-                :class="{ on: financeSubTab === 'acct-overview' }"
+                :class="{ on: financeSubTab === 'management-overview' }"
               >
-                <div class="acct-note">選用「電子付款」繳交管理費住戶，於3小時內即可結算，其他支付方式由於核對需時未能即時更新，敬請見諒。</div>
+                <div class="acct-note">資料由 iSmart 大廈資料、文件及應收接口同步。</div>
+                <div
+                  v-if="buildingInfoError"
+                  class="acct-banner warn"
+                >
+                  {{ buildingInfoError }}
+                </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">管理費總覽</div>
-                  <input
-                    class="acct-search"
-                    placeholder="Search.."
+                  <div class="work-card-title acct-toolbar-title">管理處總覽</div>
+                  <div class="acct-total">{{ buildingName }}</div>
+                </div>
+                <div class="building-field-grid">
+                  <div
+                    v-for="f in managementOverviewFields"
+                    :key="f.label"
+                    class="building-field"
                   >
+                    <span>{{ f.label }}</span>
+                    <strong>{{ f.value }}</strong>
+                  </div>
+                </div>
+                <div
+                  v-if="financeReceivableError"
+                  class="acct-banner warn"
+                >
+                  {{ financeReceivableError }}
+                </div>
+                <div class="finance-summary-grid">
+                  <div
+                    v-for="f in financeReceivableFields"
+                    :key="f.label"
+                    class="finance-summary-item"
+                  >
+                    <span>{{ f.label }}</span>
+                    <strong>{{ f.value }}</strong>
+                  </div>
+                </div>
+                <div class="acct-toolbar">
+                  <div class="work-card-title acct-toolbar-title">管理費應收摘要</div>
+                  <div class="acct-total">{{ managementFeeRows.length }} 項</div>
                 </div>
                 <div class="acct-table-wrap">
-                  <table class="acct-table">
+                  <table class="acct-table finance-management-table">
                     <thead>
                       <tr>
-                        <th>單位</th>
-                        <th>2025/11</th>
-                        <th>2025/10</th>
-                        <th>2025/09</th>
-                        <th>2025/08月前</th>
+                        <th
+                          v-for="column in managementFeeColumns"
+                          :key="column"
+                        >
+                          {{ column }}
+                        </th>
+                        <th v-if="managementFeeColumns.length === 0">資料</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr
-                        v-for="r in financeOverview"
-                        :key="r.unit"
+                        v-for="row in managementFeePreviewRows"
+                        :key="managementFeeRowKey(row)"
                       >
-                        <td>{{ r.unit }}</td>
-                        <td :class="r.m11Status === 'due' ? 'acct-due' : 'acct-paid'">
-                          {{ r.m11 }}
+                        <td
+                          v-for="column in managementFeeColumns"
+                          :key="column"
+                        >
+                          {{ financeCellText(row[column]) }}
                         </td>
-                        <td :class="r.m10Status === 'due' ? 'acct-due' : 'acct-paid'">
-                          {{ r.m10 }}
+                      </tr>
+                      <tr v-if="managementFeePreviewRows.length === 0">
+                        <td
+                          class="building-empty-row"
+                          :colspan="managementFeeColumnSpan"
+                        >
+                          {{ managementFeeEmptyText }}
                         </td>
-                        <td :class="r.m09Status === 'due' ? 'acct-due' : 'acct-paid'">
-                          {{ r.m09 }}
-                        </td>
-                        <td :class="r.mBeforeStatus === 'due' ? 'acct-due' : 'acct-paid'">
-                          {{ r.mBefore }}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="acct-toolbar">
+                  <div class="work-card-title acct-toolbar-title">其他費用應收</div>
+                  <div class="acct-total">合計 {{ formatOwnerHKD(otherFeeTotal) }}</div>
+                </div>
+                <div class="acct-table-wrap">
+                  <table class="acct-table finance-other-fee-table">
+                    <thead>
+                      <tr>
+                        <th>賬單號</th>
+                        <th>單位</th>
+                        <th>項目</th>
+                        <th>賬期</th>
+                        <th>金額</th>
+                        <th>備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="fee in otherFeePreviewRows"
+                        :key="otherFeeRowKey(fee)"
+                      >
+                        <td>{{ financeCellText(fee.invoice_no) }}</td>
+                        <td>{{ financeCellText(fee.flat_code) }}</td>
+                        <td>{{ financeCellText(fee.item_id) }}</td>
+                        <td>{{ financeCellText(fee.trs_to) }}</td>
+                        <td class="acct-due">{{ formatOwnerHKD(ownerAmountValue(fee.trs_val)) }}</td>
+                        <td>{{ financeCellText(fee.remark) }}</td>
+                      </tr>
+                      <tr v-if="otherFeePreviewRows.length === 0">
+                        <td
+                          class="building-empty-row"
+                          colspan="6"
+                        >
+                          {{ otherFeeEmptyText }}
                         </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
+
               <!-- 財務報表 -->
               <div
-                v-show="financeSubTab === 'acct-finance'"
+                v-show="financeSubTab === 'financial-reports'"
                 class="acct-subpanel"
-                :class="{ on: financeSubTab === 'acct-finance' }"
+                :class="{ on: financeSubTab === 'financial-reports' }"
               >
+                <div
+                  v-if="buildingInfoError"
+                  class="acct-banner warn"
+                >
+                  {{ buildingInfoError }}
+                </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">法團財務報表</div>
-                  <input
-                    class="acct-search"
-                    placeholder="Search.."
-                  >
+                  <div class="work-card-title acct-toolbar-title">財務報表</div>
+                  <div class="acct-total">{{ financialReports.length }} 份</div>
                 </div>
-                <div class="acct-table-wrap">
-                  <table class="acct-table">
-                    <thead>
-                      <tr>
-                        <th>日期</th>
-                        <th>標題</th>
-                        <th>查閱</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="(r, i) in financeReports"
-                        :key="i"
+                <table class="work-table building-file-table">
+                  <colgroup>
+                    <col class="building-file-title-col">
+                    <col class="building-file-date-col">
+                    <col class="building-file-month-col">
+                    <col class="building-file-action-col">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>標題</th>
+                      <th>日期</th>
+                      <th>月份</th>
+                      <th>下載</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="report in financialReports"
+                      :key="report.key"
+                    >
+                      <td class="building-file-title-cell">{{ report.title }}</td>
+                      <td class="building-file-meta-cell">{{ report.date }}</td>
+                      <td class="building-file-meta-cell">{{ report.month }}</td>
+                      <td class="building-file-action-cell">
+                        <a
+                          v-if="report.url"
+                          class="building-link"
+                          :href="report.url"
+                          target="_blank"
+                          rel="noopener"
+                        >查看</a>
+                        <span v-else>-</span>
+                      </td>
+                    </tr>
+                    <tr v-if="financialReports.length === 0">
+                      <td
+                        class="building-empty-row"
+                        colspan="4"
                       >
-                        <td>{{ r.date }}</td>
-                        <td>{{ r.title }}</td>
-                        <td>
-                          <button
-                            type="button"
-                            class="acct-download"
-                          >
-                            查閱
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                        <span v-if="buildingInfoLoading">正在讀取財務報表。</span>
+                        <span v-else>目前未有財務報表。</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <!-- 核數報告 -->
+
+              <!-- 核數報表 -->
               <div
-                v-show="financeSubTab === 'acct-audit'"
+                v-show="financeSubTab === 'audit-reports'"
                 class="acct-subpanel"
-                :class="{ on: financeSubTab === 'acct-audit' }"
+                :class="{ on: financeSubTab === 'audit-reports' }"
               >
+                <div
+                  v-if="buildingInfoError"
+                  class="acct-banner warn"
+                >
+                  {{ buildingInfoError }}
+                </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">核數報告</div>
-                  <input
-                    class="acct-search"
-                    placeholder="Search.."
-                  >
+                  <div class="work-card-title acct-toolbar-title">核數報表</div>
+                  <div class="acct-total">{{ auditReports.length }} 份</div>
                 </div>
-                <div class="acct-table-wrap">
-                  <table class="acct-table">
-                    <thead>
-                      <tr>
-                        <th>日期</th>
-                        <th>項目</th>
-                        <th>查閱</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        v-for="(r, i) in auditReports"
-                        :key="i"
+                <table class="work-table building-file-table">
+                  <colgroup>
+                    <col class="building-file-title-col">
+                    <col class="building-file-date-col">
+                    <col class="building-file-month-col">
+                    <col class="building-file-action-col">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>標題</th>
+                      <th>日期</th>
+                      <th>月份</th>
+                      <th>下載</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="report in auditReports"
+                      :key="report.key"
+                    >
+                      <td class="building-file-title-cell">{{ report.title }}</td>
+                      <td class="building-file-meta-cell">{{ report.date }}</td>
+                      <td class="building-file-meta-cell">{{ report.month }}</td>
+                      <td class="building-file-action-cell">
+                        <a
+                          v-if="report.url"
+                          class="building-link"
+                          :href="report.url"
+                          target="_blank"
+                          rel="noopener"
+                        >查看</a>
+                        <span v-else>-</span>
+                      </td>
+                    </tr>
+                    <tr v-if="auditReports.length === 0">
+                      <td
+                        class="building-empty-row"
+                        colspan="4"
                       >
-                        <td>{{ r.date }}</td>
-                        <td>{{ r.item }}</td>
-                        <td>
-                          <button
-                            type="button"
-                            class="acct-download"
-                          >
-                            查閱
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                        <span v-if="buildingInfoLoading">正在讀取核數報表。</span>
+                        <span v-else>目前未有核數報表。</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </section>
@@ -1318,21 +2021,198 @@ onMounted(() => {
             <div>
               <div class="work-kicker">Owner Account</div>
               <h2 class="work-title">業戶帳目</h2>
-              <p class="work-desc">查看業戶管理費繳款記錄。</p>
+              <p class="work-desc">按已綁定單位查看未繳賬單及繳費記錄。</p>
             </div>
+            <button
+              type="button"
+              class="work-action"
+              :disabled="ownerAccountLoading"
+              @click="refreshOwnerAccount"
+            >
+              {{ ownerAccountLoading ? '載入中' : '重新整理' }}
+            </button>
           </section>
           <section class="work-card acct-card-wrap">
             <div class="acct-tabs">
               <button
                 type="button"
-                class="acct-tab on"
+                class="acct-tab"
+                :class="{ on: ownerAccountTab === 'owner-unpaid' }"
+                @click="switchOwnerAccountTab('owner-unpaid')"
               >
-                管理費繳款記錄
+                未繳費賬單列表
+              </button>
+              <button
+                type="button"
+                class="acct-tab"
+                :class="{ on: ownerAccountTab === 'owner-records' }"
+                @click="switchOwnerAccountTab('owner-records')"
+              >
+                繳費記錄
               </button>
             </div>
             <div class="acct-body">
-              <div class="acct-subpanel on">
-                <div class="acct-dev">正在開發</div>
+              <div
+                v-show="ownerAccountTab === 'owner-unpaid'"
+                class="acct-subpanel"
+                :class="{ on: ownerAccountTab === 'owner-unpaid' }"
+              >
+                <div class="acct-note">
+                  目前綁定單位：{{ ownerBoundUnitLabel }}
+                </div>
+                <div
+                  v-if="ownerUnpaidError"
+                  class="acct-banner warn"
+                >
+                  {{ ownerUnpaidError }}
+                </div>
+                <div class="acct-toolbar">
+                  <div class="work-card-title acct-toolbar-title">未繳費賬單列表</div>
+                  <div class="acct-total">合計 {{ formatOwnerHKD(ownerUnpaidTotal) }}</div>
+                </div>
+                <div class="acct-table-wrap">
+                  <table class="acct-table owner-account-table">
+                    <thead>
+                      <tr>
+                        <th>賬單號</th>
+                        <th>單位</th>
+                        <th>項目</th>
+                        <th>賬期</th>
+                        <th>賬單日期</th>
+                        <th>金額</th>
+                        <th>備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(invoice, invoiceIndex) in ownerUnpaidInvoices"
+                        :key="ownerUnpaidInvoiceKey(invoice, invoiceIndex)"
+                      >
+                        <td>{{ ownerTextValue(invoice.invoice_no) }}</td>
+                        <td>{{ ownerTextValue(invoice.flat_code) }}</td>
+                        <td>{{ ownerTextValue(invoice.item_id) }}</td>
+                        <td>{{ ownerTextValue(invoice.trs_to) }}</td>
+                        <td>{{ ownerTextValue(invoice.bill_dt) }}</td>
+                        <td class="acct-due">{{ formatOwnerHKD(ownerAmountValue(invoice.net_amount)) }}</td>
+                        <td>{{ ownerTextValue(invoice.remark) }}</td>
+                      </tr>
+                      <tr v-if="ownerUnpaidInvoices.length === 0">
+                        <td
+                          class="building-empty-row"
+                          colspan="7"
+                        >
+                          {{ ownerUnpaidEmptyText }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div
+                v-show="ownerAccountTab === 'owner-records'"
+                class="acct-subpanel"
+                :class="{ on: ownerAccountTab === 'owner-records' }"
+              >
+                <div class="acct-note">
+                  目前綁定單位：{{ ownerBoundUnitLabel }}
+                </div>
+                <form
+                  class="acct-filter-row"
+                  @submit.prevent="searchOwnerPaymentRecordsByDate"
+                >
+                  <label class="acct-filter-field">
+                    <span>起始日期</span>
+                    <input
+                      v-model="ownerRecordFromDate"
+                      type="date"
+                    >
+                  </label>
+                  <label class="acct-filter-field">
+                    <span>結束日期</span>
+                    <input
+                      v-model="ownerRecordToDate"
+                      type="date"
+                    >
+                  </label>
+                  <label class="acct-filter-field">
+                    <span>日期類型</span>
+                    <select v-model="ownerRecordDateType">
+                      <option value="input_date">輸入日期</option>
+                      <option value="tran_date">交易日期</option>
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    class="notice-action-btn"
+                    :disabled="ownerRecordsLoading"
+                  >
+                    {{ ownerRecordsLoading ? '查詢中' : '查詢' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="acct-secondary-action"
+                    :disabled="ownerRecordsLoading"
+                    @click="resetOwnerPaymentRecordSearch"
+                  >
+                    顯示全部
+                  </button>
+                </form>
+                <div
+                  v-if="ownerRecordsError"
+                  class="acct-banner warn"
+                >
+                  {{ ownerRecordsError }}
+                </div>
+                <div class="acct-toolbar">
+                  <div class="work-card-title acct-toolbar-title">繳費記錄</div>
+                  <div class="acct-total">合計 {{ formatOwnerHKD(ownerPaymentRecordTotal) }}</div>
+                </div>
+                <div class="acct-table-wrap">
+                  <table class="acct-table owner-record-table">
+                    <thead>
+                      <tr>
+                        <th>收據號</th>
+                        <th>付款編號</th>
+                        <th>輸入時間</th>
+                        <th>交易時間</th>
+                        <th>單位</th>
+                        <th>項目</th>
+                        <th>賬期</th>
+                        <th>金額</th>
+                        <th>付款方式</th>
+                        <th>狀態</th>
+                        <th>備註</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="row in ownerPaymentRecordRows"
+                        :key="row.key"
+                      >
+                        <td>{{ row.receiptID }}</td>
+                        <td>{{ row.paymentID }}</td>
+                        <td>{{ row.inputTime }}</td>
+                        <td>{{ row.tranTime }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td>{{ row.item }}</td>
+                        <td>{{ row.term }}</td>
+                        <td>{{ formatOwnerHKD(row.amount) }}</td>
+                        <td>{{ row.payType }}</td>
+                        <td :class="row.statusClass">{{ row.status }}</td>
+                        <td>{{ row.remark }}</td>
+                      </tr>
+                      <tr v-if="ownerPaymentRecordRows.length === 0">
+                        <td
+                          class="building-empty-row"
+                          colspan="11"
+                        >
+                          {{ ownerRecordsEmptyText }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
@@ -2558,6 +3438,11 @@ onMounted(() => {
   padding: 0 10px;
 }
 
+.notice-select:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
 .building-readonly-select {
   display: flex;
   align-items: center;
@@ -2592,6 +3477,14 @@ onMounted(() => {
 .notice-action-btn:hover {
   border-color: var(--brand-mid);
   color: var(--brand);
+}
+
+.notice-action-btn:disabled,
+.notice-action-btn:disabled:hover {
+  border-color: var(--bdr);
+  background: var(--sur-3);
+  color: var(--ink-3);
+  cursor: not-allowed;
 }
 
 .notice-table {
@@ -3010,6 +3903,22 @@ onMounted(() => {
   padding: 12px 14px;
 }
 
+.acct-banner {
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 14px;
+}
+
+.acct-banner.warn {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .acct-toolbar {
   display: flex;
   align-items: center;
@@ -3019,6 +3928,13 @@ onMounted(() => {
 
 .acct-toolbar-title {
   margin: 0;
+}
+
+.acct-total {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 /* 3. 帳目搜尋框 */
@@ -3032,6 +3948,68 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   padding: 9px 12px;
+}
+
+.acct-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  padding: 12px;
+}
+
+.acct-filter-field {
+  display: grid;
+  min-width: 150px;
+  gap: 5px;
+}
+
+.acct-filter-field span {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.acct-filter-field input,
+.acct-filter-field select {
+  min-height: 32px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 9px;
+}
+
+.acct-secondary-action {
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.acct-secondary-action:hover {
+  border-color: var(--brand-mid);
+  color: var(--brand);
+}
+
+.acct-secondary-action:disabled,
+.acct-secondary-action:disabled:hover {
+  border-color: var(--bdr);
+  background: var(--sur-3);
+  color: var(--ink-3);
+  cursor: not-allowed;
 }
 
 /* 4. 帳目表格 */
@@ -3073,11 +4051,63 @@ onMounted(() => {
   background: #FAFAFA;
 }
 
+.owner-account-table {
+  min-width: 900px;
+}
+
+.owner-record-table {
+  min-width: 1280px;
+}
+
+.finance-management-table {
+  min-width: 980px;
+}
+
+.finance-other-fee-table {
+  min-width: 900px;
+}
+
+.finance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finance-summary-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.finance-summary-item span {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.finance-summary-item strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
 /* 5. 帳目狀態色 */
+.acct-unit-cell {
+  color: var(--ink);
+}
+
 .acct-paid {
   color: var(--success);
 }
 
+.acct-pending {
+  color: var(--warning);
+}
+
+.acct-error,
 .acct-due {
   color: var(--error);
 }
@@ -3527,6 +4557,7 @@ onMounted(() => {
   .building-summary-grid,
   .building-doc-grid,
   .access-summary-grid,
+  .finance-summary-grid,
   .building-field-grid {
     grid-template-columns: 1fr;
   }
@@ -3590,6 +4621,20 @@ onMounted(() => {
   .acct-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .acct-filter-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .acct-filter-field {
+    min-width: 0;
+  }
+
+  .acct-filter-row .notice-action-btn,
+  .acct-secondary-action {
+    width: 100%;
   }
 
   .affairs-guided-actions {

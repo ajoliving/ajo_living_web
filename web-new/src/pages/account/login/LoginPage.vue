@@ -40,7 +40,7 @@ const {
     <section class="login-shell">
       <LoginHero :hero="selectedHero" />
       <LoginFormPanel
-        v-model:display-name="formState.displayName"
+        v-model:eng-name="formState.engName"
         v-model:email="formState.email"
         v-model:password="formState.password"
         v-model:phone="formState.phone"

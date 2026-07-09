@@ -17,7 +17,7 @@ interface LoginFormPanelProps {
   emailActionSwitchLabel: string;
   buildingOptions: LoginSelectOption[];
   buildingsLoading: boolean;
-  displayName: string;
+  engName: string;
   email: string;
   password: string;
   phone: string;
@@ -42,7 +42,7 @@ interface LoginFormPanelProps {
 const props = defineProps<LoginFormPanelProps>();
 
 const emit = defineEmits<{
-  'update:displayName': [value: string];
+  'update:engName': [value: string];
   'update:email': [value: string];
   'update:password': [value: string];
   'update:phone': [value: string];
@@ -129,17 +129,16 @@ const togglePasswordVisibility = (): void => {
 
         <template v-if="props.emailAction === 'register'">
           <label class="block">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.username') }}</span>
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.engName') }}</span>
             <div class="group relative">
               <input
-                :value="props.displayName"
+                :value="props.engName"
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.registerUsernamePlaceholder')"
-                autocapitalize="none"
-                autocomplete="username"
+                :placeholder="t('auth.engNamePlaceholder')"
+                autocomplete="name"
                 spellcheck="false"
                 type="text"
-                @input="emit('update:displayName', readInputValue($event))"
+                @input="emit('update:engName', readInputValue($event))"
               >
               <AppIcon
                 name="user"

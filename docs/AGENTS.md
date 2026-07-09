@@ -26,5 +26,8 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 2026-07-08: 建立 docs prompt/context 記憶邊界與索引維護規則。
 2026-07-08: 補充 `docs/prompts` 與 `docs/deployment` 的本地 prompt 維護入口。
 2026-07-08: 將 `product`、`prototypes`、`backups` 移入 `archive`，並從活躍 prompt/context 入口排除。
+2026-07-08: 補充 iSmart integration API 在 POS relay 與 AJO 後端會員態接口的集成邊界。
+2026-07-09: 補充 `我的大廈` 的大廈財務與業戶帳目會員態接口使用約定。
+2026-07-09: 同步根級每次修改後執行 prompt/context 記憶檢查的默認規則。
 
 [PROTOCOL]: When changing prompt-bearing docs in this directory, update `PROMPT_INDEX.md`, add a dated change-log line, and check parent `../AGENTS.md` for project-level memory changes.

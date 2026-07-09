@@ -245,10 +245,9 @@ export const useSessionStore = defineStore('session', {
     async registerEmailAccount(
       email: string,
       password: string,
-      displayName: string,
+      engName: string,
       phoneCountryCode: string,
       phoneNumber: string,
-      username: string,
       publisherIdentityType = '',
       primaryCommunityID = '',
       primaryCommunityName = '',
@@ -259,10 +258,9 @@ export const useSessionStore = defineStore('session', {
       const { data } = await registerWithEmail({
         email: trimmedEmail,
         password,
-        display_name: displayName,
+        eng_name: engName,
         phone_country_code: phoneCountryCode,
         phone_number: phoneNumber,
-        username,
         publisher_identity_type: publisherIdentityType,
         primary_community_id: primaryCommunityID,
         primary_community_name: primaryCommunityName,

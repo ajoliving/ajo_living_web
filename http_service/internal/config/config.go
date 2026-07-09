@@ -41,6 +41,7 @@ type Config struct {
 	POSPaymentServiceURL        string
 	IsmartExternalAppBaseURL    string
 	IsmartExternalAppAPIBaseURL string
+	IsmartIntegrationAPIBaseURL string
 	IsmartExternalAppTimeout    time.Duration
 	ICCTVAPIBaseURL             string
 	ICCTVAdminUsername          string
@@ -138,6 +139,7 @@ func Load() *Config {
 		POSPaymentServiceURL:        getEnv("POS_PAYMENT_SERVICE_URL", defaultPOSPaymentServiceURL()),
 		IsmartExternalAppBaseURL:    getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()),
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
+		IsmartIntegrationAPIBaseURL: getEnv("ISMART_INTEGRATION_API_BASE_URL", defaultIsmartIntegrationAPIBaseURL()),
 		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
 		ICCTVAPIBaseURL:             getEnv("ICCTV_API_BASE_URL", defaultICCTVAPIBaseURL()),
 		ICCTVAdminUsername:          strings.TrimSpace(getEnv("ICCTV_ADMIN_USERNAME", "")),
@@ -549,7 +551,12 @@ func defaultIsmartExternalAppAPIBaseURL() string {
 	return strings.TrimRight(getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()), "/") + "/api/v1/external"
 }
 
-// 27. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.
+// 27. defaultIsmartIntegrationAPIBaseURL returns the deployed iSmart integration API base URL.
+func defaultIsmartIntegrationAPIBaseURL() string {
+	return strings.TrimRight(getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()), "/") + "/api/v1/integration"
+}
+
+// 28. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.
 func defaultICCTVAPIBaseURL() string {
 	return "https://icctv.skylinedances.com/api"
 }

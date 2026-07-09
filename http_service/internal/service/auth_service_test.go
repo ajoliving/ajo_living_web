@@ -139,7 +139,44 @@ func TestAuthServiceRegisterAndLoginWithUsername(t *testing.T) {
 	}
 }
 
-// 4. TestAuthServiceResetPasswordWithEmail validates email reset code flow.
+// 4. TestAuthServiceRegisterWithEngNameAllowsSpaces validates iSmart-aligned registration names.
+func TestAuthServiceRegisterWithEngNameAllowsSpaces(t *testing.T) {
+	runtimeValue := newAuthTestRuntime(t, nil)
+	authService := NewAuthService(runtimeValue)
+
+	registered, err := authService.RegisterWithEmail(context.Background(), EmailPasswordParams{
+		Email:            "eng-name@example.com",
+		Password:         "password123",
+		EngName:          "CHAN TAI MAN",
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61239876",
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+
+	var registeredUser model.User
+	if err := runtimeValue.DB.Where("public_id = ?", registered.User.PublicID).First(&registeredUser).Error; err != nil {
+		t.Fatalf("load registered user: %v", err)
+	}
+	var profile model.UserProfile
+	if err := runtimeValue.DB.Where("user_id = ?", registeredUser.ID).First(&profile).Error; err != nil {
+		t.Fatalf("load registered profile: %v", err)
+	}
+	if profile.DisplayName != "CHAN TAI MAN" {
+		t.Fatalf("expected eng_name as profile display name, got %q", profile.DisplayName)
+	}
+
+	var credential model.UserCredential
+	if err := runtimeValue.DB.Where("user_id = ?", registeredUser.ID).First(&credential).Error; err != nil {
+		t.Fatalf("load credential: %v", err)
+	}
+	if credential.Username == nil || *credential.Username != "61239876" {
+		t.Fatalf("expected phone fallback username, got %+v", credential.Username)
+	}
+}
+
+// 5. TestAuthServiceResetPasswordWithEmail validates email reset code flow.
 func TestAuthServiceResetPasswordWithEmail(t *testing.T) {
 	runtimeValue := newAuthTestRuntime(t, &config.Config{OTPMockCode: "123456"})
 	runtimeValue.MailSender = &MockMailSender{}

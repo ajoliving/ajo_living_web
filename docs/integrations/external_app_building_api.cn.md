@@ -790,6 +790,8 @@
 - 即使沒有文件，也會返回陣列
 - 若沒有 `BuildingInfo` row，`building_info` 會返回 `null` 或空字串值
 - 目前程式碼使用 `btype='audition'` 查詢審計報告；若資料使用 `auditreport`，在程式碼對齊前，這些文件不會出現在此端點
+- AJO Web `大廈財務` 使用本接口顯示 `管理處總覽`、`財務報表` 與 `核數報表`
+- AJO 後端會員態代理會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_reports`、`mfinreport` / `financial_reports`
 
 ### 3.2 提交大廈意見
 
@@ -1613,6 +1615,60 @@ curl -X POST "https://<your-domain>/api/v1/integration/payments/pos/" \
       }
     ]
   }'
+```
+
+## AJO 後端集成設計
+
+AJO Web 前端不直接調用 iSmart 原始整合端點；前端統一調用 AJO 後端會員態接口，由 AJO 後端使用目前登入使用者的 iSmart 綁定資料補齊 `user_id` 並執行可見範圍校驗。
+
+### Payment 類接口
+
+POS payment、收銀台、bank-in 與支付歷史兼容優先落在 `ismart_pos_relay`：
+
+- 舊 `/api/...` route 保持兼容，舊 upstream 不可用時可 fallback 到新 `/api/v1/integration/...`
+- 新 `/api/v1/integration/...` route 也在 relay 中提供，並可在新 upstream 不可用時按保守規則 fallback 到舊 upstream
+- 寫入類接口不對普通業務錯誤自動重送，避免重複付款或重複 bank-in
+- base URL 由 `ISMART_OLD_API_BASE_URL` 與 `ISMART_INTEGRATION_BASE_URL` 控制
+
+### AJO 會員態 iSmart 接口
+
+AJO 後端提供以下會員態入口：
+
+| AJO Path | Method | Upstream |
+|---|---|---|
+| `/api/v1/me/ismart/account-registration` | `POST` | `/api/v1/integration/auth/register/` |
+| `/api/v1/me/ismart/buildings` | `GET` | AJO 本地 iSmart 綁定快照 |
+| `/api/v1/me/ismart/building-info` | `GET` | `/api/v1/integration/buildings/info/`，必要時 fallback 舊 external path |
+| `/api/v1/me/ismart/management-fees` | `GET` | `/api/v1/integration/buildings/receivables/management-fees/` |
+| `/api/v1/me/ismart/other-fees` | `GET` | `/api/v1/integration/buildings/receivables/other-fees/` |
+| `/api/v1/me/ismart/notices` | `GET` | `/api/v1/integration/buildings/notices/` |
+| `/api/v1/me/ismart/building-comments` | `POST` | `/api/v1/integration/buildings/comments/` |
+| `/api/v1/me/ismart/owner-binding-requests` | `POST` | `/api/v1/integration/buildings/building-flat-owner-binding-requests/` |
+| `/api/v1/me/ismart/subaccounts` | `GET` | `/api/v1/integration/buildings/subaccounts/` |
+| `/api/v1/me/ismart/subaccounts/grant` | `POST` | `/api/v1/integration/buildings/subaccounts/grant/` |
+| `/api/v1/me/ismart/subaccounts/revoke` | `POST` | `/api/v1/integration/buildings/subaccounts/revoke/` |
+| `/api/v1/me/ismart/building-access` | `GET` | `/api/v1/integration/access/buildings/` |
+| `/api/v1/me/ismart/building-access/open-door` | `POST` | `/api/v1/integration/access/open-door/` |
+| `/api/v1/me/ismart/building-access/qrcode` | `POST` | `/api/v1/integration/access/qrcode/` |
+
+### AJO Web 頁面使用約定
+
+| AJO Web Page | 前端區塊 | AJO 會員態接口 | 說明 |
+|---|---|---|---|
+| `我的大廈` | `大廈財務 > 管理處總覽` | `/api/v1/me/ismart/building-info`, `/api/v1/me/ismart/management-fees`, `/api/v1/me/ismart/other-fees` | 顯示管理處資料、管理費應收摘要與其他費用應收摘要。 |
+| `我的大廈` | `大廈財務 > 財務報表` | `/api/v1/me/ismart/building-info` | 使用 `documents.financial_reports`，兼容舊 `mfinreport`。 |
+| `我的大廈` | `大廈財務 > 核數報表` | `/api/v1/me/ismart/building-info` | 使用 `documents.audit_reports`，兼容舊 `auditreport` 與 `audition`。 |
+| `我的大廈` | `業戶帳目 > 未繳費賬單列表` | `/api/v1/me/payments/pos/bills` | 按目前登入會員可見單位讀取未繳賬單；前端不可直接調用 `/api/v1/integration/payments/unpaid-invoices/`。 |
+| `我的大廈` | `業戶帳目 > 繳費記錄` | `/api/v1/me/payments/pos/history` | 按目前登入會員可見單位讀取付款歷史；前端不可直接調用 `/api/v1/integration/payments/transactions/by-unit/` 或 `/api/v1/integration/payments/transactions/by-date/`。 |
+
+AJO 後端使用以下環境變數區分新舊 upstream：
+
+`/api/v1/me/ismart/building-info` 會保留並補齊 `documents.forms`、`documents.building_info_files`、`documents.floorplans`、`documents.audit_reports`、`documents.financial_reports` 陣列；AJO Web `大廈財務` 直接使用其中 `building_info`、`documents.financial_reports` 與 `documents.audit_reports`。
+
+```bash
+ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
+ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
+ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
 ```
 
 ## 操作檢查清單

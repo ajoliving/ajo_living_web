@@ -28,6 +28,7 @@ export interface EmailOtpPayload {
 export interface EmailPasswordPayload {
   email: string;
   password: string;
+  eng_name?: string;
   display_name?: string;
   phone_country_code?: string;
   phone_number?: string;

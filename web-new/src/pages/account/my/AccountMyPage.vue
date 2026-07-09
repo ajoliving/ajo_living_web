@@ -13,10 +13,21 @@
  * 3. 帳號管理、授權副戶、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
  * 4. 退出登入後返回登入頁。
  */
+import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
-import { fetchMemberPosBuildings, fetchMemberPosBuildingUnits } from '@/httpapis/building';
+import {
+  fetchMemberIsmartSubaccounts,
+  fetchMemberPosBuildings,
+  fetchMemberPosBuildingUnits,
+  fetchPosBuildings,
+  fetchPosBuildingUnits,
+  grantMemberIsmartSubaccount,
+  revokeMemberIsmartSubaccount,
+  submitMemberIsmartOwnerBindingRequest,
+  type IsmartSubaccountRow,
+} from '@/httpapis/building';
 import { updateMe } from '@/httpapis/me';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
@@ -44,8 +55,8 @@ type PanelKey =
 // 2. 導覽項目（對齊 HTML data-work-target）
 const navItems: { key: PanelKey; label: string; needsApi?: boolean }[] = [
   { key: 'profile-account', label: '帳號管理' },
-  { key: 'profile-subaccounts', label: '授權副戶', needsApi: true },
-  { key: 'profile-property-binding', label: '物業綁定', needsApi: true },
+  { key: 'profile-subaccounts', label: '授權副戶' },
+  { key: 'profile-property-binding', label: '物業綁定' },
   { key: 'profile-wallet', label: 'AJO 錢包' },
   { key: 'profile-chat', label: '訊息管理' },
   { key: 'profile-properties', label: '我的樓盤' },
@@ -609,45 +620,510 @@ const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
   { label: '帳單地址', value: displayText(ismartProfile.value?.billing_address) },
 ]);
 
-// 7. 授權副戶 mock 資料
-const subaccountGroups = [
-  {
-    name: '華興大廈(271號)',
-    rows: [
-      { location: '華興大廈(271號)', user: 'The Incorporated Owners of No. 269, 271 Temple Street', type: '法團', permission: '只讀' },
-    ],
-  },
-  {
-    name: '仁英大廈 G 02',
-    rows: [
-      { location: '仁英大廈 G 02', user: '住客帳戶', type: '住客', permission: '只讀' },
-    ],
-  },
-  { name: '仁英大廈 07 B', rows: [] },
-  { name: '仁英大廈 08 C', rows: [] },
-];
+interface SubaccountDisplayRow {
+  key: string;
+  relationInfoID: string;
+  location: string;
+  user: string;
+  meta: string;
+  role: string;
+  historyCount: string;
+  targetUserID: string;
+}
 
-// 8. 物業綁定 mock 資料
+interface SubaccountGroup {
+  unitID: string;
+  buildingID: string;
+  name: string;
+  rows: SubaccountDisplayRow[];
+  grantTargetUserID: string;
+  grantRemark: string;
+  isGranting: boolean;
+  error: string;
+}
+
+interface SubaccountUnitContext {
+  unitID: string;
+  buildingID: string;
+  name: string;
+}
+
+const subaccountGroups = ref<SubaccountGroup[]>([]);
+const subaccountsLoading = ref(false);
+const subaccountsLoaded = ref(false);
+const subaccountsError = ref('');
+const activeSubaccountGrantUnitID = ref('');
+const revokingSubaccountKey = ref('');
+
+// 7.1 讀取 API 錯誤訊息
+const readAccountApiErrorMessage = (error: unknown, fallback: string): string =>
+  axios.isAxiosError<{ message?: string }>(error)
+    ? error.response?.data?.message ?? fallback
+    : fallback;
+
+// 7.2 判斷是否為無業主權限單位
+const isForbiddenRequest = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 403;
+
+// 7.3 轉換授權副戶顯示文字
+const toSubaccountText = (value: unknown, fallback = ''): string => {
+  const text = String(value ?? '').trim();
+  return text || fallback;
+};
+
+// 7.4 組裝授權副戶聯絡資料
+const buildSubaccountMeta = (row: IsmartSubaccountRow): string =>
+  [row.target_phone, row.target_email]
+    .map((item) => toSubaccountText(item))
+    .filter(Boolean)
+    .join(' · ');
+
+// 7.5 轉換授權副戶列表列
+const buildSubaccountDisplayRow = (
+  row: IsmartSubaccountRow,
+  groupName: string,
+  index: number,
+): SubaccountDisplayRow => {
+  const targetUserID = toSubaccountText(row.target_user_id);
+  const historyCount = Number(row.history_count ?? 0);
+  const rowKey =
+    toSubaccountText(row.relation_info_id) ||
+    [row.unit_id, targetUserID, index].map((item) => toSubaccountText(item)).filter(Boolean).join('-');
+
+  return {
+    key: rowKey || `subaccount-${index}`,
+    relationInfoID: toSubaccountText(row.relation_info_id, '-'),
+    location: toSubaccountText(row.unit_display, groupName),
+    user: toSubaccountText(row.target_name || row.target_username || row.target_client_id || targetUserID, '未命名用戶'),
+    meta: buildSubaccountMeta(row),
+    role: toSubaccountText(row.role, '授權用戶'),
+    historyCount: Number.isFinite(historyCount) ? `${historyCount} 次` : '0 次',
+    targetUserID,
+  };
+};
+
+// 7.6 建立授權副戶分組
+const createSubaccountGroup = (unit: SubaccountUnitContext, rows: IsmartSubaccountRow[] = []): SubaccountGroup => ({
+  unitID: unit.unitID,
+  buildingID: unit.buildingID,
+  name: unit.name,
+  rows: rows.map((row, index) => buildSubaccountDisplayRow(row, unit.name, index)),
+  grantTargetUserID: '',
+  grantRemark: '',
+  isGranting: false,
+  error: '',
+});
+
+// 7.7 建立授權副戶單位名稱
+const buildSubaccountUnitName = (buildingID: string, item: PosBuildingUnit): string => {
+  const buildingName = bindBuildingNameMap.value[buildingID] || buildingID;
+  const floor = getBindUnitFloor(item);
+  const unitName = getBindUnitName(item);
+  return [buildingName, floor, unitName].filter(Boolean).join(' ') || getBindUnitID(item);
+};
+
+// 7.8 讀取會員可見單位作為授權副戶分組
+const loadSubaccountUnitContexts = async (): Promise<SubaccountUnitContext[]> => {
+  const buildingIDs = bindAllowedBuildingIDs.value;
+  const unitPermissions = bindAllowedUnitIDs.value;
+  if (buildingIDs.length === 0 || unitPermissions.length === 0) {
+    return [];
+  }
+
+  const settled = await Promise.allSettled(
+    buildingIDs.map(async (buildingID) => {
+      const units = await fetchMemberPosBuildingUnits(buildingID);
+      const filteredUnits = filterBindUnitsByPermission(buildingID, units, unitPermissions);
+      const fallbackUnits = buildBindUnitsFromFlatUnitPermissions(buildingID, unitPermissions);
+      return filteredUnits.length > 0 ? filteredUnits : fallbackUnits;
+    }),
+  );
+  const unitMap = new Map<string, SubaccountUnitContext>();
+  settled.forEach((result, index) => {
+    const buildingID = buildingIDs[index] ?? '';
+    const units = result.status === 'fulfilled'
+      ? result.value
+      : buildBindUnitsFromFlatUnitPermissions(buildingID, unitPermissions);
+    units.forEach((unit) => {
+      const unitID = getBindUnitID(unit);
+      if (!unitID || unitMap.has(unitID)) {
+        return;
+      }
+      unitMap.set(unitID, {
+        unitID,
+        buildingID,
+        name: buildSubaccountUnitName(buildingID, unit),
+      });
+    });
+  });
+
+  return Array.from(unitMap.values()).sort((left, right) =>
+    left.name.localeCompare(right.name, 'en', { numeric: true, sensitivity: 'base' }),
+  );
+};
+
+// 7.9 按單位讀取授權副戶
+const loadSubaccountRowsForGroup = async (group: SubaccountGroup): Promise<SubaccountGroup | null> => {
+  try {
+    const result = await fetchMemberIsmartSubaccounts(group.unitID);
+    return {
+      ...group,
+      rows: (result.items ?? []).map((row, index) => buildSubaccountDisplayRow(row, group.name, index)),
+      error: '',
+    };
+  } catch (error) {
+    if (isForbiddenRequest(error)) {
+      return null;
+    }
+    return {
+      ...group,
+      rows: [],
+      error: readAccountApiErrorMessage(error, '授權副戶資料載入失敗。'),
+    };
+  }
+};
+
+// 7.10 使用後端匯總資料建立授權副戶分組
+const loadAggregateSubaccountGroups = async (): Promise<void> => {
+  const result = await fetchMemberIsmartSubaccounts();
+  const groups = new Map<string, SubaccountGroup>();
+  (result.items ?? []).forEach((row, index) => {
+    const unitID = toSubaccountText(row.unit_id, `aggregate-${index}`);
+    const buildingName = toSubaccountText(row.building_name || row.building_id);
+    const unitName = toSubaccountText(row.unit_display || row.unit_id, unitID);
+    const groupName = [buildingName, unitName].filter(Boolean).join(' ') || unitID;
+    const existingGroup = groups.get(unitID);
+    if (existingGroup) {
+      existingGroup.rows.push(buildSubaccountDisplayRow(row, groupName, existingGroup.rows.length));
+      return;
+    }
+    groups.set(unitID, createSubaccountGroup({
+      unitID,
+      buildingID: toSubaccountText(row.building_id),
+      name: groupName,
+    }, [row]));
+  });
+  subaccountGroups.value = Array.from(groups.values());
+};
+
+// 7.11 載入授權副戶資料
+const loadSubaccountGroups = async (): Promise<void> => {
+  subaccountsLoading.value = true;
+  subaccountsError.value = '';
+  try {
+    const unitContexts = await loadSubaccountUnitContexts();
+    if (unitContexts.length === 0) {
+      await loadAggregateSubaccountGroups();
+      return;
+    }
+
+    const groups = unitContexts.map((item) => createSubaccountGroup(item));
+    const settledGroups = await Promise.all(groups.map((group) => loadSubaccountRowsForGroup(group)));
+    subaccountGroups.value = settledGroups.filter((group): group is SubaccountGroup => Boolean(group));
+  } catch (error) {
+    subaccountGroups.value = [];
+    subaccountsError.value = readAccountApiErrorMessage(error, '授權副戶資料載入失敗。');
+  } finally {
+    subaccountsLoading.value = false;
+    subaccountsLoaded.value = true;
+  }
+};
+
+// 7.12 重新整理單一授權副戶分組
+const refreshSubaccountGroup = async (group: SubaccountGroup): Promise<void> => {
+  const refreshedGroup = await loadSubaccountRowsForGroup(group);
+  if (!refreshedGroup) {
+    subaccountGroups.value = subaccountGroups.value.filter((item) => item.unitID !== group.unitID);
+    return;
+  }
+  Object.assign(group, {
+    rows: refreshedGroup.rows,
+    error: refreshedGroup.error,
+  });
+};
+
+// 7.13 切換新增授權表單
+const toggleSubaccountGrantForm = (unitID: string): void => {
+  activeSubaccountGrantUnitID.value = activeSubaccountGrantUnitID.value === unitID ? '' : unitID;
+};
+
+// 7.14 判斷新增授權是否可提交
+const canSubmitSubaccountGrant = (group: SubaccountGroup): boolean =>
+  /^\d+$/.test(group.grantTargetUserID.trim()) && !group.isGranting;
+
+// 7.15 新增授權副戶
+const handleGrantSubaccount = async (group: SubaccountGroup): Promise<void> => {
+  const targetUserID = Number(group.grantTargetUserID.trim());
+  if (!Number.isSafeInteger(targetUserID) || targetUserID <= 0) {
+    feedbackStore.pushToast('請輸入有效的用戶 ID。', 'error');
+    return;
+  }
+
+  group.isGranting = true;
+  try {
+    await grantMemberIsmartSubaccount({
+      unit_id: group.unitID,
+      target_user_id: targetUserID,
+      remark: group.grantRemark.trim() || undefined,
+    });
+    group.grantTargetUserID = '';
+    group.grantRemark = '';
+    activeSubaccountGrantUnitID.value = '';
+    await refreshSubaccountGroup(group);
+    feedbackStore.pushToast('授權副戶已新增。', 'success');
+  } catch (error) {
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, '新增授權副戶失敗。'), 'error');
+  } finally {
+    group.isGranting = false;
+  }
+};
+
+// 7.16 撤銷授權副戶
+const handleRevokeSubaccount = async (group: SubaccountGroup, row: SubaccountDisplayRow): Promise<void> => {
+  const targetUserID = Number(row.targetUserID);
+  if (!Number.isSafeInteger(targetUserID) || targetUserID <= 0) {
+    feedbackStore.pushToast('授權副戶用戶 ID 無效。', 'error');
+    return;
+  }
+  if (!window.confirm('確認撤銷此授權副戶？')) {
+    return;
+  }
+
+  revokingSubaccountKey.value = row.key;
+  try {
+    await revokeMemberIsmartSubaccount({
+      unit_id: group.unitID,
+      target_user_id: targetUserID,
+    });
+    await refreshSubaccountGroup(group);
+    feedbackStore.pushToast('授權副戶已撤銷。', 'success');
+  } catch (error) {
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, '撤銷授權副戶失敗。'), 'error');
+  } finally {
+    revokingSubaccountKey.value = '';
+  }
+};
+
+interface BindingStatusItem {
+  key: string;
+  title: string;
+  meta: string;
+  chip: string;
+  chipType: 'good' | 'warn' | 'brand';
+}
+
+// 8. 物業綁定申請
 const bindingSteps = [
-  { num: '1', title: '選擇平台', desc: '先選擇 AJO PM 大廈平台或 AJO Rent 租務平台。' },
-  { num: '2', title: '填寫聯絡資料', desc: '提供申請人姓名、電話及電郵，便於管理處核對。' },
-  { num: '3', title: '上載證明文件', desc: '按身份提交業權、租約或授權文件。' },
-  { num: '4', title: '等待審批', desc: '審批通過後，該物業會加入帳戶可見範圍。' },
+  { num: '1', title: '選擇單位', desc: '選擇申請綁定的大廈、樓層與單位。' },
+  { num: '2', title: '填寫資料', desc: '提供申請身份、姓名與聯絡方式。' },
+  { num: '3', title: '等待審批', desc: '提交後由管理處或職員審批。' },
 ];
-
-const bindingPlatform = ref<'pm' | 'rent'>('pm');
 
 const bindingDocs = [
   { title: '身份證明', desc: '身份證、護照或公司授權人身份文件。' },
   { title: '物業關係證明', desc: '業權文件、租約、住戶證明或授權書。' },
   { title: '最近賬單或收據', desc: '管理費賬單、水電煤賬單或管理處認可文件。' },
-  { title: '補充文件', desc: '如管理處要求，可上載其他補充證明。' },
+  { title: '補充文件', desc: '如管理處要求，可後續補交其他證明。' },
 ];
 
-const bindingStatusList = [
-  { title: '康睦庭園第二座 / 02 / D', meta: '業主身份 · 已於 2026年6月5日完成審批', chip: '已綁定', chipType: 'good' },
-  { title: '仁英大廈 / 07 / B', meta: '租客身份 · 等待管理處核對文件', chip: '審批中', chipType: 'warn' },
-];
+const bindingRoleOptions = ['業主', '住戶代表', '公司授權人'];
+const bindingBuildings = ref<PosBuilding[]>([]);
+const bindingUnits = ref<PosBuildingUnit[]>([]);
+const bindingBuildingID = ref('');
+const bindingFloor = ref('');
+const bindingUnitID = ref('');
+const bindingRole = ref('業主');
+const bindingApplicantName = ref('');
+const bindingPhone = ref('');
+const bindingEmail = ref('');
+const bindingNote = ref('');
+const bindingReceiveEmail = ref(true);
+const bindingBuildingsLoading = ref(false);
+const bindingUnitsLoading = ref(false);
+const bindingSubmitting = ref(false);
+const bindingStatusList = ref<BindingStatusItem[]>([]);
+let latestBindingUnitsRequestID = 0;
+
+// 8.1 取得物業綁定大廈選項
+const bindingBuildingOptions = computed<BindOption[]>(() =>
+  bindingBuildings.value
+    .slice()
+    .sort((left, right) => getBindBuildingName(left).localeCompare(getBindBuildingName(right), 'en', {
+      numeric: true,
+      sensitivity: 'base',
+    }))
+    .map((item) => ({ label: getBindBuildingName(item), value: getBindBuildingID(item) }))
+    .filter((item) => item.label.length > 0 && item.value.length > 0),
+);
+
+// 8.2 取得物業綁定可選單位
+const visibleBindingUnits = computed(() => bindingUnits.value);
+
+// 8.3 取得物業綁定樓層與單位選項
+const bindingFloorOptions = computed<BindOption[]>(() =>
+  Array.from(new Set(visibleBindingUnits.value.map((item) => getBindDisplayUnitFloor(item)).filter(Boolean)))
+    .sort(compareBindCodes)
+    .map((floor) => ({ label: floor, value: floor })),
+);
+const bindingUnitOptions = computed<BindOption[]>(() =>
+  visibleBindingUnits.value
+    .filter((item) => getBindDisplayUnitFloor(item) === bindingFloor.value)
+    .slice()
+    .sort((left, right) => compareBindCodes(getBindUnitName(left), getBindUnitName(right)))
+    .map((item) => ({ label: getBindUnitName(item), value: getBindUnitID(item) }))
+    .filter((item) => item.label.length > 0 && item.value.length > 0),
+);
+
+// 8.4 取得物業綁定目前選擇
+const bindingSelectedBuildingName = computed(() =>
+  bindingBuildingOptions.value.find((item) => item.value === bindingBuildingID.value)?.label ?? '',
+);
+const bindingSelectedUnit = computed(() =>
+  visibleBindingUnits.value.find((item) => getBindUnitID(item) === bindingUnitID.value),
+);
+const bindingSelectedUnitName = computed(() =>
+  bindingSelectedUnit.value ? getBindUnitName(bindingSelectedUnit.value) : '',
+);
+const bindingCurrent = computed(() =>
+  [bindingSelectedBuildingName.value, bindingFloor.value, bindingSelectedUnitName.value].filter(Boolean).join(' / ') || '尚未選擇單位',
+);
+const canSubmitOwnerBinding = computed(() =>
+  bindingBuildingID.value.length > 0 &&
+  bindingFloor.value.length > 0 &&
+  bindingUnitID.value.length > 0 &&
+  bindingRole.value.trim().length > 0 &&
+  bindingApplicantName.value.trim().length > 0 &&
+  bindingPhone.value.trim().length > 0 &&
+  !bindingSubmitting.value,
+);
+
+// 8.5 同步物業綁定預設聯絡資料
+const syncOwnerBindingContactFromProfile = (): void => {
+  if (!bindingApplicantName.value.trim()) {
+    bindingApplicantName.value = accountDisplayName.value === unsetText ? '' : accountDisplayName.value;
+  }
+  if (!bindingPhone.value.trim()) {
+    bindingPhone.value = memberPhoneText.value === unsetText ? '' : memberPhoneText.value;
+  }
+  if (!bindingEmail.value.trim()) {
+    bindingEmail.value = sessionStore.me?.email?.trim()
+      || ismartProfile.value?.account_email?.trim()
+      || sessionStore.me?.ismart_msg?.email?.trim()
+      || '';
+  }
+};
+
+// 8.6 同步物業綁定預設大廈
+const syncOwnerBindingBuildingFromOptions = (): void => {
+  if (bindingBuildingID.value || bindingBuildingOptions.value.length === 0) {
+    return;
+  }
+  const preferredBuildingID = bindBuildingID.value && bindingBuildingOptions.value.some((item) => item.value === bindBuildingID.value)
+    ? bindBuildingID.value
+    : bindingBuildingOptions.value[0]?.value ?? '';
+  bindingBuildingID.value = preferredBuildingID;
+};
+
+// 8.7 載入物業綁定大廈
+const loadOwnerBindingBuildings = async (): Promise<void> => {
+  bindingBuildingsLoading.value = true;
+  try {
+    bindingBuildings.value = await fetchPosBuildings();
+  } catch {
+    bindingBuildings.value = visibleBindBuildings.value;
+    if (bindingBuildings.value.length === 0) {
+      feedbackStore.pushToast('物業綁定大廈資料載入失敗。', 'error');
+    }
+  } finally {
+    bindingBuildingsLoading.value = false;
+  }
+};
+
+// 8.8 載入物業綁定單位
+const loadOwnerBindingUnits = async (buildingID: string): Promise<void> => {
+  const requestID = ++latestBindingUnitsRequestID;
+  const value = buildingID.trim();
+  if (!value) {
+    bindingUnits.value = [];
+    return;
+  }
+
+  bindingUnitsLoading.value = true;
+  try {
+    const result = await fetchPosBuildingUnits(value);
+    if (requestID !== latestBindingUnitsRequestID) {
+      return;
+    }
+    bindingUnits.value = result.filter((item) => isSelectableBindUnit(value, item));
+    if (bindingFloor.value && !bindingFloorOptions.value.some((item) => item.value === bindingFloor.value)) {
+      bindingFloor.value = '';
+      bindingUnitID.value = '';
+    }
+    if (bindingUnitID.value && !visibleBindingUnits.value.some((item) => getBindUnitID(item) === bindingUnitID.value)) {
+      bindingUnitID.value = '';
+    }
+  } catch {
+    if (requestID !== latestBindingUnitsRequestID) {
+      return;
+    }
+    bindingUnits.value = [];
+    feedbackStore.pushToast('物業綁定單位資料載入失敗。', 'error');
+  } finally {
+    if (requestID === latestBindingUnitsRequestID) {
+      bindingUnitsLoading.value = false;
+    }
+  }
+};
+
+// 8.9 轉換物業綁定可選欄位
+const optionalBindingValue = (value: string): string | undefined => {
+  const text = value.trim();
+  return text || undefined;
+};
+
+// 8.10 提交物業綁定申請
+const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
+  if (!canSubmitOwnerBinding.value) {
+    feedbackStore.pushToast('請填寫大廈、單位、申請身份、姓名及電話。', 'error');
+    return;
+  }
+
+  bindingSubmitting.value = true;
+  try {
+    await submitMemberIsmartOwnerBindingRequest({
+      building_id: bindingBuildingID.value,
+      ownedflat: [bindingUnitID.value],
+      cli_role: bindingRole.value.trim(),
+      ownernote: optionalBindingValue(bindingNote.value),
+      is_receive_email: bindingReceiveEmail.value,
+      reg_tel: optionalBindingValue(bindingPhone.value),
+      reg_email: optionalBindingValue(bindingEmail.value),
+      cli_name: optionalBindingValue(bindingApplicantName.value),
+      cli_tel: optionalBindingValue(bindingPhone.value),
+    });
+
+    const submittedAt = new Date().toLocaleDateString('zh-HK', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const pendingStatus: BindingStatusItem = {
+      key: `${bindingUnitID.value}-${Date.now()}`,
+      title: [bindingSelectedBuildingName.value || bindingBuildingID.value, bindingFloor.value, bindingSelectedUnitName.value || bindingUnitID.value]
+        .filter(Boolean)
+        .join(' / '),
+      meta: `${bindingRole.value}身份 · 已於 ${submittedAt} 提交審批`,
+      chip: '審批中',
+      chipType: 'warn',
+    };
+    bindingStatusList.value = [pendingStatus, ...bindingStatusList.value].slice(0, 5);
+    feedbackStore.pushToast('物業綁定申請已提交。', 'success');
+  } catch (error) {
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, '物業綁定申請提交失敗。'), 'error');
+  } finally {
+    bindingSubmitting.value = false;
+  }
+};
 
 // 9. 住宅 mock 資料
 const homeListings = [
@@ -692,12 +1168,20 @@ onMounted(async () => {
     if (!sessionStore.me) {
       await sessionStore.loadCurrentUser();
     }
+    syncOwnerBindingContactFromProfile();
     syncBindFromProfile();
     await loadBindBuildings();
+    await loadOwnerBindingBuildings();
+    const previousBindingBuildingID = bindingBuildingID.value;
+    syncOwnerBindingBuildingFromOptions();
     if (bindBuildingID.value) {
       await loadBindUnits(bindBuildingID.value);
       syncBindUnitFromProfile();
     }
+    if (bindingBuildingID.value && bindingBuildingID.value === previousBindingBuildingID) {
+      await loadOwnerBindingUnits(bindingBuildingID.value);
+    }
+    await loadSubaccountGroups();
   } finally {
     isSyncingBindProfile = false;
   }
@@ -719,6 +1203,28 @@ watch(bindFloor, (nextValue, previousValue) => {
     bindUnitID.value = '';
   }
 });
+
+watch(bindingBuildingID, (nextValue, previousValue) => {
+  if (nextValue === previousValue) {
+    return;
+  }
+  bindingFloor.value = '';
+  bindingUnitID.value = '';
+  void loadOwnerBindingUnits(nextValue);
+});
+
+watch(bindingFloor, (nextValue, previousValue) => {
+  if (nextValue !== previousValue) {
+    bindingUnitID.value = '';
+  }
+});
+
+watch(
+  bindingBuildingOptions,
+  () => {
+    syncOwnerBindingBuildingFromOptions();
+  },
+);
 
 watch(
   () => route.path,
@@ -928,30 +1434,101 @@ watch(
             <div>
               <div class="work-kicker">Subaccounts</div>
               <h2 class="work-title">授權副戶</h2>
-              <p class="work-desc">只讀顯示各物業的授權副戶資料，後續再接同步與管理操作。</p>
+              <p class="work-desc">顯示各單位目前有效的授權副戶，並可由已審批業主新增或撤銷授權。</p>
             </div>
           </section>
           <section class="work-subaccount-group">
-            <div v-for="group in subaccountGroups" :key="group.name" class="work-subaccount-card">
-              <div class="work-subaccount-head">
-                <div class="work-subaccount-name">{{ group.name }}</div>
-                <button type="button" class="work-action">新增授權</button>
-              </div>
-              <table class="work-table">
-                <thead><tr><th>地點</th><th>用戶</th><th>類型</th><th>權限</th></tr></thead>
-                <tbody>
-                  <tr v-for="row in group.rows" :key="row.location">
-                    <td>{{ row.location }}</td>
-                    <td>{{ row.user }}</td>
-                    <td>{{ row.type }}</td>
-                    <td>{{ row.permission }}</td>
-                  </tr>
-                  <tr v-if="group.rows.length === 0">
-                    <td colspan="4" class="work-subaccount-empty">目前未有授權副戶資料</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-if="subaccountsLoading" class="work-subaccount-state">正在載入授權副戶資料。</div>
+            <div v-else-if="subaccountsError" class="work-subaccount-state error">
+              <span>{{ subaccountsError }}</span>
+              <button type="button" class="work-action secondary" @click="loadSubaccountGroups">重新載入</button>
             </div>
+            <div v-else-if="subaccountsLoaded && subaccountGroups.length === 0" class="work-subaccount-state">
+              目前未有可管理單位或授權副戶資料
+            </div>
+            <template v-else>
+              <div v-for="group in subaccountGroups" :key="group.unitID" class="work-subaccount-card">
+                <div class="work-subaccount-head">
+                  <div class="work-subaccount-name">{{ group.name }}</div>
+                  <button
+                    type="button"
+                    class="work-action"
+                    @click="toggleSubaccountGrantForm(group.unitID)"
+                  >
+                    {{ activeSubaccountGrantUnitID === group.unitID ? '收起' : '新增授權' }}
+                  </button>
+                </div>
+                <div v-if="activeSubaccountGrantUnitID === group.unitID" class="work-subaccount-form">
+                  <label>
+                    <span>用戶 ID</span>
+                    <input
+                      v-model="group.grantTargetUserID"
+                      type="number"
+                      min="1"
+                      inputmode="numeric"
+                      placeholder="CustomUser ID"
+                    >
+                  </label>
+                  <label>
+                    <span>備註</span>
+                    <input
+                      v-model="group.grantRemark"
+                      type="text"
+                      maxlength="120"
+                      placeholder="可選"
+                    >
+                  </label>
+                  <div class="work-subaccount-form-actions">
+                    <button
+                      type="button"
+                      class="work-action"
+                      :disabled="!canSubmitSubaccountGrant(group)"
+                      @click="handleGrantSubaccount(group)"
+                    >
+                      {{ group.isGranting ? '提交中' : '提交授權' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="work-action secondary"
+                      :disabled="group.isGranting"
+                      @click="toggleSubaccountGrantForm(group.unitID)"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+                <table class="work-table">
+                  <thead><tr><th>地點</th><th>用戶</th><th>角色</th><th>記錄</th><th>操作</th></tr></thead>
+                  <tbody>
+                    <tr v-for="row in group.rows" :key="row.key">
+                      <td>{{ row.location }}</td>
+                      <td>
+                        <strong>{{ row.user }}</strong>
+                        <span v-if="row.meta" class="work-subaccount-user-meta">{{ row.meta }}</span>
+                      </td>
+                      <td>{{ row.role }}</td>
+                      <td>{{ row.historyCount }}</td>
+                      <td>
+                        <button
+                          type="button"
+                          class="work-mini-btn"
+                          :disabled="revokingSubaccountKey === row.key"
+                          @click="handleRevokeSubaccount(group, row)"
+                        >
+                          {{ revokingSubaccountKey === row.key ? '撤銷中' : '撤銷' }}
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="group.error">
+                      <td colspan="5" class="work-subaccount-empty">{{ group.error }}</td>
+                    </tr>
+                    <tr v-else-if="group.rows.length === 0">
+                      <td colspan="5" class="work-subaccount-empty">目前未有授權副戶資料</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
           </section>
         </div>
 
@@ -961,7 +1538,7 @@ watch(
             <div>
               <div class="work-kicker">Property Binding</div>
               <h2 class="work-title">物業綁定</h2>
-              <p class="work-desc">提交大廈與單位資料，並上載指定文件予管理處審批。</p>
+              <p class="work-desc">提交大廈與單位資料予管理處審批。</p>
             </div>
           </section>
           <section class="work-card">
@@ -975,72 +1552,118 @@ watch(
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">選擇平台</div>
-            <div class="binding-platform-grid">
-              <button
-                type="button"
-                class="binding-platform-card"
-                :class="{ on: bindingPlatform === 'pm' }"
-                @click="bindingPlatform = 'pm'"
-              >
-                <strong>AJO PM 大廈平台</strong>
-                <span>適用於已接入 iSmart 或由物業管理公司審批的大廈。</span>
-              </button>
-              <button
-                type="button"
-                class="binding-platform-card"
-                :class="{ on: bindingPlatform === 'rent' }"
-                @click="bindingPlatform = 'rent'"
-              >
-                <strong>AJO Rent 租務平台</strong>
-                <span>適用於租務住宅或由 AJO 確認的租住申請。</span>
-              </button>
-            </div>
+            <div class="work-card-title">審批說明</div>
             <div class="binding-review-box">
               <strong>審批責任</strong>
-              <span v-if="bindingPlatform === 'pm'">AJO PM 大廈平台由物業管理公司審批。</span>
-              <span v-else>AJO Rent 租務平台由 AJO 根據租務資料確認。</span>
+              <span>此申請會提交至 iSmart OwnerReg 業主角色綁定流程，由職員審批後生效。</span>
             </div>
           </section>
           <section class="work-card">
             <div class="work-card-title">綁定申請</div>
-            <div v-show="bindingPlatform === 'pm'" class="binding-platform-panel" :class="{ on: bindingPlatform === 'pm' }">
-              <div class="binding-subtitle">已支援大廈</div>
+            <div class="binding-platform-panel">
+              <div class="binding-subtitle">申請單位</div>
+              <div class="work-bind-current">{{ bindingCurrent }}</div>
               <div class="acct-form-grid">
-                <div class="acct-field full">
+                <div class="acct-field">
                   <label>大廈</label>
-                  <select class="acct-select">
-                    <option>請選擇已支援大廈</option>
-                    <option>時安大廈</option>
-                    <option>仁英大廈</option>
-                    <option>康睦庭園第二座</option>
-                    <option>協和大廈</option>
+                  <select
+                    v-model="bindingBuildingID"
+                    class="acct-select"
+                    :disabled="bindingBuildingsLoading || bindingBuildingOptions.length === 0"
+                  >
+                    <option value="">{{ bindingBuildingsLoading ? '載入中' : '請選擇大廈' }}</option>
+                    <option
+                      v-for="item in bindingBuildingOptions"
+                      :key="item.value"
+                      :value="item.value"
+                    >
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="acct-field">
+                  <label>樓層</label>
+                  <select
+                    v-model="bindingFloor"
+                    class="acct-select"
+                    :disabled="!bindingBuildingID || bindingUnitsLoading || bindingFloorOptions.length === 0"
+                  >
+                    <option value="">{{ bindingUnitsLoading ? '載入中' : '請選擇樓層' }}</option>
+                    <option
+                      v-for="item in bindingFloorOptions"
+                      :key="item.value"
+                      :value="item.value"
+                    >
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="acct-field">
+                  <label>單位</label>
+                  <select
+                    v-model="bindingUnitID"
+                    class="acct-select"
+                    :disabled="!bindingFloor || bindingUnitsLoading || bindingUnitOptions.length === 0"
+                  >
+                    <option value="">{{ bindingUnitsLoading ? '載入中' : '請選擇單位' }}</option>
+                    <option
+                      v-for="item in bindingUnitOptions"
+                      :key="item.value"
+                      :value="item.value"
+                    >
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="acct-field">
+                  <label>申請身份</label>
+                  <select v-model="bindingRole" class="acct-select">
+                    <option
+                      v-for="role in bindingRoleOptions"
+                      :key="role"
+                      :value="role"
+                    >
+                      {{ role }}
+                    </option>
                   </select>
                 </div>
               </div>
-              <div class="binding-subtitle">未收錄大廈資料</div>
-              <div class="acct-form-grid">
-                <div class="acct-field"><label>大廈名稱</label><input class="acct-input" type="text" placeholder="請輸入大廈名稱"></div>
-                <div class="acct-field"><label>大廈地址</label><input class="acct-input" type="text" placeholder="請輸入完整地址"></div>
-                <div class="acct-field"><label>樓層</label><input class="acct-input" type="text" placeholder="例如 07"></div>
-                <div class="acct-field"><label>單位</label><input class="acct-input" type="text" placeholder="例如 B"></div>
-                <div class="acct-field"><label>申請身份</label><select class="acct-select"><option>業主</option><option>租客</option><option>住戶代表</option><option>公司授權人</option></select></div>
-              </div>
-            </div>
-            <div v-show="bindingPlatform === 'rent'" class="binding-platform-panel" :class="{ on: bindingPlatform === 'rent' }">
-              <div class="binding-subtitle">租務單位資料</div>
-              <div class="acct-form-grid">
-                <div class="acct-field"><label>租務大廈或項目</label><input class="acct-input" type="text" placeholder="請輸入大廈或項目名稱"></div>
-                <div class="acct-field"><label>申請身份</label><select class="acct-select"><option>業主</option><option>租客</option><option>住戶代表</option><option>公司授權人</option></select></div>
-                <div class="acct-field"><label>樓層</label><input class="acct-input" type="text" placeholder="例如 07"></div>
-                <div class="acct-field"><label>單位</label><input class="acct-input" type="text" placeholder="例如 B"></div>
-              </div>
             </div>
             <div class="acct-form-grid binding-common-grid">
-              <div class="acct-field"><label>申請人姓名</label><input class="acct-input" type="text"></div>
-              <div class="acct-field"><label>聯絡電話</label><input class="acct-input" type="text"></div>
-              <div class="acct-field full"><label>聯絡電郵</label><input class="acct-input" type="email"></div>
-              <div class="acct-field full"><label>備註</label><textarea class="acct-textarea" placeholder="可補充與審批人核對所需資料"></textarea></div>
+              <div class="acct-field">
+                <label>申請人姓名</label>
+                <input v-model="bindingApplicantName" class="acct-input" type="text" autocomplete="name">
+              </div>
+              <div class="acct-field">
+                <label>聯絡電話</label>
+                <input v-model="bindingPhone" class="acct-input" type="tel" autocomplete="tel">
+              </div>
+              <div class="acct-field full">
+                <label>聯絡電郵</label>
+                <input v-model="bindingEmail" class="acct-input" type="email" autocomplete="email">
+              </div>
+              <div class="acct-field full">
+                <label>備註</label>
+                <textarea
+                  v-model="bindingNote"
+                  class="acct-textarea"
+                  placeholder="可補充與審批人核對所需資料"
+                ></textarea>
+              </div>
+            </div>
+            <label class="binding-check">
+              <input v-model="bindingReceiveEmail" type="checkbox">
+              <span>接收此申請的電郵通知</span>
+            </label>
+            <div class="work-bind-actions work-doc-actions">
+              <button
+                type="button"
+                class="work-action"
+                :disabled="!canSubmitOwnerBinding"
+                @click="handleSubmitOwnerBindingRequest"
+              >
+                {{ bindingSubmitting ? '提交中' : '提交審批' }}
+              </button>
             </div>
           </section>
           <section class="work-card">
@@ -1049,17 +1672,16 @@ watch(
               <div v-for="doc in bindingDocs" :key="doc.title" class="binding-doc-card">
                 <div class="binding-doc-title">{{ doc.title }}</div>
                 <div class="binding-doc-desc">{{ doc.desc }}</div>
-                <input class="acct-file" type="file">
               </div>
-            </div>
-            <div class="work-bind-actions work-doc-actions">
-              <button type="button" class="work-action">提交審批</button>
             </div>
           </section>
           <section class="work-card">
             <div class="work-card-title">申請狀態</div>
             <div class="binding-status-list">
-              <div v-for="item in bindingStatusList" :key="item.title" class="binding-status-item">
+              <div v-if="bindingStatusList.length === 0" class="binding-empty-state">
+                目前未有本次提交記錄。
+              </div>
+              <div v-for="item in bindingStatusList" :key="item.key" class="binding-status-item">
                 <div>
                   <div class="binding-status-title">{{ item.title }}</div>
                   <div class="binding-status-meta">{{ item.meta }}</div>
@@ -1700,6 +2322,12 @@ watch(
   color: var(--ink);
 }
 
+.work-action:disabled,
+.work-mini-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .work-compact-action {
   min-height: 38px;
   border-radius: 6px;
@@ -1872,6 +2500,68 @@ watch(
   font-weight: 700;
 }
 
+.work-subaccount-state {
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 18px;
+}
+
+.work-subaccount-state.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--danger);
+}
+
+.work-subaccount-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.work-subaccount-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.work-subaccount-form input {
+  width: 100%;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.work-subaccount-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.work-subaccount-user-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .work-subaccount-empty {
   color: var(--ink-3);
   font-size: 12px;
@@ -1949,54 +2639,10 @@ watch(
   line-height: 1.6;
 }
 
-/* 19. 平台選擇 */
-.binding-platform-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.binding-platform-card {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  padding: 16px;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-
-.binding-platform-card:hover {
-  border-color: var(--brand-mid);
-  box-shadow: var(--shadow-sm);
-}
-
-.binding-platform-card.on {
-  border-color: var(--brand);
-  background: var(--brand-light);
-}
-
-.binding-platform-card strong {
-  display: block;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-.binding-platform-card span {
-  display: block;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
+/* 19. 審批說明 */
 .binding-review-box {
   display: grid;
   gap: 6px;
-  margin-top: 12px;
   border: 1px solid var(--bdr);
   border-radius: 8px;
   background: var(--sur-2);
@@ -2035,7 +2681,23 @@ watch(
   margin-top: 14px;
 }
 
-/* 21. 文件上傳 */
+.binding-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.binding-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+
+/* 21. 文件說明 */
 .binding-doc-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2096,6 +2758,16 @@ watch(
   margin-top: 4px;
 }
 
+.binding-empty-state {
+  border: 1px dashed var(--bdr-2);
+  border-radius: 8px;
+  background: var(--sur-2);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 14px;
+}
+
 /* 23. 表單元件 */
 .acct-form-grid {
   display: grid;
@@ -2138,18 +2810,6 @@ watch(
   line-height: 1.6;
 }
 
-.acct-file {
-  flex: 1;
-  min-width: 260px;
-  border: 1px dashed var(--bdr-2);
-  border-radius: 6px;
-  background: var(--sur-2);
-  padding: 12px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 /* 24. 響應式 - 平板 */
 @media (max-width: 900px) {
   .work-shell {
@@ -2170,7 +2830,6 @@ watch(
   .work-account-grid,
   .work-bind-grid,
   .binding-flow,
-  .binding-platform-grid,
   .binding-doc-grid {
     grid-template-columns: 1fr;
   }
@@ -2181,6 +2840,10 @@ watch(
   }
 
   .acct-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .work-subaccount-form {
     grid-template-columns: 1fr;
   }
 }

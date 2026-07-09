@@ -7,8 +7,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"ajoliving_web/http_service/internal/config"
 	"ajoliving_web/http_service/internal/model"
 	"ajoliving_web/http_service/internal/utils"
 )
@@ -141,4 +145,174 @@ func TestIsmartSelectVisibleBuildingRejectsInvisibleProfileBuilding(t *testing.T
 	if err == nil {
 		t.Fatal("expected invisible profile building to be rejected")
 	}
+}
+
+// 3. TestIsmartListManagementFeesUsesIntegration verifies raw array integration payloads are decorated.
+func TestIsmartListManagementFeesUsesIntegration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v1/integration/buildings/receivables/management-fees/" {
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+		if request.URL.Query().Get("building_id") != "0348200" || request.URL.Query().Get("data_structure") != "table" {
+			t.Fatalf("unexpected query: %s", request.URL.RawQuery)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`[{"unit":"18A","amount":1500}]`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	result, err := NewIsmartExternalService(runtimeValue).ListManagementFees(context.Background(), user.ID, IsmartReceivableParams{
+		BuildingID: "0348200",
+	})
+	if err != nil {
+		t.Fatalf("list management fees: %v", err)
+	}
+	rows, ok := result["result"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("expected one raw result row, got %#v", result["result"])
+	}
+	if result["selected_building_id"] != "0348200" {
+		t.Fatalf("expected selected building, got %#v", result)
+	}
+}
+
+// 4. TestIsmartGetBuildingInfoNormalizesDocumentGroups verifies old and new file keys are readable.
+func TestIsmartGetBuildingInfoNormalizesDocumentGroups(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v1/integration/buildings/info/" {
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+		if request.URL.Query().Get("building_id") != "0348200" {
+			t.Fatalf("unexpected query: %s", request.URL.RawQuery)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{
+			"status":"success",
+			"data":{
+				"building":{"building_id":"0348200"},
+				"documents":{
+					"floorplans":[],
+					"floorplan":[{"id":1,"title":"平面圖"}],
+					"audit_reports":[],
+					"auditreport":[{"id":3,"title":"核數報告"}],
+					"mfinreport":[{"id":2,"title":"財務報告"}]
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	result, err := NewIsmartExternalService(runtimeValue).GetBuildingInfo(context.Background(), user.ID, IsmartBuildingParams{
+		BuildingID: "0348200",
+	})
+	if err != nil {
+		t.Fatalf("get building info: %v", err)
+	}
+	documents, ok := result["documents"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected document map, got %#v", result["documents"])
+	}
+	floorplans, ok := documents["floorplans"].([]any)
+	if !ok || len(floorplans) != 1 {
+		t.Fatalf("expected normalized floorplans, got %#v", documents["floorplans"])
+	}
+	forms, ok := documents["forms"].([]any)
+	if !ok || len(forms) != 0 {
+		t.Fatalf("expected empty forms array, got %#v", documents["forms"])
+	}
+	auditReports, ok := documents["audit_reports"].([]any)
+	if !ok || len(auditReports) != 1 {
+		t.Fatalf("expected normalized audit reports, got %#v", documents["audit_reports"])
+	}
+	financialReports, ok := documents["financial_reports"].([]any)
+	if !ok || len(financialReports) != 1 {
+		t.Fatalf("expected normalized financial reports, got %#v", documents["financial_reports"])
+	}
+}
+
+// 5. TestIsmartOwnerBindingInjectsCurrentUser verifies frontend user_id cannot override iSmart identity.
+func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v1/integration/buildings/building-flat-owner-binding-requests/" {
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload["user"].(float64) != 88 {
+			t.Fatalf("expected current ismart user 88, got %#v", payload["user"])
+		}
+		if payload["building_id"] != "0348200" {
+			t.Fatalf("unexpected building id: %#v", payload["building_id"])
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"success","data":{"owner_reg_id":45,"status":"pending_approval"}}`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	result, err := NewIsmartExternalService(runtimeValue).SubmitOwnerBindingRequest(context.Background(), user.ID, IsmartOwnerBindingParams{
+		BuildingID: "0348200",
+		OwnedFlat:  []string{"0348200001"},
+		Role:       "業主",
+	})
+	if err != nil {
+		t.Fatalf("submit owner binding: %v", err)
+	}
+	if result["owner_reg_id"] != json.Number("45") && result["owner_reg_id"] != float64(45) {
+		t.Fatalf("expected owner_reg_id in result, got %#v", result)
+	}
+}
+
+// 6. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
+func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, model.User) {
+	t.Helper()
+	runtimeValue := newAuthTestRuntime(
+		t,
+		&config.Config{
+			IsmartExternalAppBaseURL:    baseURL,
+			IsmartExternalAppAPIBaseURL: baseURL + "/api/v1/external",
+			IsmartIntegrationAPIBaseURL: baseURL + "/api/v1/integration",
+		},
+		&model.User{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	user := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234569",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	visibleBuildingJSON, err := marshalJSON([]string{"0348200"})
+	if err != nil {
+		t.Fatalf("marshal visible building json: %v", err)
+	}
+	visibleUnitJSON, err := marshalJSON([]string{"0348200001"})
+	if err != nil {
+		t.Fatalf("marshal visible unit json: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             user.ID,
+		IsmartUserID:                       88,
+		Username:                           "patrick",
+		ClientBuildingPermissions:          visibleBuildingJSON,
+		ClientBuildingFlatUnitsPermissions: visibleUnitJSON,
+		Building:                           []byte("[]"),
+		StaffBuildingPermissions:           []byte("[]"),
+		RawMessage:                         []byte("{}"),
+	}).Error; err != nil {
+		t.Fatalf("create ismart account: %v", err)
+	}
+
+	return runtimeValue, user
 }

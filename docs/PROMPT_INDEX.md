@@ -55,3 +55,7 @@ No direct prompt regression test currently guards prompt wording or localization
 2026-07-08: Established the project prompt/context index and connected docs, AGENTS files, deployment prompts, and local Codex skill prompts.
 2026-07-08: Added local memory maps for reusable UI prompts, deployment prompts, frontend pages, and backend internal layers.
 2026-07-08: Archived docs product, prototypes, and backups under `docs/archive` and excluded them from prompt/context indexing.
+2026-07-08: Recorded POS iSmart relay v2 deployment chain and verification rules in the deployment prompt.
+2026-07-08: Recorded AJO backend iSmart integration base URL deployment requirements alongside the legacy external app API.
+2026-07-09: Recorded `我的大廈` finance and owner-account AJO member API usage in the iSmart integration docs.
+2026-07-09: Added the default post-change prompt/context memory audit rule to the repository instructions.

@@ -18,8 +18,16 @@ func registerIsmartRoutes(
 	requireAuth gin.HandlerFunc,
 ) {
 	api.GET("/me/ismart/buildings", requireAuth, ismartHandler.ListBuildings)
+	api.POST("/me/ismart/account-registration", requireAuth, ismartHandler.RegisterAccount)
 	api.GET("/me/ismart/building-info", requireAuth, ismartHandler.GetBuildingInfo)
+	api.GET("/me/ismart/management-fees", requireAuth, ismartHandler.ListManagementFees)
+	api.GET("/me/ismart/other-fees", requireAuth, ismartHandler.ListOtherFees)
+	api.GET("/me/ismart/notices", requireAuth, ismartHandler.ListBuildingNotices)
 	api.POST("/me/ismart/building-comments", requireAuth, ismartHandler.SubmitBuildingComment)
+	api.POST("/me/ismart/owner-binding-requests", requireAuth, ismartHandler.SubmitOwnerBindingRequest)
+	api.GET("/me/ismart/subaccounts", requireAuth, ismartHandler.ListSubaccounts)
+	api.POST("/me/ismart/subaccounts/grant", requireAuth, ismartHandler.GrantSubaccount)
+	api.POST("/me/ismart/subaccounts/revoke", requireAuth, ismartHandler.RevokeSubaccount)
 	api.GET("/me/ismart/building-access", requireAuth, ismartHandler.GetBuildingAccess)
 	api.POST("/me/ismart/building-access/open-door", requireAuth, ismartHandler.OpenDoor)
 	api.POST("/me/ismart/building-access/qrcode", requireAuth, ismartHandler.GenerateQRCode)

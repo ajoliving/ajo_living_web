@@ -14,5 +14,7 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 
 ## 變更日誌
 2026-07-08: 建立部署 prompt 目錄記憶，固定部署前讀取與驗證邊界。
+2026-07-08: 補充 POS iSmart relay v2 的實際部署鏈路、Supervisor 名稱、端口與驗證規則。
+2026-07-08: 補充 AJO 後端 iSmart integration 與 legacy external app API 並存的生產環境變數。
 
 [PROTOCOL]: When changing deployment prompts or server-operation instructions, update this map, `../PROMPT_INDEX.md`, and verify whether root `../AGENTS.md` deployment references need updating.

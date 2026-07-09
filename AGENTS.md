@@ -183,11 +183,13 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 ### 架構決策
 - `docs/PROMPT_INDEX.md` 是本倉庫 prompt/context 主索引；不要另建平行索引。
 - 新增、移動或修改 prompt、agent 規則、AI 文件生成規範、工具描述或本地 skill 時，同步更新最近的 `AGENTS.md` 與 `docs/PROMPT_INDEX.md`。
+- 每次完成程式碼、文件、部署、設定或資料契約修改後，必須執行一次 prompt/context 記憶檢查：若變更形成可重用規則、模組歸屬、接口契約、部署鏈路、頁面資料流或目錄責任，更新最近的 `AGENTS.md`、`docs/PROMPT_INDEX.md` 或對應 docs；若不需要更新，收尾時明確說明未更新原因。
 - `.claude/worktrees/`、`dist`、`node_modules`、`.uploads`、資料庫備份與 HTML 備份不是穩定上下文入口，除非使用者明確要求追溯。
 
 ### 變更日誌
 2026-07-08: 建立專案 prompt/context 記憶入口，指向 `docs/PROMPT_INDEX.md` 與 `docs/AGENTS.md`。
 2026-07-08: 補充 docs prompt、部署 prompt、前端 pages 與後端 internal 的本地記憶入口。
 2026-07-08: 將 docs product、prototypes、backups 歸入 `docs/archive/`，不作後續 prompt/context 入口。
+2026-07-09: 補充每次修改後必須執行 prompt/context 記憶檢查的默認規則。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

@@ -2,6 +2,7 @@
  * POS 物業繳費型別。
  * 1. 定義 AJO 後端聚合後的 POS 單位上下文。
  * 2. 定義 AJO Pay 首頁與付款頁需要的賬單、付款設定與訂單資料結構。
+ * 3. 定義 iSmart integration 未繳賬單與交易紀錄資料結構。
  */
 
 // 1. POS 單位上下文
@@ -70,4 +71,56 @@ export interface POSPaymentReportPayload {
   BLG_ID?: string;
   UNIT_ID?: string;
   bank_account_received?: string;
+}
+
+// 8. iSmart integration 未繳賬單
+export interface POSIntegrationUnpaidInvoice {
+  invoice_no?: string;
+  flat_code?: string;
+  item_id?: string;
+  trs_to?: string;
+  bill_dt?: string;
+  net_amount?: number;
+  remark?: string;
+  [field: string]: string | number | null | undefined;
+}
+
+// 9. iSmart integration 交易明細
+export interface POSIntegrationPaymentDetail {
+  floor?: string;
+  unit?: string;
+  flat_code?: string;
+  item_id?: string;
+  term?: string;
+  trs_val?: number;
+  remark?: string;
+  [field: string]: string | number | null | undefined;
+}
+
+// 10. iSmart integration 交易紀錄
+export interface POSIntegrationPaymentTransaction {
+  payment_id?: string;
+  input_time?: string;
+  tran_time?: string;
+  trs_val?: number;
+  receipt_id?: string;
+  ref_no?: string;
+  pay_type?: string;
+  status?: string;
+  payment_detail_objs?: POSIntegrationPaymentDetail[];
+  [field: string]: string | number | POSIntegrationPaymentDetail[] | null | undefined;
+}
+
+// 11. iSmart integration 交易紀錄回應
+export interface POSIntegrationTransactionsPayload {
+  payment_objs?: POSIntegrationPaymentTransaction[];
+}
+
+// 12. iSmart integration 日期查詢條件
+export interface POSIntegrationTransactionDateQuery {
+  building_id: string;
+  from_date: string;
+  to_date: string;
+  date_type: 'input_date' | 'tran_date';
+  pay_method?: 'all' | 'pos';
 }

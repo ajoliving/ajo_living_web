@@ -25,7 +25,7 @@
 | --- | --- | --- | --- | --- |
 | `easy.payment.skylinedances.com` | 47.239.117.108 | :20034 | Go + Supervisor | SAN(含 pos.web) |
 | `pos.web.skylinedances.com` | 47.239.117.108 | :20035 | nginx 静态 | 同上 |
-| `pos.ismart.skylinedances.com` | 47.83.21.100 | → 门店 | Go relay | 独立 |
+| `pos.ismart.skylinedances.com` | 47.83.21.100 | :28889 | Go relay + Supervisor `ismart_pos_http_relay_v2` | 独立 |
 | `iboard.skylinedances.com` | 47.239.117.108 | :9002 | Docker(前端) | 独立 |
 | `iboard.service.skylinedances.com` | 47.239.117.108 | :10031 | Docker(Go) | 独立 |
 | `icctv.skylinedances.com` | 47.239.117.108 | :32002 | Docker(前端) | SAN(含 icctv.service) |
@@ -74,6 +74,63 @@
 | `/home/admin/<project>/` | 业务服务目录 |
 | `/home/admin/svavo_smart_databoard/` | svavo 项目目录（后端、前端 dist、.env、compose） |
 | `/home/admin/good_price_databoard/` | good-price 项目目录（后端、前端 dist、.env、PostgreSQL compose） |
+
+### POS iSmart Relay 現況與部署
+
+`pos.ismart.skylinedances.com` 目前部署在網關伺服器 `47.83.21.100`，不要部署到應用伺服器。
+
+目前請求鏈路：
+
+```text
+nginx `/etc/nginx/sites-enabled/pos_ismart_ssl.conf`
+→ 127.0.0.1:80 frps
+→ `/home/admin/ismart_pos/frp/frpc.ini`
+→ localPort 28889
+→ `/home/admin/ismart_pos/ismart_pos_relay/ismart_pos_http_relay`
+```
+
+目前生效服務：
+
+| 項目 | 值 |
+| --- | --- |
+| Supervisor | `ismart_pos_http_relay_v2` |
+| 服務目錄 | `/home/admin/ismart_pos/ismart_pos_relay` |
+| 二進制 | `/home/admin/ismart_pos/ismart_pos_relay/ismart_pos_http_relay` |
+| 設定檔 | `/home/admin/ismart_pos/ismart_pos_relay/.conf` |
+| 監聽端口 | `0.0.0.0:28889` |
+| 日誌 | `/home/admin/ismart_pos/ismart_pos_relay/http_service.log`、`/home/admin/ismart_pos/ismart_pos_relay/supervisor.log` |
+
+歷史服務 `ismart_pos_http_relay` 仍在 `28888`，但目前 public domain 不指向它。除非先確認 frpc/nginx 映射已變更，不要把新版本部署到 v1 目錄。
+
+部署方式：
+
+```bash
+# 1. 本地構建
+cd /Users/yangliu/Documents/Code/hk/pos/ismart_pos_relay
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/ismart_pos_http_relay
+
+# 2. 先備份線上 v2 二進制
+ssh admin@47.83.21.100 'cd /home/admin/ismart_pos/ismart_pos_relay && cp ismart_pos_http_relay "ismart_pos_http_relay.bak_$(date +%Y%m%d_%H%M%S)"'
+
+# 3. 上傳、替換、重啟
+scp /tmp/ismart_pos_http_relay admin@47.83.21.100:/home/admin/ismart_pos/ismart_pos_relay/ismart_pos_http_relay.__new
+ssh admin@47.83.21.100 'cd /home/admin/ismart_pos/ismart_pos_relay && chmod +x ismart_pos_http_relay.__new && mv ismart_pos_http_relay.__new ismart_pos_http_relay && sudo supervisorctl restart ismart_pos_http_relay_v2'
+```
+
+驗證方式：
+
+```bash
+ssh admin@47.83.21.100 "sudo supervisorctl status ismart_pos_http_relay_v2"
+curl -i https://pos.ismart.skylinedances.com/api/poslogin
+curl -i https://pos.ismart.skylinedances.com/api/v1/integration/auth/login/
+```
+
+POS relay 支援以下可選設定；可放在 Supervisor 環境變數，也可追加到 `/home/admin/ismart_pos/ismart_pos_relay/.conf`，未設定時使用生產預設值：
+
+| 變數 | 用途 | 預設 |
+| --- | --- | --- |
+| `ISMART_OLD_API_BASE_URL` | 舊 AWS iSmart POS API base URL | `https://uqf0jqfm77.execute-api.ap-east-1.amazonaws.com/prod/v1` |
+| `ISMART_INTEGRATION_BASE_URL` | 新 iSmart integration API host | `https://ismart.ajoliving.com` |
 
 ---
 
@@ -518,6 +575,18 @@ cd /Users/yangliu/Documents/Code/ajoliving_web
 - 后端启动时会执行 GORM `AutoMigrate`，新增字段会自动补齐；正常情况下不会删除已有表或已有字段。
 - `.env` 默认保留服务器现有版本；只有显式设置 `SYNC_ENV=1` 才会用本地 `.env` 覆盖服务器 `.env`。
 - 每次部署的话，我想你能先ssh然后能将服务的配置搞懂后再部署，部署的话尽量奥卡姆剃刀原理，不要添加到了无关的服务或者文件啥的，要简单些尽量
+
+### 4.1 iSmart integration 環境變數
+
+AJO 後端同時保留舊 external app API 與新 integration API，生產 `.env` 至少保持以下設定：
+
+```bash
+ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
+ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
+ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
+```
+
+`/api/v1/me/ismart/...` 會員態接口優先使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
 
 危险操作：
 

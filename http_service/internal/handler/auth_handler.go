@@ -46,6 +46,7 @@ type emailOTPRequest struct {
 type emailPasswordRequest struct {
 	Email                 string `json:"email"`
 	Password              string `json:"password" binding:"required"`
+	EngName               string `json:"eng_name"`
 	DisplayName           string `json:"display_name"`
 	PhoneCountryCode      string `json:"phone_country_code"`
 	PhoneNumber           string `json:"phone_number"`
@@ -220,6 +221,7 @@ func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 	result, err := h.authService.RegisterWithEmail(c.Request.Context(), service.EmailPasswordParams{
 		Email:                 strings.TrimSpace(request.Email),
 		Password:              request.Password,
+		EngName:               strings.TrimSpace(request.EngName),
 		DisplayName:           strings.TrimSpace(request.DisplayName),
 		PhoneCountryCode:      strings.TrimSpace(request.PhoneCountryCode),
 		PhoneNumber:           strings.TrimSpace(request.PhoneNumber),

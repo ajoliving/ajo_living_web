@@ -56,6 +56,7 @@ go run ./http_service/cmd/server
 | 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
 | 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
 | 73 | /api/v1/auth/ismart/login | POST | 使用 ismart 帳戶登入並同步 POS 權限 | 無 |
+| 73.1 | /api/v1/me/ismart/building-info | GET | 查詢目前會員可見大廈資料與文件中繼資料 | 會員 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
 | 7 | /api/v1/me | GET | 取得目前會員資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
@@ -551,8 +552,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 {
   "email": "member@example.com", // 選填
   "password": "safe-password-123", // 必填，至少 8 個字元
-  "display_name": "Email Member", // 必填
-  "username": "email-member", // 必填
+  "eng_name": "CHAN TAI MAN", // 必填，英文姓名；舊 display_name 仍兼容
+  "username": "email-member", // 選填，未提供時後端使用手機號碼生成本地登入名
   "phone_country_code": "+852", // 必填
   "phone_number": "91234567", // 必填
   "publisher_identity_type": "owner", // 選填，owner / tenant / resident_representative / company_authorized_person
@@ -599,8 +600,7 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
   -H "Content-Type: application/json" \
   -d '{
     "password": "safe-password-123",
-    "display_name": "Email Member",
-    "username": "email-member",
+    "eng_name": "CHAN TAI MAN",
     "phone_country_code": "+852",
     "phone_number": "91234567",
     "publisher_identity_type": "owner",
@@ -614,8 +614,7 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
 $headers=@{"Content-Type"="application/json"}
 $body=@{
   password="safe-password-123"
-  display_name="Email Member"
-  username="email-member"
+  eng_name="CHAN TAI MAN"
   phone_country_code="+852"
   phone_number="91234567"
   publisher_identity_type="owner"
@@ -1119,6 +1118,46 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 }
 ```
 - **回應參數**: 同 `/api/v1/me`，包含 `ismart_linked`、`ismart_msg`、`bound_building_ids` 與 `bound_flat_unit_ids`。
+
+---
+
+### 8B. /api/v1/me/ismart/building-info [GET]
+- **簡介**: 查詢目前會員可見大廈資料與文件中繼資料，供 `我的大廈` 內 `大廈資料` 與 `大廈財務` 使用。
+- **請求參數**
+```json
+{
+  "building_id": "0348200"
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "selected_building_id": "0348200",
+    "building_options": ["0348200"],
+    "building": {
+      "building_id": "0348200",
+      "buildname_chi": "示例大廈",
+      "buildname": "Example Building"
+    },
+    "building_info": {
+      "owners_corporation_name": "示例法團",
+      "management_office_phone": "21234567",
+      "management_company_name": "Example PM Co."
+    },
+    "documents": {
+      "forms": [],
+      "building_info_files": [],
+      "floorplans": [],
+      "audit_reports": [],
+      "financial_reports": []
+    }
+  }
+}
+```
+- **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。
 
 ---
 

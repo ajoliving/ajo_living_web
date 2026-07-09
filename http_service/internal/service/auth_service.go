@@ -67,6 +67,7 @@ type EmailOTPParams struct {
 type EmailPasswordParams struct {
 	Email                 string
 	Password              string
+	EngName               string
 	DisplayName           string
 	PhoneCountryCode      string
 	PhoneNumber           string
@@ -305,11 +306,15 @@ func (s *AuthService) VerifyEmailOTP(ctx context.Context, params EmailOTPParams)
 func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswordParams) (*VerifyOTPResult, error) {
 	email := normalizeEmail(params.Email)
 	password := strings.TrimSpace(params.Password)
+	engName := strings.TrimSpace(params.EngName)
+	if engName == "" {
+		engName = strings.TrimSpace(params.DisplayName)
+	}
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
 	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
 	username := strings.TrimSpace(params.Username)
 	if username == "" {
-		username = strings.TrimSpace(params.DisplayName)
+		username = registrationUsernameCandidate(phoneNumber, email, engName)
 	}
 	normalizedUsername := normalizeUsername(username)
 	publisherIdentityType := strings.TrimSpace(params.PublisherIdentityType)
@@ -327,8 +332,8 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	if email != "" && !isValidEmail(email) {
 		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 	}
-	if !isValidPhone(phoneCountryCode, phoneNumber) || !isValidUsername(normalizedUsername) || len(password) < 8 {
-		return nil, errcode.New(errcode.CodeValidationError, "valid phone number, username, and password are required")
+	if !isValidPhone(phoneCountryCode, phoneNumber) || !isValidEnglishName(engName) || !isValidUsername(normalizedUsername) || len(password) < 8 {
+		return nil, errcode.New(errcode.CodeValidationError, "valid phone number, English name, username, and password are required")
 	}
 
 	passwordHash, err := utils.HashPassword(password)
@@ -394,7 +399,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 
 		profile = model.UserProfile{
 			UserID:                user.ID,
-			DisplayName:           username,
+			DisplayName:           engName,
 			PublisherIdentityType: publisherIdentityType,
 			ResidenceFloor:        residenceFloor,
 			ResidenceUnit:         residenceUnit,
@@ -1795,22 +1800,41 @@ func normalizeUsername(username string) string {
 	return strings.ToLower(strings.TrimSpace(username))
 }
 
-// 63. isValidUsername checks the minimum username shape needed for password auth.
+// 63. registrationUsernameCandidate chooses a stable local username fallback.
+func registrationUsernameCandidate(phoneNumber string, email string, engName string) string {
+	if strings.TrimSpace(phoneNumber) != "" {
+		return strings.TrimSpace(phoneNumber)
+	}
+	if strings.TrimSpace(email) != "" {
+		localPart := strings.Split(strings.TrimSpace(email), "@")[0]
+		if strings.TrimSpace(localPart) != "" {
+			return localPart
+		}
+	}
+	return strings.ReplaceAll(strings.TrimSpace(engName), " ", "")
+}
+
+// 64. isValidUsername checks the minimum username shape needed for password auth.
 func isValidUsername(username string) bool {
 	return len(username) >= 2 && len(username) <= 120 && !strings.ContainsAny(username, " \t\r\n")
 }
 
-// 64. normalizeEmail prepares email lookup input.
+// 65. isValidEnglishName checks the registration name required by iSmart.
+func isValidEnglishName(name string) bool {
+	return len(strings.TrimSpace(name)) >= 2 && len(strings.TrimSpace(name)) <= 120
+}
+
+// 66. normalizeEmail prepares email lookup input.
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// 65. isValidEmail checks the minimum email shape needed for auth flows.
+// 67. isValidEmail checks the minimum email shape needed for auth flows.
 func isValidEmail(email string) bool {
 	return strings.Contains(email, "@") && strings.Contains(email, ".") && len(email) <= 255
 }
 
-// 66. normalizePhoneCountryCode prepares a phone country code for lookup.
+// 68. normalizePhoneCountryCode prepares a phone country code for lookup.
 func normalizePhoneCountryCode(countryCode string) string {
 	value := strings.TrimSpace(countryCode)
 	if value == "" {
@@ -1822,14 +1846,14 @@ func normalizePhoneCountryCode(countryCode string) string {
 	return "+" + value
 }
 
-// 67. normalizePhoneNumber prepares a phone number for lookup.
+// 69. normalizePhoneNumber prepares a phone number for lookup.
 func normalizePhoneNumber(phoneNumber string) string {
 	value := strings.TrimSpace(phoneNumber)
 	value = strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(value)
 	return value
 }
 
-// 68. isValidPhone checks the minimum phone shape needed for password auth.
+// 70. isValidPhone checks the minimum phone shape needed for password auth.
 func isValidPhone(countryCode string, phoneNumber string) bool {
 	if !strings.HasPrefix(countryCode, "+") || len(countryCode) > 8 || len(phoneNumber) < 4 || len(phoneNumber) > 32 {
 		return false
@@ -1842,7 +1866,7 @@ func isValidPhone(countryCode string, phoneNumber string) bool {
 	return true
 }
 
-// 69. normalizeAuthScene returns a stable verification scene.
+// 71. normalizeAuthScene returns a stable verification scene.
 func normalizeAuthScene(scene string) string {
 	value := strings.TrimSpace(scene)
 	if value == "" {
@@ -1852,7 +1876,7 @@ func normalizeAuthScene(scene string) string {
 	return value
 }
 
-// 70. buildEmailOTPContent returns the email verification message.
+// 72. buildEmailOTPContent returns the email verification message.
 func buildEmailOTPContent(code string, scene string) (string, string) {
 	if normalizeAuthScene(scene) == passwordResetEmailScene {
 		return "AJO Living password reset code", fmt.Sprintf("Your AJO Living password reset code is %s. It expires in 5 minutes.", code)
@@ -1867,7 +1891,7 @@ func buildEmailOTPContent(code string, scene string) (string, string) {
 	return subject, body
 }
 
-// 71. otpMockDisclosureAllowed allows mock code output only in local test environments.
+// 73. otpMockDisclosureAllowed allows mock code output only in local test environments.
 func otpMockDisclosureAllowed(appEnv string) bool {
 	switch strings.ToLower(strings.TrimSpace(appEnv)) {
 	case "", "development", "dev", "local", "test", "testing":
@@ -1877,12 +1901,12 @@ func otpMockDisclosureAllowed(appEnv string) bool {
 	}
 }
 
-// 72. otpKey builds the in-memory OTP lookup key.
+// 74. otpKey builds the in-memory OTP lookup key.
 func otpKey(countryCode string, phoneNumber string, scene string) string {
 	return strings.TrimSpace(countryCode) + ":" + strings.TrimSpace(phoneNumber) + ":" + normalizeAuthScene(scene)
 }
 
-// 73. emailOTPKey builds the in-memory email OTP lookup key.
+// 75. emailOTPKey builds the in-memory email OTP lookup key.
 func emailOTPKey(email string, scene string) string {
 	return "email:" + normalizeEmail(email) + ":" + normalizeAuthScene(scene)
 }

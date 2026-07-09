@@ -9,6 +9,7 @@ package service
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
 	"gorm.io/gorm"
@@ -73,14 +74,19 @@ func (s *IsmartExternalService) GetBuildingInfo(ctx context.Context, userID int6
 		return nil, err
 	}
 
-	result, err := s.postExternal(ctx, "/building-info/", map[string]any{
-		"building_id": buildingID,
-	})
+	query := url.Values{}
+	query.Set("building_id", buildingID)
+	result, err := s.getIntegration(ctx, "/buildings/info/", query)
+	if err != nil && ismartFallbackAllowed(err, false) {
+		result, err = s.postExternal(ctx, "/building-info/", map[string]any{
+			"building_id": buildingID,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
+	return decorateIsmartPayload(normalizeBuildingInfoPayload(result.Payload), buildingID, buildingOptions, result.Message, account.IsStaff), nil
 }
 
 // 9. SubmitBuildingComment proxies building comment submission.
@@ -95,12 +101,16 @@ func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userI
 		return nil, errcode.New(errcode.CodeValidationError, "comment type and content are required")
 	}
 
-	result, err := s.postExternal(ctx, "/blg-cs/submit/", map[string]any{
+	payload := map[string]any{
 		"user_id":      account.IsmartUserID,
 		"building_id":  buildingID,
 		"comment_type": commentType,
 		"comment":      comment,
-	})
+	}
+	result, err := s.postIntegration(ctx, "/buildings/comments/", payload)
+	if err != nil && ismartFallbackAllowed(err, true) {
+		result, err = s.postExternal(ctx, "/blg-cs/submit/", payload)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -115,10 +125,14 @@ func (s *IsmartExternalService) GetBuildingAccess(ctx context.Context, userID in
 		return nil, err
 	}
 
-	result, err := s.postExternal(ctx, "/building-access/", map[string]any{
+	payload := map[string]any{
 		"user_id":     account.IsmartUserID,
 		"building_id": buildingID,
-	})
+	}
+	result, err := s.postIntegration(ctx, "/access/buildings/", payload)
+	if err != nil && ismartFallbackAllowed(err, false) {
+		result, err = s.postExternal(ctx, "/building-access/", payload)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -136,11 +150,15 @@ func (s *IsmartExternalService) OpenDoor(ctx context.Context, userID int64, para
 		return nil, errcode.New(errcode.CodeValidationError, "door id is required")
 	}
 
-	result, err := s.postExternal(ctx, "/building-access/open-door/", map[string]any{
+	payload := map[string]any{
 		"user_id":     account.IsmartUserID,
 		"building_id": buildingID,
 		"door_id":     params.DoorID,
-	})
+	}
+	result, err := s.postIntegration(ctx, "/access/open-door/", payload)
+	if err != nil && ismartFallbackAllowed(err, true) {
+		result, err = s.postExternal(ctx, "/building-access/open-door/", payload)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -162,11 +180,15 @@ func (s *IsmartExternalService) GenerateQRCode(ctx context.Context, userID int64
 		term = "dynamic"
 	}
 
-	result, err := s.postExternal(ctx, "/building-access/qrcode/", map[string]any{
+	payload := map[string]any{
 		"user_id":          account.IsmartUserID,
 		"qrcode_record_id": params.QRCodeRecordID,
 		"term":             term,
-	})
+	}
+	result, err := s.postIntegration(ctx, "/access/qrcode/", payload)
+	if err != nil && ismartFallbackAllowed(err, true) {
+		result, err = s.postExternal(ctx, "/building-access/qrcode/", payload)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +214,10 @@ func (s *IsmartExternalService) SubmitPOSPayment(ctx context.Context, userID int
 	requestPayload["BLG_ID"] = buildingID
 	requestPayload["USER_ID"] = account.IsmartUserID
 
-	result, err := s.postRoot(ctx, "/api/v1/pos-payment-to-ismart", requestPayload)
+	result, err := s.postIntegration(ctx, "/payments/pos/", requestPayload)
+	if err != nil && ismartFallbackAllowed(err, true) {
+		result, err = s.postRoot(ctx, "/api/v1/pos-payment-to-ismart", requestPayload)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -292,9 +317,67 @@ func (s *IsmartExternalService) visibleBuildingIDs(account *model.UserIsmartAcco
 	return resolveIsmartBoundBuildings(message)
 }
 
-// 19. decorateIsmartPayload adds AJO visibility metadata to upstream data.
-func decorateIsmartPayload(payload map[string]any, buildingID string, buildingOptions []string, message string, isStaff bool) map[string]any {
-	result := paymentCloneMap(payload)
+// 19. normalizeBuildingInfoPayload keeps old and new building document groups readable.
+func normalizeBuildingInfoPayload(payload any) any {
+	result := paymentMapValue(payload)
+	if len(result) == 0 {
+		return payload
+	}
+
+	documents := paymentMapValue(result["documents"])
+	if documents == nil {
+		documents = map[string]any{}
+	}
+	documents["forms"] = buildingDocumentGroup(documents, "forms")
+	documents["building_info_files"] = buildingDocumentGroup(documents, "building_info_files")
+	documents["floorplans"] = buildingDocumentGroup(documents, "floorplans", "floorplan")
+	documents["audit_reports"] = buildingDocumentGroup(documents, "audit_reports", "auditreport", "audition")
+	documents["financial_reports"] = buildingDocumentGroup(documents, "financial_reports", "mfinreport")
+	result["documents"] = documents
+
+	return result
+}
+
+// 20. buildingDocumentGroup reads one canonical document group from compatible keys.
+func buildingDocumentGroup(documents map[string]any, keys ...string) any {
+	var fallback any
+	for _, key := range keys {
+		if value, ok := documents[key]; ok && value != nil {
+			if fallback == nil {
+				fallback = value
+			}
+			if !isEmptyDocumentGroup(value) {
+				return value
+			}
+		}
+	}
+	if fallback != nil {
+		return fallback
+	}
+
+	return []any{}
+}
+
+// 21. isEmptyDocumentGroup checks whether one document group is an empty list.
+func isEmptyDocumentGroup(value any) bool {
+	switch rows := value.(type) {
+	case []any:
+		return len(rows) == 0
+	case []map[string]any:
+		return len(rows) == 0
+	case []string:
+		return len(rows) == 0
+	default:
+		return false
+	}
+}
+
+// 22. decorateIsmartPayload adds AJO visibility metadata to upstream data.
+func decorateIsmartPayload(payload any, buildingID string, buildingOptions []string, message string, isStaff bool) map[string]any {
+	result := paymentCloneMap(paymentMapValue(payload))
+	if len(result) == 0 && payload != nil {
+		result["result"] = payload
+	}
 	result["building_options"] = buildingOptions
 	result["is_staff"] = isStaff
 	if strings.TrimSpace(buildingID) != "" {

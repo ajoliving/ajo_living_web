@@ -23,7 +23,7 @@ export type LoginEmailAction = 'login' | 'register';
 export interface LoginFormState {
   email: string;
   password: string;
-  displayName: string;
+  engName: string;
   phone: string;
   phoneCountryCode: string;
   publisherIdentityType: string;
@@ -73,7 +73,7 @@ const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
 const createInitialFormState = (): LoginFormState => ({
   email: '',
   password: '',
-  displayName: '',
+  engName: '',
   phone: '',
   phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
   publisherIdentityType: DEFAULT_PUBLISHER_IDENTITY_TYPE,
@@ -206,13 +206,19 @@ const isValidUsernameInput = (value: string): boolean => {
   return username.length >= 2 && username.length <= 120 && !/\s/.test(username);
 };
 
-// 7. 取得隨機登入頁主視覺
+// 7. 檢查英文姓名格式
+const isValidEngNameInput = (value: string): boolean => {
+  const engName = value.trim();
+  return engName.length >= 2 && engName.length <= 120;
+};
+
+// 8. 取得隨機登入頁主視覺
 const getRandomHeroImage = (): LoginHeroImage => {
   const selectedIndex = Math.floor(Math.random() * LOGIN_HERO_IMAGES.length);
   return LOGIN_HERO_IMAGES[selectedIndex] ?? LOGIN_HERO_IMAGES[0];
 };
 
-// 8. 將後台登入背景圖轉為頁面主視覺列表
+// 9. 將後台登入背景圖轉為頁面主視覺列表
 const buildConfiguredHeroImages = (items: LoginHeroImageSetting[]): LoginHeroImage[] =>
   items
     .slice()
@@ -513,7 +519,7 @@ export const useLoginPage = () => {
       }
 
       const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-      if (!isValidUsernameInput(formState.displayName) || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
+      if (!isValidEngNameInput(formState.engName) || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
         feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
         return;
       }
@@ -533,10 +539,9 @@ export const useLoginPage = () => {
         await sessionStore.registerEmailAccount(
           formState.email.trim(),
           formState.password,
-          formState.displayName.trim(),
+          formState.engName.trim(),
           phoneCountryCode,
           phoneNumber,
-          formState.displayName.trim(),
           formState.publisherIdentityType.trim(),
           formState.primaryCommunityID.trim(),
           selectedBuildingName.value.trim(),
