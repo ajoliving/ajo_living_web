@@ -1,7 +1,7 @@
 <!--
  * 聊天頁。
  * 1. 串接真實會話列表、詳情、訊息與已讀流程。
- * 2. 保持左欄會話與右欄內容上下文的高資訊密度布局。
+ * 2. 以會話列表與聊天內容單頁切換，維持清晰的訊息操作流程。
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
@@ -21,6 +21,7 @@ const {
   conversations,
   draftMessage,
   formatPrice,
+  handleBackToChats,
   handleSelectChat,
   handleSendByEnter,
   handleSendMessage,
@@ -43,7 +44,10 @@ const {
         v-if="sessionStore.isAuthenticated"
         class="chat-layout"
       >
-        <div class="chat-panel chat-panel--conversations">
+        <div
+          v-if="!activeConversation"
+          class="chat-panel chat-panel--conversations"
+        >
           <div class="chat-panel__header chat-panel__header--compact">
             <div>
               <p class="chat-panel__eyebrow">{{ t('chat.kicker') }}</p>
@@ -112,10 +116,25 @@ const {
           </div>
         </div>
 
-        <div class="chat-panel chat-thread">
-          <template v-if="activeConversation">
-            <div class="chat-panel__header">
-              <div class="chat-thread-header">
+        <div
+          v-else
+          class="chat-panel chat-thread"
+        >
+          <div class="chat-panel__header">
+            <div class="chat-thread-header">
+              <div class="chat-thread-header__identity">
+                <button
+                  type="button"
+                  class="chat-back-button"
+                  :aria-label="t('chat.backToConversations')"
+                  :title="t('chat.backToConversations')"
+                  @click="handleBackToChats"
+                >
+                  <AppIcon
+                    name="arrow-left"
+                    :size="18"
+                  />
+                </button>
                 <div class="chat-thread-header__main">
                   <p class="chat-thread-header__title">
                     {{ activeConversation.peer.display_name }}
@@ -124,79 +143,69 @@ const {
                     {{ activeConversation.listing.title }}
                   </p>
                 </div>
-                <div
-                  v-if="activeReferencePrice > 0"
-                  class="chat-listing-summary"
-                >
-                  <p class="chat-listing-summary__label">{{ t('chat.listingPrice') }}</p>
-                  <p class="chat-listing-summary__price">
-                    {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
-                  </p>
-                </div>
               </div>
-            </div>
-
-            <div
-              :ref="setMessageContainerRef"
-              class="chat-message-scroll"
-            >
               <div
-                v-if="loadingMessages"
-                class="chat-loading"
+                v-if="activeReferencePrice > 0"
+                class="chat-listing-summary"
               >
-                {{ t('chat.loadingMessages') }}
-              </div>
-              <MessageBubble
-                v-for="messageItem in activeMessages"
-                :key="messageItem.id"
-                :message="messageItem"
-              />
-            </div>
-
-            <div class="chat-composer">
-              <div class="chat-composer__meta">
-                <span>{{ t('chat.replying') }}</span>
-                <span>{{ draftMessage.length }}/{{ messageMaxLength }}</span>
-              </div>
-              <div class="chat-composer__row">
-                <BaseTextarea
-                  :model-value="draftMessage"
-                  :rows="2"
-                  :maxlength="messageMaxLength"
-                  class="chat-composer__textarea"
-                  :placeholder="t('chat.composePlaceholder')"
-                  @update:model-value="draftMessage = $event"
-                  @keydown.enter="handleSendByEnter"
-                />
-                <div class="chat-composer__actions">
-                  <BaseButton
-                    variant="primary"
-                    size="sm"
-                    class="chat-send-button"
-                    :disabled="!canSendMessage"
-                    @click="handleSendMessage"
-                  >
-                    <template #leading>
-                      <AppIcon
-                        name="send"
-                        :size="16"
-                      />
-                    </template>
-                    {{ sendingMessage ? t('chat.sending') : t('common.action.send') }}
-                  </BaseButton>
-                </div>
+                <p class="chat-listing-summary__label">{{ t('chat.listingPrice') }}</p>
+                <p class="chat-listing-summary__price">
+                  {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
+                </p>
               </div>
             </div>
-          </template>
+          </div>
 
           <div
-            v-else
-            class="flex flex-1 items-center justify-center p-6"
+            :ref="setMessageContainerRef"
+            class="chat-message-scroll"
           >
-            <BaseEmpty
-              :title="t('common.empty.chatsTitle')"
-              :description="t('common.empty.chatsDescription')"
+            <div
+              v-if="loadingMessages"
+              class="chat-loading"
+            >
+              {{ t('chat.loadingMessages') }}
+            </div>
+            <MessageBubble
+              v-for="messageItem in activeMessages"
+              :key="messageItem.id"
+              :message="messageItem"
             />
+          </div>
+
+          <div class="chat-composer">
+            <div class="chat-composer__meta">
+              <span>{{ t('chat.replying') }}</span>
+              <span>{{ draftMessage.length }}/{{ messageMaxLength }}</span>
+            </div>
+            <div class="chat-composer__row">
+              <BaseTextarea
+                :model-value="draftMessage"
+                :rows="2"
+                :maxlength="messageMaxLength"
+                class="chat-composer__textarea"
+                :placeholder="t('chat.composePlaceholder')"
+                @update:model-value="draftMessage = $event"
+                @keydown.enter="handleSendByEnter"
+              />
+              <div class="chat-composer__actions">
+                <BaseButton
+                  variant="primary"
+                  size="sm"
+                  class="chat-send-button"
+                  :disabled="!canSendMessage"
+                  @click="handleSendMessage"
+                >
+                  <template #leading>
+                    <AppIcon
+                      name="send"
+                      :size="16"
+                    />
+                  </template>
+                  {{ sendingMessage ? t('chat.sending') : t('common.action.send') }}
+                </BaseButton>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -223,15 +232,18 @@ const {
 
 .chat-layout {
   display: grid;
+  width: 100%;
+  max-width: 56rem;
   gap: 1rem;
   align-items: stretch;
+  margin-inline: auto;
 }
 
 .chat-panel {
   border: 1px solid rgb(var(--color-border));
   border-radius: 2px;
   background: rgb(var(--color-surface));
-  min-height: clamp(34rem, calc(100vh - 12rem), 46rem);
+  min-height: clamp(34rem, calc(100svh - 12rem), 46rem);
   overflow: hidden;
 }
 
@@ -390,6 +402,37 @@ const {
   min-width: 0;
 }
 
+.chat-thread-header__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chat-back-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.chat-back-button:hover,
+.chat-back-button:focus-visible {
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
+  outline: none;
+}
+
 .chat-thread-header__title {
   margin: 0;
   color: rgb(var(--color-text));
@@ -489,15 +532,14 @@ const {
 }
 
 @media (min-width: 1024px) {
+  .chat-panel {
+    height: clamp(34rem, calc(100svh - 7rem), 46rem);
+    min-height: 0;
+  }
+
   .chat-thread-header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-  }
-}
-
-@media (min-width: 1280px) {
-  .chat-layout {
-    grid-template-columns: 20.5rem minmax(0, 1fr);
   }
 }
 

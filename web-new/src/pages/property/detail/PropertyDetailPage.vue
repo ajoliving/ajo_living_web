@@ -878,7 +878,7 @@ onMounted(() => {
 .detail-page {
   display: block;
   width: 100%;
-  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100svh - var(--nav-h));
   background: var(--sur-2);
 }
 

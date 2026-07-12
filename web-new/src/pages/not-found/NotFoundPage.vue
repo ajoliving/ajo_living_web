@@ -50,7 +50,7 @@ const { t } = useI18n();
 .not-found-page {
   display: grid;
   width: 100%;
-  min-height: calc(100vh - var(--app-header-offset, 0rem));
+  min-height: calc(100svh - var(--app-header-offset, 0rem));
   place-items: center;
   padding: 4rem var(--layout-page-padding-inline);
   color: rgb(var(--color-text));

@@ -26,6 +26,7 @@ import {
 import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import type { SupermarketProduct } from '@/model/supermarket-offers';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatPrice } from '@/utils/format';
@@ -332,8 +333,11 @@ onMounted(() => {
     <!-- 1. 工具列：標題與篩選 -->
     <div class="saved-toolbar">
       <div>
-        <div class="section-eyebrow">我的收藏</div>
-        <div class="saved-toolbar-title">已收藏物件</div>
+        <div class="section-eyebrow">收藏管理</div>
+        <div class="saved-toolbar-heading">
+          <h1 class="saved-toolbar-title">我的收藏</h1>
+          <span class="saved-count">{{ items.length }}</span>
+        </div>
       </div>
       <div class="saved-filters">
         <select
@@ -347,11 +351,14 @@ onMounted(() => {
         </select>
         <button
           type="button"
-          class="nav-login ripple-host"
-          style="background:var(--sur)!important;color:var(--ink)!important;border:1px solid var(--bdr)!important;font-size:12px;padding:6px 14px;"
+          class="saved-clear-button"
           :disabled="loading || actionLoading || !hasItems"
           @click="clearAll"
         >
+          <AppIcon
+            name="close"
+            :size="15"
+          />
           {{ actionLoading ? '處理中' : '清除全部' }}
         </button>
       </div>
@@ -387,51 +394,46 @@ onMounted(() => {
             :disabled="isRemoving(item)"
             @click="removeItem(item)"
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <AppIcon
+              name="close"
+              :size="14"
+              :stroke-width="2.2"
+            />
           </button>
         </div>
         <div class="saved-card-body">
-          <div class="saved-card-name">{{ item.name }}</div>
+          <button
+            type="button"
+            class="saved-card-name"
+            @click="goDetail(item)"
+          >
+            {{ item.name }}
+          </button>
           <div class="saved-card-price">{{ item.price }}</div>
           <div class="saved-card-meta">{{ item.district }} · {{ item.area }} · {{ item.rooms }}</div>
         </div>
         <div class="saved-card-footer">
           <button
+            v-if="item.canSetAlert"
             type="button"
-            class="saved-card-btn ripple-host"
-            :disabled="!item.canSetAlert"
+            class="saved-card-btn"
             @click="openAlertModal(item)"
           >
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            {{ item.canSetAlert ? '提醒' : '已收藏' }}
+            <AppIcon
+              name="bell"
+              :size="14"
+            />
+            價格提醒
           </button>
           <button
             type="button"
-            class="saved-card-btn ripple-host primary"
+            class="saved-card-btn primary"
             @click="goDetail(item)"
           >
+            <AppIcon
+              name="arrow-right"
+              :size="14"
+            />
             查看詳情
           </button>
         </div>
@@ -444,26 +446,23 @@ onMounted(() => {
       class="saved-empty"
     >
       <div class="saved-empty-icon">
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
+        <AppIcon
+          name="star"
+          :size="44"
+          :stroke-width="1.4"
+        />
       </div>
       <div class="saved-empty-title">尚未收藏任何項目</div>
       <div class="saved-empty-desc">瀏覽樓盤、二手商品或綜合優惠時可加入收藏。</div>
       <button
         type="button"
-        class="nav-login ripple-host"
+        class="saved-primary-action"
         @click="goBrowse"
       >
+        <AppIcon
+          name="search"
+          :size="16"
+        />
         去搜尋樓盤
       </button>
     </div>
@@ -478,19 +477,10 @@ onMounted(() => {
     <div class="alert-modal">
       <div class="alert-modal-header">
         <div class="alert-modal-title">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
+          <AppIcon
+            name="bell"
+            :size="16"
+          />
           設定目標價提醒
         </div>
         <button
@@ -499,17 +489,10 @@ onMounted(() => {
           aria-label="關閉"
           @click="closeAlertModal"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <AppIcon
+            name="close"
+            :size="18"
+          />
         </button>
       </div>
       <div class="alert-modal-body">
@@ -530,8 +513,7 @@ onMounted(() => {
         <div class="alert-hint">當商品優惠價低於或等於目標價，系統會在通知中心提醒。</div>
         <button
           type="button"
-          class="nav-login ripple-host"
-          style="width:100%;padding:11px;font-size:13px;"
+          class="saved-primary-action saved-primary-action--full"
           :disabled="alertSaving"
           @click="saveAlert"
         >
@@ -545,7 +527,9 @@ onMounted(() => {
 <style scoped>
 /* 1. 頁面容器 */
 .saved-page {
-  padding: var(--sp-5) var(--sp-6);
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 72px;
 }
 
 /* 2. 工具列 */
@@ -553,22 +537,47 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--sp-4);
+  gap: 16px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--bdr);
+  padding-bottom: 12px;
 }
 
 .section-eyebrow {
-  font-size: 9px;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 6px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.saved-toolbar-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .saved-toolbar-title {
+  margin: 0;
   font-family: var(--font-serif);
-  font-size: var(--text-xl);
-  font-weight: 400;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.saved-count {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--brand-light);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding-inline: 8px;
 }
 
 .saved-filters {
@@ -578,14 +587,49 @@ onMounted(() => {
 
 .saved-sort {
   border: 1px solid var(--bdr);
-  border-radius: var(--r-md);
-  padding: 5px 10px;
-  font-size: var(--text-sm);
+  border-radius: 4px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
   font-family: var(--font);
   outline: none;
   background: var(--sur);
   color: var(--ink);
   cursor: pointer;
+}
+
+.saved-clear-button,
+.saved-primary-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--sur);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 12px;
+}
+
+.saved-clear-button:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.saved-primary-action {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.saved-primary-action--full {
+  width: 100%;
+  min-height: 42px;
 }
 
 .saved-loading {
@@ -601,17 +645,19 @@ onMounted(() => {
 /* 4. 收藏卡片網格 */
 .saved-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
 }
 
 .saved-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
   background: var(--sur);
   border: 1px solid var(--bdr);
-  border-radius: var(--r-lg);
+  border-radius: 6px;
   overflow: hidden;
   position: relative;
-  cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
@@ -622,7 +668,7 @@ onMounted(() => {
 
 /* 5. 卡片圖片區（含 pat 斜紋底紋） */
 .saved-card-img {
-  height: 110px;
+  aspect-ratio: 16 / 10;
   width: 100%;
   position: relative;
   background-position: center;
@@ -659,7 +705,7 @@ onMounted(() => {
   left: 8px;
   top: 8px;
   z-index: 1;
-  border-radius: var(--r-sm);
+  border-radius: 3px;
   background: rgba(255, 255, 255, 0.9);
   color: var(--ink);
   font-size: 10px;
@@ -672,10 +718,10 @@ onMounted(() => {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.58);
   color: #fff;
   border: none;
   cursor: pointer;
@@ -692,41 +738,67 @@ onMounted(() => {
 
 /* 6. 卡片內容區 */
 .saved-card-body {
-  padding: 10px 12px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
 }
 
 .saved-card-name {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 3px;
+  display: -webkit-box;
+  overflow: hidden;
+  width: 100%;
+  min-height: 2.7em;
+  border: 0;
+  background: transparent;
   color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 0;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.saved-card-name:hover {
+  color: var(--brand);
 }
 
 .saved-card-price {
-  font-size: 14px;
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
   color: var(--brand);
-  margin-bottom: 4px;
 }
 
 .saved-card-meta {
-  font-size: 10px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 7. 卡片底部按鈕 */
 .saved-card-footer {
   display: flex;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-top: 1px solid var(--sur-3);
 }
 
 .saved-card-btn {
   flex: 1;
-  font-size: 10px;
-  padding: 5px 0;
-  border-radius: var(--r-sm);
+  min-height: 36px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 8px;
+  border-radius: 4px;
   border: 1px solid var(--bdr);
   background: var(--sur);
   cursor: pointer;
@@ -746,7 +818,8 @@ onMounted(() => {
 
 .saved-card-btn:disabled,
 .saved-card-remove:disabled,
-.nav-login:disabled {
+.saved-clear-button:disabled,
+.saved-primary-action:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -763,14 +836,16 @@ onMounted(() => {
 
 /* 8. 空狀態 */
 .saved-empty {
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
   text-align: center;
-  padding: 80px 40px;
+  padding: 56px 24px;
   color: var(--ink-3);
 }
 
 .saved-empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   opacity: 0.4;
   color: var(--ink-3);
   display: flex;
@@ -804,7 +879,7 @@ onMounted(() => {
 
 .alert-modal {
   background: var(--sur);
-  border-radius: var(--r-xl);
+  border-radius: 8px;
   width: 100%;
   max-width: 420px;
   box-shadow: var(--shadow-lg);
@@ -962,5 +1037,78 @@ onMounted(() => {
 
 .alert-active-rm:hover {
   color: var(--error);
+}
+
+@media (max-width: 767px) {
+  .saved-page {
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
+  }
+
+  .saved-toolbar {
+    align-items: stretch;
+  }
+
+  .saved-toolbar-title {
+    font-size: 24px;
+  }
+
+  .saved-card {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .saved-card-img {
+    grid-row: 1 / 3;
+    height: 100%;
+    min-height: 164px;
+    aspect-ratio: auto;
+  }
+
+  .saved-card-body {
+    padding: 12px 12px 8px;
+  }
+
+  .saved-card-footer {
+    padding: 8px 12px 12px;
+  }
+
+  .saved-card-btn {
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
+  .saved-empty {
+    padding: 40px 20px;
+  }
+
+  .alert-modal-overlay {
+    align-items: flex-end;
+    padding:
+      var(--app-safe-top)
+      var(--layout-page-padding-inline)
+      calc(var(--app-safe-bottom) + 10px);
+  }
+
+  .alert-modal {
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+    overflow-y: auto;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .alert-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 370px) {
+  .saved-card {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .saved-card-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

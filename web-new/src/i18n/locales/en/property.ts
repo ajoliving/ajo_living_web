@@ -61,6 +61,7 @@ export default {
     draft: 'Draft',
     active: 'Active',
     available: 'Active',
+    published: 'Published',
     hidden: 'Hidden',
     expired: 'Expired',
     sold: 'Sold',
@@ -299,5 +300,6 @@ export default {
     imageRequired: 'At least one photo is required before publishing.',
     staffCreateDisabled: 'Management mode only supports editing existing properties.',
     requiredFields: 'Please complete required fields first.',
+    requiredFieldsDetail: 'Please complete: {fields}',
   },
 };

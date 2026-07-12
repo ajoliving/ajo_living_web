@@ -260,7 +260,7 @@ const {
 @media (max-width: 767px) {
   .listing-editor-page {
     max-width: none;
-    padding: 1rem var(--layout-page-padding-inline) 4rem;
+    padding: 1rem var(--layout-page-padding-inline) calc(var(--app-mobile-content-bottom) + 1rem);
   }
 }
 

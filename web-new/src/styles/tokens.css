@@ -60,6 +60,13 @@
   --shadow-brand: 0 4px 16px rgba(240, 90, 0, 0.25);
 
   --nav-h: 52px;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-header-offset: var(--nav-h);
+  --app-mobile-bottom-nav-height: 64px;
+  --app-mobile-content-bottom: calc(var(--app-mobile-bottom-nav-height) + var(--app-safe-bottom));
 
   --black: var(--ink);
   --white: var(--sur);
@@ -140,6 +147,20 @@
   --border-width-strong: 1.5px;
   --border-subtle: 1px solid rgb(228 228 228 / 0.82);
   --border-strong: 1.5px solid rgb(192 70 0 / 0.22);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --nav-h: 56px;
+    --app-header-offset: calc(var(--nav-h) + var(--app-safe-top));
+    --app-mobile-bottom-nav-height: 68px;
+    --layout-page-padding-inline: max(14px, calc(14px + var(--app-safe-left)));
+    --space-section: 2rem;
+    --space-card: 1rem;
+    --font-size-title-sm: 1.25rem;
+    --font-size-title: 1.625rem;
+    --font-size-hero: 2.25rem;
+  }
 }
 
 /* 3. 深色模式（嚴格對齊 HTML body.dark） */

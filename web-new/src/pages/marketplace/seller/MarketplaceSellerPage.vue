@@ -96,7 +96,7 @@ const samplePrice = computed(() => formatPrice(680, preferenceStore.locale));
   display: grid;
   width: 100%;
   max-width: var(--layout-page-max-width);
-  min-height: calc(100vh - var(--app-header-offset, 0rem));
+  min-height: calc(100svh - var(--app-header-offset, 0rem));
   gap: 1rem;
   margin: 0 auto;
   padding: 0.75rem var(--layout-page-padding-inline) 4rem;

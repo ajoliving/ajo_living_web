@@ -77,6 +77,7 @@ func New(deps *Dependencies) *gin.Engine {
 	api := engine.Group("/api/v1")
 	registerPublicRoutes(api, healthHandler, userHandler, homeContentHandler, walletHandler, secondhandHandler, propertyHandler, supermarketOfferHandler, marketTrendHandler, optionalAuth)
 	registerPublicPOSPaymentRoutes(api, posBuildingHandler, walletHandler)
+	registerPublicIsmartIntegrationRoutes(api, ismartHandler)
 	registerAuthRoutes(api, authHandler, requireAuth, limiter)
 	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth)
 	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireAuth)

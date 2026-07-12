@@ -313,7 +313,7 @@ const isActiveRoute = (path: string): boolean =>
 @media (max-width: 1023px) {
   .profile-shell {
     max-width: 100%;
-    padding-bottom: 96px;
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
   }
 
   .profile-shell__nav {

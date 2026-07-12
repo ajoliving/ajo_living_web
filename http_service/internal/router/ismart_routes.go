@@ -2,6 +2,7 @@
  * iSmart proxy route registration.
  * 1. Keep all iSmart external API proxy routes in one file.
  * 2. Require AJO authentication before proxying to old iSmart services.
+ * 3. Expose documented public integration payment query routes.
  */
 package router
 
@@ -11,7 +12,17 @@ import (
 	"ajoliving_web/http_service/internal/handler"
 )
 
-// 1. registerIsmartRoutes registers authenticated iSmart proxy routes.
+// 1. registerPublicIsmartIntegrationRoutes registers public iSmart payment integration routes.
+func registerPublicIsmartIntegrationRoutes(
+	api *gin.RouterGroup,
+	ismartHandler *handler.IsmartExternalHandler,
+) {
+	api.GET("/integration/payments/unpaid-invoices/", ismartHandler.ListPaymentUnpaidInvoices)
+	api.GET("/integration/payments/transactions/by-unit/", ismartHandler.ListPaymentTransactionsByUnit)
+	api.GET("/integration/payments/transactions/by-date/", ismartHandler.ListPaymentTransactionsByDate)
+}
+
+// 2. registerIsmartRoutes registers authenticated iSmart proxy routes.
 func registerIsmartRoutes(
 	api *gin.RouterGroup,
 	ismartHandler *handler.IsmartExternalHandler,

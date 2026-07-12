@@ -31,7 +31,7 @@ export const buildingRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/detail',
-    redirect: '/properties/1',
+    redirect: '/properties',
   },
   {
     path: '/properties',

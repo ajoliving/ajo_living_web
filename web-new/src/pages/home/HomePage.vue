@@ -135,6 +135,11 @@ const openFeatured = (card: FeaturedCard): void => {
   void router.push(card.targetPath);
 };
 
+// 8. 隱藏失效樓盤封面
+const hideFailedImage = (event: Event): void => {
+  (event.currentTarget as HTMLImageElement).style.display = 'none';
+};
+
 onMounted(() => {
   void loadFeaturedProperties();
 });
@@ -365,6 +370,7 @@ onMounted(() => {
               :src="feat.imageUrl"
               :alt="feat.title"
               loading="lazy"
+              @error="hideFailedImage"
             />
             <span v-else>AJO Living</span>
           </div>

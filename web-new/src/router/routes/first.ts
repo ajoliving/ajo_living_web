@@ -18,7 +18,7 @@ export const firstRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/service-detail',
-    redirect: '/serviced-residences/1',
+    redirect: '/serviced-residences',
   },
   {
     path: '/serviced-residence',
@@ -27,7 +27,7 @@ export const firstRoutes: RouteRecordRaw[] = [
   {
     path: '/serviced-residence/booking',
     redirect: (to) => ({
-      path: '/serviced-residences/1',
+      path: '/serviced-residences',
       query: to.query,
       hash: to.hash,
     }),

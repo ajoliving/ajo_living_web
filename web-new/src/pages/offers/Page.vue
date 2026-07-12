@@ -2,7 +2,7 @@
  * 綜合優惠頻道頁。
  * 1. 使用 AJO 後端超市優惠摘要與搜尋接口。
  * 2. 提供商品搜尋、分類、品牌、商店、排序、收藏與分頁。
- * 3. 保持 web-new 現有暗色 Hero、控制欄、卡片與表格視圖風格。
+ * 3. 桌面保留摘要 Hero；手機以搜尋、快捷篩選與底部篩選彈窗呈現。
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
@@ -16,6 +16,7 @@ import {
   searchSupermarketProducts,
 } from '@/httpapis/supermarket-offers';
 import { readStoredAccessToken } from '@/httpapis/auth-session';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
 import type {
   SupermarketProduct,
   SupermarketSearchParams,
@@ -78,6 +79,7 @@ const activeSort = ref('discount');
 const showFavoritesOnly = ref(false);
 const viewMode = ref<ViewMode>('grid');
 const currentPage = ref(1);
+const isMobileFilterOpen = ref(false);
 
 const sortOptions: SortOption[] = [
   { label: '優惠力度 ↓', value: 'discount' },
@@ -120,7 +122,15 @@ const storePills = computed<FilterPill[]>(() => [
 // 4. 建立品牌篩選項
 const brandOptions = computed<string[]>(() => searchResult.value?.brands ?? []);
 
-// 5. 取得目前列表商品
+// 5. 計算目前已套用的手機端篩選數量
+const activeFilterCount = computed(() =>
+  Number(Boolean(activeCategory.value))
+  + Number(Boolean(activeStore.value))
+  + Number(Boolean(activeBrand.value))
+  + Number(showFavoritesOnly.value),
+);
+
+// 6. 取得目前列表商品
 const visibleProducts = computed<SupermarketProduct[]>(() => {
   if (showFavoritesOnly.value) {
     const start = (currentPage.value - 1) * pageSize;
@@ -129,13 +139,13 @@ const visibleProducts = computed<SupermarketProduct[]>(() => {
   return searchResult.value?.items ?? [];
 });
 
-// 6. 取得目前總數
+// 7. 取得目前總數
 const totalCount = computed(() => (showFavoritesOnly.value ? favorites.value.length : searchResult.value?.total ?? 0));
 
-// 7. 取得目前總頁數
+// 8. 取得目前總頁數
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
 
-// 8. 建立分頁按鈕
+// 9. 建立分頁按鈕
 const pageButtons = computed<PageButton[]>(() => {
   const pages = new Set<number>([1, totalPages.value, currentPage.value]);
   if (currentPage.value > 1) pages.add(currentPage.value - 1);
@@ -167,7 +177,7 @@ const pageButtons = computed<PageButton[]>(() => {
   ];
 });
 
-// 9. 建立更新資訊文字
+// 10. 建立更新資訊文字
 const updatedBarText = computed(() => {
   const updatedDate = formatSupermarketDate(summary.value?.metadata?.latestSnapshotDate);
   const productCount = formatInteger(summary.value?.stats.products);
@@ -175,7 +185,7 @@ const updatedBarText = computed(() => {
   return `${prefix} · 共監測 ${productCount} 件商品 · 價格只供參考，實際售價以商戶公布為準。`;
 });
 
-// 10. 載入摘要
+// 11. 載入摘要
 const loadSummary = async (): Promise<void> => {
   summaryLoading.value = true;
   summaryError.value = '';
@@ -189,7 +199,7 @@ const loadSummary = async (): Promise<void> => {
   }
 };
 
-// 11. 載入搜尋結果
+// 12. 載入搜尋結果
 const loadSearch = async (): Promise<void> => {
   searchLoading.value = true;
   searchError.value = '';
@@ -214,7 +224,7 @@ const loadSearch = async (): Promise<void> => {
   }
 };
 
-// 12. 載入收藏
+// 13. 載入收藏
 const loadFavorites = async (): Promise<void> => {
   if (!readStoredAccessToken()) {
     favorites.value = [];
@@ -233,14 +243,14 @@ const loadFavorites = async (): Promise<void> => {
   }
 };
 
-// 13. 提交搜尋
+// 14. 提交搜尋
 const submitSearch = (): void => {
   showFavoritesOnly.value = false;
   currentPage.value = 1;
   void loadSearch();
 };
 
-// 14. 切換分類
+// 15. 切換分類
 const selectCategory = (category: string): void => {
   activeCategory.value = category;
   showFavoritesOnly.value = false;
@@ -248,7 +258,7 @@ const selectCategory = (category: string): void => {
   void loadSearch();
 };
 
-// 15. 切換商店
+// 16. 切換商店
 const selectStore = (store: string): void => {
   activeStore.value = store;
   showFavoritesOnly.value = false;
@@ -256,14 +266,44 @@ const selectStore = (store: string): void => {
   void loadSearch();
 };
 
-// 16. 切換品牌
+// 17. 套用手機端快捷篩選
+const handleMobileQuickFilter = (filter: 'category' | 'store', event: Event): void => {
+  const value = (event.target as HTMLSelectElement).value;
+  if (filter === 'category') {
+    selectCategory(value);
+    return;
+  }
+  selectStore(value);
+};
+
+// 18. 開關手機端篩選彈窗
+const openMobileFilter = (): void => {
+  isMobileFilterOpen.value = true;
+};
+
+const closeMobileFilter = (): void => {
+  isMobileFilterOpen.value = false;
+};
+
+// 19. 重設篩選條件並保留搜尋文字
+const resetFilters = (): void => {
+  activeCategory.value = '';
+  activeStore.value = '';
+  activeBrand.value = '';
+  activeSort.value = 'discount';
+  showFavoritesOnly.value = false;
+  currentPage.value = 1;
+  void loadSearch();
+};
+
+// 20. 切換品牌
 const selectBrand = (): void => {
   showFavoritesOnly.value = false;
   currentPage.value = 1;
   void loadSearch();
 };
 
-// 17. 切換排序
+// 21. 切換排序
 const selectSort = (): void => {
   currentPage.value = 1;
   if (!showFavoritesOnly.value) {
@@ -271,7 +311,7 @@ const selectSort = (): void => {
   }
 };
 
-// 18. 切換收藏列表
+// 22. 切換收藏列表
 const toggleFavoritesOnly = async (): Promise<void> => {
   if (!showFavoritesOnly.value && !readStoredAccessToken()) {
     await openLogin('/supermarket-offers');
@@ -287,7 +327,7 @@ const toggleFavoritesOnly = async (): Promise<void> => {
   }
 };
 
-// 19. 切換商品收藏
+// 23. 切換商品收藏
 const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
   if (!readStoredAccessToken()) {
     await openLogin(`/supermarket-offers/products/${encodeURIComponent(product.code)}`);
@@ -313,12 +353,12 @@ const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
   }
 };
 
-// 20. 切換視圖模式
+// 24. 切換視圖模式
 const setView = (mode: ViewMode): void => {
   viewMode.value = mode;
 };
 
-// 21. 切換分頁
+// 25. 切換分頁
 const selectPage = (page: PageButton): void => {
   if (page.disabled || currentPage.value === page.page) {
     return;
@@ -329,17 +369,17 @@ const selectPage = (page: PageButton): void => {
   }
 };
 
-// 22. 開啟商品詳情
+// 26. 開啟商品詳情
 const openDetail = (product: SupermarketProduct): void => {
   void router.push({ path: `/supermarket-offers/products/${encodeURIComponent(product.code)}` });
 };
 
-// 23. 前往登入
+// 27. 前往登入
 const openLogin = async (redirect: string): Promise<void> => {
   await router.push({ path: '/login', query: { redirect } });
 };
 
-// 24. 更新商品收藏狀態
+// 28. 更新商品收藏狀態
 const patchFavoriteState = (productCode: string, isFavorite: boolean): void => {
   searchResult.value?.items.forEach((item) => {
     if (item.code === productCode) {
@@ -353,7 +393,7 @@ const patchFavoriteState = (productCode: string, isFavorite: boolean): void => {
   });
 };
 
-// 25. 建立篩選按鈕
+// 29. 建立篩選按鈕
 const valueCountPills = (
   values: SupermarketValueCount[],
   formatter: (value: string) => string,
@@ -364,7 +404,7 @@ const valueCountPills = (
     .map((item) => ({ label: formatter(item.value), value: item.value }))
     .filter((item) => item.value);
 
-// 26. 格式化整數
+// 30. 格式化整數
 const formatInteger = (value: number | undefined): string => (value ?? 0).toLocaleString('zh-HK');
 
 onMounted(() => {
@@ -378,6 +418,134 @@ onMounted(() => {
     id="page-offers"
     class="page"
   >
+    <button
+      v-if="isMobileFilterOpen"
+      type="button"
+      class="gp-filter-backdrop"
+      aria-label="關閉篩選"
+      @click="closeMobileFilter"
+    ></button>
+
+    <aside
+      id="offers-mobile-filter-sheet"
+      class="gp-filter-sheet"
+      :class="{ 'is-filter-open': isMobileFilterOpen }"
+      :role="isMobileFilterOpen ? 'dialog' : undefined"
+      :aria-modal="isMobileFilterOpen ? 'true' : undefined"
+      aria-labelledby="offers-mobile-filter-title"
+    >
+      <header class="gp-filter-sheet-header">
+        <h2 id="offers-mobile-filter-title">篩選條件</h2>
+        <button
+          type="button"
+          class="gp-filter-sheet-close filter-sheet-close"
+          aria-label="關閉篩選"
+          @click="closeMobileFilter"
+        >
+          <AppIcon
+            name="close"
+            :size="20"
+          />
+        </button>
+      </header>
+
+      <div class="gp-filter-sheet-body">
+        <section class="gp-filter-section">
+          <h3>商品分類</h3>
+          <div class="gp-filter-tags">
+            <button
+              v-for="category in categoryPills"
+              :key="`sheet-category-${category.value || 'all'}`"
+              type="button"
+              class="gp-filter-tag"
+              :class="activeCategory === category.value ? 'on' : ''"
+              @click="selectCategory(category.value)"
+            >
+              {{ category.label }}
+            </button>
+          </div>
+        </section>
+
+        <section class="gp-filter-section">
+          <h3>商店</h3>
+          <div class="gp-filter-tags">
+            <button
+              v-for="store in storePills"
+              :key="`sheet-store-${store.value || 'all'}`"
+              type="button"
+              class="gp-filter-tag"
+              :class="activeStore === store.value ? 'on' : ''"
+              @click="selectStore(store.value)"
+            >
+              {{ store.label }}
+            </button>
+          </div>
+        </section>
+
+        <label class="gp-filter-select-field">
+          <span>品牌</span>
+          <select
+            v-model="activeBrand"
+            @change="selectBrand"
+          >
+            <option value="">全部品牌</option>
+            <option
+              v-for="brand in brandOptions"
+              :key="`sheet-brand-${brand}`"
+              :value="brand"
+            >
+              {{ brand }}
+            </option>
+          </select>
+        </label>
+
+        <label class="gp-filter-select-field">
+          <span>排序</span>
+          <select
+            v-model="activeSort"
+            @change="selectSort"
+          >
+            <option
+              v-for="option in sortOptions"
+              :key="`sheet-sort-${option.value}`"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <section class="gp-filter-section gp-view-filter-section">
+          <h3>顯示方式</h3>
+          <div class="gp-view-filter-actions">
+            <button
+              type="button"
+              :class="viewMode === 'grid' ? 'on' : ''"
+              @click="setView('grid')"
+            >網格</button>
+            <button
+              type="button"
+              :class="viewMode === 'table' ? 'on' : ''"
+              @click="setView('table')"
+            >表格</button>
+          </div>
+        </section>
+      </div>
+
+      <footer class="gp-filter-sheet-actions filter-sheet-actions">
+        <button
+          type="button"
+          class="gp-filter-sheet-reset"
+          @click="resetFilters"
+        >重設</button>
+        <button
+          type="button"
+          class="gp-filter-sheet-apply"
+          @click="closeMobileFilter"
+        >查看 {{ totalCount.toLocaleString('zh-HK') }} 個優惠</button>
+      </footer>
+    </aside>
+
     <!-- 1. 暗色 HERO -->
     <section class="gp-hero">
       <div class="gp-hero-left">
@@ -420,7 +588,12 @@ onMounted(() => {
           type="submit"
           class="gp-search-btn"
         >
-          搜尋
+          <span class="gp-search-button-label">搜尋</span>
+          <AppIcon
+            class="gp-mobile-search-icon"
+            name="search"
+            :size="19"
+          />
         </button>
         <button
           type="button"
@@ -432,6 +605,86 @@ onMounted(() => {
           {{ favoritesLoading ? '載入中' : '我的收藏' }}
         </button>
       </form>
+      <div
+        class="gp-mobile-filter-rail"
+        aria-label="優惠篩選"
+      >
+        <select
+          v-model="activeSort"
+          class="gp-mobile-filter-select gp-mobile-sort-select"
+          aria-label="排序方式"
+          @change="selectSort"
+        >
+          <option
+            v-for="option in sortOptions"
+            :key="`mobile-sort-${option.value}`"
+            :value="option.value"
+          >{{ option.label }}</option>
+        </select>
+        <select
+          :value="activeCategory"
+          class="gp-mobile-filter-select"
+          aria-label="商品分類"
+          @change="handleMobileQuickFilter('category', $event)"
+        >
+          <option value="">商品分類</option>
+          <option
+            v-for="category in categoryPills.slice(1)"
+            :key="`mobile-category-${category.value}`"
+            :value="category.value"
+          >{{ category.label }}</option>
+        </select>
+        <select
+          :value="activeStore"
+          class="gp-mobile-filter-select"
+          aria-label="商店"
+          @change="handleMobileQuickFilter('store', $event)"
+        >
+          <option value="">商店</option>
+          <option
+            v-for="store in storePills.slice(1)"
+            :key="`mobile-store-${store.value}`"
+            :value="store.value"
+          >{{ store.label }}</option>
+        </select>
+        <button
+          type="button"
+          class="gp-mobile-filter-button mobile-filter-button"
+          aria-controls="offers-mobile-filter-sheet"
+          :aria-expanded="isMobileFilterOpen"
+          @click="openMobileFilter"
+        >
+          <AppIcon
+            name="filter"
+            :size="16"
+          />
+          <span>更多</span>
+          <span
+            v-if="activeFilterCount > 0"
+            class="gp-mobile-filter-count"
+          >{{ activeFilterCount }}</span>
+        </button>
+        <button
+          type="button"
+          class="gp-mobile-favorite-filter"
+          :class="showFavoritesOnly ? 'on' : ''"
+          :aria-pressed="showFavoritesOnly"
+          :disabled="favoritesLoading"
+          @click="toggleFavoritesOnly"
+        >
+          <AppIcon
+            name="star"
+            :size="16"
+          />
+          <span>收藏</span>
+        </button>
+        <button
+          v-if="activeFilterCount > 0"
+          type="button"
+          class="gp-mobile-filter-reset"
+          @click="resetFilters"
+        >重設</button>
+      </div>
       <div class="gp-filter-pills">
         <button
           v-for="category in categoryPills"
@@ -467,7 +720,7 @@ onMounted(() => {
         <div class="gp-toolbar">
           <select
             v-model="activeBrand"
-            class="gp-sort"
+            class="gp-sort gp-brand-select"
             @change="selectBrand"
           >
             <option value="">全部品牌</option>
@@ -499,7 +752,7 @@ onMounted(() => {
           </div>
           <select
             v-model="activeSort"
-            class="gp-sort"
+            class="gp-sort gp-order-select"
             @change="selectSort"
           >
             <option
@@ -675,9 +928,16 @@ onMounted(() => {
 /* 1. 頁面容器 */
 .page {
   width: 100%;
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
   background: var(--sur-2);
   color: var(--ink);
+}
+
+.gp-filter-backdrop,
+.gp-filter-sheet,
+.gp-mobile-filter-rail,
+.gp-mobile-search-icon {
+  display: none;
 }
 
 /* 2. 暗色 HERO */
@@ -1204,6 +1464,7 @@ onMounted(() => {
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
+  min-width: 36px;
   padding: 8px 12px;
 }
 
@@ -1230,59 +1491,376 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .gp-hero,
+  .gp-filter-pills,
+  .gp-store-pills,
+  .gp-search-row .gp-fav-btn,
+  .gp-brand-select,
+  .gp-view-toggle,
+  .gp-toolbar {
+    display: none;
+  }
+
   .gp-controls,
   .gp-content {
     max-width: none;
+    margin: 0;
   }
 
-  .gp-hero {
-    margin: 14px 14px 0;
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 22px;
+  .gp-controls {
+    padding: 12px;
   }
 
-  .gp-hero-right,
-  .gp-content-header,
-  .gp-toolbar {
+  .gp-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 0;
+    margin: 0;
+  }
+
+  .gp-search-box {
     width: 100%;
+    max-width: none;
+    min-height: 48px;
+    flex: 1 1 auto;
+    border-radius: 8px 0 0 8px;
+    padding: 0 13px;
   }
 
-  .gp-hero-right {
-    justify-content: space-between;
+  .gp-sinput {
+    min-height: 48px;
+    font-size: 16px;
+    padding: 0;
   }
 
-  .gp-hstat {
-    min-width: 0;
-    flex: 1;
+  .gp-search-btn {
+    display: inline-flex;
+    width: 48px;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 8px 8px 0;
+    padding: 0;
+  }
+
+  .gp-search-button-label {
+    display: none;
+  }
+
+  .gp-mobile-search-icon {
+    display: block;
+  }
+
+  .gp-mobile-filter-rail {
+    display: flex;
+    gap: 8px;
+    margin: 10px -2px 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 2px;
+    scrollbar-width: none;
+  }
+
+  .gp-mobile-filter-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gp-mobile-filter-select,
+  .gp-mobile-filter-button,
+  .gp-mobile-favorite-filter {
+    min-height: 40px;
+    border: 1px solid var(--bdr);
+    border-radius: 999px;
+    background: var(--sur);
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .gp-mobile-filter-select {
+    width: auto;
+    min-width: 104px;
+    flex: 0 0 auto;
+    padding: 0 30px 0 13px;
+  }
+
+  .gp-mobile-sort-select {
+    min-width: 120px;
+  }
+
+  .gp-mobile-filter-button,
+  .gp-mobile-favorite-filter {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
     padding: 0 12px;
+    cursor: pointer;
   }
 
-  .gp-controls,
+  .gp-mobile-favorite-filter.on {
+    border-color: var(--brand-mid);
+    background: var(--brand-light);
+    color: var(--accent);
+  }
+
+  .gp-mobile-favorite-filter:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+  }
+
+  .gp-mobile-filter-count {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .gp-mobile-filter-reset {
+    flex: 0 0 auto;
+    min-height: 40px;
+    border: 0;
+    background: transparent;
+    color: var(--ink-3);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    padding: 0 4px;
+  }
+
   .gp-content {
-    margin: 12px 14px 0;
-    padding: 14px;
+    padding: 14px 12px calc(32px + var(--app-safe-bottom));
+  }
+
+  .gp-content-header {
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
   }
 
   .gp-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
-  .gp-search-row,
-  .gp-content-header {
-    align-items: stretch;
+  .gp-card {
+    min-height: 0;
+  }
+
+  .gp-card-img {
+    height: 126px;
+    padding: 10px;
+  }
+
+  .gp-card-body {
+    padding: 12px;
+  }
+
+  .gp-filter-backdrop {
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgb(0 0 0 / 0.44);
+    cursor: pointer;
+  }
+
+  .gp-filter-sheet {
+    position: fixed;
+    z-index: 121;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    max-height: min(82svh, 720px);
+    min-height: 0;
+    box-sizing: border-box;
     flex-direction: column;
+    border-radius: 8px 8px 0 0;
+    background: var(--sur);
+    box-shadow: 0 -12px 32px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    overflow-y: auto;
+    pointer-events: none;
+    touch-action: pan-y;
+    transform: translateY(100%);
+    transition: transform 0.2s ease, opacity 0.18s ease, visibility 0.2s;
+    visibility: hidden;
   }
 
-  .gp-toolbar {
-    align-items: stretch;
+  .gp-filter-sheet.is-filter-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  .gp-filter-sheet-header {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--bdr);
+    padding: 8px 12px 8px 14px;
+    background: var(--sur);
+  }
+
+  .gp-filter-sheet-header h2 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .gp-filter-sheet-close {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .gp-filter-sheet-body {
+    padding: 12px 14px 4px;
+  }
+
+  .gp-filter-section {
+    margin-bottom: 16px;
+  }
+
+  .gp-filter-section h3 {
+    margin: 0 0 7px;
+    color: var(--ink-3);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .gp-filter-tags {
+    display: flex;
     flex-wrap: wrap;
+    gap: 6px;
   }
 
-  .gp-sort {
-    max-width: none;
+  .gp-filter-tag {
+    min-height: 36px;
+    border: 1px solid var(--bdr);
+    border-radius: 999px;
+    background: var(--sur);
+    color: var(--ink-2);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    padding: 4px 11px;
+  }
+
+  .gp-filter-tag.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .gp-filter-select-field {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    min-height: 48px;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--sur-3);
+    color: var(--ink-2);
+    font-size: 13px;
+  }
+
+  .gp-filter-select-field select {
+    min-width: 0;
+    min-height: 38px;
+    border: 1px solid var(--bdr);
+    border-radius: 6px;
+    background: var(--sur);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    padding: 0 10px;
+  }
+
+  .gp-view-filter-section {
+    margin: 14px 0 10px;
+  }
+
+  .gp-view-filter-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .gp-view-filter-actions button {
+    min-height: 40px;
+    border: 1px solid var(--bdr);
+    border-radius: 6px;
+    background: var(--sur);
+    color: var(--ink-2);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .gp-view-filter-actions button.on {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .gp-filter-sheet-actions {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+    gap: 8px;
+    border-top: 1px solid var(--bdr);
+    padding: 10px max(14px, calc(14px + var(--app-safe-right))) calc(10px + var(--app-safe-bottom)) max(14px, calc(14px + var(--app-safe-left)));
+    background: var(--sur);
+  }
+
+  .gp-filter-sheet-reset,
+  .gp-filter-sheet-apply {
+    min-height: 44px;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .gp-filter-sheet-reset {
+    border: 1px solid var(--bdr);
+    background: var(--sur);
+    color: var(--ink-2);
+  }
+
+  .gp-filter-sheet-apply {
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
   }
 }
 

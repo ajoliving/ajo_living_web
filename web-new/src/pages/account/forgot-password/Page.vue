@@ -252,13 +252,13 @@ const handleResetPassword = async (): Promise<void> => {
 
 <style scoped>
 .forgot-password-page {
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
   background: rgb(var(--color-surface));
 }
 
 .forgot-password-shell {
   display: grid;
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
   min-width: 0;
   place-items: center;
   padding: clamp(2rem, 8vw, 4.5rem) clamp(1.5rem, 6vw, 3rem);

@@ -1013,7 +1013,7 @@ watch(
 /* 1. 頁面容器 */
 .offers-detail-page {
   width: 100%;
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
   background: var(--sur-2);
   color: var(--ink);
   padding: 20px 0 44px;

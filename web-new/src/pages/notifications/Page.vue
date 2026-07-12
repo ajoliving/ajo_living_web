@@ -431,7 +431,7 @@ onMounted(() => {
 <style scoped>
 /* 1. 頁面外框 */
 #page-notif {
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
   background: var(--sur-2);
 }
 

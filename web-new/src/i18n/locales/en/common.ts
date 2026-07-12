@@ -108,6 +108,7 @@ export default {
     active: 'Active',
     available: 'Available',
     expired: 'Expired',
+    published: 'Published',
     sold: 'Sold',
     draft: 'Draft',
     hidden: 'Hidden',

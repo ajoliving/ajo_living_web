@@ -151,6 +151,11 @@ interface PropertyEditorStep {
   label: string;
 }
 
+interface PropertyEditorValidationIssue {
+  step: PropertyEditorStepKey;
+  label: string;
+}
+
 type ResidentialBasicTextFieldKey = 'addressText' | 'addressTextEn';
 
 interface ResidentialBasicTextField {
@@ -676,47 +681,81 @@ const contactChannelReady = computed(() =>
   form.allowChat ||
   form.contactAttributes.hide_phone_allow_inquiry === 'yes',
 );
-const contactReady = computed(() => {
-  if (isAgentPublisher.value) {
-    return form.contactAttributes.agency_company_profile?.trim() !== '' &&
-      form.contactAttributes.agency_contact_profile?.trim() !== '';
-  }
-  if (isServicedPublisher.value) {
-    return contactChannelReady.value &&
-      [form.phone, form.serviceWhatsApp, form.wechat, form.email].some((value) => value.trim() !== '');
+const missingRequiredFields = computed<PropertyEditorValidationIssue[]>(() => {
+  const issues: PropertyEditorValidationIssue[] = [];
+  const addIssue = (missing: boolean, step: PropertyEditorStepKey, labelKey: string): void => {
+    if (missing) {
+      issues.push({ step, label: t(labelKey) });
+    }
+  };
+
+  addIssue(form.districtCode.trim() === '', 'details', 'property.editor.locationSubdistrictField');
+  addIssue(
+    isSale.value ? form.addressText.trim() === '' : resolveServicedAddressText() === '',
+    'details',
+    'property.editor.addressField',
+  );
+
+  if (isSale.value) {
+    addIssue(form.title.trim() === '', 'details', 'property.editor.titleField');
+    addIssue(form.titleEn.trim() === '', 'details', 'property.editor.titleEnField');
+    addIssue(form.description.trim() === '', 'details', 'property.editor.descriptionField');
+    addIssue(form.descriptionEn.trim() === '', 'details', 'property.editor.descriptionEnField');
+    addIssue(form.addressTextEn.trim() === '', 'details', 'property.editor.addressEnField');
+    addIssue(!salePriceReady.value, 'details', form.transactionType === 'rent'
+      ? 'property.editor.monthlyRentField'
+      : 'property.editor.askingPriceField');
+    addIssue(form.propertyType !== 'land' && form.estateName.trim() === '', 'details', saleFieldProfile.value.estateLabelKey);
+    addIssue(!saleAreaReady.value, 'details', saleFieldProfile.value.requiredArea === 'gross'
+      ? 'property.editor.grossAreaField'
+      : 'property.editor.usableAreaField');
+    addIssue(!saleFloorReady.value, 'details', 'property.editor.floorField');
+    addIssue(!salePropertyNoReady.value, 'details', 'property.editor.propertyNoField');
+    addIssue(!saleCategoryReady.value, 'details', saleFieldProfile.value.categoryLabelKey);
+
+    if (isAgentPublisher.value) {
+      addIssue(
+        form.contactAttributes.agency_company_profile?.trim() === '',
+        'contact',
+        'property.editor.agencyCompanyProfileField',
+      );
+      addIssue(
+        form.contactAttributes.agency_contact_profile?.trim() === '',
+        'contact',
+        'property.editor.agencyContactProfileField',
+      );
+    } else {
+      addIssue(form.contactNameZh.trim() === '', 'contact', 'property.editor.contactNameZhField');
+      addIssue(form.contactNameEn.trim() === '', 'contact', 'property.editor.contactNameEnField');
+      addIssue(form.phone.trim() === '', 'contact', 'property.editor.phoneField');
+    }
+
+    return issues;
   }
 
-  return form.contactNameZh.trim() !== '' &&
-    form.contactNameEn.trim() !== '' &&
-    form.phone.trim() !== '';
+  addIssue(form.projectName.trim() === '', 'details', 'property.editor.projectNameField');
+  addIssue(form.summary.trim() === '', 'details', 'property.editor.summaryField');
+  addIssue(!servicedPriceReady.value, 'details', 'property.editor.monthlyRentField');
+  addIssue(form.minStayValue <= 0, 'details', 'property.editor.minStayValueField');
+  addIssue(
+    form.roomTypes.length === 0 || form.roomTypes.some((room) =>
+      room.name.trim() === '' ||
+      Number(room.usable_area_min_sqft || room.usable_area_sqft || 0) <= 0 ||
+      Number(room.min_stay_value || 0) <= 0,
+    ),
+    'details',
+    'property.editor.roomTypesSection',
+  );
+  addIssue(!contactChannelReady.value, 'details', 'property.editor.contactMethodField');
+  addIssue(
+    ![form.phone, form.serviceWhatsApp, form.wechat, form.email].some((value) => value.trim() !== ''),
+    'details',
+    'property.editor.servicedPhoneField',
+  );
+
+  return issues;
 });
-const canSave = computed(() =>
-  form.districtCode.trim() !== '' &&
-  (isSale.value ? form.addressText.trim() !== '' : resolveServicedAddressText() !== '') &&
-  contactReady.value &&
-  (isSale.value
-    ? form.title.trim() !== '' &&
-      form.titleEn.trim() !== '' &&
-      form.description.trim() !== '' &&
-      form.descriptionEn.trim() !== '' &&
-      form.addressTextEn.trim() !== '' &&
-      salePriceReady.value &&
-      (form.propertyType === 'land' || form.estateName.trim() !== '') &&
-      saleAreaReady.value &&
-      saleFloorReady.value &&
-      salePropertyNoReady.value &&
-      saleCategoryReady.value
-    : form.projectName.trim() !== '' &&
-      form.summary.trim() !== '' &&
-      servicedPriceReady.value &&
-      form.minStayValue > 0 &&
-      form.roomTypes.length > 0 &&
-      form.roomTypes.every((room) =>
-        room.name.trim() !== '' &&
-        Number(room.usable_area_min_sqft || room.usable_area_sqft || 0) > 0 &&
-        Number(room.min_stay_value || 0) > 0,
-      )),
-);
+const canSave = computed(() => missingRequiredFields.value.length === 0);
 
 // 必填欄位標記
 const estateNameRequired = computed(() => form.propertyType !== 'land');
@@ -1820,12 +1859,7 @@ const loadDetail = async (): Promise<void> => {
 
 // 40. 儲存草稿
 const saveDraft = async (): Promise<string> => {
-  if (!canSave.value) {
-    feedbackStore.pushToast(t('property.editor.requiredFields'), 'error');
-    return '';
-  }
-
-  saving.value = true;
+	saving.value = true;
   try {
     if (!listingId.value) {
       if (props.staffMode) {
@@ -1877,10 +1911,22 @@ const saveAndPublish = async (): Promise<void> => {
     if (savedListingId) {
       emit('saved', savedListingId);
     }
-    return;
-  }
+		return;
+	}
 
-  if (!hasImage.value) {
+	if (!canSave.value) {
+		const firstIssue = missingRequiredFields.value[0];
+		if (firstIssue) {
+			activeEditorStep.value = firstIssue.step;
+		}
+		feedbackStore.pushToast(t('property.editor.requiredFieldsDetail', {
+			fields: missingRequiredFields.value.slice(0, 4).map((issue) => issue.label).join('、'),
+		}), 'error');
+		return;
+	}
+
+	if (!hasImage.value) {
+    activeEditorStep.value = 'details';
     feedbackStore.pushToast(t('property.editor.imageRequired'), 'error');
     return;
   }
@@ -5072,7 +5118,7 @@ onBeforeUnmount(() => {
 
   .property-editor-page {
     max-width: 100%;
-    padding-bottom: 96px;
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 1rem);
   }
 
   .property-editor-progress {

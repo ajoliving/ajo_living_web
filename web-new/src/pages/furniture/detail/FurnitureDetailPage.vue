@@ -559,7 +559,7 @@ const stats = computed(() => [
   padding: 20px;
   position: sticky;
   top: 48px;
-  height: calc(100vh - 48px);
+  height: calc(100svh - 48px);
   overflow-y: auto;
 }
 

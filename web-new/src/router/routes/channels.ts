@@ -18,7 +18,7 @@ export const channelRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/market-detail',
-    redirect: '/furniture/1',
+    redirect: '/furniture',
   },
   {
     path: '/furniture',

@@ -1157,7 +1157,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
   }
 }
 ```
-- **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。
+- **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。
 
 ---
 
@@ -3417,7 +3417,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   }
 }
 ```
-- **必填規則**: 樓盤租售建立與更新需提交 `title_en`、`description_en`、`address_text_en`，長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。
+- **草稿規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。
+- **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片，並按 `ad_package_code` 扣除相應 AJO Points。建立草稿、圖片登記與 `publish` 為連續但獨立的請求。
 - **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低周租或月租。
 - **公開回應規則**: `floor_raw` 只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
 - **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天。
@@ -4184,7 +4185,7 @@ curl -X GET "http://127.0.0.1:8080/api/v1/market-trends/rent"
 ### 43. /api/v1/supermarket-offers/summary [GET]
 - **簡介**: 公開超市優惠摘要，資料來自已部署 good-price 服務
 - **請求參數**: 無
-- **回應參數**: good-price summary 原始資料，包裝於 AJO 統一回應 `data`
+- **回應參數**: good-price summary 原始資料，包裝於 AJO 統一回應 `data`；當 good-price 暫時不可達時，回傳可渲染的空摘要結構與 `upstreamAvailable=false`
 - **Curl測試**
 ```bash
 curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/summary"
@@ -4205,7 +4206,7 @@ curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/summary"
   "pageSize": 20
 }
 ```
-- **回應參數**: good-price search 原始資料，包裝於 AJO 統一回應 `data`
+- **回應參數**: good-price search 原始資料，包裝於 AJO 統一回應 `data`；當 good-price 暫時不可達時，回傳可渲染的空搜尋結構與 `upstreamAvailable=false`
 - **Curl測試**
 ```bash
 curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/search?offerOnly=true&page=1&pageSize=20"

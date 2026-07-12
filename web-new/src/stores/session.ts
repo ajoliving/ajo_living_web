@@ -50,6 +50,8 @@ const buildSessionUser = (member: CurrentMemberProfile | null): SessionUserView 
   ajo_balance: member?.ajo_balance ?? 0,
 });
 
+let pendingHydrateSession: Promise<void> | null = null;
+
 // 1. 建立會員登入狀態 Store
 export const useSessionStore = defineStore('session', {
   state: () => ({
@@ -83,22 +85,32 @@ export const useSessionStore = defineStore('session', {
 
     // 6. 啟動時還原登入狀態
     async hydrateSession() {
-      if (this.isLoaded || this.isHydrating) {
+      if (this.isLoaded) {
         return;
       }
 
-      this.isHydrating = true;
-
-      try {
-        if (this.accessToken) {
-          await this.loadCurrentUser();
-        }
-      } catch {
-        this.clearSession();
-      } finally {
-        this.isHydrating = false;
-        this.isLoaded = true;
+      if (pendingHydrateSession) {
+        await pendingHydrateSession;
+        return;
       }
+
+      pendingHydrateSession = (async () => {
+        this.isHydrating = true;
+
+        try {
+          if (this.accessToken) {
+            await this.loadCurrentUser();
+          }
+        } catch {
+          this.clearSession();
+        } finally {
+          this.isHydrating = false;
+          this.isLoaded = true;
+          pendingHydrateSession = null;
+        }
+      })();
+
+      await pendingHydrateSession;
     },
 
     // 7. 請求 OTP 驗證碼

@@ -331,7 +331,7 @@ func normalizeBuildingInfoPayload(payload any) any {
 	documents["forms"] = buildingDocumentGroup(documents, "forms")
 	documents["building_info_files"] = buildingDocumentGroup(documents, "building_info_files")
 	documents["floorplans"] = buildingDocumentGroup(documents, "floorplans", "floorplan")
-	documents["audit_reports"] = buildingDocumentGroup(documents, "audit_reports", "auditreport", "audition")
+	documents["audit_reports"] = buildingDocumentGroup(documents, "audit_reports", "auditreport", "audition", "audit_report", "auditreports", "auditions")
 	documents["financial_reports"] = buildingDocumentGroup(documents, "financial_reports", "mfinreport")
 	result["documents"] = documents
 

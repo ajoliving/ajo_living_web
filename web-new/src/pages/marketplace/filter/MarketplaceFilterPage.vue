@@ -388,7 +388,7 @@ const viewMode = ref<ResultViewMode>('grid');
   display: flex;
   width: 100%;
   max-width: var(--layout-page-max-width);
-  min-height: calc(100vh - var(--app-header-offset, 0rem));
+  min-height: calc(100svh - var(--app-header-offset, 0rem));
   gap: 16px;
   margin: 0 auto;
   padding: 24px var(--layout-page-padding-inline) 72px;
@@ -737,7 +737,7 @@ const viewMode = ref<ResultViewMode>('grid');
 @media (max-width: 767px) {
   .marketplace-filter-page {
     height: auto;
-    min-height: calc(100vh - var(--app-header-offset, 0rem));
+    min-height: calc(100svh - var(--app-header-offset, 0rem));
     flex-direction: column;
     gap: 18px;
     overflow: visible;

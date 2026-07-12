@@ -321,7 +321,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: min(100%, 72rem);
-  max-height: calc(100vh - 2rem);
+  max-height: calc(100svh - 2rem);
 }
 
 .management-dialog-header {

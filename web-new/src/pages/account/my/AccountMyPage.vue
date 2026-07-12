@@ -1809,7 +1809,7 @@ watch(
 
 /* 1. 頁面容器 */
 .page {
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--sur-2);
   color: var(--ink);
 }

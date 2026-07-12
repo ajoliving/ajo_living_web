@@ -84,6 +84,30 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		t.Fatalf("create media asset: %v", err)
 	}
 
+	incompleteDraft, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID: owner.ID,
+	})
+	if err != nil {
+		t.Fatalf("create incomplete property draft: %v", err)
+	}
+	if incompleteDraft.ListingID == "" || incompleteDraft.PublicationStatus != "draft" {
+		t.Fatalf("unexpected incomplete draft detail: %#v", incompleteDraft)
+	}
+	updatedIncompleteDraft, err := propertyService.UpdatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:     owner.ID,
+		ListingPublicID: incompleteDraft.ListingID,
+		Title:           "未完成草稿",
+	})
+	if err != nil {
+		t.Fatalf("update incomplete property draft: %v", err)
+	}
+	if updatedIncompleteDraft.Title != "未完成草稿" || updatedIncompleteDraft.PublicationStatus != "draft" {
+		t.Fatalf("unexpected updated incomplete draft detail: %#v", updatedIncompleteDraft)
+	}
+	if _, err := propertyService.PublishProperty(context.Background(), PropertyChannelSale, owner.ID, incompleteDraft.ListingID); err == nil {
+		t.Fatal("expected incomplete draft publication to fail")
+	}
+
 	detail, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
 		OwnerUserID:           owner.ID,
 		Title:                 "仁英大廈高層放售",
@@ -337,6 +361,7 @@ func TestValidateNonResidentialSaleModes(t *testing.T) {
 	land.TransactionType = "sale"
 	land.PropertyType = "land"
 	land.PropertyNo = "LAND-001"
+	land.EstateName = ""
 	land.MonthlyRentHKD = 0
 	land.AskingPriceHKD = 3800000
 	land.FeatureTags = []string{"land_farmland"}

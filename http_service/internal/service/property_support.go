@@ -23,10 +23,6 @@ import (
 
 // 1. upsertPropertySale creates or updates a sale listing aggregate.
 func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertPropertySaleParams, creating bool) (string, error) {
-	if err := s.validateSaleParams(params); err != nil {
-		return "", err
-	}
-
 	communityID, err := s.resolveCommunityID(ctx, params.CommunityID)
 	if err != nil {
 		return "", err
@@ -155,8 +151,14 @@ func normalizeAnnualPrepayOption(value string, enabled bool) string {
 
 // 3. updatePropertySaleWithCharge updates a sale listing and charges edit points.
 func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, params UpsertPropertySaleParams) (string, *PointsChargeResponse, error) {
-	if err := s.validateSaleParams(params); err != nil {
+	existing, _, err := s.loadOwnedPropertyListing(ctx, PropertyChannelSale, params.OwnerUserID, params.ListingPublicID)
+	if err != nil {
 		return "", nil, err
+	}
+	if existing.PublicationStatus != "draft" {
+		if err := s.validateSaleParams(params); err != nil {
+			return "", nil, err
+		}
 	}
 
 	communityID, err := s.resolveCommunityID(ctx, params.CommunityID)
@@ -606,7 +608,7 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 
 // 9. validateSaleParams validates sale listing payloads.
 func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) error {
-	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.EstateName) == "" || strings.TrimSpace(params.AddressText) == "" {
+	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required property fields")
 	}
 	if strings.TrimSpace(params.TitleEn) == "" || strings.TrimSpace(params.DescriptionEn) == "" || strings.TrimSpace(params.AddressTextEn) == "" {
@@ -629,6 +631,9 @@ func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) er
 	propertyType := normalizeSalePropertyType(params.PropertyType)
 	if !isAllowedPropertyValue(propertyType, []string{"residential", "car_park", "industrial", "shop", "land"}) {
 		return errcode.New(errcode.CodeValidationError, "invalid property type")
+	}
+	if propertyType != "land" && strings.TrimSpace(params.EstateName) == "" {
+		return errcode.New(errcode.CodeValidationError, "estate name is required")
 	}
 	if transactionType == "sale" && !params.PriceNegotiable && params.AskingPriceHKD <= 0 {
 		return errcode.New(errcode.CodeValidationError, "valid asking price is required")
@@ -1577,6 +1582,57 @@ func (s *PropertyService) validatePropertyReadyWithTx(ctx context.Context, tx *g
 	}
 
 	return nil
+}
+
+// 24.1 validatePropertySalePublicationWithTx validates persisted sale data before publication.
+func (s *PropertyService) validatePropertySalePublicationWithTx(ctx context.Context, tx *gorm.DB, listing *model.Listing, contact *model.ListingContact) error {
+	var sale model.PropertySaleListing
+	if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&sale).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to validate property sale listing")
+	}
+
+	phone := ""
+	if strings.TrimSpace(contact.PhoneEncrypted) != "" {
+		phone = "stored"
+	}
+	params := UpsertPropertySaleParams{
+		PropertyNo:            sale.PropertyNo,
+		Title:                 listing.Title,
+		TitleEn:               sale.TitleEn,
+		Description:           listing.Description,
+		DescriptionEn:         sale.DescriptionEn,
+		DistrictCode:          listing.DistrictCode,
+		PublisherIdentityType: listing.PublisherIdentityType,
+		TransactionType:       sale.TransactionType,
+		LocationScope:         sale.LocationScope,
+		ListingCategory:       sale.ListingCategory,
+		PropertyType:          sale.PropertyType,
+		EstateName:            sale.EstateName,
+		AddressText:           sale.AddressText,
+		AddressTextEn:         sale.AddressTextEn,
+		AskingPriceHKD:        sale.AskingPriceHKD,
+		MonthlyRentHKD:        sale.MonthlyRentHKD,
+		PriceNegotiable:       sale.PriceNegotiable,
+		AreaMode:              sale.AreaMode,
+		UsableAreaSqft:        sale.UsableAreaSqft,
+		GrossAreaSqft:         sale.GrossAreaSqft,
+		FeatureTags:           decodeStringSliceBytes(sale.FeatureTags),
+		ContactMethod:         sale.ContactMethod,
+		BusinessStatus:        listing.BusinessStatus,
+		AdPackageCode:         sale.AdPackageCode,
+		Contact: PropertyContactInput{
+			ContactNameZH:     contact.ContactNameZH,
+			ContactNameEN:     contact.ContactNameEN,
+			Phone:             phone,
+			ContactAttributes: decodeStringMapBytes(contact.ContactAttributes),
+			ShowPhone:         contact.ShowPhone,
+			ShowWhatsApp:      contact.ShowWhatsApp,
+			ShowChat:          contact.ShowChat,
+			ShowInquiryForm:   contact.ShowInquiryForm,
+		},
+	}
+
+	return s.validateSaleParams(params)
 }
 
 // 25. decodeStringSliceBytes decodes JSON bytes into string slice.

@@ -323,6 +323,7 @@ export const useLoginPage = () => {
   const rememberMe = ref(true);
   const selectedHero = ref(getRandomHeroImage());
   let latestUnitRequestID = 0;
+  let buildingsRequested = false;
 
   const isAuthenticated = computed(() => sessionStore.isAuthenticated);
 
@@ -478,7 +479,17 @@ export const useLoginPage = () => {
     }
   };
 
-  // 24. 載入指定大廈單位清單
+  // 24. 按需載入住戶註冊大廈選項
+  const ensureBuildingsLoaded = async (): Promise<void> => {
+    if (buildingsRequested || buildingsLoading.value) {
+      return;
+    }
+
+    buildingsRequested = true;
+    await loadBuildings();
+  };
+
+  // 25. 載入指定大廈單位清單
   const loadUnitsForBuilding = async (buildingID: string): Promise<void> => {
     const requestID = ++latestUnitRequestID;
     unitsLoading.value = true;
@@ -648,7 +659,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 29. 按目前模式提交登入表單
+  // 30. 按目前模式提交登入表單
   const handleSubmit = async (): Promise<void> => {
     if (emailAction.value === 'login' && authMode.value === 'username') {
       await handleAccountSubmit();
@@ -663,34 +674,39 @@ export const useLoginPage = () => {
     await handlePhoneSubmit();
   };
 
-  // 30. 執行登出
+  // 31. 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 31. 前往忘記密碼流程
+  // 32. 前往忘記密碼流程
   const handleForgotPassword = async (): Promise<void> => {
     await router.push('/forgot-password');
   };
 
-  // 32. 設定登入模式
+  // 33. 設定登入模式
   const setAuthMode = (mode: LoginAuthMode): void => {
     authMode.value = mode;
     emailAction.value = 'login';
     formState.otp = '';
   };
 
-  // 33. 切換電郵登入與註冊模式
+  // 34. 切換電郵登入與註冊模式
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
     authMode.value = emailAction.value === 'register' ? 'email' : 'phone';
     formState.otp = '';
   };
 
+  watch(emailAction, (action) => {
+    if (action === 'register') {
+      void ensureBuildingsLoaded();
+    }
+  });
+
   onMounted(() => {
     void loadConfiguredHero();
-    void loadBuildings();
   });
 
   return {

@@ -479,7 +479,7 @@ const togglePasswordVisibility = (): void => {
           <button
             v-if="props.emailAction === 'login' || props.emailAction === 'register'"
             type="button"
-            class="ml-1 font-bold text-primary transition hover:underline"
+            class="ml-1 inline-flex min-w-[36px] items-center justify-center font-bold text-primary transition hover:underline"
             @click="emit('toggle-email-action')"
           >
             {{ props.emailActionSwitchLabel }}
@@ -683,6 +683,10 @@ const togglePasswordVisibility = (): void => {
   gap: 1rem;
 }
 
+.login-help-row label {
+  min-height: 40px;
+}
+
 .login-forgot-button {
   color: rgb(var(--color-primary));
   font-size: 13px;
@@ -734,8 +738,45 @@ const togglePasswordVisibility = (): void => {
 }
 
 @media (max-width: 640px) {
+  .login-form-panel {
+    padding: 1.1rem var(--layout-page-padding-inline) calc(var(--app-mobile-content-bottom) + 1rem);
+  }
+
+  .login-form-main {
+    justify-content: start;
+    padding-block: 0;
+  }
+
+  .login-form-heading {
+    text-align: left;
+  }
+
+  .login-form-heading h2 {
+    font-size: 26px;
+  }
+
   .login-form-input {
+    height: 44px;
     font-size: 16px;
+  }
+
+  .login-choice-tabs {
+    gap: 8px;
+  }
+
+  .login-mode-tab,
+  .login-submit-button {
+    min-height: 44px;
+  }
+
+  .login-help-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .login-inline-switch {
+    text-align: left;
   }
 }
 </style>

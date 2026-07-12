@@ -1,7 +1,7 @@
 <!--
  * 樓盤租售列表頁。
- * 1. 三欄布局：左側篩選欄 + 中間自適應列表區 + 右側廣告欄。
- * 2. 左側含搜尋框（含自動補全下拉）與 6 組篩選標籤（地區、性質、售價、面積、房間、裝修）。
+ * 1. 桌面採左側篩選、中間列表與右側廣告三欄布局。
+ * 2. 手機將篩選收進底部彈窗，入口固定在搜尋框左側。
  * 3. 中間含排序欄、後端樓盤卡片與分頁。
  * 4. 卡片含類型堆疊、售/租標識、代理公司、呎價、位置。
  * 5. 右側接入 3 個 16:9 短廣告與 2 個 9:16 長廣告。
@@ -26,6 +26,7 @@ import {
 } from '@/constants/property';
 import type { PaginationMeta } from '@/model/api';
 import type { PropertyListParams, PropertyListingSummaryResponse } from '@/model/property';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
 import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
 import {
@@ -48,6 +49,7 @@ const pageSize = 12;
 
 // 2. 搜尋關鍵字
 const keyword = ref('');
+const isFilterOpen = ref(false);
 
 // 3. 排序選項
 const sortBy = ref('latest');
@@ -140,6 +142,14 @@ const filterGroups = ref<FilterGroup[]>([
     activeValue: '',
   },
 ]);
+const activeFilterCount = computed(() =>
+  filterGroups.value.filter((group) => Boolean(group.activeValue)).length,
+);
+const mobileQuickFilterGroups = computed<FilterGroup[]>(() =>
+  ['region', 'property_type', 'bedroom', 'renovation']
+    .map((key) => filterGroups.value.find((group) => group.key === key))
+    .filter((group): group is FilterGroup => Boolean(group)),
+);
 
 // 7. 樓盤卡片資料
 interface PropertyCard {
@@ -256,12 +266,35 @@ const handleFilterToggle = (groupKey: string, optionValue: string) => {
   void loadListings();
 };
 
-// 13. 點擊卡片跳轉詳情
+// 13. 開關手機端篩選彈窗
+const openFilterSheet = (): void => {
+  isFilterOpen.value = true;
+};
+
+const closeFilterSheet = (): void => {
+  isFilterOpen.value = false;
+};
+
+// 14. 清除樓盤篩選條件
+const clearFilters = (): void => {
+  filterGroups.value.forEach((group) => {
+    group.activeValue = '';
+  });
+  currentPage.value = 1;
+  void loadListings();
+};
+
+// 15. 點擊卡片跳轉詳情
 const handleCardClick = (id: string) => {
   void router.push(`/properties/${id}`);
 };
 
-// 14. 點擊分頁
+// 16. 隱藏失效樓盤封面
+const hideFailedImage = (event: Event): void => {
+  (event.currentTarget as HTMLImageElement).style.display = 'none';
+};
+
+// 17. 點擊分頁
 const handlePageSelect = (page: PaginationPage) => {
   if (page.disabled || page.page === currentPage.value) {
     return;
@@ -270,20 +303,20 @@ const handlePageSelect = (page: PaginationPage) => {
   void loadListings();
 };
 
-// 15. 提交搜尋
+// 18. 提交搜尋
 const submitSearch = (): void => {
   currentPage.value = 1;
   showAutocomplete.value = false;
   void loadListings();
 };
 
-// 16. 切換排序
+// 19. 切換排序
 const handleSortChange = (): void => {
   currentPage.value = 1;
   void loadListings();
 };
 
-// 17. 切換收藏
+// 20. 切換收藏
 const toggleFavorite = async (card: PropertyCard): Promise<void> => {
   if (!readStoredAccessToken()) {
     await router.push({ path: '/login', query: { redirect: '/properties' } });
@@ -302,19 +335,19 @@ const toggleFavorite = async (card: PropertyCard): Promise<void> => {
   }
 };
 
-// 18. 預約睇樓
+// 21. 預約睇樓
 const openAppointment = (card: PropertyCard): void => {
   void router.push({ path: `/properties/${card.id}`, query: { action: 'appointment' } });
 };
 
-// 19. 更新收藏狀態
+// 22. 更新收藏狀態
 const patchFavorite = (listingId: string, isFavorite: boolean): void => {
   items.value = items.value.map((listing) =>
     listing.listing_id === listingId ? { ...listing, is_favorite: isFavorite } : listing,
   );
 };
 
-// 20. 轉換卡片資料
+// 23. 轉換卡片資料
 const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard => {
   const sale = listing.property_sale;
   const priceKind = resolvePropertyTransactionType(listing);
@@ -352,23 +385,23 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
   };
 };
 
-// 21. 格式化港幣
+// 24. 格式化港幣
 const formatHKD = (value: number): string =>
   `HK$${value.toLocaleString('zh-HK')}`;
 
-// 22. 顯示自動補全
+// 25. 顯示自動補全
 const showAC = () => {
   showAutocomplete.value = keyword.value.length > 0;
 };
 
-// 23. 隱藏自動補全
+// 26. 隱藏自動補全
 const hideAC = () => {
   setTimeout(() => {
     showAutocomplete.value = false;
   }, 200);
 };
 
-// 24. 選擇自動補全項目
+// 27. 選擇自動補全項目
 const selectAC = (value: string) => {
   keyword.value = value;
   showAutocomplete.value = false;
@@ -383,10 +416,43 @@ onMounted(() => {
 <template>
   <div class="page">
     <div class="lp">
+      <button
+        v-if="isFilterOpen"
+        type="button"
+        class="filter-backdrop"
+        aria-label="關閉篩選條件"
+        @click="closeFilterSheet"
+      ></button>
+
       <!-- 1. 左側篩選欄 -->
-      <aside class="lf">
+      <aside
+        id="property-filter-sheet"
+        class="lf"
+        :class="{ 'is-filter-open': isFilterOpen }"
+        :role="isFilterOpen ? 'dialog' : undefined"
+        :aria-modal="isFilterOpen ? 'true' : undefined"
+        aria-labelledby="property-filter-title"
+      >
+        <header class="filter-sheet-header">
+          <div>
+            <span class="filter-sheet-eyebrow">樓盤放售</span>
+            <h2 id="property-filter-title">篩選條件</h2>
+          </div>
+          <button
+            type="button"
+            class="filter-sheet-close"
+            aria-label="關閉篩選條件"
+            @click="closeFilterSheet"
+          >
+            <AppIcon
+              name="close"
+              :size="20"
+            />
+          </button>
+        </header>
+
         <!-- 1.1 搜尋欄（含自動補全） -->
-        <div class="sbar">
+        <div class="sbar desktop-filter-search">
           <form
             class="autocomplete-wrap"
             @submit.prevent="submitSearch"
@@ -462,26 +528,140 @@ onMounted(() => {
         </div>
 
         <!-- 1.2 篩選群組 -->
-        <section
-          v-for="group in filterGroups"
-          :key="group.key"
-          class="fs"
-        >
-          <div class="ft-title">{{ group.title }}</div>
-          <div class="ftags">
-            <FilterTag
-              v-for="option in group.options"
-              :key="`${group.key}-${option.value}`"
-              :label="option.label"
-              :active="option.value === group.activeValue"
-              @toggle="handleFilterToggle(group.key, option.value)"
-            />
-          </div>
-        </section>
+        <div class="filter-sections">
+          <section
+            v-for="group in filterGroups"
+            :key="group.key"
+            class="fs"
+          >
+            <div class="ft-title">{{ group.title }}</div>
+            <div class="ftags">
+              <FilterTag
+                v-for="option in group.options"
+                :key="`${group.key}-${option.value}`"
+                :label="option.label"
+                :active="option.value === group.activeValue"
+                @toggle="handleFilterToggle(group.key, option.value)"
+              />
+            </div>
+          </section>
+        </div>
+
+        <div class="filter-sheet-actions">
+          <button
+            type="button"
+            class="filter-sheet-reset"
+            @click="clearFilters"
+          >全部清除</button>
+          <button
+            type="button"
+            class="filter-sheet-apply"
+            @click="closeFilterSheet"
+          >查看 {{ pagination.total }} 個結果</button>
+        </div>
       </aside>
 
       <!-- 2. 中間列表區 -->
       <main class="lr">
+        <div class="mobile-listing-controls">
+          <div class="mobile-search-toolbar">
+            <form
+              class="mobile-search-form"
+              @submit.prevent="submitSearch"
+            >
+              <div class="autocomplete-wrap">
+                <input
+                  v-model="keyword"
+                  class="sinput"
+                  placeholder="搜尋樓盤…"
+                  autocomplete="off"
+                  @input="showAC"
+                  @blur="hideAC"
+                />
+                <div
+                  v-if="showAutocomplete"
+                  class="autocomplete-drop"
+                >
+                  <button
+                    v-for="item in autocompleteItems"
+                    :key="item.value"
+                    type="button"
+                    class="ac-item"
+                    @mousedown="selectAC(item.value)"
+                  >
+                    <span><span class="ac-highlight">{{ item.prefix }}</span>{{ item.suffix }}</span>
+                  </button>
+                </div>
+              </div>
+              <button
+                type="submit"
+                class="mobile-search-button"
+                aria-label="搜尋樓盤"
+              >
+                <AppIcon
+                  name="search"
+                  :size="19"
+                />
+              </button>
+            </form>
+          </div>
+
+          <div
+            class="mobile-filter-rail"
+            aria-label="樓盤快捷篩選"
+          >
+            <select
+              v-for="group in mobileQuickFilterGroups"
+              :key="group.key"
+              v-model="group.activeValue"
+              class="mobile-filter-select"
+              :aria-label="group.title"
+              @change="handleFilterToggle(group.key, group.activeValue)"
+            >
+              <option value="">{{ group.title }}</option>
+              <option
+                v-for="option in group.options"
+                :key="option.value"
+                :value="option.value"
+              >{{ option.label }}</option>
+            </select>
+            <select
+              v-model="sortBy"
+              class="mobile-filter-select mobile-sort-select"
+              aria-label="樓盤排序"
+              @change="handleSortChange"
+            >
+              <option value="latest">最新更新</option>
+              <option value="price_asc">價格低至高</option>
+              <option value="price_desc">價格高至低</option>
+              <option value="usable_area_desc">面積大至小</option>
+            </select>
+            <button
+              type="button"
+              class="mobile-filter-button"
+              aria-controls="property-filter-sheet"
+              :aria-expanded="isFilterOpen"
+              @click="openFilterSheet"
+            >
+              <span>更多</span>
+              <AppIcon
+                name="chevron-down"
+                :size="16"
+              />
+              <span
+                v-if="activeFilterCount > 0"
+                class="mobile-filter-count"
+              >{{ activeFilterCount }}</span>
+            </button>
+            <button
+              v-if="activeFilterCount > 0"
+              type="button"
+              class="mobile-filter-reset"
+              @click="clearFilters"
+            >重設</button>
+          </div>
+        </div>
+
         <!-- 2.1 排序欄 -->
         <div class="sort-row listing-sort-row">
           <div class="listing-result-tools">
@@ -547,6 +727,7 @@ onMounted(() => {
                   v-if="card.imageUrl"
                   :src="card.imageUrl"
                   :alt="card.title"
+                  @error="hideFailedImage"
                 >
                 <svg
                   v-else
@@ -676,7 +857,7 @@ onMounted(() => {
 /* 1. 頁面容器 */
 .page {
   width: 100%;
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--sur-2);
 }
 
@@ -689,7 +870,7 @@ onMounted(() => {
   margin: 0 auto;
   padding: 0 var(--layout-page-padding-inline);
   background: var(--sur-2);
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   align-items: stretch;
 }
 
@@ -699,12 +880,19 @@ onMounted(() => {
   border-right: 1px solid var(--bdr);
   padding: 18px 18px;
   height: auto;
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   overflow: visible;
   scrollbar-width: none;
 }
 
 .lf::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-backdrop,
+.filter-sheet-header,
+.filter-sheet-actions,
+.mobile-listing-controls {
   display: none;
 }
 
@@ -788,7 +976,7 @@ onMounted(() => {
   background: var(--sur-2);
   padding: 14px 14px 36px;
   min-width: 0;
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
 }
 
 /* 7. 排序欄 */
@@ -1358,6 +1546,308 @@ onMounted(() => {
   }
 }
 
+@media (max-width: 1023px) {
+  .filter-backdrop {
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgb(0 0 0 / 0.44);
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  .lf {
+    position: fixed;
+    z-index: 121;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    max-height: min(82svh, 720px);
+    min-height: 0;
+    flex-direction: column;
+    border: 0;
+    border-radius: 8px 8px 0 0;
+    padding: 0;
+    background: var(--sur);
+    box-shadow: 0 -12px 32px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    overflow-y: auto;
+    pointer-events: none;
+    touch-action: pan-y;
+    transform: translateY(100%);
+    transition: transform 0.2s ease, opacity 0.18s ease, visibility 0.2s;
+    visibility: hidden;
+  }
+
+  .lf.is-filter-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  .desktop-filter-search {
+    display: none;
+  }
+
+  .filter-sheet-header {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--bdr);
+    padding: 8px 12px 8px 14px;
+    background: var(--sur);
+  }
+
+  .filter-sheet-header h2 {
+    margin: 1px 0 0;
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .filter-sheet-eyebrow {
+    display: block;
+    color: var(--ink-3);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  .filter-sheet-close {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .filter-sections {
+    padding: 10px 14px 2px;
+  }
+
+  .filter-sections .fs {
+    margin-bottom: 10px;
+  }
+
+  .filter-sections .ft-title {
+    margin-bottom: 4px;
+    color: var(--ink-3);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .filter-sections .ftags {
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .filter-sections :deep(.ft) {
+    min-height: 36px;
+    padding: 4px 10px;
+  }
+
+  .filter-sheet-actions {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+    gap: 8px;
+    border-top: 1px solid var(--bdr);
+    padding: 10px max(14px, calc(14px + var(--app-safe-right))) calc(10px + var(--app-safe-bottom)) max(14px, calc(14px + var(--app-safe-left)));
+    background: var(--sur);
+  }
+
+  .filter-sheet-reset,
+  .filter-sheet-apply {
+    min-height: 44px;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .filter-sheet-reset {
+    border: 1px solid var(--bdr);
+    background: var(--sur);
+    color: var(--ink-2);
+  }
+
+  .filter-sheet-apply {
+    border: 1px solid var(--brand);
+    background: var(--brand);
+    color: #fff;
+  }
+
+  .mobile-listing-controls {
+    display: block;
+    box-sizing: border-box;
+    margin: -12px calc(-1 * var(--layout-page-padding-inline)) 12px;
+    border-bottom: 1px solid var(--bdr);
+    padding: 12px var(--layout-page-padding-inline) 10px;
+    background: var(--sur);
+  }
+
+  .mobile-search-toolbar {
+    margin-bottom: 10px;
+  }
+
+  .mobile-search-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    min-width: 0;
+  }
+
+  .mobile-search-form .sinput {
+    height: 48px;
+    border-radius: 8px 0 0 8px;
+    background: var(--sur);
+    font-size: 16px;
+  }
+
+  .mobile-search-button {
+    display: inline-flex;
+    width: 48px;
+    height: 48px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--brand);
+    border-radius: 0 8px 8px 0;
+    background: var(--brand);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .mobile-filter-rail {
+    display: flex;
+    gap: 8px;
+    margin: 0 -2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 2px;
+    scrollbar-width: none;
+  }
+
+  .mobile-filter-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-filter-select,
+  .mobile-filter-button,
+  .mobile-filter-reset {
+    min-height: 40px;
+    border: 1px solid var(--bdr);
+    border-radius: 999px;
+    background: var(--sur);
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .mobile-filter-select {
+    width: auto;
+    min-width: 98px;
+    flex: 0 0 auto;
+    padding: 0 30px 0 13px;
+  }
+
+  .mobile-sort-select {
+    min-width: 108px;
+  }
+
+  .mobile-filter-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    padding: 0 12px;
+    cursor: pointer;
+  }
+
+  .mobile-filter-reset {
+    flex: 0 0 auto;
+    border-color: transparent;
+    padding: 0 4px;
+    background: transparent;
+    color: var(--ink-3);
+    cursor: pointer;
+  }
+
+  .mobile-filter-count {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .sort-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+
+  .sort-row .ssel {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--bdr);
+    border-radius: 8px;
+    padding: 0 12px;
+    background: var(--sur);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+  }
+
+  .listing-sort-row > .ssel {
+    display: none;
+  }
+
+  .mobile-search-form .autocomplete-drop {
+    border-top: 1px solid var(--bdr);
+    border-radius: 0 0 6px 6px;
+  }
+
+  .mobile-search-form .ac-item {
+    width: 100%;
+    min-height: 36px;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    background: var(--sur);
+    text-align: left;
+  }
+
+  .lr {
+    padding: 0 0 36px;
+  }
+}
+
 @media (max-width: 767px) {
   .listing-pagination {
     flex-direction: column;
@@ -1391,4 +1881,5 @@ onMounted(() => {
   }
 
 }
+
 </style>

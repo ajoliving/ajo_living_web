@@ -38,12 +38,12 @@ type propertyContactRequest struct {
 
 // 3. propertySaleRequest defines sale listing create and update payload.
 type propertySaleRequest struct {
-	Title                 string                      `json:"title" binding:"required"`
+	Title                 string                      `json:"title"`
 	TitleEn               string                      `json:"title_en"`
 	Summary               string                      `json:"summary"`
 	Description           string                      `json:"description"`
 	DescriptionEn         string                      `json:"description_en"`
-	DistrictCode          string                      `json:"district_code" binding:"required"`
+	DistrictCode          string                      `json:"district_code"`
 	CommunityID           string                      `json:"community_id"`
 	PublisherIdentityType string                      `json:"publisher_identity_type"`
 	PropertyNo            string                      `json:"property_no"`
@@ -51,13 +51,13 @@ type propertySaleRequest struct {
 	LocationScope         string                      `json:"location_scope"`
 	ListingCategory       string                      `json:"listing_category"`
 	MultiUnitProject      bool                        `json:"multi_unit_project"`
-	PropertyType          string                      `json:"property_type" binding:"required"`
+	PropertyType          string                      `json:"property_type"`
 	RentalType            string                      `json:"rental_type"`
 	PropertyAttributes    map[string]string           `json:"property_attributes"`
 	RenovationType        string                      `json:"renovation_type"`
 	AgencyCompanyName     string                      `json:"agency_company_name"`
 	EstateName            string                      `json:"estate_name"`
-	AddressText           string                      `json:"address_text" binding:"required"`
+	AddressText           string                      `json:"address_text"`
 	AddressTextEn         string                      `json:"address_text_en"`
 	BlockName             string                      `json:"block_name"`
 	UnitName              string                      `json:"unit_name"`
@@ -95,7 +95,7 @@ type propertySaleRequest struct {
 	PrivateNote           string                      `json:"private_note"`
 	AdPackageCode         string                      `json:"ad_package_code"`
 	FeatureTags           []string                    `json:"feature_tags"`
-	ContactMethod         string                      `json:"contact_method" binding:"required"`
+	ContactMethod         string                      `json:"contact_method"`
 	BusinessStatus        string                      `json:"business_status"`
 	Images                []service.ListingImageInput `json:"images"`
 	Contact               propertyContactRequest      `json:"contact"`

@@ -442,6 +442,7 @@ onMounted(() => {
         <label class="property-search-input">
           <AppIcon
             name="search"
+            class="member-search-input-icon"
             :size="17"
           />
           <input
@@ -455,6 +456,10 @@ onMounted(() => {
           class="property-button property-button--secondary"
           :disabled="loading"
         >
+          <AppIcon
+            name="search"
+            :size="16"
+          />
           {{ t('property.mine.search') }}
         </button>
       </div>
@@ -503,118 +508,127 @@ onMounted(() => {
     >
       <div class="property-panel__title">
         <h2>{{ pageTitle }}</h2>
+        <span>{{ paginationText }}</span>
       </div>
 
-      <div class="property-table-wrap">
-        <table class="property-table">
-          <thead>
-            <tr>
-              <th>{{ t('property.mine.columnListing') }}</th>
-              <th>{{ t('property.mine.columnType') }}</th>
-              <th>{{ t('property.mine.columnLocation') }}</th>
-              <th>{{ t('property.mine.columnSpec') }}</th>
-              <th>{{ t('property.mine.columnPrice') }}</th>
-              <th>{{ t('property.mine.columnAdPackage') }}</th>
-              <th>{{ t('property.mine.columnStatus') }}</th>
-              <th>{{ t('property.mine.columnPublishedAt') }}</th>
-              <th>{{ t('property.mine.columnExpiresAt') }}</th>
-              <th>{{ t('property.mine.columnUpdatedAt') }}</th>
-              <th>{{ t('property.mine.columnActions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="listing in filteredItems"
-              :key="listing.listing_id"
-            >
-              <td>
-                <div class="property-item">
-                  <div class="property-item__media">
-                    <img
-                      v-if="resolvePropertyCoverImage(listing)"
-                      :src="resolvePropertyCoverImage(listing)?.url"
-                      :alt="resolvePropertyTitle(listing)"
-                    />
-                    <div
-                      v-else
-                      class="property-item__placeholder"
-                    >
-                      <AppIcon
-                        name="picture"
-                        :size="20"
-                      />
-                    </div>
-                  </div>
+      <div class="property-manage-list property-table-wrap">
+        <article
+          v-for="listing in filteredItems"
+          :key="listing.listing_id"
+          class="property-manage-card"
+        >
+          <div class="property-manage-card__overview">
+            <div class="property-item__media">
+              <img
+                v-if="resolvePropertyCoverImage(listing)"
+                :src="resolvePropertyCoverImage(listing)?.url"
+                :alt="resolvePropertyTitle(listing)"
+              />
+              <div
+                v-else
+                class="property-item__placeholder"
+              >
+                <AppIcon
+                  name="picture"
+                  :size="22"
+                />
+              </div>
+            </div>
 
-                  <div class="property-item__content">
-                    <strong>{{ resolvePropertyTitle(listing) }}</strong>
-                    <p>{{ resolvePropertySummary(listing) }}</p>
-                  </div>
-                </div>
-              </td>
-              <td>{{ resolveTypeText(listing) }}</td>
-              <td>{{ resolveLocationText(listing) }}</td>
-              <td>{{ resolveSpecText(listing) }}</td>
-              <td>{{ resolvePriceText(listing) }}</td>
-              <td>{{ resolveAdPackageText(listing) }}</td>
-              <td>
-                <span class="property-status-pill">{{ resolveStatusLabel(listing) }}</span>
-              </td>
-              <td>{{ formatOptionalDate(listing.published_at) }}</td>
-              <td>{{ formatOptionalDate(listing.expire_at) }}</td>
-              <td>{{ formatOptionalDate(listing.updated_at) }}</td>
-              <td>
-                <div class="property-table-actions">
-                  <button
-                    type="button"
-                    class="property-button property-button--primary"
-                    @click="openEditEditor(listing.listing_id)"
-                  >
-                    {{ t('property.mine.edit') }}
-                  </button>
-                  <RouterLink
-                    :to="resolvePropertyDetailPath(listing)"
-                    class="property-button property-button--secondary"
-                  >
-                    {{ t('property.mine.publicDetail') }}
-                  </RouterLink>
-                  <button
-                    v-if="listing.publication_status === 'draft'"
-                    type="button"
-                    class="property-button property-button--primary"
-                    @click="runAction('publish', listing.listing_id)"
-                  >
-                    {{ t('property.mine.publish') }} · {{ formatPoints(chargeCost) }}
-                  </button>
-                  <button
-                    v-if="listing.publication_status === 'expired' || listing.publication_status === 'hidden'"
-                    type="button"
-                    class="property-button property-button--primary"
-                    @click="runAction('republish', listing.listing_id)"
-                  >
-                    {{ t('property.mine.republish') }} · {{ formatPoints(chargeCost) }}
-                  </button>
-                  <button
-                    v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
-                    type="button"
-                    class="property-button property-button--secondary"
-                    @click="runAction('mark-sold', listing.listing_id)"
-                  >
-                    {{ t('property.sale.soldAction') }}
-                  </button>
-                  <button
-                    v-if="listing.publication_status === 'active'"
-                    type="button"
-                    class="property-button property-button--secondary"
-                    @click="runAction('deactivate', listing.listing_id)"
-                  >
-                    {{ t('property.mine.deactivate') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            <div class="property-item__content">
+              <div class="property-item__heading">
+                <strong>{{ resolvePropertyTitle(listing) }}</strong>
+                <span
+                  class="property-status-pill"
+                  :class="`property-status-pill--${resolvePropertyStatus(listing)}`"
+                >
+                  {{ resolveStatusLabel(listing) }}
+                </span>
+              </div>
+              <p>{{ resolvePropertySummary(listing) }}</p>
+              <strong class="property-item__price">{{ resolvePriceText(listing) }}</strong>
+            </div>
+          </div>
+
+          <dl class="property-manage-card__details">
+            <div>
+              <dt>{{ t('property.mine.columnType') }}</dt>
+              <dd>{{ resolveTypeText(listing) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnLocation') }}</dt>
+              <dd>{{ resolveLocationText(listing) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnSpec') }}</dt>
+              <dd>{{ resolveSpecText(listing) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnAdPackage') }}</dt>
+              <dd>{{ resolveAdPackageText(listing) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnPublishedAt') }}</dt>
+              <dd>{{ formatOptionalDate(listing.published_at) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnExpiresAt') }}</dt>
+              <dd>{{ formatOptionalDate(listing.expire_at) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('property.mine.columnUpdatedAt') }}</dt>
+              <dd>{{ formatOptionalDate(listing.updated_at) }}</dd>
+            </div>
+          </dl>
+
+          <div class="property-table-actions">
+            <button
+              type="button"
+              class="property-button property-button--primary"
+              @click="openEditEditor(listing.listing_id)"
+            >
+              {{ t('property.mine.edit') }}
+            </button>
+            <RouterLink
+              :to="resolvePropertyDetailPath(listing)"
+              class="property-button property-button--secondary"
+            >
+              {{ t('property.mine.publicDetail') }}
+            </RouterLink>
+            <button
+              v-if="listing.publication_status === 'draft'"
+              type="button"
+              class="property-button property-button--primary"
+              @click="runAction('publish', listing.listing_id)"
+            >
+              {{ t('property.mine.publish') }} · {{ formatPoints(chargeCost) }}
+            </button>
+            <button
+              v-if="listing.publication_status === 'expired' || listing.publication_status === 'hidden'"
+              type="button"
+              class="property-button property-button--primary"
+              @click="runAction('republish', listing.listing_id)"
+            >
+              {{ t('property.mine.republish') }} · {{ formatPoints(chargeCost) }}
+            </button>
+            <button
+              v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
+              type="button"
+              class="property-button property-button--secondary"
+              @click="runAction('mark-sold', listing.listing_id)"
+            >
+              {{ t('property.sale.soldAction') }}
+            </button>
+            <button
+              v-if="listing.publication_status === 'active'"
+              type="button"
+              class="property-button property-button--secondary"
+              @click="runAction('deactivate', listing.listing_id)"
+            >
+              {{ t('property.mine.deactivate') }}
+            </button>
+          </div>
+        </article>
       </div>
 
       <div class="property-pagination">
@@ -724,7 +738,7 @@ onMounted(() => {
 
 .property-my-heading {
   align-items: end;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0;
 }
 
 .property-kicker {
@@ -739,7 +753,9 @@ onMounted(() => {
 .property-my-heading h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 5vw, 3.8rem);
+  font-size: 2rem;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 .property-button {
@@ -813,7 +829,7 @@ onMounted(() => {
 .property-tab {
   min-height: 2.25rem;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   background: rgb(var(--color-surface-raised));
   padding: 0 0.75rem;
   color: rgb(var(--color-text-muted));
@@ -832,6 +848,7 @@ onMounted(() => {
 }
 
 .property-status-pill {
+  flex: 0 0 auto;
   border-radius: 999px;
   background: rgb(var(--color-primary-soft));
   padding: 0.3rem 0.55rem;
@@ -840,19 +857,36 @@ onMounted(() => {
   font-weight: 900;
 }
 
+.property-status-pill--active,
+.property-status-pill--published {
+  background: rgb(var(--color-success-bg));
+  color: rgb(var(--color-success));
+}
+
+.property-status-pill--expired {
+  background: rgb(var(--color-warning-bg));
+  color: rgb(var(--color-warning));
+}
+
+.property-status-pill--hidden,
+.property-status-pill--draft {
+  background: rgb(var(--color-surface-muted));
+  color: rgb(var(--color-text-muted));
+}
+
 .property-panel {
   display: grid;
   gap: 14px;
-  margin-top: 12px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 3px;
-  background: rgb(var(--color-surface));
-  padding: 12px;
+  margin-top: 0;
 }
 
 .property-panel__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding-bottom: 14px;
+  padding-bottom: 12px;
 }
 
 .property-panel__title h2 {
@@ -862,45 +896,80 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.property-table-wrap {
-  overflow-x: auto;
-}
-
-.property-table {
-  width: 100%;
-  min-width: 1360px;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.property-table th,
-.property-table td {
-  border-top: 1px solid rgb(var(--color-border));
-  padding: 12px 10px;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.property-table thead th {
-  border-top: 0;
+.property-panel__title span {
   color: rgb(var(--color-text-muted));
   font-size: 12px;
+}
+
+.property-table-wrap {
+  min-width: 0;
+}
+
+.property-manage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.property-manage-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 6px;
+  background: rgb(var(--color-surface));
+  padding: 14px;
+}
+
+.property-manage-card__overview {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  align-items: start;
+}
+
+.property-manage-card__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 4px;
+  background: rgb(var(--color-surface-raised));
+}
+
+.property-manage-card__details > div {
+  min-width: 0;
+  background: rgb(var(--color-surface));
+  padding: 10px 12px;
+}
+
+.property-manage-card__details dt {
+  margin-bottom: 4px;
+  color: rgb(var(--color-text-muted));
+  font-size: 10px;
   font-weight: 600;
 }
 
-.property-item {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+.property-manage-card__details dd {
+  overflow: hidden;
+  margin: 0;
+  color: rgb(var(--color-text));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-item__media {
   overflow: hidden;
+  width: 100%;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: 4px;
   background: rgb(var(--color-surface-muted));
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 3;
 }
 
 .property-item__media img {
@@ -918,15 +987,25 @@ onMounted(() => {
 
 .property-item__content {
   display: grid;
-  gap: 6px;
+  align-content: start;
+  gap: 8px;
   min-width: 0;
 }
 
-.property-item__content strong {
+.property-item__heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-item__heading > strong {
   overflow: hidden;
   color: rgb(var(--color-text));
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -942,10 +1021,23 @@ onMounted(() => {
   line-height: 1.6;
 }
 
+.property-item__price {
+  color: rgb(var(--color-primary));
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .property-table-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  border-top: 1px solid rgb(var(--color-border));
+  padding-top: 12px;
+}
+
+.property-table-actions .property-button {
+  min-width: 5.5rem;
 }
 
 .property-pagination {
@@ -1003,8 +1095,8 @@ onMounted(() => {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: min(96vw, 1260px);
-  height: min(820px, calc(100vh - 32px));
-  max-height: calc(100vh - 32px);
+  height: min(820px, calc(100svh - 32px));
+  max-height: calc(100svh - 32px);
   overflow: hidden;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
@@ -1169,13 +1261,13 @@ onMounted(() => {
 }
 
 .property-my-page {
-  padding: 18px var(--layout-page-padding-inline) 72px;
+  padding: 0 0 72px;
 }
 
 .property-my-heading {
   border-bottom: 1px solid rgb(var(--color-border));
-  margin-bottom: 14px;
-  padding-bottom: 18px;
+  margin-bottom: 0;
+  padding-bottom: 12px;
 }
 
 .property-kicker {
@@ -1185,8 +1277,8 @@ onMounted(() => {
 }
 
 .property-my-heading h1 {
-  font-size: 32px;
-  font-weight: 400;
+  font-size: 26px;
+  font-weight: 500;
 }
 
 .property-button {
@@ -1216,7 +1308,7 @@ onMounted(() => {
 
 .property-tab {
   min-height: 32px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   background: rgb(var(--color-surface));
   font-size: 11px;
   font-weight: 600;
@@ -1235,12 +1327,62 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   .property-my-page {
-    padding-bottom: 96px;
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
   }
 
-  .property-search-row,
-  .property-pagination {
-    grid-template-columns: 1fr;
+  .property-search-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .property-my-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .property-my-heading .property-button {
+    min-width: 44px;
+  }
+
+  .property-tab-row {
+    flex-wrap: nowrap;
+    margin-inline: -12px;
+    padding: 0 12px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .property-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .property-tab {
+    flex: 0 0 auto;
+  }
+
+  .property-manage-card {
+    padding: 12px;
+  }
+
+  .property-manage-card__overview {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .property-item__heading {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .property-status-pill {
+    width: fit-content;
+  }
+
+  .property-manage-card__details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .property-table-actions .property-button {
+    flex: 1 1 7rem;
   }
 
   .property-search-row {
@@ -1253,20 +1395,24 @@ onMounted(() => {
   }
 
   .property-pagination div {
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
   }
 
   .property-editor-dialog {
-    padding: 0;
+    padding:
+      var(--app-safe-top)
+      var(--layout-page-padding-inline)
+      calc(var(--app-safe-bottom) + 10px);
+    place-items: end center;
   }
 
   .property-editor-dialog__panel {
     width: 100%;
-    height: 100vh;
-    max-height: 100vh;
-    border-right: 0;
-    border-radius: 0;
-    border-left: 0;
+    height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+    border-radius: 8px 8px 0 0;
   }
 
   .property-editor-dialog__header {
@@ -1275,12 +1421,28 @@ onMounted(() => {
     padding: 10px;
   }
 
+  .property-editor-dialog__close {
+    width: 44px;
+    height: 44px;
+  }
+
   .property-editor-dialog__body {
     padding: 12px;
   }
 
   .property-editor-dialog__progress-label {
     display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .property-manage-card__overview,
+  .property-manage-card__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .property-item__media {
+    max-height: 11rem;
   }
 }
 </style>

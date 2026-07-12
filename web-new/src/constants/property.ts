@@ -788,17 +788,26 @@ export const propertyAutoTagOptions: MarketplaceLabelledOption[] = [
 ];
 
 export const servicedFacilityTagOptions: MarketplaceLabelledOption[] = [
+  { value: 'private_kitchen', label_zh_hk: '獨立廚房', label_en: 'Private kitchen' },
+  { value: 'front_desk_24h', label_zh_hk: '24小時接待', label_en: '24-hour reception' },
+  { value: 'broadband', label_zh_hk: '寬頻上網', label_en: 'Broadband' },
+  { value: 'business_center', label_zh_hk: '商業中心', label_en: 'Business centre' },
+  { value: 'child_care', label_zh_hk: '幼兒護理', label_en: 'Child care' },
   { value: 'gym', label_zh_hk: '健身室', label_en: 'Gym' },
   { value: 'laundry', label_zh_hk: '洗衣房', label_en: 'Laundry' },
   { value: 'workspace', label_zh_hk: '共享工作區', label_en: 'Workspace' },
   { value: 'lounge', label_zh_hk: '住客休息室', label_en: 'Resident lounge' },
   { value: 'parking', label_zh_hk: '泊車', label_en: 'Parking' },
+  { value: 'pay_tv', label_zh_hk: '收費電視', label_en: 'Pay TV' },
+  { value: 'pet_friendly', label_zh_hk: '可養貓狗', label_en: 'Pet friendly' },
   { value: 'restaurant', label_zh_hk: '餐廳', label_en: 'Restaurant' },
+  { value: 'shuttle_bus', label_zh_hk: '接駁巴士', label_en: 'Shuttle bus' },
+  { value: 'pool', label_zh_hk: '泳池', label_en: 'Pool' },
 ];
 
 export const servicedServiceTagOptions: MarketplaceLabelledOption[] = [
   { value: 'housekeeping', label_zh_hk: '房務清潔', label_en: 'Housekeeping' },
-  { value: 'wifi', label_zh_hk: 'Wi-Fi', label_en: 'Wi-Fi' },
+  { value: 'wifi', label_zh_hk: '無線網絡', label_en: 'Wi-Fi' },
   { value: 'utilities', label_zh_hk: '水電煤', label_en: 'Utilities' },
   { value: 'front_desk', label_zh_hk: '前台服務', label_en: 'Front desk' },
   { value: 'linen', label_zh_hk: '床品更換', label_en: 'Linen service' },

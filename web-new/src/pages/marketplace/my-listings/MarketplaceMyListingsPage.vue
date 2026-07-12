@@ -15,6 +15,7 @@ const {
   filteredItems,
   formatDate,
   formatPrice,
+  handleSearch,
   formatAjoPoints,
   loading,
   openCreate,
@@ -64,19 +65,35 @@ const {
       </header>
 
       <section class="my-toolbar">
-        <label class="my-search-field">
-          <AppIcon
-            name="search"
-            class="left-icon"
-            :size="17"
-          />
-          <input
-            v-model="searchQuery"
-            type="search"
-            class="my-text-input pl-9"
-            :placeholder="t('marketplace.mine.searchPlaceholder')"
-          />
-        </label>
+        <form
+          class="my-search-row"
+          @submit.prevent="handleSearch"
+        >
+          <label class="my-search-field">
+            <AppIcon
+              name="search"
+              class="left-icon member-search-input-icon"
+              :size="17"
+            />
+            <input
+              v-model="searchQuery"
+              type="search"
+              class="my-text-input pl-9"
+              :placeholder="t('marketplace.mine.searchPlaceholder')"
+            />
+          </label>
+          <button
+            type="submit"
+            class="my-search-button"
+            :disabled="loading"
+          >
+            <AppIcon
+              name="search"
+              :size="16"
+            />
+            {{ t('marketplace.mine.search') }}
+          </button>
+        </form>
         <div class="my-filter-row">
           <button
             v-for="option in tabOptions"
@@ -315,6 +332,13 @@ const {
   padding: 12px;
 }
 
+.my-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+}
+
 .my-filter-row {
   display: flex;
   flex-wrap: wrap;
@@ -345,6 +369,32 @@ const {
   pointer-events: none;
 }
 
+.my-search-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  padding: 0 14px;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.my-search-button:hover:not(:disabled) {
+  border-color: rgb(var(--color-primary));
+  color: rgb(var(--color-primary));
+}
+
+.my-search-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .my-text-input {
   height: 34px;
   width: 100%;
@@ -368,7 +418,7 @@ const {
 }
 
 .my-filter-chip {
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border-width: 1px;
   min-height: 32px;
   padding: 0 12px;

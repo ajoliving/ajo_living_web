@@ -262,7 +262,7 @@ onMounted(() => {
   --nav-h: 52px;
 
   width: 100%;
-  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100svh - var(--nav-h));
   background: var(--sur-2);
   font-family: var(--font);
   font-size: 13px;

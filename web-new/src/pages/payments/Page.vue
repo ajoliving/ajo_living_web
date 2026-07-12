@@ -249,7 +249,7 @@ onMounted(() => {
   --pay-border: #e2e2ee;
   --pay-border-2: #cacade;
   display: grid;
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--pay-surface-2);
   color: var(--pay-ink);
 }
@@ -553,7 +553,7 @@ onMounted(() => {
   .ajo-pay-home__footer {
     align-items: flex-start;
     flex-direction: column;
-    padding: 18px 20px 96px;
+    padding: 18px 20px calc(var(--app-mobile-content-bottom) + 24px);
   }
 }
 </style>

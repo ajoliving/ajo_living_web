@@ -358,7 +358,7 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 	var returnPublicID string
 	var charge *PointsChargeResponse
 	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		listing, _, err := s.loadOwnedPropertyListingWithTx(ctx, tx, channel, ownerUserID, listingPublicID)
+		listing, contact, err := s.loadOwnedPropertyListingWithTx(ctx, tx, channel, ownerUserID, listingPublicID)
 		if err != nil {
 			return err
 		}
@@ -367,6 +367,11 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 		}
 		if action == WalletActionRepublish && listing.PublicationStatus != "expired" && listing.PublicationStatus != "hidden" {
 			return errcode.New(errcode.CodeValidationError, "only expired or hidden listings can be republished")
+		}
+		if channel == PropertyChannelSale {
+			if err := s.validatePropertySalePublicationWithTx(ctx, tx, listing, contact); err != nil {
+				return err
+			}
 		}
 		if err := s.validatePropertyReadyWithTx(ctx, tx, listing.ID); err != nil {
 			return err

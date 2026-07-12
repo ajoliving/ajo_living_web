@@ -2,8 +2,8 @@
  * 全域頂部導航。
  * 1. 嚴格對齊 HTML 設計稿 chrome.html 的 .nav 結構與樣式。
  * 2. 按登入態輸出公開入口、會員入口與通知中心鈴鐺。
- * 3. 整合主題切換按鈕（月亮/太陽）與登入入口。
- * 4. 保留 mobile 全屏導航與底部主入口。
+ * 3. 整合主題、語系切換按鈕與登入入口。
+ * 4. 保留 mobile 側邊抽屜與底部主入口。
 -->
 <script setup lang="ts">
 import { computed, watch } from 'vue';
@@ -11,7 +11,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
-import { usePreferenceStore } from '@/stores/preferences';
+import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { type AppThemeName } from '@/utils/theme';
 
@@ -20,6 +20,7 @@ interface NavigationItem {
   to: string;
   label: string;
   match: string[];
+  icon?: 'home' | 'building' | 'browse' | 'star' | 'user';
   requiresAuth?: boolean;
   requiresStaff?: boolean;
 }
@@ -38,6 +39,14 @@ const mobileDrawerOpen = computed({
 });
 const accountPath = computed(() => (sessionStore.isAuthenticated ? '/profile' : '/login'));
 const isDarkTheme = computed(() => preferenceStore.theme === 'dark-neutral');
+const themeToggleAriaLabel = computed(() =>
+  isDarkTheme.value ? t('common.action.switchToLight') : t('common.action.switchToDark'),
+);
+const localeToggleLabel = computed(() =>
+  preferenceStore.locale === 'zh-HK'
+    ? t('common.locale.enShort')
+    : t('common.locale.zhHkShort'),
+);
 const isNavigationItemVisible = (item: NavigationItem): boolean => {
   if (item.requiresAuth && !sessionStore.isAuthenticated) {
     return false;
@@ -73,18 +82,28 @@ const mobileNavigationItems = computed<NavigationItem[]>(() => [
   ...(
     sessionStore.isAuthenticated
       ? [{ key: 'notification', to: '/notifications', label: '通知中心', match: ['/notifications', '/account/notifications'] }]
-      : []
+      : [{ key: 'login', to: '/login', label: '登入', match: ['/login'] }]
   ),
 ]);
 
 // 3. 底部導航入口
-const bottomNavigationItems = computed<NavigationItem[]>(() => [
-  { key: 'home', to: '/', label: '首頁', match: ['/'] },
-  { key: 'listing', to: '/properties', label: '樓盤', match: ['/properties'] },
-  { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'] },
-  { key: 'offers', to: '/supermarket-offers', label: '格價', match: ['/offers', '/supermarket-offers'] },
-  { key: 'profile', to: '/profile', label: '我的', match: ['/profile', '/account'], requiresAuth: true },
-].filter(isNavigationItemVisible));
+const bottomNavigationItems = computed<NavigationItem[]>(() => {
+  const items: NavigationItem[] = [
+    { key: 'home', to: '/', label: '首頁', match: ['/'], icon: 'home' },
+    { key: 'listing', to: '/properties', label: '樓盤', match: ['/properties'], icon: 'building' },
+    { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'], icon: 'browse' },
+    { key: 'offers', to: '/supermarket-offers', label: '優惠', match: ['/offers', '/supermarket-offers'], icon: 'star' },
+    {
+      key: 'profile',
+      to: accountPath.value,
+      label: sessionStore.isAuthenticated ? '我的' : '登入',
+      match: ['/profile', '/account', '/login'],
+      icon: 'user',
+    },
+  ];
+
+  return items.filter(isNavigationItemVisible);
+});
 
 // 4. 判斷目前路由是否命中導航項
 const isRouteActive = (item: NavigationItem): boolean => {
@@ -116,20 +135,26 @@ const handleThemeToggle = (): void => {
   preferenceStore.setTheme(nextTheme);
 };
 
-// 7. 執行帳戶入口操作
+// 7. 切換繁中與 English 語系
+const handleLocaleToggle = (): void => {
+  const nextLocale: AppLocale = preferenceStore.locale === 'zh-HK' ? 'en' : 'zh-HK';
+  preferenceStore.setLocale(nextLocale);
+};
+
+// 8. 執行帳戶入口操作
 const handleAccountAction = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await router.push(accountPath.value);
 };
 
-// 8. 執行登出
+// 9. 執行登出
 const handleSignOut = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await sessionStore.signOut();
   await router.push('/login');
 };
 
-// 9. 路由切換時收起 mobile 導航
+// 10. 路由切換時收起 mobile 導航
 watch(
   () => route.fullPath,
   () => {
@@ -143,6 +168,17 @@ watch(
     id="mainNav"
     class="nav"
   >
+    <button
+      type="button"
+      class="hamburger"
+      :aria-label="t('nav.account')"
+      @click="mobileDrawerOpen = true"
+    >
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
     <!-- logo -->
     <RouterLink
       to="/"
@@ -201,7 +237,7 @@ watch(
     <button
       type="button"
       class="theme-toggle"
-      :aria-label="t('common.action.switchToDark')"
+      :aria-label="themeToggleAriaLabel"
       @click="handleThemeToggle"
     >
       <span class="theme-toggle__icon theme-toggle__moon">
@@ -213,14 +249,19 @@ watch(
     </button>
     <button
       type="button"
-      class="hamburger"
-      :aria-label="t('nav.account')"
-      @click="mobileDrawerOpen = true"
+      class="locale-toggle"
+      :aria-label="t('common.action.switchLanguage')"
+      @click="handleLocaleToggle"
     >
-      <span></span>
-      <span></span>
-      <span></span>
+      {{ localeToggleLabel }}
     </button>
+    <RouterLink
+      v-if="!sessionStore.isAuthenticated"
+      to="/login"
+      class="mobile-login"
+    >
+      登入
+    </RouterLink>
   </nav>
 
   <div class="scroll-progress"></div>
@@ -231,53 +272,62 @@ watch(
       <div
         v-if="mobileDrawerOpen"
         class="mobile-menu"
+        @click.self="mobileDrawerOpen = false"
       >
-        <div class="mobile-menu-header">
-          <RouterLink
-            to="/"
-            class="mobile-menu-logo"
-          >
-            AJO LIVING
-          </RouterLink>
-          <button
-            type="button"
-            class="mobile-close"
-            :aria-label="t('common.action.close')"
-            @click="mobileDrawerOpen = false"
-          >
-            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6l-12 12"/></svg>
-          </button>
-        </div>
+        <aside
+          class="mobile-menu-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-menu-title"
+        >
+          <div class="mobile-menu-header">
+            <RouterLink
+              id="mobile-menu-title"
+              to="/"
+              class="mobile-menu-logo"
+            >
+              AJO LIVING
+            </RouterLink>
+            <button
+              type="button"
+              class="mobile-close"
+              :aria-label="t('common.action.close')"
+              @click="mobileDrawerOpen = false"
+            >
+              <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+            </button>
+          </div>
 
-        <nav class="mobile-menu-body">
-          <RouterLink
-            v-for="item in mobileNavigationItems"
-            :key="item.key"
-            :to="item.to"
-            class="mnl"
-            :class="{ on: isRouteActive(item) }"
-          >
-            {{ item.label }}
-          </RouterLink>
-        </nav>
+          <nav class="mobile-menu-body">
+            <RouterLink
+              v-for="item in mobileNavigationItems"
+              :key="item.key"
+              :to="item.to"
+              class="mnl"
+              :class="{ on: isRouteActive(item) }"
+            >
+              {{ item.label }}
+            </RouterLink>
+          </nav>
 
-        <div class="mobile-menu-footer">
-          <button
-            type="button"
-            class="mobile-menu-theme"
-            @click="handleThemeToggle"
-          >
-            {{ isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark') }}
-          </button>
-          <button
-            v-if="sessionStore.isAuthenticated"
-            type="button"
-            class="mobile-menu-signout"
-            @click="handleSignOut"
-          >
-            {{ t('common.action.signOut') }}
-          </button>
-        </div>
+          <div class="mobile-menu-footer">
+            <button
+              type="button"
+              class="mobile-menu-theme"
+              @click="handleThemeToggle"
+            >
+              {{ isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark') }}
+            </button>
+            <button
+              v-if="sessionStore.isAuthenticated"
+              type="button"
+              class="mobile-menu-signout"
+              @click="handleSignOut"
+            >
+              {{ t('common.action.signOut') }}
+            </button>
+          </div>
+        </aside>
       </div>
     </transition>
   </Teleport>
@@ -290,7 +340,14 @@ watch(
       class="bnav-item"
       :class="{ on: isRouteActive(item) }"
     >
-      <span class="bnav-icon"></span>
+      <span class="bnav-icon">
+        <AppIcon
+          v-if="item.icon"
+          :name="item.icon"
+          :size="22"
+          :stroke-width="2"
+        />
+      </span>
       {{ item.label }}
     </RouterLink>
   </nav>
@@ -299,7 +356,8 @@ watch(
 <style scoped>
 /*
  * 樣式嚴格對齊 HTML 設計稿 .nav / .nav-logo / .nav-links / .nl / .nav-bell /
- * .nav-r / .nav-login / .theme-toggle / .hamburger / .mobile-menu /
+ * .nav-r / .nav-login / .theme-toggle / .locale-toggle / .hamburger / .mobile-menu /
+ * .mobile-menu-panel /
  * .mobile-menu-header / .mobile-menu-logo / .mobile-close / .mobile-menu-body /
  * .mnl / .mobile-menu-footer / .bottom-nav / .bnav-item / .bnav-icon /
  * .scroll-progress / .toast-container，使用原生 CSS 變數名。
@@ -532,6 +590,12 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   display: block;
 }
 
+/* 語系切換按鈕（桌面隱藏） */
+.locale-toggle,
+.mobile-login {
+  display: none;
+}
+
 /* mobile 漢堡按鈕（桌面隱藏） */
 .hamburger {
   display: none;
@@ -550,14 +614,22 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   background: var(--black);
 }
 
-/* mobile 全屏導航 */
+/* mobile 側邊抽屜 */
 .mobile-menu {
   position: fixed;
   z-index: 100;
   inset: 0;
+  background: rgb(0 0 0 / 0.48);
+}
+
+.mobile-menu-panel {
   display: flex;
+  width: min(76vw, 336px);
+  height: 100%;
   flex-direction: column;
   background: var(--sur);
+  box-shadow: 12px 0 28px rgb(0 0 0 / 0.18);
+  will-change: transform;
 }
 
 .mobile-menu-header {
@@ -571,6 +643,9 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
 }
 
 .mobile-menu-logo {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   font-family: var(--font-serif);
   font-size: 13px;
   letter-spacing: 2px;
@@ -679,19 +754,103 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   transition: opacity 0.18s ease;
 }
 
+.drawer-fade-enter-active .mobile-menu-panel,
+.drawer-fade-leave-active .mobile-menu-panel {
+  transition: transform 0.22s ease;
+}
+
 .drawer-fade-enter-from,
 .drawer-fade-leave-to {
   opacity: 0;
 }
 
+.drawer-fade-enter-from .mobile-menu-panel,
+.drawer-fade-leave-to .mobile-menu-panel {
+  transform: translateX(-100%);
+}
+
 @media (max-width: 1023px) {
   .nav-links,
-  .nav-login {
+  .nav-r {
     display: none;
   }
 
+  .nav {
+    height: calc(var(--nav-h) + var(--app-safe-top));
+    justify-content: flex-start;
+    padding: var(--app-safe-top) max(14px, calc(14px + var(--app-safe-right))) 0 max(14px, calc(14px + var(--app-safe-left)));
+  }
+
+  .nav-logo {
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .theme-toggle,
+  .locale-toggle,
+  .mobile-login,
   .hamburger {
-    display: flex;
+    width: 44px;
+    height: 44px;
+  }
+
+  .theme-toggle {
+    margin-left: auto;
+  }
+
+  .locale-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .mobile-login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .locale-toggle:hover {
+    color: var(--brand);
+  }
+
+  .mobile-login:hover {
+    color: var(--brand-dark);
+  }
+
+  html[data-theme='dark-neutral'] .locale-toggle {
+    color: #E5E7EB;
+  }
+
+  html[data-theme='dark-neutral'] .locale-toggle:hover {
+    color: var(--brand);
+  }
+
+  html[data-theme='dark-neutral'] .mobile-login:hover {
+    color: var(--brand-mid);
+  }
+
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
   }
 
   .bottom-nav {
@@ -701,20 +860,26 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     bottom: 0;
     left: 0;
     display: flex;
-    height: 54px;
+    height: calc(var(--app-mobile-bottom-nav-height) + var(--app-safe-bottom));
     align-items: center;
     justify-content: space-around;
     border-top: 1px solid var(--bdr);
     background: var(--sur);
-    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+    padding: 6px max(8px, var(--app-safe-right)) calc(6px + var(--app-safe-bottom)) max(8px, var(--app-safe-left));
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
   }
 
   .bnav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    font-size: 9px;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 52px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
     color: var(--g4);
     cursor: pointer;
     border: none;
@@ -723,15 +888,79 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     flex: 1;
     padding: 4px 0;
     text-decoration: none;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
   }
 
   .bnav-icon {
-    font-size: 19px;
-    line-height: 1;
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
   }
 
   .bnav-item.on {
+    background: var(--brand-light);
     color: var(--brand);
+  }
+
+  .mobile-menu-panel {
+    box-sizing: border-box;
+    padding-top: var(--app-safe-top);
+    padding-right: var(--app-safe-right);
+    padding-bottom: var(--app-safe-bottom);
+    padding-left: var(--app-safe-left);
+  }
+
+  .mobile-menu-header {
+    height: var(--nav-h);
+    padding: 0 16px;
+  }
+
+  .mobile-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-menu-body {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .mnl {
+    min-height: 48px;
+    border: 1px solid var(--bdr);
+    border-radius: 8px;
+    padding: 13px 14px;
+  }
+
+  .mnl.on {
+    border-color: var(--brand-mid);
+    background: var(--brand-light);
+  }
+
+  .mobile-menu-footer {
+    padding: 14px 16px;
+  }
+
+  .mobile-menu-theme,
+  .mobile-menu-signout {
+    height: 46px;
+  }
+
+  .scroll-progress {
+    top: var(--app-header-offset);
+  }
+
+  .toast-container {
+    right: 16px;
+    bottom: calc(var(--app-mobile-content-bottom) + 12px);
+    left: 16px;
+    transform: none;
   }
 }
 </style>

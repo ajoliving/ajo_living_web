@@ -143,6 +143,7 @@ router -> handler -> service -> model/database
 - service 回傳業務結果與 `error`，由上層負責轉換回應。
 - 原生 SQL 僅用於遷移場景或明確的效能優化場景，並應寫明原因。
 - 禁止以 panic 處理運行期業務錯誤。
+- 樓盤放售草稿可保存未完成資料，完整欄位校驗只在正式發布時執行。`land` 類型不強制要求 `estate_name`，但發布時仍需樓盤編號、地址、價格、建築面積、土地分類標籤、聯絡資料與發布圖片；前後端必須保持同一必填契約。
 
 ## Middleware 規範
 - middleware 僅處理認證、鑑權、上下文透傳、限流、快取、審計等通用能力。
@@ -233,5 +234,7 @@ go test ./...
 
 ## 變更日誌
 2026-07-08: 補充後端 internal 目錄記憶入口，連接 API 契約與 prompt/context 索引。
+2026-07-10: 對齊土地樓盤發布契約，取消後端對 `estate_name` 的額外強制要求並保留其餘發布校驗。
+2026-07-12: 對齊未完成樓盤草稿保存與正式發布完整校驗的服務端契約。
 
 [PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.

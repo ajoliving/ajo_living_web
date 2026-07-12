@@ -108,6 +108,7 @@ export default {
     active: '上架中',
     available: '未售出',
     expired: '已過期',
+    published: '已發布',
     sold: '已售出',
     draft: '草稿',
     hidden: '已隱藏',

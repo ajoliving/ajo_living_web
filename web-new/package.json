@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
+    "audit:mobile": "node scripts/audit-mobile.mjs",
     "export:html-design": "node scripts/export-html-design.mjs",
     "preview": "vite preview",
     "test:unit": "vitest run --environment jsdom",

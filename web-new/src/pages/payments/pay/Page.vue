@@ -1101,7 +1101,7 @@ watch(hasContext, (ready) => {
   --pay-border-2: #cacade;
   display: grid;
   gap: 0;
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--pay-surface-2);
   color: var(--pay-ink);
   padding: 40px;
@@ -1774,11 +1774,13 @@ watch(hasContext, (ready) => {
 
 @media (max-width: 767px) {
   .ajo-pay-checkout {
-    padding: 28px 16px 96px;
+    padding: 20px var(--layout-page-padding-inline) calc(var(--app-mobile-content-bottom) + 24px);
   }
 
   .ajo-pay-checkout__steps {
     gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
 
   .ajo-pay-checkout__step strong {
@@ -1795,6 +1797,14 @@ watch(hasContext, (ready) => {
 
   .ajo-pay-checkout__offline {
     grid-template-columns: 1fr;
+  }
+
+  .ajo-pay-checkout__notice button,
+  .ajo-pay-checkout__link-button,
+  .ajo-pay-checkout__order-result button,
+  .ajo-pay-checkout__voucher button,
+  .ajo-pay-checkout__voucher-list button {
+    width: 100%;
   }
 }
 </style>

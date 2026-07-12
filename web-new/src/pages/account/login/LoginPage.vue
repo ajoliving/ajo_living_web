@@ -77,7 +77,7 @@ const {
 
 <style scoped>
 .login-page {
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - var(--app-header-offset, 48px));
   background: rgb(var(--color-surface));
 }
 
@@ -86,12 +86,19 @@ const {
   grid-template-columns: minmax(0, 1fr) 520px;
   align-items: stretch;
   min-width: 0;
-  min-height: calc(100vh - 48px);
+  min-height: calc(100svh - 48px);
 }
 
 @media (max-width: 1023px) {
   .login-shell {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .login-page,
+  .login-shell {
+    min-height: calc(100svh - var(--app-header-offset));
   }
 }
 </style>

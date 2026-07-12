@@ -14,11 +14,13 @@
     font-family: var(--font-sans);
     background-color: rgb(var(--color-canvas));
     color: rgb(var(--color-text));
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
     margin: 0;
-    min-height: 100vh;
+    min-height: 100svh;
     background: rgb(var(--color-canvas));
     color: rgb(var(--color-text));
     transition:
@@ -26,6 +28,7 @@
       color 0.24s ease;
     -webkit-user-select: text;
     user-select: text;
+    overflow-x: hidden;
   }
 
   body :where(*, *::before, *::after) {
@@ -55,6 +58,10 @@
   a {
     color: inherit;
     text-decoration: none;
+  }
+
+  :where(button, a, input, select, textarea, [role='button']) {
+    -webkit-tap-highlight-color: rgb(var(--color-primary) / 0.12);
   }
 
   ::selection {
@@ -218,6 +225,10 @@
     @apply inline-flex items-center rounded-pill border px-3 py-1 text-xs font-semibold;
   }
 
+  .member-search-input-icon {
+    color: rgb(var(--color-text-muted));
+  }
+
   .subroute-transition-shell {
     min-width: 0;
   }
@@ -289,4 +300,507 @@
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+/*
+ * 手機端 App 基線。
+ * 1. 對齊 iPhone 安全區與底部主導航。
+ * 2. 統一觸控尺寸、橫向分段導航與表格滾動。
+ * 3. 降低全站 page 在 430px 寬度下的溢出風險。
+ */
+@media (max-width: 1023px) {
+  html #app .app-main {
+    padding-bottom: var(--app-mobile-content-bottom);
+  }
+
+  html #app :where(.work-shell, .profile-shell, .settings-shell, .marketplace-my-hub, .marketplace-shell) {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+
+  html #app :where(.work-sidebar, .profile-shell__sidebar, .settings-shell__sidebar, .marketplace-my-hub__sidebar, .settings-sidebar, .marketplace-sidebar) {
+    position: static;
+    top: auto;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 2px 0 10px;
+  }
+
+  html #app :where(.work-nav, .profile-shell__nav, .settings-shell__nav, .marketplace-my-hub__nav, .settings-nav, .marketplace-nav) {
+    display: flex;
+    grid-template-columns: none;
+    gap: 6px;
+    margin: 10px -2px -2px;
+    padding: 0 2px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  html #app :where(.work-nav, .profile-shell__nav, .settings-shell__nav, .marketplace-my-hub__nav, .settings-nav, .marketplace-nav)::-webkit-scrollbar {
+    display: none;
+  }
+
+  html #app :where(.work-nav-item, .profile-shell__nav-item, .settings-shell__nav-item, .marketplace-my-hub__nav-item, .settings-nav-item, .marketplace-nav-item) {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 40px;
+    border: 1px solid var(--bdr);
+    border-radius: 999px;
+    padding: 0 12px;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  html #app .work-account-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  html #app .work-account-actions .work-account-btn {
+    width: auto;
+    min-width: 0;
+    padding: 0 8px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  html #app .wallet-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  html #app :where(.wallet-balance-card, .wallet-stat-card) {
+    min-height: 108px;
+    padding: 12px;
+  }
+
+  html #app :where(.my-filter-row, .property-tab-row) {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin: 0 -2px;
+    padding: 2px 2px 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  html #app :where(.my-filter-row, .property-tab-row)::-webkit-scrollbar {
+    display: none;
+  }
+
+  html #app :where(.my-filter-row, .property-tab-row) :where(.my-filter-chip, .property-tab) {
+    flex: 0 0 auto;
+    min-height: 40px;
+    border-radius: 999px;
+    padding: 0 13px;
+    white-space: nowrap;
+  }
+
+  html #app :where(button, [role='button'], input, select, textarea, .app-button) {
+    min-height: 40px;
+    scroll-margin-bottom: calc(var(--app-mobile-content-bottom) + 12px);
+  }
+
+  html #app :where(input, select, textarea) {
+    font-size: 16px;
+  }
+
+  html #app :where(.nav-logo, .bc-link, .app-footer__link) {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+  }
+
+  html #app :where(.bc-link) {
+    min-width: 40px;
+    justify-content: center;
+  }
+
+  html #app .app-footer__social {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  html #app :where(.ft, .gp-fpill, .gp-spill, .gp-view-btn, .gp-card-fav, .work-nav-item, .work-mini-btn, .work-account-btn, .listing-page-btn, .market-page-btn, .listing-editor-progress__step, .login-forgot-button, .login-inline-switch button, button[aria-label*='密碼']) {
+    min-height: 40px;
+  }
+
+  html #app :where(.listing-page-btn, .market-page-btn, .listing-editor-progress__step, button[aria-label*='密碼']) {
+    min-width: 40px;
+  }
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #app {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: rgb(var(--color-page-tint));
+  }
+
+  html #app .app-main {
+    min-width: 0;
+    padding-bottom: var(--app-mobile-content-bottom);
+  }
+
+  html #app :where(main, section, article, aside, div, form) {
+    min-width: 0;
+  }
+
+  html #app :where(button, [role='button'], input, select, textarea, .app-button) {
+    min-height: 44px;
+    scroll-margin-bottom: calc(var(--app-mobile-content-bottom) + 12px);
+  }
+
+  html #app :where(input, select, textarea) {
+    font-size: 16px;
+  }
+
+  html #app :where(.section-shell, .home-section) {
+    width: 100%;
+    max-width: 100%;
+    padding-right: max(14px, calc(14px + var(--app-safe-right)));
+    padding-left: max(14px, calc(14px + var(--app-safe-left)));
+  }
+
+  html #app :where(.panel-surface, .work-card, .cat-card, .feat-card, .mc, .property-editor-panel) {
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  html #app .display-title {
+    font-size: var(--font-size-title);
+    line-height: 1.18;
+  }
+
+  html #app .text-kicker {
+    letter-spacing: 0.08em;
+  }
+
+  html #app :where(.channel-page, .trend-page-wrap, .sv-page, .gp-page, .offers-detail-page, .furniture-detail-page, .marketplace-filter-page, .marketplace-detail-page, .seller-page, .saved-page, .wallet-page, .my-preview-page, .marketplace-my-page, .property-my-page, .account-profile-page, .forgot-password-page, .not-found-page, .marketplace-chat-page, .home-hero-page, .login-hero-page, .display-ads-page, .notice-page, .wallet-settings-page) {
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
+  }
+
+  html #app :where(.work-shell, .profile-shell, .settings-shell, .marketplace-my-hub, .marketplace-shell, .lp, .mp) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    padding: 12px var(--layout-page-padding-inline) calc(var(--app-mobile-content-bottom) + 16px);
+  }
+
+  html #app :where(.work-sidebar, .profile-shell__sidebar, .settings-shell__sidebar, .marketplace-my-hub__sidebar, .settings-sidebar, .marketplace-sidebar) {
+    position: static;
+    top: auto;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    border-radius: 0;
+    background: transparent;
+    padding: 2px 0 10px;
+  }
+
+  html #app :where(.work-sidebar h1, .profile-shell__sidebar h1, .settings-shell__sidebar h1, .marketplace-my-hub__sidebar h1, .profile-shell__nav-heading) {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  html #app :where(.work-nav, .profile-shell__nav, .settings-shell__nav, .marketplace-my-hub__nav, .settings-nav, .marketplace-nav) {
+    display: flex;
+    grid-template-columns: none;
+    gap: 6px;
+    margin: 10px -2px -2px;
+    padding: 0 2px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  html #app :where(.work-nav, .profile-shell__nav, .settings-shell__nav, .marketplace-my-hub__nav, .settings-nav, .marketplace-nav)::-webkit-scrollbar {
+    display: none;
+  }
+
+  html #app :where(.work-nav-item, .profile-shell__nav-item, .settings-shell__nav-item, .marketplace-my-hub__nav-item, .settings-nav-item, .marketplace-nav-item) {
+    flex: 0 0 auto;
+    min-height: 40px;
+    border: 1px solid var(--bdr);
+    border-radius: 999px;
+    background: var(--sur);
+    padding: 0 12px;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  html #app .work-nav-item::after,
+  html #app .profile-shell__nav-item::after,
+  html #app .settings-shell__nav-item::after,
+  html #app .marketplace-my-hub__nav-item::after {
+    content: none;
+  }
+
+  html #app :where(.work-nav-item.on, .profile-shell__nav-item--active, .settings-shell__nav-item--active, .marketplace-my-hub__nav-item--active, .profile-shell__nav-item.router-link-active, .settings-shell__nav-item.router-link-active, .marketplace-my-hub__nav-item.router-link-active, .settings-nav-item.router-link-active, .marketplace-nav-item.router-link-active) {
+    border-color: var(--brand-mid);
+    background: var(--brand-light);
+    color: var(--brand);
+  }
+
+  html #app :where(.nav-logo, .bc-link, .app-footer__link) {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    scroll-margin-bottom: calc(var(--app-mobile-content-bottom) + 12px);
+  }
+
+  html #app :where(.bc-link) {
+    min-width: 36px;
+    justify-content: center;
+  }
+
+  html #app .nav-logo {
+    min-height: 44px;
+  }
+
+  html #app .app-footer__social {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  html #app :where(.listing-page-btn, .market-page-btn, .filter-current-page, .view-mode-button, .favorite-card-button, .saved-card-remove, .listing-editor-progress__step, .forgot-password-icon-button, button[aria-label*='密碼'], button.app-button) {
+    min-width: 36px;
+    min-height: 44px;
+  }
+
+  html #app :where(button[aria-label*='密碼']) {
+    min-width: 44px;
+  }
+
+  html body :where(.app-toast button.app-button) {
+    min-height: 44px;
+  }
+
+  html #app :where(.work-hero, .property-editor-heading, .property-media-header, .detail-price-row, .ajo-pay-checkout__notice, .ajo-pay-checkout__total, .ajo-pay-checkout__coin-box, .ajo-pay-checkout__order-result, .ajo-pay-checkout__receipt, .management-list-header, .management-pagination, .settings-shell__sidebar, .home-hero-header, .login-hero-header, .display-ads-header, .notice-header, .wallet-settings-header, .wallet-settings-panel-header, .wallet-settings-card-title, .wallet-settings-grant-footer, .display-ads-slot__title, .login-hero-form__top) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  html #app :where(.work-title, .property-editor-heading h1) {
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  html #app :where(.work-desc, .work-card-sub, .property-editor-note) {
+    max-width: 100%;
+    font-size: 12px;
+  }
+
+  html #app :where(.work-action, .work-account-btn, .property-editor-action, .property-upload-button, .hbtn-primary, .hbtn-ghost, .detail-agent-contact, .ajo-pay-checkout__confirm, .management-list-button, .management-dialog-button, .home-hero-button, .home-hero-upload, .login-hero-button, .login-hero-upload, .login-hero-add, .display-ads-button, .notice-button, .wallet-settings-primary-button, .wallet-settings-secondary-button, .wallet-action-button, .account-avatar-upload-button, .unsaved-dialog__button, .account-profile-dialog__actions button) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  html #app :where(.work-card, .property-editor-panel) {
+    padding: 14px;
+    overflow-x: auto;
+  }
+
+  html #app :where(.work-grid, .work-account-grid, .work-ismart-grid, .building-summary-grid, .building-field-grid, .building-doc-grid, .finance-summary-grid, .access-summary-grid, .property-editor-grid, .property-image-grid, .property-ad-package-grid, .editor-field-grid, .editor-measurement-grid, .ajo-pay-home__summary, .binfo-grid, .detail-copy-grid, .service-room-row, .seller-grid, .marketplace-profile-grid, .marketplace-profile-dialog__fields, .account-profile-phone-grid, .display-ads-grid, .gp-grid, .gp-compare-grid, .gp-summary-grid, .home-hero-card, .login-hero-panel, .wallet-settings-grid, .wallet-settings-two-column, .wallet-settings-three-column, .wallet-settings-toolbar-two, .wallet-settings-toolbar-three, .wallet-settings-grant-toolbar, .wallet-settings-grant-row, .wallet-settings-ad-card, .wallet-settings-transaction-row, .wallet-grid, .wallet-recharge-dialog__body, .wallet-recharge-methods, .wallet-recharge-regions, .wallet-ad-card, .wallet-transaction-row, .account-profile-summary-grid, .account-profile-unit__fields, .account-profile-dialog__fields, .account-profile-dialog__readonly) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html #app .work-account-field {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 8px;
+    padding: 9px 12px;
+  }
+
+  html #app .work-account-card .work-card-title {
+    padding: 12px;
+  }
+
+  html #app .saved-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  html #app .saved-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    gap: 8px;
+  }
+
+  html #app .saved-sort {
+    width: 100%;
+  }
+
+  html #app :where(.work-row, .notice-item, .detail-contact-row, .contact-link) {
+    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html #app :where(.work-row) {
+    flex-direction: column;
+  }
+
+  html #app :where(.work-table-wrap, .acct-table-wrap, .management-table-wrap, .property-table-wrap, .wallet-transaction-table-wrap, .my-table-wrap, .gp-shop-table-wrap, .access-table-wrap, .icctv-table-wrap) {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html #app :where(.work-table, .acct-table, .management-table, .property-table, .wallet-transaction-table, .my-table, .gp-shop-table, .access-door-table, .access-record-table, .icctv-table) {
+    min-width: 640px;
+  }
+
+  html #app :where(.work-card > table) {
+    display: block;
+    min-width: 640px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html #app :where(.lp, .mp, .property-list-layout, .detail-layout, .detail-wrap, .sv-content, .login-shell, .listing-editor-workspace, .chat-layout, .ajo-pay-home__hero, .ajo-pay-home__features, .ajo-pay-home__metrics, .ajo-pay-checkout__offline) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+
+  html #app :where(.detail-main, .detail-sidebar, .detail-contact-card, .chat-panel, .management-list-panel, .settings-shell__content) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  html #app :where(.chat-panel) {
+    min-height: auto;
+    border-radius: 8px;
+  }
+
+  html #app :where(.chat-panel--conversations) {
+    max-height: min(42svh, 24rem);
+  }
+
+  html #app :where(.chat-thread) {
+    min-height: min(58svh, 36rem);
+  }
+
+  html #app :where(.chat-message-scroll) {
+    max-height: calc(100svh - var(--app-header-offset) - var(--app-mobile-content-bottom) - 15rem);
+  }
+
+  html #app :where(.chat-composer) {
+    scroll-margin-bottom: calc(var(--app-mobile-content-bottom) + 12px);
+  }
+
+  html #app :where(.chat-composer__row, .chat-thread-header, .wallet-settings-actions, .login-hero-actions, .login-hero-mini-actions, .management-dialog-actions, .wallet-recharge-order-actions, .wallet-ad-dialog__success-actions, .account-profile-dialog__actions, .unsaved-dialog__actions) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  html #app :where(.home-hero-card__media, .home-hero-card__placeholder) {
+    min-height: 13rem;
+  }
+
+  html #app :where(.login-hero-preview, .login-hero-placeholder) {
+    min-height: 18rem;
+  }
+
+  html #app :where(.display-ads-tabs, .service-room-tabs) {
+    flex-wrap: nowrap;
+    margin-right: -4px;
+    margin-left: -4px;
+    padding: 0 4px 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  html #app :where(.display-ads-tabs, .service-room-tabs)::-webkit-scrollbar {
+    display: none;
+  }
+
+  html #app :where(.display-ads-tabs button, .service-room-tabs button) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  html body :where(.management-dialog, .wallet-recharge-dialog, .wallet-ad-dialog, .wallet-ad-exit-confirm, .account-profile-modal, .unsaved-dialog, .property-editor-dialog, .alert-modal-overlay) {
+    align-items: end;
+    padding: var(--app-safe-top) var(--layout-page-padding-inline) calc(var(--app-safe-bottom) + 10px);
+  }
+
+  html body .management-dialog-panel,
+  html body .wallet-recharge-dialog__panel,
+  html body .wallet-ad-dialog__panel,
+  html body .wallet-ad-exit-confirm__panel,
+  html body .account-profile-dialog,
+  html body .unsaved-dialog__panel,
+  html body .property-editor-dialog__panel,
+  html body .alert-modal {
+    width: 100%;
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+    overflow-y: auto;
+  }
+
+  html body .management-dialog-panel--editor,
+  html body .property-editor-dialog__panel {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  html body :where(.management-dialog, .wallet-recharge-dialog, .wallet-ad-dialog, .wallet-ad-exit-confirm, .account-profile-modal, .unsaved-dialog, .property-editor-dialog, .alert-modal-overlay) :where(button, [role='button'], input, select, textarea) {
+    min-height: 44px;
+    scroll-margin-bottom: calc(var(--app-mobile-content-bottom) + 12px);
+  }
+
+  html #app :where(.listing-ad-aside, .market-ad-aside, .property-filter-sidebar) {
+    position: static;
+    min-height: 0;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  html #app :where(.mgrid, .feat-grid, .cat-grid, .sv-grid, .district-grid, .saved-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html #app :where(.market-pagination, .listing-pagination, .sort-row, .work-toolbar, .acct-filter-row, .login-help-row, .service-room-tabs, .gp-search-row, .gp-content-header, .gp-toolbar, .management-list-toolbar) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  html #app :where(.display-ads-tabs, .service-room-tabs) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  html #app :where(.acct-filter-field, .work-search, .sinput, .ssel) {
+    width: 100%;
+    min-width: 0;
+  }
 }

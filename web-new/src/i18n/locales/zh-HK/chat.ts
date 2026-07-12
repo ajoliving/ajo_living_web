@@ -7,6 +7,7 @@ export default {
   emptyThreadDescription: '選擇左側會話後，可查看歷史訊息並發送新訊息。',
   catalogueNote: '查看會話列表、未讀狀態與內容上下文。',
   conversations: '會話',
+  backToConversations: '返回會話列表',
   loadingConversations: '正在載入會話...',
   listingPrice: '參考價格',
   loadingMessages: '正在載入訊息...',

@@ -1,7 +1,7 @@
 /*
  * 聊天頁 - 狀態與資料流程。
  * 1. 讀取會話列表、會話詳情與訊息。
- * 2. 管理會話切換、訊息送出與已讀同步。
+ * 2. 管理會話列表與聊天內容的單頁切換、訊息送出與已讀同步。
  */
 import axios from 'axios';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -123,8 +123,6 @@ export const useMarketplaceChatPage = () => {
       } else if (targetConversation) {
         selectedChatId.value = targetConversation.id;
         await router.replace(`/account/chat/${targetConversation.id}`);
-      } else if (!selectedChatId.value && conversations.value[0]) {
-        selectedChatId.value = conversations.value[0].id;
       } else if (deepLinkedChatId) {
         selectedChatId.value = '';
         await router.replace('/account/chat');
@@ -152,8 +150,8 @@ export const useMarketplaceChatPage = () => {
     if (!selectedConversation) {
       activeMessages.value = [];
       participantPublicIdByUserId.value = {};
-      selectedChatId.value = conversations.value[0]?.id || '';
-      await router.replace(selectedChatId.value ? `/account/chat/${selectedChatId.value}` : '/account/chat');
+      selectedChatId.value = '';
+      await router.replace('/account/chat');
       return;
     }
 
@@ -168,8 +166,8 @@ export const useMarketplaceChatPage = () => {
         conversations.value = conversations.value.filter((item) => item.id !== selectedChatId.value);
         activeMessages.value = [];
         participantPublicIdByUserId.value = {};
-        selectedChatId.value = conversations.value[0]?.id || '';
-        await router.replace(selectedChatId.value ? `/account/chat/${selectedChatId.value}` : '/account/chat');
+        selectedChatId.value = '';
+        await router.replace('/account/chat');
         return;
       }
 
@@ -203,7 +201,13 @@ export const useMarketplaceChatPage = () => {
     await router.replace(`/account/chat/${chatId}`);
   };
 
-  // 3.6 送出訊息
+  // 3.6 返回會話列表
+  const handleBackToChats = async (): Promise<void> => {
+    selectedChatId.value = '';
+    await router.replace('/account/chat');
+  };
+
+  // 3.7 送出訊息
   const handleSendMessage = async (): Promise<void> => {
     const content = draftMessage.value.trim();
     if (!content || !selectedChatId.value) {
@@ -238,7 +242,7 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
-  // 3.7 使用 Enter 送出訊息，Shift + Enter 保留換行
+  // 3.8 使用 Enter 送出訊息，Shift + Enter 保留換行
   const handleSendByEnter = (event: KeyboardEvent): void => {
     if (event.shiftKey || event.isComposing || !canSendMessage.value) {
       return;
@@ -248,7 +252,7 @@ export const useMarketplaceChatPage = () => {
     void handleSendMessage();
   };
 
-  // 3.8 綁定訊息滾動容器
+  // 3.9 綁定訊息滾動容器
   const setMessageContainerRef = (element: Element | ComponentPublicInstance | null): void => {
     messageContainerRef.value = element instanceof HTMLDivElement ? element : null;
   };
@@ -277,6 +281,11 @@ export const useMarketplaceChatPage = () => {
     () => route.params.conversationId,
     (conversationId) => {
       const nextId = String(conversationId || '').trim();
+      if (!nextId) {
+        selectedChatId.value = '';
+        return;
+      }
+
       if (nextId && nextId !== selectedChatId.value) {
         if (conversations.value.some((conversation) => conversation.id === nextId)) {
           selectedChatId.value = nextId;
@@ -300,6 +309,7 @@ export const useMarketplaceChatPage = () => {
     conversations,
     draftMessage,
     formatPrice,
+    handleBackToChats,
     handleSelectChat,
     handleSendByEnter,
     handleSendMessage,

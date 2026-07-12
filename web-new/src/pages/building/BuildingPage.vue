@@ -164,7 +164,7 @@ const currentMonthStart = (): string => {
 const currentDateValue = (): string => formatDateInputValue(new Date());
 
 // 3. 主面板與子面板狀態
-const activeTab = ref<AffairsTab>('affairs-feedback');
+const activeTab = ref<AffairsTab>('affairs-notices');
 const buildingInfoLoading = ref(false);
 const buildingInfoError = ref('');
 const selectedBuildingID = ref('');
@@ -297,11 +297,40 @@ const fileRows = (rows: IsmartBuildingDocument[] | undefined): BuildingFileRow[]
     url: String(item.file_url ?? '').trim(),
   }));
 
-const documentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): BuildingFileRow[] => {
-  const rows = groups.find((group) => Array.isArray(group) && group.length > 0)
-    ?? groups.find((group) => Array.isArray(group));
-  return fileRows(rows);
+const parseReportDate = (value: string | null | undefined): number => {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === '-') return 0;
+  const match = raw.match(/(19\d{2}|20\d{2})(?:[-/.年](0?[1-9]|1[0-2]))?(?:[-/.月](0?[1-9]|[12]\d|3[01]))?/);
+  if (!match) return 0;
+  const year = Number(match[1]);
+  const month = match[2] ? Number(match[2]) : 12;
+  const day = match[3] ? Number(match[3]) : new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Date.UTC(year, month - 1, day);
 };
+
+const reportSortTime = (item: IsmartBuildingDocument): number =>
+  parseReportDate(item.file_month)
+  || parseReportDate(item.file_date)
+  || parseReportDate(item.created_date)
+  || parseReportDate(item.title);
+
+const sortReportDocuments = (rows: IsmartBuildingDocument[] | undefined): IsmartBuildingDocument[] =>
+  [...(rows ?? [])].sort((a, b) => {
+    const timeDiff = reportSortTime(b) - reportSortTime(a);
+    if (timeDiff !== 0) return timeDiff;
+    return Number(b.id ?? 0) - Number(a.id ?? 0);
+  });
+
+const firstDocumentGroup = (...groups: Array<IsmartBuildingDocument[] | undefined>): IsmartBuildingDocument[] | undefined =>
+  groups.find((group) => Array.isArray(group) && group.length > 0)
+  ?? groups.find((group) => Array.isArray(group));
+
+const documentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): BuildingFileRow[] => {
+  return fileRows(firstDocumentGroup(...groups));
+};
+
+const reportDocumentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): BuildingFileRow[] =>
+  fileRows(sortReportDocuments(firstDocumentGroup(...groups)));
 
 const normalizeMapEmbedURL = (value: string | null | undefined): string => {
   const raw = String(value ?? '').trim();
@@ -327,14 +356,17 @@ const floorPlans = computed(() => documentRows(
   ismartBuildingProfile.value?.documents?.floorplans,
   ismartBuildingProfile.value?.documents?.floorplan,
 ));
-const financialReports = computed(() => documentRows(
+const financialReports = computed(() => reportDocumentRows(
   ismartBuildingProfile.value?.documents?.financial_reports,
   ismartBuildingProfile.value?.documents?.mfinreport,
 ));
-const auditReports = computed(() => documentRows(
+const auditReports = computed(() => reportDocumentRows(
   ismartBuildingProfile.value?.documents?.audit_reports,
   ismartBuildingProfile.value?.documents?.auditreport,
   ismartBuildingProfile.value?.documents?.audition,
+  ismartBuildingProfile.value?.documents?.audit_report,
+  ismartBuildingProfile.value?.documents?.auditreports,
+  ismartBuildingProfile.value?.documents?.auditions,
 ));
 const buildingMapURL = computed(() => String(currentBuildingInfo.value.google_map_url ?? '').trim());
 const buildingMapEmbedURL = computed(() => normalizeMapEmbedURL(currentBuildingInfo.value.google_map_url));
@@ -1318,6 +1350,7 @@ const goNoticeDetail = (notice: NoticeRow) => {
 
 onMounted(() => {
   void loadBuildingInfo();
+  void loadBuildingNotices();
 });
 </script>
 
@@ -3056,7 +3089,7 @@ onMounted(() => {
 <style scoped>
 /* 1. 頁面容器與雙欄布局 */
 #page-affairs {
-  min-height: calc(100vh - var(--nav-h, 52px));
+  min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--sur-2);
 }
 

@@ -76,7 +76,7 @@ const footerSocials = computed(() => [
 </script>
 
 <template>
-  <div class="app-shell min-h-screen bg-canvas text-text">
+  <div class="app-shell bg-canvas text-text">
     <AppHeader />
 
     <main class="app-main">
@@ -157,11 +157,12 @@ const footerSocials = computed(() => [
 
 <style scoped>
 .app-shell {
+  min-height: 100svh;
   min-width: 320px;
 }
 
 .app-main {
-  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100svh - var(--nav-h));
 }
 
 .app-footer {
@@ -286,16 +287,16 @@ const footerSocials = computed(() => [
   .app-footer__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .app-footer {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {
-  .app-footer {
-    padding: 32px 20px 92px;
-  }
-
-  .app-footer__grid {
-    grid-template-columns: 1fr;
-    gap: 26px;
+  .app-main {
+    min-height: calc(100svh - var(--app-header-offset));
+    padding-bottom: var(--app-mobile-content-bottom);
   }
 }
 </style>

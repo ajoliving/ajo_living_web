@@ -61,6 +61,7 @@ export default {
     draft: '草稿',
     active: '上架中',
     available: '上架中',
+    published: '已發布',
     hidden: '已下架',
     expired: '已過期',
     sold: '已成交',
@@ -299,5 +300,6 @@ export default {
     imageRequired: '發布前至少需要一張相片',
     staffCreateDisabled: '管理模式只支援編輯現有樓盤',
     requiredFields: '請先填寫必填欄位',
+    requiredFieldsDetail: '請先填寫：{fields}',
   },
 };

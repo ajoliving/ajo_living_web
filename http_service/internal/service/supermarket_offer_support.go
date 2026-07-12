@@ -78,4 +78,47 @@ func supermarketImageObjectKey(code string) string {
 	return "ajo_living/supermarket/products/" + strings.ToUpper(code) + ".jpg"
 }
 
+// 8. supermarketUnavailableSummary returns a renderable empty public summary.
+func supermarketUnavailableSummary() map[string]any {
+	return map[string]any{
+		"stats":         supermarketEmptyStats(),
+		"metadata":      map[string]any{"upstreamAvailable": false},
+		"categories":    []any{},
+		"stores":        []any{},
+		"cheapest":      []any{},
+		"bestDiscounts": []any{},
+		"biggestDiffs":  []any{},
+		"offers":        []any{},
+	}
+}
+
+// 9. supermarketUnavailableSearch returns a renderable empty public search result.
+func supermarketUnavailableSearch(page int, pageSize int) map[string]any {
+	return map[string]any{
+		"items":             []any{},
+		"total":             0,
+		"page":              page,
+		"pageSize":          pageSize,
+		"stats":             supermarketEmptyStats(),
+		"categories":        []any{},
+		"brands":            []any{},
+		"stores":            []any{},
+		"upstreamAvailable": false,
+	}
+}
+
+// 10. supermarketEmptyStats returns the good-price stats shape with zero values.
+func supermarketEmptyStats() map[string]any {
+	return map[string]any{
+		"records":            0,
+		"products":           0,
+		"stores":             0,
+		"offers":             0,
+		"parsedOffers":       0,
+		"unsupportedOffers":  0,
+		"ambiguousOffers":    0,
+		"uncalculatedOffers": 0,
+	}
+}
+
 type jsonNumber string

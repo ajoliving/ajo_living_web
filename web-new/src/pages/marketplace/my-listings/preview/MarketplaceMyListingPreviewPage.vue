@@ -409,7 +409,7 @@ const {
 @media (max-width: 767px) {
   .my-preview-page {
     max-width: 100%;
-    padding-bottom: 96px;
+    padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
   }
 }
 </style>

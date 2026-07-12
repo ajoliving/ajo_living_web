@@ -343,7 +343,7 @@ onMounted(() => {
 <style scoped>
 .notif-wrap {
   display: grid;
-  min-height: calc(100vh - var(--app-header-offset, 48px));
+  min-height: calc(100svh - var(--app-header-offset, 48px));
   background: #ffffff;
   color: #1a1a1a;
   grid-template-columns: 220px minmax(0, 1fr);

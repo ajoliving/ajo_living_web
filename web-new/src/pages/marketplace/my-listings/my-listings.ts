@@ -107,13 +107,18 @@ export const useMarketplaceMyListingsPage = () => {
     activeTab.value = value as MyListingsTab;
   };
 
-  // 1.3 判斷帖子是否有可執行操作
+  // 1.4 提交家具搜尋
+  const handleSearch = (): void => {
+    searchQuery.value = searchQuery.value.trim();
+  };
+
+  // 1.5 判斷帖子是否有可執行操作
   const hasListingActions = (listing: SecondhandListingSummaryResponse): boolean =>
     listing.publication_status === 'draft' ||
     listing.publication_status === 'expired' ||
     (listing.publication_status === 'active' && listing.business_status !== 'sold');
 
-  // 1.4 執行帖子狀態操作
+  // 1.6 執行帖子狀態操作
   const runAction = async (action: MyListingsAction, listingId: string): Promise<void> => {
     if ((action === 'publish' || action === 'republish' || action === 'renew') &&
       !window.confirm(`${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`)) {
@@ -162,27 +167,27 @@ export const useMarketplaceMyListingsPage = () => {
     }
   };
 
-  // 1.5 導向新增帖子頁
+  // 1.7 導向新增帖子頁
   const openCreate = async (): Promise<void> => {
     await router.push('/account/listings/new');
   };
 
-  // 1.6 導向帖子編輯頁
+  // 1.8 導向帖子編輯頁
   const openEditor = async (listingId: string): Promise<void> => {
     await router.push(`/account/listings/editor/${listingId}`);
   };
 
-  // 1.7 導向我的帖子管理詳情頁
+  // 1.9 導向我的帖子管理詳情頁
   const openManagedDetail = async (listingId: string): Promise<void> => {
     await router.push(`/account/listings/item/${listingId}`);
   };
 
-  // 1.8 導向公開詳情頁
+  // 1.10 導向公開詳情頁
   const openPublicDetail = async (listingId: string): Promise<void> => {
     await router.push(`/furniture/${listingId}`);
   };
 
-  // 1.9 輸出扣費確認文案 key
+  // 1.11 輸出扣費確認文案 key
   const resolveChargeConfirmKey = (action: MyListingsAction): string => {
     if (action === 'publish') {
       return 'marketplace.mine.confirmPublishCharge';
@@ -193,7 +198,7 @@ export const useMarketplaceMyListingsPage = () => {
     return 'marketplace.mine.confirmRenewCharge';
   };
 
-  // 1.10 輸出指定動作扣費
+  // 1.12 輸出指定動作扣費
   const resolveActionChargeCost = (action: MyListingsAction): number =>
     action === 'renew'
       ? resolveWalletRenewChargeCost('secondhand')
@@ -212,6 +217,7 @@ export const useMarketplaceMyListingsPage = () => {
     filteredItems,
     formatDate,
     formatPrice,
+    handleSearch,
     hasListingActions,
     loading,
     openCreate,

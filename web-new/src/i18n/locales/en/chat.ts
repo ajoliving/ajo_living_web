@@ -7,6 +7,7 @@ export default {
   emptyThreadDescription: 'Choose a conversation to view message history and send a new message.',
   catalogueNote: 'Review conversations, unread counts, and content context in one place.',
   conversations: 'Conversations',
+  backToConversations: 'Back to conversations',
   loadingConversations: 'Loading conversations...',
   listingPrice: 'Reference price',
   loadingMessages: 'Loading messages...',

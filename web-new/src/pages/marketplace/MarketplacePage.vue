@@ -89,7 +89,7 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
 </script>
 
 <template>
-  <div class="marketplace-layout min-h-screen pb-10">
+  <div class="marketplace-layout pb-10">
     <nav class="breadcrumb">
       <template
         v-for="(item, index) in breadcrumbItems"
@@ -117,6 +117,10 @@ const breadcrumbItems = computed<MarketplaceBreadcrumbItem[]>(() => {
 </template>
 
 <style scoped>
+.marketplace-layout {
+  min-height: 100svh;
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;

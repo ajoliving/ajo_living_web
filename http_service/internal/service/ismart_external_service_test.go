@@ -195,7 +195,8 @@ func TestIsmartGetBuildingInfoNormalizesDocumentGroups(t *testing.T) {
 					"floorplans":[],
 					"floorplan":[{"id":1,"title":"平面圖"}],
 					"audit_reports":[],
-					"auditreport":[{"id":3,"title":"核數報告"}],
+					"auditreport":[],
+					"audit_report":[{"id":3,"title":"核數報告"}],
 					"mfinreport":[{"id":2,"title":"財務報告"}]
 				}
 			}
@@ -232,7 +233,65 @@ func TestIsmartGetBuildingInfoNormalizesDocumentGroups(t *testing.T) {
 	}
 }
 
-// 5. TestIsmartOwnerBindingInjectsCurrentUser verifies frontend user_id cannot override iSmart identity.
+// 5. TestIsmartListBuildingNoticesFallbackUsesLegacyBuildingKey verifies old notice API payloads.
+func TestIsmartListBuildingNoticesFallbackUsesLegacyBuildingKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/v1/integration/buildings/notices/":
+			response.Header().Set("Content-Type", "application/json")
+			response.WriteHeader(http.StatusInternalServerError)
+			_, _ = response.Write([]byte(`{"status":"error","message":"missing integration route"}`))
+		case "/api/v1/building-notices/":
+			var payload map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			if payload["blg_id"] != "0348200" {
+				t.Fatalf("expected legacy blg_id, got %#v", payload)
+			}
+			if _, ok := payload["building_id"]; ok {
+				t.Fatalf("unexpected building_id in legacy payload: %#v", payload)
+			}
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = response.Write([]byte(`[{"id":18,"mess_code":"N1","mess_title":"通告"}]`))
+		default:
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	result, err := NewIsmartExternalService(runtimeValue).ListBuildingNotices(context.Background(), user.ID, IsmartBuildingParams{
+		BuildingID: "0348200",
+	})
+	if err != nil {
+		t.Fatalf("list building notices: %v", err)
+	}
+	rows, ok := result["result"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("expected one fallback notice, got %#v", result["result"])
+	}
+}
+
+// 6. TestNormalizeBuildingInfoPayloadUsesAuditionAlias verifies the current upstream audit key remains readable.
+func TestNormalizeBuildingInfoPayloadUsesAuditionAlias(t *testing.T) {
+	payload := map[string]any{
+		"documents": map[string]any{
+			"audit_reports": []any{},
+			"audition": []any{
+				map[string]any{"id": 8, "title": "核數報告"},
+			},
+		},
+	}
+	result := paymentMapValue(normalizeBuildingInfoPayload(payload))
+	documents := paymentMapValue(result["documents"])
+	auditReports, ok := documents["audit_reports"].([]any)
+	if !ok || len(auditReports) != 1 {
+		t.Fatalf("expected audition alias to normalize audit reports, got %#v", documents["audit_reports"])
+	}
+}
+
+// 7. TestIsmartOwnerBindingInjectsCurrentUser verifies frontend user_id cannot override iSmart identity.
 func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/v1/integration/buildings/building-flat-owner-binding-requests/" {
@@ -267,7 +326,7 @@ func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
 	}
 }
 
-// 6. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
+// 8. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
 func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, model.User) {
 	t.Helper()
 	runtimeValue := newAuthTestRuntime(

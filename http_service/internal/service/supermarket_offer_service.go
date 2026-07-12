@@ -21,7 +21,7 @@ import (
 func (s *SupermarketOfferService) Summary(ctx context.Context) (map[string]any, error) {
 	result, err := s.fetchGoodPriceJSON(ctx, "/summary", nil, true)
 	if err != nil {
-		return nil, err
+		return supermarketUnavailableSummary(), nil
 	}
 
 	s.attachSupermarketImages(result)
@@ -43,7 +43,7 @@ func (s *SupermarketOfferService) Search(ctx context.Context, filters Supermarke
 
 	result, err := s.fetchGoodPriceJSON(ctx, "/search", query, true)
 	if err != nil {
-		return nil, err
+		return supermarketUnavailableSearch(page, pageSize), nil
 	}
 
 	s.attachSupermarketImages(result)

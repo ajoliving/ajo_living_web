@@ -3,10 +3,12 @@
  * 1. 接收 AJO 前端請求並使用目前登入態解析 iSmart 帳戶。
  * 2. 代理大廈資料、意見、門禁、二維碼與 POS payment to iSmart。
  * 3. 不接受前端提交舊系統 user_id 作為權限依據。
+ * 4. 代理支付 integration 查詢介面並保留上游 raw response。
  */
 package handler
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -187,7 +189,47 @@ func (h *IsmartExternalHandler) SubmitPOSPayment(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 10. RegisterAccount proxies one iSmart account registration request.
+// 10. ListPaymentUnpaidInvoices returns raw unpaid invoice rows.
+func (h *IsmartExternalHandler) ListPaymentUnpaidInvoices(c *gin.Context) {
+	result, err := h.ismartService.ListPaymentUnpaidInvoices(c.Request.Context(), service.IsmartPaymentUnpaidInvoiceParams{
+		UnitID: strings.TrimSpace(c.Query("unit_id")),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// 11. ListPaymentTransactionsByUnit returns raw unit payment history rows.
+func (h *IsmartExternalHandler) ListPaymentTransactionsByUnit(c *gin.Context) {
+	result, err := h.ismartService.ListPaymentTransactionsByUnit(c.Request.Context(), service.IsmartPaymentTransactionsByUnitParams{
+		UnitIDList: c.QueryArray("unit_id_list"),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// 12. ListPaymentTransactionsByDate returns raw date payment history rows.
+func (h *IsmartExternalHandler) ListPaymentTransactionsByDate(c *gin.Context) {
+	result, err := h.ismartService.ListPaymentTransactionsByDate(c.Request.Context(), service.IsmartPaymentTransactionsByDateParams{
+		BuildingID: strings.TrimSpace(c.Query("building_id")),
+		FromDate:   strings.TrimSpace(c.Query("from_date")),
+		ToDate:     strings.TrimSpace(c.Query("to_date")),
+		DateType:   strings.TrimSpace(c.Query("date_type")),
+		PayMethod:  strings.TrimSpace(c.Query("pay_method")),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// 13. RegisterAccount proxies one iSmart account registration request.
 func (h *IsmartExternalHandler) RegisterAccount(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -209,7 +251,7 @@ func (h *IsmartExternalHandler) RegisterAccount(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 11. ListManagementFees returns visible building management-fee receivables.
+// 14. ListManagementFees returns visible building management-fee receivables.
 func (h *IsmartExternalHandler) ListManagementFees(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -228,7 +270,7 @@ func (h *IsmartExternalHandler) ListManagementFees(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 12. ListOtherFees returns visible building other-fee receivables.
+// 15. ListOtherFees returns visible building other-fee receivables.
 func (h *IsmartExternalHandler) ListOtherFees(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -247,7 +289,7 @@ func (h *IsmartExternalHandler) ListOtherFees(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 13. ListBuildingNotices returns visible building notices.
+// 16. ListBuildingNotices returns visible building notices.
 func (h *IsmartExternalHandler) ListBuildingNotices(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -265,7 +307,7 @@ func (h *IsmartExternalHandler) ListBuildingNotices(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 14. SubmitOwnerBindingRequest submits an owner-role binding request.
+// 17. SubmitOwnerBindingRequest submits an owner-role binding request.
 func (h *IsmartExternalHandler) SubmitOwnerBindingRequest(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -309,7 +351,7 @@ func (h *IsmartExternalHandler) SubmitOwnerBindingRequest(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 15. ListSubaccounts returns current owner-controlled authorized users.
+// 18. ListSubaccounts returns current owner-controlled authorized users.
 func (h *IsmartExternalHandler) ListSubaccounts(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -327,17 +369,17 @@ func (h *IsmartExternalHandler) ListSubaccounts(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 16. GrantSubaccount grants one iSmart authorized user.
+// 19. GrantSubaccount grants one iSmart authorized user.
 func (h *IsmartExternalHandler) GrantSubaccount(c *gin.Context) {
 	h.handleSubaccountMutation(c, "grant")
 }
 
-// 17. RevokeSubaccount revokes one iSmart authorized user.
+// 20. RevokeSubaccount revokes one iSmart authorized user.
 func (h *IsmartExternalHandler) RevokeSubaccount(c *gin.Context) {
 	h.handleSubaccountMutation(c, "revoke")
 }
 
-// 18. handleSubaccountMutation handles grant and revoke requests.
+// 21. handleSubaccountMutation handles grant and revoke requests.
 func (h *IsmartExternalHandler) handleSubaccountMutation(c *gin.Context, action string) {
 	user := currentUser(c)
 	if user == nil {

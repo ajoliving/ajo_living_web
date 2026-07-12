@@ -70,6 +70,9 @@ export interface IsmartBuildingDocuments {
   floorplan?: IsmartBuildingDocument[];
   auditreport?: IsmartBuildingDocument[];
   audition?: IsmartBuildingDocument[];
+  audit_report?: IsmartBuildingDocument[];
+  auditreports?: IsmartBuildingDocument[];
+  auditions?: IsmartBuildingDocument[];
   mfinreport?: IsmartBuildingDocument[];
 }
 
