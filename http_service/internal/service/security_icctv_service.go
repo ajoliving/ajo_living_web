@@ -291,11 +291,15 @@ func (s *SecurityICCTVService) normalizeICCTVPublicResult(result *icctvPublicEnv
 				continue
 			}
 			channel := icctvChannelName(urlValue, index)
+			playbackURL := ""
+			if item.IsActive {
+				playbackURL = s.icctvProxyURL(urlValue)
+			}
 			cameras = append(cameras, ICCTVCameraSummary{
 				ID:           icctvCameraID(item.OrangePiID, channel, index),
 				Title:        icctvCameraTitle(item.OrangePiName, channel, index),
 				Channel:      channel,
-				URL:          s.icctvProxyURL(urlValue),
+				URL:          playbackURL,
 				OrangePiID:   item.OrangePiID,
 				OrangePiName: strings.TrimSpace(item.OrangePiName),
 				IsActive:     item.IsActive,

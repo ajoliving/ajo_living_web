@@ -1338,7 +1338,7 @@ const toggleICCTVCamera = (cameraID: string) => {
 
 // 30. 開啟視像監控新窗口
 const openIcctvWindow = (camera: ICCTVCameraSummary) => {
-  if (!camera.url) return;
+  if (!camera.is_active || !camera.url) return;
   window.open(camera.url, '_blank', 'noopener');
 };
 
@@ -3035,7 +3035,7 @@ onMounted(() => {
                           <button
                             type="button"
                             class="work-mini-btn primary"
-                            :disabled="!camera.url"
+                            :disabled="!camera.is_active || !camera.url"
                             @click="toggleICCTVCamera(camera.id)"
                           >
                             {{ isICCTVCameraExpanded(camera.id) ? '收起' : '查看' }}
@@ -3043,7 +3043,7 @@ onMounted(() => {
                           <button
                             type="button"
                             class="work-mini-btn"
-                            :disabled="!camera.url"
+                            :disabled="!camera.is_active || !camera.url"
                             @click="openIcctvWindow(camera)"
                           >
                             新窗口

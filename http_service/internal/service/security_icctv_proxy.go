@@ -2,7 +2,7 @@
  * iCCTV 視像監控代理 URL 處理。
  * 1. 將 Orange Pi 明文 FRP 地址改寫為 AJO 可嵌入的 HTTPS 入口。
  * 2. 限制只處理 iCCTV Orange Pi auth 服務端口。
- * 3. 保留非目標 URL 原樣返回。
+ * 3. 保留播放所需的短期授權參數並移除 URL fragment。
  */
 package service
 
@@ -18,7 +18,7 @@ func (s *SecurityICCTVService) icctvProxyURL(rawURL string) string {
 	if err != nil || parsed.Host == "" {
 		return rawURL
 	}
-	sanitizedURL := icctvURLWithoutQuery(parsed)
+	sanitizedURL := icctvURLWithoutFragment(parsed)
 	proxyBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.ICCTVStreamProxyBaseURL), "/")
 	if proxyBaseURL == "" {
 		return sanitizedURL
@@ -38,7 +38,11 @@ func (s *SecurityICCTVService) icctvProxyURL(rawURL string) string {
 		return sanitizedURL
 	}
 
-	return proxyBase.Scheme + "://" + proxyBase.Host + proxyPath + "/opi/" + parsedPort + "/" + cameraPath
+	proxyURL := proxyBase.Scheme + "://" + proxyBase.Host + proxyPath + "/opi/" + parsedPort + "/" + cameraPath
+	if parsed.RawQuery != "" {
+		proxyURL += "?" + parsed.RawQuery
+	}
+	return proxyURL
 }
 
 // 2. icctvStreamPortAllowed checks the configured FRP stream port range.
@@ -51,10 +55,9 @@ func icctvStreamPortAllowed(portValue string) bool {
 	return port >= 29000 && port <= 29999
 }
 
-// 3. icctvURLWithoutQuery removes upstream tokens from browser-visible URLs.
-func icctvURLWithoutQuery(parsed *url.URL) string {
+// 3. icctvURLWithoutFragment removes browser-only fragments without dropping playback authorization.
+func icctvURLWithoutFragment(parsed *url.URL) string {
 	value := *parsed
-	value.RawQuery = ""
 	value.Fragment = ""
 	return value.String()
 }

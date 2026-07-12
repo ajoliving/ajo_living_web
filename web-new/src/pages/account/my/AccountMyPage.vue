@@ -17,6 +17,7 @@ import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
+import { isIntegrationBusinessAuthError } from '@/httpapis';
 import {
   fetchMemberIsmartSubaccounts,
   fetchMemberPosBuildings,
@@ -214,6 +215,7 @@ const bindUnitID = ref('');
 const bindLoading = ref(false);
 const bindUnitsLoading = ref(false);
 const bindSaving = ref(false);
+const integrationAuthUnavailable = ref(false);
 let latestBindUnitsRequestID = 0;
 let isSyncingBindProfile = false;
 const bindUnassignedFloor = '未指定樓層';
@@ -512,7 +514,8 @@ const loadBindBuildings = async (): Promise<void> => {
   bindLoading.value = true;
   try {
     bindBuildings.value = await fetchMemberPosBuildings();
-  } catch {
+  } catch (error) {
+    integrationAuthUnavailable.value = isIntegrationBusinessAuthError(error);
     const fallbackBuildings = bindAllowedBuildingIDs.value.map((buildingID) => ({
       building_id: buildingID,
       buildname: buildingID,
@@ -531,6 +534,14 @@ const loadBindUnits = async (buildingID: string): Promise<void> => {
   const value = buildingID.trim();
   if (!value) {
     bindUnits.value = [];
+    return;
+  }
+
+  if (integrationAuthUnavailable.value) {
+    bindUnits.value = buildBindUnitsFromFlatUnitPermissions(value, bindAllowedUnitIDs.value);
+    if (isSyncingBindProfile) {
+      syncBindUnitFromProfile();
+    }
     return;
   }
 
@@ -811,6 +822,11 @@ const loadSubaccountGroups = async (): Promise<void> => {
   subaccountsLoading.value = true;
   subaccountsError.value = '';
   try {
+    if (integrationAuthUnavailable.value) {
+      subaccountGroups.value = [];
+      subaccountsError.value = '請重新登入 iSmart 以查看授權副戶。';
+      return;
+    }
     const unitContexts = await loadSubaccountUnitContexts();
     if (unitContexts.length === 0) {
       await loadAggregateSubaccountGroups();
@@ -1191,10 +1207,11 @@ watch(bindBuildingID, (nextValue, previousValue) => {
   if (nextValue === previousValue) {
     return;
   }
-  if (!isSyncingBindProfile) {
-    bindFloor.value = '';
-    bindUnitID.value = '';
+  if (isSyncingBindProfile) {
+    return;
   }
+  bindFloor.value = '';
+  bindUnitID.value = '';
   void loadBindUnits(nextValue);
 });
 

@@ -20,7 +20,7 @@ const httpClient = axios.create({
 });
 
 // 2. 判斷是否為 POS/iSmart 業務授權失效
-const isPOSBusinessAuthError = (error: unknown): boolean => {
+export const isIntegrationBusinessAuthError = (error: unknown): boolean => {
   if (!axios.isAxiosError(error)) {
     return false;
   }
@@ -28,7 +28,12 @@ const isPOSBusinessAuthError = (error: unknown): boolean => {
   const data = error.response?.data as { code?: string; message?: string } | undefined;
   const message = String(data?.message ?? '').trim().toLowerCase();
   return (
-    (url.includes('/me/payments/pos/') || url.includes('/me/pos/')) &&
+    (
+      url.includes('/me/payments/pos/')
+      || url.includes('/me/pos/')
+      || url.includes('/me/ismart/')
+      || url.includes('/me/security/icctv/')
+    ) &&
     data?.code === 'AUTH_REQUIRED' &&
     (message === 'ismart login is required' || message === 'pos token expired')
   );
@@ -49,7 +54,7 @@ httpClient.interceptors.request.use((config) => {
 httpClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 && !isPOSBusinessAuthError(error)) {
+    if (error.response?.status === 401 && !isIntegrationBusinessAuthError(error)) {
       clearStoredTokens();
       emitAuthSessionExpired();
     }

@@ -369,7 +369,10 @@ export const fetchMemberIsmartBuildingInfo = async (buildingID?: string): Promis
 // 11. 取得目前會員 iSmart 智能門禁資料
 export const fetchMemberIsmartBuildingAccess = async (buildingID?: string): Promise<IsmartBuildingAccessResponse> => {
   const params = buildingID ? { building_id: buildingID } : undefined;
-  const { data } = await httpClient.get<ApiResponse<IsmartBuildingAccessResponse>>('/me/ismart/building-access', { params });
+  const { data } = await httpClient.get<ApiResponse<IsmartBuildingAccessResponse>>('/me/ismart/building-access', {
+    params,
+    timeout: 20000,
+  });
   return data.data;
 };
 
@@ -388,7 +391,10 @@ export const generateMemberIsmartDoorQRCode = async (payload: GenerateIsmartQRCo
 // 14. 取得目前會員 iCCTV 視像監控鏡頭
 export const fetchMemberICCTVPublicCameras = async (buildingID?: string): Promise<ICCTVPublicCameraResponse> => {
   const params = buildingID ? { building_id: buildingID } : undefined;
-  const { data } = await httpClient.get<ApiResponse<ICCTVPublicCameraResponse>>('/me/security/icctv/public-cameras', { params });
+  const { data } = await httpClient.get<ApiResponse<ICCTVPublicCameraResponse>>('/me/security/icctv/public-cameras', {
+    params,
+    timeout: 20000,
+  });
   return data.data;
 };
 

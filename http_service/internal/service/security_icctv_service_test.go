@@ -1,8 +1,9 @@
 /*
  * iCCTV 視像監控服務測試。
  * 1. 驗證可見大廈會代理到 iCCTV public 授權接口。
- * 2. 驗證攝像頭 URL 會改寫為 HTTPS 代理入口。
- * 3. 驗證不可見大廈不會向上游請求。
+ * 2. 驗證攝像頭 URL 會保留授權參數並改寫為 HTTPS 代理入口。
+ * 3. 驗證離線攝像頭不會提供播放 URL。
+ * 4. 驗證不可見大廈不會向上游請求。
  */
 package service
 
@@ -68,15 +69,36 @@ func TestSecurityICCTVRewritesCameraURLs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get public cameras: %v", err)
 	}
-	if result.Cameras[0].URL != "https://icctv.skylinedances.com/opi/29005/channel1" {
+	if result.Cameras[0].URL != "https://icctv.skylinedances.com/opi/29005/channel1?token=hidden" {
 		t.Fatalf("unexpected rewritten camera url: %s", result.Cameras[0].URL)
 	}
-	if result.Cameras[1].URL != "http://47.83.21.100:20042/channel1" {
+	if result.Cameras[1].URL != "http://47.83.21.100:20042/channel1?token=hidden" {
 		t.Fatalf("unexpected non-stream camera url: %s", result.Cameras[1].URL)
 	}
 }
 
-// 3. TestSecurityICCTVRejectsInvisibleBuilding verifies visibility checks before upstream calls.
+// 3. TestSecurityICCTVHidesOfflineCameraURLs verifies offline cameras cannot be opened.
+func TestSecurityICCTVHidesOfflineCameraURLs(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"success":true,"data":{"orangepis":[{"orangepi_id":7,"orangepi_name":"offline","is_active":false,"token":"hidden","urls":["http://47.83.21.100:29003/channel1?token=hidden"]}]}}`))
+	}))
+	defer upstream.Close()
+
+	runtimeValue, user := newSecurityICCTVTestRuntime(t, upstream.URL+"/api", true, []string{"0999900"})
+	runtimeValue.Config.ICCTVStreamProxyBaseURL = "https://icctv.skylinedances.com"
+	result, err := NewSecurityICCTVService(runtimeValue).GetPublicCameras(context.Background(), user.ID, ICCTVBuildingParams{
+		BuildingID: "0999900",
+	})
+	if err != nil {
+		t.Fatalf("get public cameras: %v", err)
+	}
+	if len(result.Cameras) != 1 || result.Cameras[0].IsActive || result.Cameras[0].URL != "" {
+		t.Fatalf("unexpected offline camera result: %#v", result.Cameras)
+	}
+}
+
+// 4. TestSecurityICCTVRejectsInvisibleBuilding verifies visibility checks before upstream calls.
 func TestSecurityICCTVRejectsInvisibleBuilding(t *testing.T) {
 	called := false
 	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -97,7 +119,7 @@ func TestSecurityICCTVRejectsInvisibleBuilding(t *testing.T) {
 	}
 }
 
-// 4. newSecurityICCTVTestRuntime creates a member and linked iSmart account.
+// 5. newSecurityICCTVTestRuntime creates a member and linked iSmart account.
 func newSecurityICCTVTestRuntime(t *testing.T, upstreamURL string, isStaff bool, buildingIDs []string) (*Runtime, model.User) {
 	t.Helper()
 	runtimeValue := newAuthTestRuntime(
