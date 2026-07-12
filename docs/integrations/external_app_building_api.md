@@ -453,6 +453,14 @@ Common HTTP status codes currently used:
 ?building_id=0348200
 ```
 
+#### Legacy Request
+
+```json
+{
+  "blg_id": "0348200"
+}
+```
+
 #### Success Response
 
 ```json
@@ -782,14 +790,14 @@ This section covers member-to-unit binding flows implemented in this session.
 | `documents.forms` | `form` |
 | `documents.building_info_files` | `blginfo` |
 | `documents.floorplans` | `floorplan` |
-| `documents.audit_reports` | queried as `audition` in current code |
+| `documents.audit_reports` | `auditreport` / `audition` |
 | `documents.financial_reports` | `mfinreport` |
 
 #### Notes
 
 - arrays are returned even when no files exist
 - `building_info` is returned with `null` or empty-string values when no `BuildingInfo` row exists
-- current code queries audit reports using `btype='audition'`; if your data uses `auditreport`, those files will not appear in this endpoint until code is aligned
+- AJO member proxy normalizes `auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` into `documents.audit_reports`; the upstream endpoint must still return one of these groups
 
 ### 3.2 Submit Building Comment
 
@@ -1528,7 +1536,7 @@ Integrators should be aware of the following inconsistencies in current implemen
 - several payment queries use raw SQL and manual timezone shifting
 - `PosPaymentToIsmart` is currently exposed without an active IP whitelist
 - `qfpayapi` does not validate the callback signature
-- `ExternalBuildingInfoApi` currently queries audit reports using `btype='audition'`
+- `ExternalBuildingInfoApi` audit report `btype` naming must stay aligned with the data source
 - door-access list permission logic and remote-open permission logic are not identical
 
 ## Method Design Recommendation
@@ -1619,6 +1627,6 @@ curl -X POST "https://<your-domain>/api/v1/integration/payments/pos/" \
 
 - populate `EXTERNAL_APP_ALLOWED_IPS` for production integrations
 - decide whether `PosPaymentToIsmart` should be protected by `POS_PAYMENT_ALLOWED_IPS`
-- align audit report `btype` naming if audit files must appear in `/api/v1/integration/buildings/info/`
+- keep audit report `btype` naming aligned if audit files must appear in `/api/v1/integration/buildings/info/`
 - test door open and QR generation against the target hardware environment
 - treat `test_webhook/` as non-production and disable or protect it if not needed

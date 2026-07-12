@@ -1,0 +1,2670 @@
+<!--
+ * AJO Living App HTML 設計稿。
+ * 1. 以現有 Web 功能整理 App 首頁、我的大廈、AJO Pay、生活與物業、會員中心等完整手機畫面。
+ * 2. 補齊主要 page、發布流程、會員流程、管理流程與彈窗浮層的手機稿。
+ * 3. 用靜態 HTML/CSS 供產品審閱，不接入前端路由、API 或 Flutter 工程。
+ * 4. 文案採用繁體中文與 English，保持正式、直接、可執行。
+-->
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AJO Living App Design Mockup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211c;
+      --muted: #69756f;
+      --line: #dce4de;
+      --line-strong: #c4d0c8;
+      --paper: #f6f8f5;
+      --surface: #ffffff;
+      --soft: #eef4ef;
+      --green: #1f7a4d;
+      --green-dark: #145538;
+      --blue: #2563eb;
+      --amber: #c97918;
+      --red: #b94b45;
+      --charcoal: #202621;
+      --shadow: 0 24px 60px rgba(25, 35, 29, 0.12);
+      --phone-shadow: 0 30px 80px rgba(19, 28, 23, 0.2);
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang HK", "PingFang TC", "Noto Sans TC", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(31, 122, 77, 0.14), transparent 30rem),
+        linear-gradient(180deg, #fbfcfa 0%, var(--paper) 48%, #edf2ee 100%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page-shell {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .doc-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: end;
+      padding: 26px 0 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      max-width: 780px;
+      font-size: clamp(34px, 4vw, 58px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .doc-subtitle {
+      max-width: 760px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .meta-strip {
+      display: grid;
+      gap: 10px;
+      min-width: 310px;
+    }
+
+    .meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .meta-row span {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .meta-row strong {
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .module-map {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin: 26px 0 34px;
+    }
+
+    .module-card {
+      min-height: 118px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 12px 36px rgba(26, 36, 30, 0.06);
+    }
+
+    .module-card b {
+      display: block;
+      margin-bottom: 9px;
+      font-size: 15px;
+    }
+
+    .module-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .phone-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 22px;
+      align-items: start;
+    }
+
+    .phone-stage {
+      display: grid;
+      gap: 14px;
+    }
+
+    .stage-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 46px;
+      gap: 12px;
+    }
+
+    .stage-label h2 {
+      font-size: 18px;
+      line-height: 1.25;
+    }
+
+    .stage-label span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      text-align: right;
+    }
+
+    .phone {
+      position: relative;
+      overflow: hidden;
+      width: min(100%, 390px);
+      margin: 0 auto;
+      min-height: 842px;
+      border: 10px solid #151a17;
+      border-radius: 38px;
+      background: #f7f9f6;
+      box-shadow: var(--phone-shadow);
+    }
+
+    .phone::before {
+      content: "";
+      position: absolute;
+      z-index: 4;
+      top: 11px;
+      left: 50%;
+      width: 112px;
+      height: 25px;
+      border-radius: 999px;
+      background: #151a17;
+      transform: translateX(-50%);
+    }
+
+    .screen {
+      position: relative;
+      min-height: 822px;
+      padding: 48px 18px 92px;
+      background: linear-gradient(180deg, #fbfcfa 0%, #eef4ef 100%);
+    }
+
+    .screen-dark {
+      color: #f8fbf8;
+      background: linear-gradient(180deg, #17211c 0%, #233129 45%, #f2f6f2 45%);
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      opacity: 0.88;
+    }
+
+    .signal {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .signal i {
+      display: block;
+      width: 4px;
+      border-radius: 8px;
+      background: currentColor;
+    }
+
+    .signal i:nth-child(1) {
+      height: 6px;
+      opacity: 0.5;
+    }
+
+    .signal i:nth-child(2) {
+      height: 9px;
+      opacity: 0.75;
+    }
+
+    .signal i:nth-child(3) {
+      height: 12px;
+    }
+
+    .app-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 0 18px;
+    }
+
+    .title-stack {
+      min-width: 0;
+    }
+
+    .title-stack small {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .screen-dark .title-stack small {
+      color: rgba(248, 251, 248, 0.72);
+    }
+
+    .title-stack h3 {
+      font-size: 24px;
+      line-height: 1.12;
+    }
+
+    .icon-button,
+    .avatar {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(23, 33, 28, 0.11);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--ink);
+      font-weight: 800;
+      box-shadow: 0 10px 24px rgba(18, 28, 22, 0.08);
+    }
+
+    .screen-dark .icon-button,
+    .screen-dark .avatar {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+
+    .icon-button svg,
+    .tab-icon svg,
+    .quick-icon svg,
+    .tiny-icon svg {
+      display: block;
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 26px;
+      background:
+        linear-gradient(140deg, rgba(31, 122, 77, 0.9), rgba(20, 85, 56, 0.94)),
+        url("https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=900&q=80") center/cover;
+      box-shadow: 0 22px 44px rgba(14, 37, 25, 0.28);
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      inset: auto 18px 18px auto;
+      width: 108px;
+      height: 108px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 30px;
+      transform: rotate(12deg);
+    }
+
+    .hero-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-card small {
+      display: block;
+      margin-bottom: 48px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .hero-card h3 {
+      max-width: 210px;
+      color: #ffffff;
+      font-size: 26px;
+      line-height: 1.12;
+    }
+
+    .hero-card p {
+      max-width: 230px;
+      margin-top: 9px;
+      color: rgba(255, 255, 255, 0.83);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .summary-pill {
+      padding: 12px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.76);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--ink);
+      box-shadow: 0 14px 28px rgba(20, 30, 24, 0.08);
+    }
+
+    .summary-pill b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 16px;
+    }
+
+    .summary-pill span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .screen-dark .section {
+      color: var(--ink);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 11px;
+    }
+
+    .section-head h3 {
+      font-size: 17px;
+    }
+
+    .section-head a,
+    .section-head span {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .quick-action {
+      display: grid;
+      place-items: center;
+      gap: 7px;
+      min-height: 78px;
+      padding: 10px 6px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      box-shadow: 0 10px 24px rgba(25, 35, 29, 0.06);
+    }
+
+    .quick-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 14px;
+      background: var(--soft);
+      color: var(--green-dark);
+    }
+
+    .task-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .task-item,
+    .panel-card,
+    .bill-card,
+    .profile-row,
+    .notice-card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 10px 28px rgba(25, 35, 29, 0.06);
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .task-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .task-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .tiny-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      background: #eaf3ec;
+      color: var(--green);
+    }
+
+    .tiny-icon.blue {
+      background: #e7efff;
+      color: var(--blue);
+    }
+
+    .tiny-icon.amber {
+      background: #fff1df;
+      color: var(--amber);
+    }
+
+    .tiny-icon.red {
+      background: #fff0ef;
+      color: var(--red);
+    }
+
+    .chip-row,
+    .segment-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+
+    .chip-row::-webkit-scrollbar,
+    .segment-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip,
+    .segment {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .chip {
+      padding: 8px 10px;
+    }
+
+    .segment {
+      padding: 9px 14px;
+    }
+
+    .chip.active,
+    .segment.active {
+      border-color: var(--green);
+      background: var(--green);
+      color: #ffffff;
+    }
+
+    .panel-card {
+      padding: 14px;
+    }
+
+    .panel-card + .panel-card {
+      margin-top: 10px;
+    }
+
+    .panel-card .panel-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .panel-card h4,
+    .bill-card h4 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .panel-card p,
+    .bill-card p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #edf4ef;
+      color: var(--green-dark);
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tag.blue {
+      background: #e7efff;
+      color: var(--blue);
+    }
+
+    .tag.amber {
+      background: #fff2df;
+      color: var(--amber);
+    }
+
+    .tag.red {
+      background: #fff0ef;
+      color: var(--red);
+    }
+
+    .building-card {
+      margin-top: 12px;
+      padding: 16px;
+      border-radius: 24px;
+      background:
+        linear-gradient(150deg, rgba(23, 33, 28, 0.86), rgba(35, 49, 41, 0.82)),
+        url("https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=80") center/cover;
+      color: #ffffff;
+      box-shadow: 0 18px 38px rgba(14, 24, 18, 0.24);
+    }
+
+    .building-card small {
+      display: block;
+      margin-bottom: 42px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .building-card h3 {
+      font-size: 23px;
+      line-height: 1.15;
+    }
+
+    .building-card p {
+      margin-top: 7px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+    }
+
+    .pay-amount {
+      padding: 22px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #ffffff, #f0f6f1);
+      box-shadow: 0 20px 42px rgba(24, 36, 29, 0.09);
+    }
+
+    .pay-amount span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .pay-amount strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 38px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .pay-amount p {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .bill-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px;
+    }
+
+    .bill-card strong {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .primary-action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 52px;
+      margin-top: 14px;
+      border: 0;
+      border-radius: 18px;
+      background: var(--green);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 900;
+      box-shadow: 0 14px 28px rgba(31, 122, 77, 0.25);
+    }
+
+    .secondary-action {
+      min-height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .market-hero {
+      overflow: hidden;
+      border-radius: 26px;
+      background: #ffffff;
+      box-shadow: 0 18px 38px rgba(24, 35, 29, 0.1);
+    }
+
+    .market-photo {
+      height: 168px;
+      background:
+        linear-gradient(180deg, transparent 34%, rgba(0, 0, 0, 0.45)),
+        url("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=80") center/cover;
+    }
+
+    .market-hero .copy {
+      padding: 15px;
+    }
+
+    .market-hero h3 {
+      font-size: 19px;
+    }
+
+    .market-hero p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .listing-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .listing-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      box-shadow: 0 10px 24px rgba(25, 35, 29, 0.06);
+    }
+
+    .listing-image {
+      height: 96px;
+      background: var(--soft);
+      background-size: cover;
+      background-position: center;
+    }
+
+    .listing-image.property {
+      background-image:
+        linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.26)),
+        url("https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=700&q=80");
+    }
+
+    .listing-image.offer {
+      background-image:
+        linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.22)),
+        url("https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
+    }
+
+    .listing-card .copy {
+      padding: 10px;
+    }
+
+    .listing-card strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .listing-card span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .profile-card {
+      padding: 18px;
+      border-radius: 26px;
+      background: #ffffff;
+      box-shadow: 0 18px 40px rgba(24, 35, 29, 0.1);
+    }
+
+    .profile-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .profile-head .avatar {
+      background: var(--green);
+      color: #ffffff;
+      box-shadow: none;
+    }
+
+    .profile-head h3 {
+      font-size: 18px;
+    }
+
+    .profile-head span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .profile-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 12px;
+      box-shadow: none;
+    }
+
+    .profile-row strong {
+      font-size: 13px;
+    }
+
+    .profile-row span {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .notice-card {
+      display: grid;
+      gap: 9px;
+      padding: 14px;
+    }
+
+    .notice-card strong {
+      font-size: 14px;
+    }
+
+    .notice-card span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .form-card {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 12px 28px rgba(25, 35, 29, 0.06);
+    }
+
+    .form-field {
+      display: grid;
+      gap: 5px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #f8fbf8;
+    }
+
+    .form-field span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .form-field strong {
+      font-size: 13px;
+    }
+
+    .qr-card {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #ffffff;
+      box-shadow: 0 18px 38px rgba(24, 35, 29, 0.09);
+    }
+
+    .qr-block {
+      display: grid;
+      place-items: center;
+      width: 112px;
+      height: 112px;
+      border-radius: 20px;
+      background:
+        linear-gradient(90deg, var(--ink) 10px, transparent 10px) 0 0/28px 28px,
+        linear-gradient(var(--ink) 10px, transparent 10px) 0 0/28px 28px,
+        #ffffff;
+      color: #ffffff;
+      font-size: 0;
+      box-shadow: inset 0 0 0 10px #ffffff;
+    }
+
+    .qr-copy h4 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .qr-copy p {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .device-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .device-card {
+      min-height: 112px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      box-shadow: 0 10px 24px rgba(25, 35, 29, 0.06);
+    }
+
+    .device-card b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .device-card span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .message-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #ffffff;
+      box-shadow: 0 10px 24px rgba(25, 35, 29, 0.06);
+    }
+
+    .message-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 16px;
+      background: var(--soft);
+      color: var(--green-dark);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .message-row strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .message-row span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .message-row time {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .bottom-nav {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      left: 12px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      padding: 8px;
+      border: 1px solid rgba(196, 208, 200, 0.82);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 18px 44px rgba(17, 25, 20, 0.18);
+      backdrop-filter: blur(16px);
+    }
+
+    .bottom-tab {
+      display: grid;
+      place-items: center;
+      gap: 4px;
+      min-height: 52px;
+      border-radius: 18px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .bottom-tab.active {
+      background: #eaf3ec;
+      color: var(--green-dark);
+    }
+
+    .tab-icon {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+    }
+
+    .coverage-section {
+      margin: 34px 0;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 16px 44px rgba(22, 33, 27, 0.08);
+    }
+
+    .section-title-block {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section-title-block h2 {
+      font-size: clamp(24px, 2.4vw, 36px);
+      line-height: 1.12;
+    }
+
+    .section-title-block p {
+      max-width: 660px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+      text-align: right;
+    }
+
+    .mini-hero {
+      display: grid;
+      gap: 6px;
+      min-height: 82px;
+      padding: 13px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #203229, #1f7a4d);
+      color: #ffffff;
+    }
+
+    .mini-hero.light {
+      border: 1px solid var(--line);
+      background: #f6f9f6;
+      color: var(--ink);
+    }
+
+    .mini-hero.amber {
+      background: linear-gradient(135deg, #2a241b, #c97918);
+    }
+
+    .mini-hero.blue {
+      background: linear-gradient(135deg, #17243d, #2563eb);
+    }
+
+    .mini-hero strong {
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .mini-hero span,
+    .mini-line span {
+      color: inherit;
+      opacity: 0.78;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .mini-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 38px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .mini-line b {
+      font-size: 12px;
+    }
+
+    .mini-line em {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 4px 7px;
+      background: var(--soft);
+      color: var(--green-dark);
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .mini-fields {
+      display: grid;
+      gap: 7px;
+    }
+
+    .mini-field {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(90deg, #ffffff 0%, #ffffff 70%, #eef4ef 70%);
+    }
+
+    .mini-tabs {
+      display: flex;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    .mini-tabs span {
+      flex: 1;
+      min-width: 0;
+      padding: 7px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--green-dark);
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .dialog-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .dialog-card {
+      min-height: 226px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(247, 249, 246, 0.98), rgba(255, 255, 255, 0.98));
+      box-shadow: 0 12px 28px rgba(24, 35, 29, 0.06);
+    }
+
+    .dialog-card h3 {
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .dialog-card p {
+      min-height: 42px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .dialog-shell {
+      margin-top: 13px;
+      padding: 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: #ffffff;
+    }
+
+    .dialog-shell strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .dialog-actions span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .dialog-actions span.primary {
+      border-color: var(--green);
+      background: var(--green);
+      color: #ffffff;
+    }
+
+    .state-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .state-pill {
+      min-height: 72px;
+      padding: 13px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .state-pill b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+    }
+
+    .state-pill span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .flow-notes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 30px;
+    }
+
+    .flow-note {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    .flow-note b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .flow-note span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1380px) {
+      .module-map {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 980px) {
+      .doc-header {
+        grid-template-columns: 1fr;
+      }
+
+      .section-title-block {
+        display: block;
+      }
+
+      .section-title-block p {
+        margin-top: 10px;
+        text-align: left;
+      }
+
+      .meta-strip {
+        min-width: 0;
+      }
+
+      .module-map,
+      .flow-notes {
+        grid-template-columns: 1fr;
+      }
+
+      .phone-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .phone {
+        width: min(390px, 100%);
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .page-shell {
+        width: min(100% - 22px, 1500px);
+        padding-top: 18px;
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      .stage-label {
+        display: block;
+      }
+
+      .stage-label span {
+        display: block;
+        margin-top: 6px;
+        text-align: left;
+      }
+
+      .phone {
+        border-width: 8px;
+        border-radius: 34px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="doc-header">
+      <div>
+        <p class="eyebrow">AJO LIVING APP CONCEPT</p>
+        <h1>以會員、大廈與支付為核心的流動端設計稿</h1>
+        <p class="doc-subtitle">
+          本稿以完整手機頁面為主：首頁作為住戶工作台，底部主導航為首頁、大廈、支付、訊息、我的；樓盤、二手、優惠與住宅服務作為高頻服務頁展示。
+        </p>
+      </div>
+      <div class="meta-strip" aria-label="design status">
+        <div class="meta-row"><span>Platform</span><strong>Flutter Ready</strong></div>
+        <div class="meta-row"><span>Primary User</span><strong>業主 / 租客 / 前線職員</strong></div>
+        <div class="meta-row"><span>Scope</span><strong>HTML Review Mockup</strong></div>
+      </div>
+    </header>
+
+    <section class="module-map" aria-label="app module map">
+      <article class="module-card">
+        <b>首頁</b>
+        <span>整合大廈狀態、待繳賬單、通知、維修、門禁與常用入口。</span>
+      </article>
+      <article class="module-card">
+        <b>我的大廈</b>
+        <span>承接最新通告、大廈資料、業戶帳目、申請表格、智能門禁與視像監控。</span>
+      </article>
+      <article class="module-card">
+        <b>AJO Pay</b>
+        <span>集中展示待繳管理費、其他費用、付款流程與 AJO Coin 回贈。</span>
+      </article>
+      <article class="module-card">
+        <b>訊息</b>
+        <span>整合管理處通知、支付提醒、交易對話、系統消息與服務跟進。</span>
+      </article>
+      <article class="module-card">
+        <b>會員中心</b>
+        <span>管理帳戶、副戶授權、物業綁定、錢包、訊息、發布與收藏。</span>
+      </article>
+    </section>
+
+    <section class="phone-grid" aria-label="mobile screens">
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>01. 首頁工作台</h2>
+          <span>登入後第一屏</span>
+        </div>
+        <div class="phone">
+          <div class="screen screen-dark">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>AJO LIVING</small>
+                <h3>早晨，陳先生</h3>
+              </div>
+              <div class="avatar">C</div>
+            </div>
+
+            <section class="hero-card">
+              <small>協和大廈 · 18/F A</small>
+              <h3>今日住戶事項</h3>
+              <p>待繳賬單、最新通告與維修進度集中處理。</p>
+            </section>
+
+            <div class="summary-row">
+              <div class="summary-pill"><b>HK$3,280</b><span>待繳費用</span></div>
+              <div class="summary-pill"><b>3</b><span>最新通告</span></div>
+              <div class="summary-pill"><b>1</b><span>維修跟進</span></div>
+            </div>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>常用服務</h3>
+                <a href="#">管理</a>
+              </div>
+              <div class="quick-grid">
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path><path d="M16 15h.01"></path></svg></span>
+                  繳費
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M4 20h16"></path><path d="M7 20V8l5-4 5 4v12"></path><path d="M10 13h4"></path></svg></span>
+                  報修
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M7 11V7a5 5 0 0 1 10 0v4"></path><rect x="5" y="11" width="14" height="10" rx="2"></rect></svg></span>
+                  門禁
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg></span>
+                  通告
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>
+                  訊息
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"></path></svg></span>
+                  收藏
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-8h6v8"></path></svg></span>
+                  樓盤
+                </a>
+                <a class="quick-action" href="#">
+                  <span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M20 12v8H4v-8"></path><path d="M2 7h20v5H2z"></path><path d="M12 22V7"></path><path d="M12 7H7.5a2.5 2.5 0 1 1 2.5-2.5C10 7 12 7 12 7z"></path><path d="M12 7h4.5A2.5 2.5 0 1 0 14 4.5C14 7 12 7 12 7z"></path></svg></span>
+                  優惠
+                </a>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>今天需要處理</h3>
+                <span>全部</span>
+              </div>
+              <div class="task-list">
+                <div class="task-item">
+                  <span class="tiny-icon amber"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>
+                  <div><strong>管理費即將到期</strong><span>7 月賬單 · 建議今日完成付款</span></div>
+                </div>
+                <div class="task-item">
+                  <span class="tiny-icon blue"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"></path><path d="M8 9h8"></path><path d="M8 13h6"></path></svg></span>
+                  <div><strong>升降機保養通知</strong><span>B 座 · 7 月 12 日 10:00-13:00</span></div>
+                </div>
+              </div>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>02. 我的大廈</h2>
+          <span>住戶服務入口</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>RESIDENT SERVICES</small>
+                <h3>我的大廈</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="切換大廈"><svg viewBox="0 0 24 24"><path d="M7 7h10"></path><path d="M7 12h10"></path><path d="M7 17h10"></path></svg></button>
+            </div>
+
+            <div class="segment-row">
+              <button class="segment active" type="button">總覽</button>
+              <button class="segment" type="button">通告</button>
+              <button class="segment" type="button">賬目</button>
+              <button class="segment" type="button">門禁</button>
+              <button class="segment" type="button">設備</button>
+            </div>
+
+            <section class="building-card">
+              <small>協和大廈 · 已綁定單位</small>
+              <h3>18/F A</h3>
+              <p>業主帳戶 · iSmart 已連接</p>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>住戶事項</h3>
+                <span>即時更新</span>
+              </div>
+              <article class="panel-card">
+                <div class="panel-top">
+                  <div><h4>最新通告</h4><p>3 份文件可查看，含升降機保養與停水安排。</p></div>
+                  <span class="tag blue">3</span>
+                </div>
+                <button class="secondary-action" type="button">查看通告</button>
+              </article>
+              <article class="panel-card">
+                <div class="panel-top">
+                  <div><h4>業戶帳目</h4><p>管理費及其他費用集中核對，支援跳轉付款。</p></div>
+                  <span class="tag amber">待繳</span>
+                </div>
+                <button class="secondary-action" type="button">前往 AJO Pay</button>
+              </article>
+              <article class="panel-card">
+                <div class="panel-top">
+                  <div><h4>意見提供 / 維修報修</h4><p>最近 1 宗維修跟進中，可補充相片與說明。</p></div>
+                  <span class="tag">跟進中</span>
+                </div>
+                <button class="secondary-action" type="button">提交事項</button>
+              </article>
+              <article class="panel-card">
+                <div class="panel-top">
+                  <div><h4>智能門禁與視像監控</h4><p>產生一次性門禁 QR，查看已授權公共鏡頭。</p></div>
+                  <span class="tag">已啟用</span>
+                </div>
+                <button class="secondary-action" type="button">打開設備</button>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>03. AJO Pay</h2>
+          <span>物業費付款</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>PAYMENT</small>
+                <h3>AJO Pay</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="付款記錄"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M7 15V9"></path><path d="M12 15V5"></path><path d="M17 15v-3"></path></svg></button>
+            </div>
+
+            <section class="pay-amount">
+              <span>協和大廈 · 18/F A</span>
+              <strong>HK$3,280</strong>
+              <p>本期共 3 筆待繳項目，付款完成後預計獲得 32 AJO Coin。</p>
+              <button class="primary-action" type="button">立即繳費</button>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>待繳項目</h3>
+                <span>全選</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div>
+                    <h4>7 月管理費</h4>
+                    <p>到期日 2026-07-15</p>
+                  </div>
+                  <strong>HK$2,480</strong>
+                </article>
+                <article class="bill-card">
+                  <div>
+                    <h4>冷氣維修分攤</h4>
+                    <p>其他費用 · 已核對</p>
+                  </div>
+                  <strong>HK$620</strong>
+                </article>
+                <article class="bill-card">
+                  <div>
+                    <h4>停車場雜費</h4>
+                    <p>其他費用 · 可合併付款</p>
+                  </div>
+                  <strong>HK$180</strong>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>付款狀態</h3>
+              </div>
+              <article class="notice-card">
+                <strong>付款前確認</strong>
+                <span>App 只展示已授權單位賬單，付款頁需保留明細核對、支付渠道選擇與結果回調狀態。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>04. 生活與物業</h2>
+          <span>公開內容聚合</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>DISCOVER</small>
+                <h3>生活與物業</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="搜尋"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+            </div>
+
+            <div class="chip-row">
+              <button class="chip active" type="button">全部</button>
+              <button class="chip" type="button">樓盤放售</button>
+              <button class="chip" type="button">服務式住宅</button>
+              <button class="chip" type="button">家具</button>
+              <button class="chip" type="button">超市優惠</button>
+            </div>
+
+            <section class="section">
+              <article class="market-hero">
+                <div class="market-photo"></div>
+                <div class="copy">
+                  <h3>社區家具與住戶優惠</h3>
+                  <p>二手家具、生活優惠與樓盤資料集中瀏覽，交易與發布仍回到會員權限下處理。</p>
+                </div>
+              </article>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>推薦內容</h3>
+                <span>更多</span>
+              </div>
+              <div class="listing-grid">
+                <article class="listing-card">
+                  <div class="listing-image property"></div>
+                  <div class="copy">
+                    <strong>太古城兩房放售</strong>
+                    <span>HK$8.6M · 實用 582 呎</span>
+                  </div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image offer"></div>
+                  <div class="copy">
+                    <strong>超市生活優惠</strong>
+                    <span>指定貨品會員價</span>
+                  </div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image" style="background-image:url('https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=700&q=80')"></div>
+                  <div class="copy">
+                    <strong>服務式住宅</strong>
+                    <span>月租方案 · 可預約</span>
+                  </div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image" style="background-image:url('https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=700&q=80')"></div>
+                  <div class="copy">
+                    <strong>實木餐桌</strong>
+                    <span>二手家具 · 近地鐵</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>發布與管理</strong>
+                <span>樓盤、服務式住宅與家具發布入口收在會員中心，避免公開瀏覽頁混入管理操作。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>05. 會員中心</h2>
+          <span>身份與資產管理</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>ACCOUNT</small>
+                <h3>會員中心</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2.1.4l-.1.1h-4l-.1-.1a1.7 1.7 0 0 0-2.1-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9l-.1-.2-2.9-1.7v-4l2.9-1.7.1-.2a1.7 1.7 0 0 0-.3-1.9L7 5.2l2-3.4.2.1a1.7 1.7 0 0 0 2.1-.4l.1-.1h4l.1.1a1.7 1.7 0 0 0 2.1.4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9l.1.2 2.9 1.7v4l-2.9 1.7z"></path></svg></button>
+            </div>
+
+            <section class="profile-card">
+              <div class="profile-head">
+                <div class="avatar">C</div>
+                <div>
+                  <h3>陳先生</h3>
+                  <span>業主 · 協和大廈 18/F A</span>
+                </div>
+              </div>
+              <div class="summary-row">
+                <div class="summary-pill"><b>2</b><span>授權副戶</span></div>
+                <div class="summary-pill"><b>HK$128</b><span>AJO Coin</span></div>
+                <div class="summary-pill"><b>6</b><span>收藏項目</span></div>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>帳戶與物業</h3>
+              </div>
+              <div class="profile-row"><strong>帳號管理</strong><span>電話、電郵、身份資料</span></div>
+              <div class="profile-row"><strong>授權副戶</strong><span>家人與租客權限</span></div>
+              <div class="profile-row"><strong>物業綁定</strong><span>POS / iSmart 單位資料</span></div>
+              <div class="profile-row"><strong>AJO 錢包</strong><span>餘額與交易記錄</span></div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>內容與交易</h3>
+              </div>
+              <div class="profile-row"><strong>訊息管理</strong><span>住戶、交易與服務對話</span></div>
+              <div class="profile-row"><strong>我的樓盤</strong><span>放售資料與審核狀態</span></div>
+              <div class="profile-row"><strong>我的住宅</strong><span>服務式住宅發布</span></div>
+              <div class="profile-row"><strong>我的家具</strong><span>二手帖子與收藏</span></div>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>06. 通告中心</h2>
+          <span>大廈文件與未讀</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>BUILDING NOTICES</small>
+                <h3>通告中心</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="搜尋通告"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+            </div>
+
+            <div class="segment-row">
+              <button class="segment active" type="button">全部</button>
+              <button class="segment" type="button">未讀</button>
+              <button class="segment" type="button">文件</button>
+              <button class="segment" type="button">收藏</button>
+            </div>
+
+            <section class="building-card">
+              <small>協和大廈 · 7 月重點</small>
+              <h3>升降機保養通知</h3>
+              <p>B 座 · 2026-07-12 10:00-13:00</p>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>最新通告</h3>
+                <span>3 未讀</span>
+              </div>
+              <div class="task-list">
+                <div class="task-item">
+                  <span class="tiny-icon blue"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg></span>
+                  <div><strong>升降機保養通知</strong><span>B 座 · 已附 PDF 文件</span></div>
+                </div>
+                <div class="task-item">
+                  <span class="tiny-icon amber"><svg viewBox="0 0 24 24"><path d="M4 20h16"></path><path d="M8 20V8"></path><path d="M16 20V8"></path><path d="M6 8h12"></path></svg></span>
+                  <div><strong>臨時停水安排</strong><span>18/F 至 22/F · 明日 14:00</span></div>
+                </div>
+                <div class="task-item">
+                  <span class="tiny-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M6 7v13h12V7"></path><path d="M9 11h6"></path></svg></span>
+                  <div><strong>大堂清潔工程</strong><span>公共區域 · 已讀</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>文件查看</strong>
+                <span>列表支援未讀、PDF、圖片附件與收藏；詳情頁保留確認已讀與分享給副戶。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>07. 通告詳情</h2>
+          <span>閱讀與附件</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <button class="icon-button" type="button" aria-label="返回"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg></button>
+              <div class="title-stack">
+                <small>NOTICE DETAIL</small>
+                <h3>通告詳情</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="收藏"><svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"></path></svg></button>
+            </div>
+
+            <section class="panel-card">
+              <div class="panel-top">
+                <div>
+                  <h4>升降機保養通知</h4>
+                  <p>協和大廈 B 座 · 管理處發布</p>
+                </div>
+                <span class="tag blue">未讀</span>
+              </div>
+              <p>工程將於 2026-07-12 10:00 至 13:00 進行，期間 B 座其中一部升降機暫停服務。住戶如需協助，可聯絡管理處。</p>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>附件</h3>
+                <span>2 份</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div>
+                    <h4>工程通知 PDF</h4>
+                    <p>PDF · 1.2 MB</p>
+                  </div>
+                  <strong>查看</strong>
+                </article>
+                <article class="bill-card">
+                  <div>
+                    <h4>受影響樓層</h4>
+                    <p>Image · 已同步副戶</p>
+                  </div>
+                  <strong>查看</strong>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>閱讀狀態</strong>
+                <span>可標記已讀、分享給副戶，並保留管理處聯絡入口。</span>
+              </article>
+              <button class="primary-action" type="button">標記已讀</button>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>08. 維修報修</h2>
+          <span>提交與跟進</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>MAINTENANCE</small>
+                <h3>維修報修</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="新增報修"><svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button>
+            </div>
+
+            <section class="hero-card">
+              <small>協和大廈 · 18/F A</small>
+              <h3>提交住戶事項</h3>
+              <p>可提交單位維修、公共設施問題或管理意見，並追蹤處理狀態。</p>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>問題類型</h3>
+                <span>選擇</span>
+              </div>
+              <div class="quick-grid">
+                <a class="quick-action" href="#"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M5 9h14"></path></svg></span>滲水</a>
+                <a class="quick-action" href="#"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg></span>電力</a>
+                <a class="quick-action" href="#"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M4 20h16"></path><path d="M7 20V8h10v12"></path></svg></span>公共</a>
+                <a class="quick-action" href="#"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 20h.01"></path><path d="M12 4a5 5 0 0 1 2 9.58c-1.2.62-2 1.6-2 3.42"></path></svg></span>其他</a>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>跟進中</h3>
+                <span>全部</span>
+              </div>
+              <div class="task-list">
+                <div class="task-item">
+                  <span class="tiny-icon amber"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M7 15l3-3 3 3 4-6"></path></svg></span>
+                  <div><strong>浴室天花滲水</strong><span>已派單 · 等待師傅預約</span></div>
+                </div>
+                <div class="task-item">
+                  <span class="tiny-icon blue"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span>
+                  <div><strong>大堂照明報修</strong><span>公共區域 · 管理處已接收</span></div>
+                </div>
+              </div>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>09. 門禁與設備</h2>
+          <span>QR、鏡頭、設備</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>SMART ACCESS</small>
+                <h3>門禁與設備</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="重新整理"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v5h-5"></path><path d="M6 22v-5h5"></path></svg></button>
+            </div>
+
+            <section class="qr-card">
+              <div class="qr-block" aria-label="dynamic QR"></div>
+              <div class="qr-copy">
+                <h4>一次性門禁 QR</h4>
+                <p>大堂正門 · 有效 60 秒。可分享給已授權副戶。</p>
+                <span class="tag">已啟用</span>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>已授權設備</h3>
+                <span>協和大廈</span>
+              </div>
+              <div class="device-grid">
+                <article class="device-card"><b>大堂門禁</b><span>QR 開門 · 正常</span></article>
+                <article class="device-card"><b>停車場閘機</b><span>車位用戶可見</span></article>
+                <article class="device-card"><b>公共鏡頭</b><span>3 個鏡頭可查看</span></article>
+                <article class="device-card"><b>訪客通行</b><span>今日 2 張邀請</span></article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>安全提示</strong>
+                <span>開門、訪客邀請與鏡頭查看均需登入後授權，不顯示未綁定大廈資料。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>10. 訊息中心</h2>
+          <span>通知與會話</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>MESSAGES</small>
+                <h3>訊息中心</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="篩選訊息"><svg viewBox="0 0 24 24"><path d="M4 6h16"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg></button>
+            </div>
+
+            <div class="segment-row">
+              <button class="segment active" type="button">全部</button>
+              <button class="segment" type="button">住戶</button>
+              <button class="segment" type="button">交易</button>
+              <button class="segment" type="button">系統</button>
+            </div>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>未讀訊息</h3>
+                <span>4</span>
+              </div>
+              <div class="task-list">
+                <article class="message-row">
+                  <div class="message-mark">管</div>
+                  <div><strong>協和大廈管理處</strong><span>浴室天花滲水個案已安排師傅聯絡。</span></div>
+                  <time>09:20</time>
+                </article>
+                <article class="message-row">
+                  <div class="message-mark">Pay</div>
+                  <div><strong>AJO Pay</strong><span>7 月管理費尚未完成付款。</span></div>
+                  <time>昨日</time>
+                </article>
+                <article class="message-row">
+                  <div class="message-mark">樓</div>
+                  <div><strong>樓盤查詢</strong><span>太古城兩房放售收到新留言。</span></div>
+                  <time>週二</time>
+                </article>
+                <article class="message-row">
+                  <div class="message-mark">二</div>
+                  <div><strong>二手交易</strong><span>實木餐桌買家要求預約取貨。</span></div>
+                  <time>週一</time>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>會話分類</strong>
+                <span>管理處、交易、支付和系統提醒同一入口管理，避免每個模組各自分散未讀數。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>11. 樓盤放售</h2>
+          <span>公開列表</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>PROPERTY</small>
+                <h3>樓盤放售</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="搜尋樓盤"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+            </div>
+
+            <div class="chip-row">
+              <button class="chip active" type="button">出售</button>
+              <button class="chip" type="button">出租</button>
+              <button class="chip" type="button">香港島</button>
+              <button class="chip" type="button">收藏</button>
+            </div>
+
+            <section class="section">
+              <article class="market-hero">
+                <div class="market-photo" style="background-image:linear-gradient(180deg, transparent 34%, rgba(0, 0, 0, 0.45)), url('https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80')"></div>
+                <div class="copy">
+                  <h3>太古城兩房放售</h3>
+                  <p>HK$8.6M · 實用 582 呎 · 近港鐵站</p>
+                </div>
+              </article>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>樓盤列表</h3>
+                <span>12 個</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div><h4>海怡半島三房</h4><p>HK$12.8M · 實用 742 呎</p></div>
+                  <strong>查看</strong>
+                </article>
+                <article class="bill-card">
+                  <div><h4>康怡花園兩房</h4><p>HK$7.9M · 實用 524 呎</p></div>
+                  <strong>查看</strong>
+                </article>
+              </div>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>12. 樓盤詳情</h2>
+          <span>相片、資料、聯絡</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <button class="icon-button" type="button" aria-label="返回"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg></button>
+              <div class="title-stack">
+                <small>PROPERTY DETAIL</small>
+                <h3>樓盤詳情</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="收藏"><svg viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"></path></svg></button>
+            </div>
+
+            <section class="market-hero">
+              <div class="market-photo" style="background-image:linear-gradient(180deg, transparent 34%, rgba(0, 0, 0, 0.45)), url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=80')"></div>
+              <div class="copy">
+                <h3>太古城兩房放售</h3>
+                <p>HK$8.6M · 實用 582 呎 · 2 房 1 廳</p>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="summary-row">
+                <div class="summary-pill"><b>582</b><span>實用呎</span></div>
+                <div class="summary-pill"><b>2 房</b><span>間隔</span></div>
+                <div class="summary-pill"><b>高層</b><span>樓層</span></div>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>物業描述</strong>
+                <span>單位保養良好，屋苑配套成熟，鄰近交通及生活設施。查詢前需登入會員以保護聯絡資料。</span>
+              </article>
+              <button class="primary-action" type="button">聯絡發布者</button>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>13. 二手與生活服務</h2>
+          <span>家具、優惠、服務</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>MARKETPLACE</small>
+                <h3>二手與生活服務</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="發布"><svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button>
+            </div>
+
+            <div class="chip-row">
+              <button class="chip active" type="button">家具</button>
+              <button class="chip" type="button">電器</button>
+              <button class="chip" type="button">超市優惠</button>
+              <button class="chip" type="button">服務</button>
+            </div>
+
+            <section class="section">
+              <div class="listing-grid">
+                <article class="listing-card">
+                  <div class="listing-image" style="background-image:url('https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=700&q=80')"></div>
+                  <div class="copy"><strong>實木餐桌</strong><span>HK$680 · 可議價</span></div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image offer"></div>
+                  <div class="copy"><strong>超市會員價</strong><span>指定貨品優惠</span></div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image" style="background-image:url('https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=700&q=80')"></div>
+                  <div class="copy"><strong>雙人梳化</strong><span>HK$1,200 · 九成新</span></div>
+                </article>
+                <article class="listing-card">
+                  <div class="listing-image" style="background-image:url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=700&q=80')"></div>
+                  <div class="copy"><strong>家居清潔</strong><span>住戶服務 · 預約</span></div>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>交易入口</strong>
+                <span>公開頁只保留瀏覽與收藏；查詢、議價、發布與下架回到會員身份處理。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>14. 服務式住宅</h2>
+          <span>住宅列表與查詢</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>SERVICED RESIDENCE</small>
+                <h3>服務式住宅</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="篩選住宅"><svg viewBox="0 0 24 24"><path d="M4 6h16"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg></button>
+            </div>
+
+            <section class="market-hero">
+              <div class="market-photo" style="background-image:linear-gradient(180deg, transparent 34%, rgba(0, 0, 0, 0.45)), url('https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80')"></div>
+              <div class="copy">
+                <h3>銅鑼灣服務式住宅</h3>
+                <p>月租 HK$18,800 起 · 可預約睇房</p>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>推薦住宅</h3>
+                <span>更多</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div><h4>灣仔一房套房</h4><p>HK$16,500 / 月 · 包基本家具</p></div>
+                  <strong>預約</strong>
+                </article>
+                <article class="bill-card">
+                  <div><h4>尖沙咀開放式單位</h4><p>HK$14,200 / 月 · 近港鐵</p></div>
+                  <strong>預約</strong>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>查詢流程</strong>
+                <span>住戶可收藏、查詢與預約，發布與管理入口仍收在會員中心。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>15. 登入與綁定</h2>
+          <span>帳戶建立</span>
+        </div>
+        <div class="phone">
+          <div class="screen screen-dark">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>AJO LIVING</small>
+                <h3>登入帳戶</h3>
+              </div>
+              <div class="avatar">A</div>
+            </div>
+
+            <section class="hero-card">
+              <small>MEMBER ACCESS</small>
+              <h3>登入後使用住戶服務</h3>
+              <p>手機號碼驗證後可綁定大廈、單位、AJO Pay 與 iSmart 帳戶。</p>
+            </section>
+
+            <section class="section">
+              <div class="form-card">
+                <div class="form-field"><span>電話號碼</span><strong>+852 6XXX XXXX</strong></div>
+                <div class="form-field"><span>驗證碼</span><strong>輸入 6 位 OTP</strong></div>
+                <button class="primary-action" type="button">登入 / 註冊</button>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>綁定方式</h3>
+                <span>登入後</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div><h4>綁定大廈單位</h4><p>選擇大廈、樓層、單位並提交驗證。</p></div>
+                  <strong>必需</strong>
+                </article>
+                <article class="bill-card">
+                  <div><h4>連接 iSmart / POS</h4><p>用於通告、賬目與付款資料同步。</p></div>
+                  <strong>可選</strong>
+                </article>
+              </div>
+            </section>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-stage">
+        <div class="stage-label">
+          <h2>16. 我的發布與收藏</h2>
+          <span>會員內容管理</span>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="signal"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app-top">
+              <div class="title-stack">
+                <small>MY CONTENT</small>
+                <h3>發布與收藏</h3>
+              </div>
+              <button class="icon-button" type="button" aria-label="新增發布"><svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button>
+            </div>
+
+            <div class="segment-row">
+              <button class="segment active" type="button">我的發布</button>
+              <button class="segment" type="button">收藏</button>
+              <button class="segment" type="button">草稿</button>
+              <button class="segment" type="button">下架</button>
+            </div>
+
+            <section class="section">
+              <div class="section-head">
+                <h3>目前發布</h3>
+                <span>3</span>
+              </div>
+              <div class="task-list">
+                <article class="bill-card">
+                  <div><h4>太古城兩房放售</h4><p>樓盤 · 審核通過 · 12 次瀏覽</p></div>
+                  <strong>管理</strong>
+                </article>
+                <article class="bill-card">
+                  <div><h4>實木餐桌</h4><p>二手家具 · 洽談中</p></div>
+                  <strong>管理</strong>
+                </article>
+                <article class="bill-card">
+                  <div><h4>灣仔服務式住宅</h4><p>住宅服務 · 草稿</p></div>
+                  <strong>編輯</strong>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <article class="notice-card">
+                <strong>AJO Coin 狀態</strong>
+                <span>發布、續期或置頂操作需先顯示扣分確認，避免在列表直接變更狀態。</span>
+              </article>
+            </section>
+
+            <nav class="bottom-nav" aria-label="bottom navigation">
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></span>首頁</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 21h16"></path><path d="M6 21V5h12v16"></path><path d="M9 9h2"></path><path d="M13 9h2"></path></svg></span>大廈</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"></path><path d="M8 11h5"></path></svg></span>支付</a>
+              <a class="bottom-tab" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H7l-3 3z"></path></svg></span>訊息</a>
+              <a class="bottom-tab active" href="#"><span class="tab-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg></span>我的</a>
+            </nav>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="coverage-section" aria-label="dialog and overlay coverage">
+      <div class="section-title-block">
+        <h2>彈窗、抽屜與狀態覆蓋</h2>
+        <p>所有浮層以手機安全區和底部導航避讓為基準；確認類操作保留明確取消與主操作，表單類浮層保留錯誤、提交中與成功狀態。</p>
+      </div>
+      <div class="dialog-board">
+        <article class="dialog-card">
+          <h3>Mobile Drawer</h3>
+          <p>全局導航抽屜，登入前只顯示公開入口，登入後顯示 AJO Pay、我的大廈、會員中心與通知中心。</p>
+          <div class="dialog-shell">
+            <strong>AJO LIVING</strong>
+            <div class="mini-line"><b>首頁</b><span>公開</span></div>
+            <div class="mini-line"><b>我的大廈</b><em>Auth</em></div>
+            <div class="dialog-actions"><span>切換主題</span><span class="primary">關閉</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>Toast</h3>
+          <p>所有提交、保存、支付、收藏與錯誤提示統一使用底部上浮 toast，不遮擋主要操作。</p>
+          <div class="dialog-shell">
+            <strong>付款資料已提交</strong>
+            <div class="mini-line"><b>Success / Error / Info</b><em>3s</em></div>
+            <div class="dialog-actions"><span class="primary">知道了</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>未儲存離開確認</h3>
+          <p>物業編輯、發布表單與管理表單共用三段式決策：保存、放棄、留在頁面。</p>
+          <div class="dialog-shell">
+            <strong>有未儲存內容</strong>
+            <div class="mini-line"><b>離開前先保存草稿</b><span>Editor</span></div>
+            <div class="dialog-actions"><span>放棄</span><span>留在頁面</span><span class="primary">保存</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>個人資料編輯</h3>
+          <p>會員資料與二手交易個人資料保留獨立表單彈窗，展示只讀身份欄位與可編輯聯絡資料。</p>
+          <div class="dialog-shell">
+            <strong>編輯個人資料</strong>
+            <div class="mini-fields"><div class="mini-field"></div><div class="mini-field"></div></div>
+            <div class="dialog-actions"><span>取消</span><span class="primary">保存</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>iSmart 綁定</h3>
+          <p>會員中心的 iSmart 綁定彈窗只承接帳戶驗證與綁定狀態，不在前端暴露舊系統內部資料。</p>
+          <div class="dialog-shell">
+            <strong>綁定 iSmart 帳戶</strong>
+            <div class="mini-fields"><div class="mini-field"></div><div class="mini-field"></div></div>
+            <div class="dialog-actions"><span>取消</span><span class="primary">綁定</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>門禁開門確認</h3>
+          <p>開門指令由確認層保護，動態 QR 顯示為底部面板，可查看有效期與目標門禁。</p>
+          <div class="dialog-shell">
+            <strong>確認開啟大堂門禁？</strong>
+            <div class="mini-line"><b>Dynamic QR</b><em>60s</em></div>
+            <div class="dialog-actions"><span>取消</span><span class="primary">確認開門</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>AJO Coin 充值</h3>
+          <p>錢包充值彈窗包含金額、預計積分、支付方式、地區、支付入口與刷新訂單狀態。</p>
+          <div class="dialog-shell">
+            <strong>充值 AJO Coin</strong>
+            <div class="mini-line"><b>HKD 500</b><em>+500</em></div>
+            <div class="mini-tabs"><span>Alipay</span><span>FPS</span><span>Card</span></div>
+            <div class="dialog-actions"><span>關閉</span><span class="primary">建立訂單</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>廣告觀看任務</h3>
+          <p>錢包廣告任務使用全屏媒體彈窗，倒數完成後才可領取；中途離開需二次確認。</p>
+          <div class="dialog-shell">
+            <strong>觀看任務</strong>
+            <div class="mini-hero light"><strong>媒體區</strong><span>圖片或影片</span></div>
+            <div class="dialog-actions"><span>繼續觀看</span><span class="primary">領取</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>價格提示</h3>
+          <p>超市優惠商品與收藏頁共用價格提示面板，可建立、更新與刪除提醒。</p>
+          <div class="dialog-shell">
+            <strong>價格提示</strong>
+            <div class="mini-line"><b>目標價格</b><span>HK$38</span></div>
+            <div class="dialog-actions"><span>刪除提示</span><span class="primary">保存</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>物業編輯器彈窗</h3>
+          <p>會員中心和 Staff 管理端可用全屏彈窗承載物業編輯器，頂部保留步驟進度和關閉。</p>
+          <div class="dialog-shell">
+            <strong>樓盤發布</strong>
+            <div class="mini-tabs"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+            <div class="dialog-actions"><span>草稿</span><span class="primary">發布</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>管理端建立與授權</h3>
+          <p>會員建立、積分授權、帖子續期與廣告續期共用 Staff 表單彈窗，明確顯示保存中和錯誤狀態。</p>
+          <div class="dialog-shell">
+            <strong>管理操作</strong>
+            <div class="mini-fields"><div class="mini-field"></div><div class="mini-field"></div></div>
+            <div class="dialog-actions"><span>取消</span><span class="primary">確認</span></div>
+          </div>
+        </article>
+        <article class="dialog-card">
+          <h3>發布收費確認</h3>
+          <p>樓盤、服務式住宅、家具重新發布與下架等扣分或狀態變更操作必須先展示費用與後果。</p>
+          <div class="dialog-shell">
+            <strong>確認發布並扣除 AJO Coin</strong>
+            <div class="mini-line"><b>費用</b><span>100 Coins</span></div>
+            <div class="dialog-actions"><span>取消</span><span class="primary">確認發布</span></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="state-strip">
+        <div class="state-pill"><b>Loading</b><span>列表、賬單、門禁、支付、設定保存均保留骨架或明確載入中狀態。</span></div>
+        <div class="state-pill"><b>Empty</b><span>無收藏、無待繳賬單、無通告、無發布內容時提供下一步入口。</span></div>
+        <div class="state-pill"><b>Error</b><span>API 失敗、未綁定單位、權限不足、支付失敗需有可重試或返回入口。</span></div>
+        <div class="state-pill"><b>Permission</b><span>Staff 頁、會員頁、大廈頁與支付頁在未登入或權限不足時不展示內部資料。</span></div>
+      </div>
+    </section>
+
+    <section class="flow-notes" aria-label="implementation notes">
+      <article class="flow-note">
+        <b>主導航建議</b>
+        <span>首版 App 使用底部五入口：首頁、大廈、支付、訊息、我的；通知、樓盤與生活服務從首頁和會員中心進入。</span>
+      </article>
+      <article class="flow-note">
+        <b>權限邊界</b>
+        <span>我的大廈、AJO Pay、會員中心保持登入後可見；公開內容只保留瀏覽，發布和付款回到會員身份下處理。</span>
+      </article>
+      <article class="flow-note">
+        <b>Flutter 落地</b>
+        <span>可先以 ShellRoute、BottomNavigationBar、Riverpod 或 Bloc 管理頁面狀態，API 沿用 AJO 後端受控接口。</span>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

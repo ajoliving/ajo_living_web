@@ -1,0 +1,2136 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AJO Living App Design Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --brand: #F05A00;
+  --brand-dark: #C04600;
+  --brand-light: #FFF0E6;
+  --brand-mid: #FDA96A;
+  --ink: #1A1A1A;
+  --ink-2: #444444;
+  --ink-3: #777777;
+  --ink-4: #AAAAAA;
+  --sur: #FFFFFF;
+  --sur-2: #F6F6F6;
+  --sur-3: #EFEFEF;
+  --bdr: #E4E4E4;
+  --bdr-2: #CCCCCC;
+  --success: #1A7A3A;
+  --error: #C0392B;
+  --warning: #E07B00;
+  --font-sans: 'DM Sans', 'Noto Sans TC', sans-serif;
+  --font-display: 'DM Serif Display', serif;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --shadow-brand: 0 4px 16px rgba(240,90,0,0.25);
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 100px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #EEEEE8;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.page-title {
+  text-align: center;
+  padding: 60px 0 20px;
+}
+
+.page-title h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  color: var(--ink);
+  letter-spacing: 1px;
+}
+
+.page-title p {
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.screen-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  justify-content: center;
+  padding: 40px 20px 80px;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+.phone {
+  width: 390px;
+  height: 844px;
+  background: var(--sur);
+  border-radius: 48px;
+  border: 10px solid #1a1a1a;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--sur-2);
+  position: relative;
+  scrollbar-width: none;
+}
+
+.phone-screen::-webkit-scrollbar { display: none; }
+
+.notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 32px;
+  background: #1a1a1a;
+  border-radius: 0 0 20px 20px;
+  z-index: 100;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 28px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  position: relative;
+  z-index: 10;
+}
+
+.status-bar .icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px 12px;
+  background: var(--sur);
+  border-bottom: 1px solid var(--bdr);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.app-header.transparent {
+  background: transparent;
+  border-bottom: none;
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+}
+
+.app-logo {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  border-bottom: 2px solid var(--brand);
+  padding-bottom: 1px;
+}
+
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: 18px;
+  transition: all 0.2s;
+}
+
+.header-icon-btn:hover {
+  background: var(--sur-2);
+  color: var(--ink);
+}
+
+.bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 68px;
+  background: var(--sur);
+  border-top: 1px solid var(--bdr);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 90;
+  padding-bottom: 8px;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-4);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.bottom-nav-item.active {
+  color: var(--brand);
+}
+
+.bottom-nav-item .icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.bottom-nav-item.active .icon {
+  background: var(--brand-light);
+  border-radius: var(--r-md);
+  padding: 4px 12px;
+}
+
+.screen-label {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* === HOME SCREEN === */
+.home-hero {
+  background: linear-gradient(160deg, #1a1a1a 0%, #2e2e2e 100%);
+  padding: 60px 24px 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.home-hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 400'%3E%3Cpath fill='%23ffffff' fill-opacity='0.04' d='M0 300h40v-40h30v-60h30v-80h20v80h30v60h30v40h40v-100h30v-60h25v-80h20v80h25v60h30v100h40v-40h30v-60h30v-80h20v80h30v60h30v40h40v-100h30v-60h25v-80h20v80h25v60h30v100h40v-40h30v-60h30v-80h20v80h30v60h30v40h40'/%3E%3C/svg%3E") center bottom / cover;
+}
+
+.home-hero h1 {
+  font-family: var(--font-display);
+  font-size: 32px;
+  color: #fff;
+  line-height: 1.3;
+  position: relative;
+}
+
+.home-hero p {
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  margin-top: 8px;
+  position: relative;
+}
+
+.home-hero-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  position: relative;
+}
+
+.btn-brand {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 10px 20px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 20px 12px;
+}
+
+.section-title::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--brand);
+  border-radius: 2px;
+}
+
+.section-title h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.section-title .more {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.home-services {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 20px;
+}
+
+.service-card {
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-lg);
+  padding: 14px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.service-card:hover {
+  border-color: var(--brand-mid);
+  box-shadow: var(--shadow-md);
+}
+
+.service-card .icon-circle {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 6px;
+  border-radius: var(--r-md);
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--brand);
+}
+
+.service-card span {
+  font-size: 10px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.property-card-list {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.property-card {
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.property-card .img {
+  width: 100%;
+  height: 160px;
+  background: var(--sur-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: var(--ink-4);
+  position: relative;
+}
+
+.property-card .tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+}
+
+.property-card .body {
+  padding: 12px 14px;
+}
+
+.property-card .body h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.property-card .meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.property-card .price {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--ink);
+}
+
+.property-card .price small {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* === PROPERTY LIST SCREEN === */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--sur);
+  border-bottom: 1px solid var(--bdr);
+}
+
+.filter-bar::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--bdr);
+  background: var(--sur);
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.filter-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.sort-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.sort-bar select {
+  border: none;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-weight: 500;
+  background: transparent;
+  cursor: pointer;
+}
+
+.list-card {
+  display: flex;
+  gap: 12px;
+  margin: 0 20px 12px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.list-card .img {
+  flex-shrink: 0;
+  width: 100px;
+  height: 100px;
+  background: var(--sur-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--ink-4);
+}
+
+.list-card .body {
+  flex: 1;
+  padding: 10px 14px 10px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.list-card .body h3 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.list-card .tags {
+  display: flex;
+  gap: 4px;
+}
+
+.list-card .tag-sm {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: var(--brand-light);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.list-card .price {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--brand);
+}
+
+/* === SERVICED RESIDENCE === */
+.sr-banner {
+  margin: 12px 20px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  padding: 20px;
+  color: #fff;
+  position: relative;
+}
+
+.sr-banner h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.sr-banner p {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+/* === MARKETPLACE === */
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 12px 20px 20px;
+}
+
+.mp-card {
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.mp-card .img {
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--sur-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--ink-4);
+  position: relative;
+}
+
+.mp-card .fav-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.mp-card .body {
+  padding: 8px 10px 12px;
+}
+
+.mp-card .body h3 {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mp-card .price {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+/* === AJO PAY === */
+.pay-header {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  padding: 20px;
+  color: #fff;
+}
+
+.pay-balance {
+  margin-top: 8px;
+}
+
+.pay-balance label {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.pay-balance .amount {
+  font-family: var(--font-display);
+  font-size: 32px;
+  margin-top: 4px;
+}
+
+.pay-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 16px 20px;
+}
+
+.pay-quick-item {
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
+  padding: 12px 4px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pay-quick-item .icon {
+  font-size: 20px;
+  color: var(--brand);
+}
+
+.pay-quick-item span {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+  color: var(--ink-2);
+}
+
+.pay-section {
+  margin: 0 20px 16px;
+}
+
+.pay-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.bill-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--sur);
+  border-radius: var(--r-md);
+  padding: 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.bill-card .icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--brand);
+}
+
+.bill-card .info {
+  flex: 1;
+}
+
+.bill-card .info h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bill-card .info p {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.bill-card .amount-due {
+  text-align: right;
+}
+
+.bill-card .amount-due .amt {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.bill-card .amount-due .status {
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* === MY BUILDING === */
+.building-hero {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2e2e2e 100%);
+  padding: 20px;
+  color: #fff;
+}
+
+.building-hero h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.building-hero p {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+.building-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 20px;
+}
+
+.building-action {
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
+  padding: 14px 4px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.building-action .icon {
+  font-size: 22px;
+  color: var(--brand);
+}
+
+.building-action span {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+  color: var(--ink-2);
+}
+
+.notice-list {
+  margin: 0 20px;
+}
+
+.notice-item {
+  display: flex;
+  gap: 12px;
+  background: var(--sur);
+  border-radius: var(--r-md);
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.notice-item .badge {
+  flex-shrink: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+.notice-item .badge.read {
+  background: var(--bdr);
+}
+
+.notice-item .content h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notice-item .content p {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 3px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notice-item .content .date {
+  font-size: 10px;
+  color: var(--ink-4);
+  margin-top: 4px;
+}
+
+/* === ACCOUNT === */
+.account-header {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  padding: 20px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+
+.account-header .info h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.account-header .info p {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.account-menu {
+  margin: 12px 20px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bdr);
+  cursor: pointer;
+}
+
+.menu-item:last-child { border-bottom: none; }
+
+.menu-item .icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--brand);
+}
+
+.menu-item .label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.menu-item .arrow {
+  color: var(--ink-4);
+  font-size: 14px;
+}
+
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 12px 20px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-item {
+  text-align: center;
+  padding: 14px 8px;
+  border-right: 1px solid var(--bdr);
+}
+
+.stat-item:last-child { border-right: none; }
+
+.stat-item .num {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.stat-item .label {
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* === NOTIFICATIONS === */
+.noti-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--bdr);
+  cursor: pointer;
+}
+
+.noti-item.unread .dot {
+  background: var(--brand);
+}
+
+.noti-item .dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--bdr);
+  margin-top: 6px;
+}
+
+.noti-item .icon-box {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--brand);
+}
+
+.noti-item .content {
+  flex: 1;
+}
+
+.noti-item .content h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.noti-item .content p {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+.noti-item .content .time {
+  font-size: 10px;
+  color: var(--ink-4);
+  margin-top: 4px;
+}
+
+/* === CHAT === */
+.chat-list-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--bdr);
+  cursor: pointer;
+}
+
+.chat-list-item .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-pill);
+  background: var(--sur-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--ink-3);
+  border: none;
+}
+
+.chat-list-item .content {
+  flex: 1;
+}
+
+.chat-list-item .top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-list-item .top-row h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chat-list-item .top-row .time {
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.chat-list-item .preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.chat-list-item .preview p {
+  font-size: 12px;
+  color: var(--ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-list-item .badge-count {
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* === LOGIN === */
+.login-screen {
+  background: linear-gradient(160deg, #1a1a1a 0%, #2e2e2e 100%);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 28px;
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.login-logo h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: #fff;
+  letter-spacing: 3px;
+  border-bottom: 2px solid var(--brand);
+  display: inline-block;
+  padding-bottom: 2px;
+}
+
+.login-logo p {
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  margin-top: 8px;
+  letter-spacing: 1px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-field {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+
+.login-field label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  display: block;
+}
+
+.login-field .input-line {
+  color: #fff;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.login-btn {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  padding: 14px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  box-shadow: var(--shadow-brand);
+}
+
+.login-alt {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+}
+
+.login-alt a {
+  color: var(--brand-mid);
+  text-decoration: none;
+}
+
+/* === FURNITURE === */
+.furniture-cat {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.furniture-cat::-webkit-scrollbar { display: none; }
+
+.furniture-cat .cat-chip {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.furniture-cat .cat-chip .circle {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-pill);
+  background: var(--sur);
+  border: 1px solid var(--bdr);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.furniture-cat .cat-chip.active .circle {
+  border-color: var(--brand);
+  background: var(--brand-light);
+}
+
+.furniture-cat .cat-chip span {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+/* === OFFERS === */
+.offer-card {
+  margin: 0 20px 12px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.offer-card .banner {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.offer-card .banner.green { background: linear-gradient(135deg, #1A7A3A, #2A9A4A); }
+.offer-card .banner.red { background: linear-gradient(135deg, #C0392B, #E0493B); }
+.offer-card .banner.blue { background: linear-gradient(135deg, #1946B8, #3066E8); }
+.offer-card .banner.purple { background: linear-gradient(135deg, #6B2C91, #8B3CB1); }
+
+.offer-card .items {
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.offer-card .item {
+  text-align: center;
+}
+
+.offer-card .item .img-box {
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--sur-2);
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: var(--ink-4);
+}
+
+.offer-card .item .price-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand);
+  margin-top: 4px;
+}
+
+.offer-card .item .original {
+  font-size: 9px;
+  color: var(--ink-4);
+  text-decoration: line-through;
+}
+
+/* === FAB === */
+.fab {
+  position: absolute;
+  right: 20px;
+  bottom: 88px;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-pill);
+  background: var(--brand);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: var(--shadow-brand);
+  cursor: pointer;
+  z-index: 80;
+}
+
+/* === TREND === */
+.trend-summary {
+  margin: 12px 20px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.trend-summary .label {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.trend-summary .value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--ink);
+  margin-top: 4px;
+}
+
+.trend-summary .change {
+  font-size: 12px;
+  color: var(--success);
+  margin-top: 4px;
+}
+
+.trend-chart {
+  margin: 0 20px 12px;
+  background: var(--sur);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.trend-chart .chart-area {
+  height: 120px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.trend-chart .bar {
+  flex: 1;
+  background: var(--brand);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.7;
+  position: relative;
+}
+
+.trend-chart .bar.active {
+  opacity: 1;
+}
+
+.trend-chart .bar span {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: var(--ink-4);
+}
+
+/* === PUBLISH === */
+.publish-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+}
+
+.step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.step-circle.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.step-circle.done {
+  background: var(--success);
+  color: #fff;
+}
+
+.step-circle.pending {
+  background: var(--sur-3);
+  color: var(--ink-4);
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.step-label.active { color: var(--ink); }
+.step-label.pending { color: var(--ink-4); }
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--bdr);
+}
+
+.step-line.done { background: var(--success); }
+
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  <h1>AJO Living App</h1>
+  <p>Mobile App Design Mockup - 12 Core Screens</p>
+</div>
+
+<div class="screen-row">
+
+<!-- ============ SCREEN 1: HOME ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="app-logo">AJO LIVING</div>
+      <div class="header-icons">
+        <div class="header-icon-btn">🔔</div>
+        <div class="header-icon-btn">👤</div>
+      </div>
+    </div>
+
+    <div class="home-hero">
+      <h1>找到你的<br>理想居所</h1>
+      <p>樓盤租售 / 服務式住宅 / 家具 / 優惠</p>
+      <div class="home-hero-btns">
+        <button class="btn-brand">開始探索</button>
+        <button class="btn-ghost">了解更多</button>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <h2>探索服務</h2>
+    </div>
+    <div class="home-services">
+      <div class="service-card"><div class="icon-circle">🏠</div><span>樓盤租售</span></div>
+      <div class="service-card"><div class="icon-circle">🏨</div><span>服務住宅</span></div>
+      <div class="service-card"><div class="icon-circle">🛋️</div><span>家具</span></div>
+      <div class="service-card"><div class="icon-circle">🛒</div><span>優惠</span></div>
+    </div>
+
+    <div class="section-title">
+      <h2>精選樓盤</h2>
+      <span class="more">查看全部 ›</span>
+    </div>
+    <div class="property-card-list">
+      <div class="property-card">
+        <div class="img">🏠<span class="tag">精選</span></div>
+        <div class="body">
+          <h3>太古城 海天花園 2房</h3>
+          <div class="meta"><span>950 呎</span><span>2房1廳</span><span>港島東</span></div>
+          <div class="price">HK$ 25,000<small>/月</small></div>
+        </div>
+      </div>
+      <div class="property-card">
+        <div class="img">🏢<span class="tag">新盤</span></div>
+        <div class="body">
+          <h3>沙田 第一城 3房</h3>
+          <div class="meta"><span>1,200 呎</span><span>3房2廳</span><span>新界東</span></div>
+          <div class="price">HK$ 18,000<small>/月</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item active"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">1. HOME</div>
+</div>
+
+<!-- ============ SCREEN 2: PROPERTY LIST ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="header-icon-btn">‹</div>
+      <div style="font-size:15px;font-weight:600;">樓盤租售</div>
+      <div class="header-icon-btn">🔍</div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip active">全部</div>
+      <div class="filter-chip">港島</div>
+      <div class="filter-chip">九龍</div>
+      <div class="filter-chip">新界東</div>
+      <div class="filter-chip">新界西</div>
+      <div class="filter-chip">離島</div>
+    </div>
+    <div class="sort-bar">
+      <span>共 248 個樓盤</span>
+      <select><option>默認排序</option></select>
+    </div>
+    <div class="list-card">
+      <div class="img">🏠</div>
+      <div class="body">
+        <h3>太古城 海天花園 2房</h3>
+        <div class="tags"><span class="tag-sm">港島東</span><span class="tag-sm">2房</span></div>
+        <div class="price">HK$ 25,000/月</div>
+      </div>
+    </div>
+    <div class="list-card">
+      <div class="img">🏢</div>
+      <div class="body">
+        <h3>將軍澳 维景灣畔 3房</h3>
+        <div class="tags"><span class="tag-sm">將軍澳</span><span class="tag-sm">3房</span></div>
+        <div class="price">HK$ 22,000/月</div>
+      </div>
+    </div>
+    <div class="list-card">
+      <div class="img">🏘️</div>
+      <div class="body">
+        <h3>沙田 第一城 2房</h3>
+        <div class="tags"><span class="tag-sm">新界東</span><span class="tag-sm">2房</span></div>
+        <div class="price">HK$ 15,500/月</div>
+      </div>
+    </div>
+    <div class="list-card">
+      <div class="img">🏠</div>
+      <div class="body">
+        <h3>荃灣 灣景花園 3房</h3>
+        <div class="tags"><span class="tag-sm">新界西</span><span class="tag-sm">3房</span></div>
+        <div class="price">HK$ 16,800/月</div>
+      </div>
+    </div>
+    <div class="fab">+</div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item active"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">2. PROPERTY LIST</div>
+</div>
+
+<!-- ============ SCREEN 3: SERVICED RESIDENCE ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="header-icon-btn">‹</div>
+      <div style="font-size:15px;font-weight:600;">服務式住宅</div>
+      <div class="header-icon-btn">🔍</div>
+    </div>
+    <div class="sr-banner">
+      <h3>精選服務式住宅</h3>
+      <p>靈活租期 / 全包傢俬 / 即住即用</p>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip active">全部</div>
+      <div class="filter-chip">港島</div>
+      <div class="filter-chip">九龍</div>
+      <div class="filter-chip">月租</div>
+      <div class="filter-chip">日租</div>
+    </div>
+    <div class="property-card-list">
+      <div class="property-card">
+        <div class="img">🏨<span class="tag">月租</span></div>
+        <div class="body">
+          <h3>Citadines 太古酒店式公寓</h3>
+          <div class="meta"><span>開放式</span><span>500 呎</span><span>包傢俬</span></div>
+          <div class="price">HK$ 28,000<small>/月</small></div>
+        </div>
+      </div>
+      <div class="property-card">
+        <div class="img">🏨<span class="tag">日租</span></div>
+        <div class="body">
+          <h3>J Plus Hotel 銅鑼灣</h3>
+          <div class="meta"><span>1房</span><span>400 呎</span><span>即住</span></div>
+          <div class="price">HK$ 1,200<small>/晚</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item active"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">3. SERVICED RESIDENCE</div>
+</div>
+
+<!-- ============ SCREEN 4: MARKETPLACE ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div style="font-size:15px;font-weight:600;">二手交易</div>
+      <div class="header-icons">
+        <div class="header-icon-btn">🔍</div>
+        <div class="header-icon-btn">💬</div>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip active">全部</div>
+      <div class="filter-chip">電子</div>
+      <div class="filter-chip">家具</div>
+      <div class="filter-chip">家電</div>
+      <div class="filter-chip">服飾</div>
+    </div>
+    <div class="mp-grid">
+      <div class="mp-card">
+        <div class="img">📱<div class="fav-badge">🤍</div></div>
+        <div class="body">
+          <h3>iPhone 15 Pro 256GB 深鈦</h3>
+          <div class="price">HK$ 7,800</div>
+        </div>
+      </div>
+      <div class="mp-card">
+        <div class="img">🖥️<div class="fav-badge">❤️</div></div>
+        <div class="body">
+          <h3>MacBook Air M2 13寸</h3>
+          <div class="price">HK$ 6,500</div>
+        </div>
+      </div>
+      <div class="mp-card">
+        <div class="img">🛋️<div class="fav-badge">🤍</div></div>
+        <div class="body">
+          <h3>宜家梳化 3座位 九成新</h3>
+          <div class="price">HK$ 1,200</div>
+        </div>
+      </div>
+      <div class="mp-card">
+        <div class="img">📷<div class="fav-badge">🤍</div></div>
+        <div class="body">
+          <h3>Sony A7 IV 全片幅</h3>
+          <div class="price">HK$ 12,000</div>
+        </div>
+      </div>
+    </div>
+    <div class="fab">+</div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item active"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">4. MARKETPLACE</div>
+</div>
+
+<!-- ============ SCREEN 5: AJO PAY ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="header-icon-btn">‹</div>
+      <div style="font-size:15px;font-weight:600;">AJO Pay</div>
+      <div class="header-icon-btn">⋮</div>
+    </div>
+    <div class="pay-header">
+      <div style="font-size:12px;opacity:0.7;">錢包餘額</div>
+      <div class="pay-balance">
+        <div class="amount">HK$ 12,450</div>
+      </div>
+    </div>
+    <div class="pay-quick">
+      <div class="pay-quick-item"><div class="icon">📄</div><span>賬單</span></div>
+      <div class="pay-quick-item"><div class="icon">💸</div><span>轉賬</span></div>
+      <div class="pay-quick-item"><div class="icon">🏦</div><span>充值</span></div>
+      <div class="pay-quick-item"><div class="icon">📊</div><span>記錄</span></div>
+    </div>
+    <div class="pay-section">
+      <h3>待繳賬單</h3>
+      <div class="bill-card">
+        <div class="icon-box">🏠</div>
+        <div class="info">
+          <h4>7月物業管理費</h4>
+          <p>海天花園 12座 A室</p>
+        </div>
+        <div class="amount-due">
+          <div class="amt">HK$ 2,800</div>
+          <div class="status">待繳</div>
+        </div>
+      </div>
+      <div class="bill-card">
+        <div class="icon-box">💧</div>
+        <div class="info">
+          <h4>7月水電費</h4>
+          <p>海天花園 12座 A室</p>
+        </div>
+        <div class="amount-due">
+          <div class="amt">HK$ 450</div>
+          <div class="status">待繳</div>
+        </div>
+      </div>
+    </div>
+    <div class="pay-section">
+      <h3>最近交易</h3>
+      <div class="bill-card">
+        <div class="icon-box">✅</div>
+        <div class="info">
+          <h4>6月物業管理費</h4>
+          <p>2026-06-05</p>
+        </div>
+        <div class="amount-due">
+          <div class="amt" style="color:var(--success);">HK$ 2,800</div>
+          <div class="status">已繳</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item active"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">5. AJO PAY</div>
+</div>
+
+<!-- ============ SCREEN 6: MY BUILDING ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="building-hero">
+      <h2>海天花園 12座</h2>
+      <p>A室 · 業主 · 已認證</p>
+    </div>
+    <div class="building-actions">
+      <div class="building-action"><div class="icon">📢</div><span>大廈通告</span></div>
+      <div class="building-action"><div class="icon">📹</div><span>監控</span></div>
+      <div class="building-action"><div class="icon">🔑</div><span>門禁</span></div>
+      <div class="building-action"><div class="icon">📞</div><span>對講機</span></div>
+      <div class="building-action"><div class="icon">🔧</div><span>報修</span></div>
+      <div class="building-action"><div class="icon">📋</div><span>訪客登記</span></div>
+    </div>
+    <div class="section-title">
+      <h2>最新通告</h2>
+      <span class="more">全部 ›</span>
+    </div>
+    <div class="notice-list">
+      <div class="notice-item">
+        <div class="badge"></div>
+        <div class="content">
+          <h4>7月份大廈清潔日安排</h4>
+          <p>各位住戶，本大廈將於7月15日進行公共區域深層清潔，請配合移走走廊雜物...</p>
+          <div class="date">2026-07-08</div>
+        </div>
+      </div>
+      <div class="notice-item">
+        <div class="badge"></div>
+        <div class="content">
+          <h4>電梯保養通知</h4>
+          <p>2號電梯將於7月12日上午9時至下午1時進行例行保養，請使用1號電梯...</p>
+          <div class="date">2026-07-06</div>
+        </div>
+      </div>
+      <div class="notice-item">
+        <div class="badge read"></div>
+        <div class="content">
+          <h4>6月份管理費繳納提醒</h4>
+          <p>請各住戶於月底前繳納6月份管理費，可通過 AJO Pay 線上繳納...</p>
+          <div class="date">2026-06-20</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item active"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">6. MY BUILDING</div>
+</div>
+
+<!-- ============ SCREEN 7: ACCOUNT ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="account-header">
+      <div class="avatar">👤</div>
+      <div class="info">
+        <h2>陳大文</h2>
+        <p>業主 · 海天花園 12座 A室</p>
+      </div>
+    </div>
+    <div class="account-stats">
+      <div class="stat-item"><div class="num">3</div><div class="label">放售中</div></div>
+      <div class="stat-item"><div class="num">12</div><div class="label">收藏</div></div>
+      <div class="stat-item"><div class="num">5</div><div class="label">二手</div></div>
+    </div>
+    <div class="account-menu">
+      <div class="menu-item"><div class="icon">📋</div><div class="label">會員資料</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">🏠</div><div class="label">我的放售</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">🏨</div><div class="label">我的服務住宅</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">📦</div><div class="label">我的二手物品</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">❤️</div><div class="label">我的收藏</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">💳</div><div class="label">AJO Pay 錢包</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">💬</div><div class="label">站內信</div><div class="arrow">›</div></div>
+      <div class="menu-item"><div class="icon">⚙️</div><div class="label">設置</div><div class="arrow">›</div></div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item active"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">7. ACCOUNT</div>
+</div>
+
+<!-- ============ SCREEN 8: NOTIFICATIONS ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="header-icon-btn">‹</div>
+      <div style="font-size:15px;font-weight:600;">通知中心</div>
+      <div class="header-icon-btn">✓</div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip active">全部</div>
+      <div class="filter-chip">大廈</div>
+      <div class="filter-chip">交易</div>
+      <div class="filter-chip">系統</div>
+    </div>
+    <div class="noti-item unread">
+      <div class="dot"></div>
+      <div class="icon-box">📢</div>
+      <div class="content">
+        <h4>大廈通告：7月清潔日安排</h4>
+        <p>本大廈將於7月15日進行公共區域深層清潔，請配合移走走廊雜物...</p>
+        <div class="time">1小時前</div>
+      </div>
+    </div>
+    <div class="noti-item unread">
+      <div class="dot"></div>
+      <div class="icon-box">💰</div>
+      <div class="content">
+        <h4>管理費待繳提醒</h4>
+        <p>您7月份物業管理費 HK$ 2,800 尚未繳納，請及時繳納...</p>
+        <div class="time">3小時前</div>
+      </div>
+    </div>
+    <div class="noti-item">
+      <div class="dot"></div>
+      <div class="icon-box">💬</div>
+      <div class="content">
+        <h4>新的站內信</h4>
+        <p>買家「Tom」對您的二手物品「iPhone 15 Pro」發起了詢問...</p>
+        <div class="time">昨天</div>
+      </div>
+    </div>
+    <div class="noti-item">
+      <div class="dot"></div>
+      <div class="icon-box">✅</div>
+      <div class="content">
+        <h4>放盤審核通過</h4>
+        <p>您發布的「太古城 海天花園 2房」已審核通過，正式上線...</p>
+        <div class="time">2天前</div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item active"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">8. NOTIFICATIONS</div>
+</div>
+
+<!-- ============ SCREEN 9: CHAT ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div style="font-size:15px;font-weight:600;">站內信</div>
+      <div class="header-icon-btn">🔍</div>
+    </div>
+    <div class="chat-list-item">
+      <div class="avatar">👤</div>
+      <div class="content">
+        <div class="top-row"><h4>Tom Wong</h4><span class="time">10:32</span></div>
+        <div class="preview"><p>你好，這個 iPhone 15 Pro 還在嗎？可以議價嗎？</p><span class="badge-count">2</span></div>
+      </div>
+    </div>
+    <div class="chat-list-item">
+      <div class="avatar">👤</div>
+      <div class="content">
+        <div class="top-row"><h4>Mary Chan</h4><span class="time">昨天</span></div>
+        <div class="preview"><p>梳面可以送貨到沙田嗎？</p></div>
+      </div>
+    </div>
+    <div class="chat-list-item">
+      <div class="avatar">🏢</div>
+      <div class="content">
+        <div class="top-row"><h4>海天花園管理處</h4><span class="time">2天前</span></div>
+        <div class="preview"><p>您提交的報修申請已受理，維修人員將於明日到場...</p></div>
+      </div>
+    </div>
+    <div class="chat-list-item">
+      <div class="avatar">👤</div>
+      <div class="content">
+        <div class="top-row"><h4>Jason Lee</h4><span class="time">3天前</span></div>
+        <div class="preview"><p>請問太古城那個單位還可以看房嗎？</p></div>
+      </div>
+    </div>
+    <div class="chat-list-item">
+      <div class="avatar">👤</div>
+      <div class="content">
+        <div class="top-row"><h4>Kelly Tam</h4><span class="time">1週前</span></div>
+        <div class="preview"><p>MacBook Air 還有嗎？</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item active"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">9. CHAT</div>
+</div>
+
+<!-- ============ SCREEN 10: FURNITURE + OFFERS ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div style="font-size:15px;font-weight:600;">家具 / 優惠</div>
+      <div class="header-icon-btn">🔍</div>
+    </div>
+    <div class="furniture-cat">
+      <div class="cat-chip active"><div class="circle">🛋️</div><span>梳化</span></div>
+      <div class="cat-chip"><div class="circle">🛏️</div><span>床</span></div>
+      <div class="cat-chip"><div class="circle">🍽️</div><span>餐桌</span></div>
+      <div class="cat-chip"><div class="circle">🗄️</div><span>收納</span></div>
+      <div class="cat-chip"><div class="circle">💡</div><span>燈具</span></div>
+    </div>
+    <div class="section-title">
+      <h2>精選優惠</h2>
+      <span class="more">更多 ›</span>
+    </div>
+    <div class="offer-card">
+      <div class="banner green">惠康超市 週年慶</div>
+      <div class="items">
+        <div class="item"><div class="img-box">🥛</div><div class="price-tag">$12</div><div class="original">$18</div></div>
+        <div class="item"><div class="img-box">🍞</div><div class="price-tag">$8</div><div class="original">$12</div></div>
+        <div class="item"><div class="img-box">🧊</div><div class="price-tag">$25</div><div class="original">$35</div></div>
+      </div>
+    </div>
+    <div class="offer-card">
+      <div class="banner red">萬寧護膝節</div>
+      <div class="items">
+        <div class="item"><div class="img-box">🧴</div><div class="price-tag">$89</div><div class="original">$129</div></div>
+        <div class="item"><div class="img-box">💄</div><div class="price-tag">$159</div><div class="original">$220</div></div>
+        <div class="item"><div class="img-box">🧼</div><div class="price-tag">$45</div><div class="original">$68</div></div>
+      </div>
+    </div>
+    <div class="offer-card">
+      <div class="banner blue">AEON 家電季</div>
+      <div class="items">
+        <div class="item"><div class="img-box">🌀</div><div class="price-tag">$2,899</div><div class="original">$3,499</div></div>
+        <div class="item"><div class="img-box">📺</div><div class="price-tag">$4,599</div><div class="original">$5,999</div></div>
+        <div class="item"><div class="img-box">🍚</div><div class="price-tag">$699</div><div class="original">$899</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item active"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">10. FURNITURE & OFFERS</div>
+</div>
+
+<!-- ============ SCREEN 11: TREND ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="app-header">
+      <div class="header-icon-btn">‹</div>
+      <div style="font-size:15px;font-weight:600;">樓市走勢</div>
+      <div class="header-icon-btn">⋮</div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip active">太古城</div>
+      <div class="filter-chip">沙田</div>
+      <div class="filter-chip">將軍澳</div>
+      <div class="filter-chip">荃灣</div>
+    </div>
+    <div class="trend-summary">
+      <div class="label">太古城 平均呎價</div>
+      <div class="value">HK$ 18,500</div>
+      <div class="change">↑ 2.3% 較上月</div>
+    </div>
+    <div class="trend-chart">
+      <div style="font-size:12px;font-weight:600;color:var(--ink-2);">近6個月走勢</div>
+      <div class="chart-area">
+        <div class="bar" style="height:60%;"><span>1月</span></div>
+        <div class="bar" style="height:55%;"><span>2月</span></div>
+        <div class="bar" style="height:70%;"><span>3月</span></div>
+        <div class="bar" style="height:65%;"><span>4月</span></div>
+        <div class="bar" style="height:80%;"><span>5月</span></div>
+        <div class="bar active" style="height:90%;"><span>6月</span></div>
+      </div>
+    </div>
+    <div class="trend-summary">
+      <div class="label">太古城 平均月租</div>
+      <div class="value">HK$ 24,000</div>
+      <div class="change" style="color:var(--error);">↓ 1.2% 較上月</div>
+    </div>
+    <div class="trend-chart">
+      <div style="font-size:12px;font-weight:600;color:var(--ink-2);">近6個月租金</div>
+      <div class="chart-area">
+        <div class="bar" style="height:85%;"><span>1月</span></div>
+        <div class="bar" style="height:88%;"><span>2月</span></div>
+        <div class="bar" style="height:82%;"><span>3月</span></div>
+        <div class="bar" style="height:78%;"><span>4月</span></div>
+        <div class="bar" style="height:80%;"><span>5月</span></div>
+        <div class="bar active" style="height:75%;"><span>6月</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="bottom-nav-item"><span class="icon">🏠</span>首頁</div>
+    <div class="bottom-nav-item active"><span class="icon">🏢</span>樓盤</div>
+    <div class="bottom-nav-item"><span class="icon">🛋️</span>家具</div>
+    <div class="bottom-nav-item"><span class="icon">🛒</span>優惠</div>
+    <div class="bottom-nav-item"><span class="icon">👤</span>我的</div>
+  </div>
+</div>
+<div class="screen-label">11. TREND</div>
+</div>
+
+<!-- ============ SCREEN 12: LOGIN ============ -->
+<div>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="phone-screen">
+    <div class="status-bar" style="color:#fff;">
+      <span>9:41</span>
+      <span class="icons">●●●● 5G ▮▮</span>
+    </div>
+    <div class="login-screen">
+      <div class="login-logo">
+        <h1>AJO LIVING</h1>
+        <p>物業管理 · 生活服務</p>
+      </div>
+      <div class="login-form">
+        <div class="login-field">
+          <label>手機號碼</label>
+          <div class="input-line">+852 XXXX XXXX</div>
+        </div>
+        <div class="login-field">
+          <label>驗證碼</label>
+          <div class="input-line">──────</div>
+        </div>
+        <button class="login-btn">登入 / 註冊</button>
+      </div>
+      <div class="login-alt">
+       還沒有帳號？<a href="#">立即註冊</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-label">12. LOGIN</div>
+</div>
+
+</div>
+
+</body>
+</html>

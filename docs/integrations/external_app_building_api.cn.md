@@ -453,6 +453,14 @@
 ?building_id=0348200
 ```
 
+#### Legacy Request
+
+```json
+{
+  "blg_id": "0348200"
+}
+```
+
 #### Success Response
 
 ```json
@@ -782,16 +790,16 @@
 | `documents.forms` | `form` |
 | `documents.building_info_files` | `blginfo` |
 | `documents.floorplans` | `floorplan` |
-| `documents.audit_reports` | queried as `audition` in current code |
+| `documents.audit_reports` | `auditreport` / `audition` |
 | `documents.financial_reports` | `mfinreport` |
 
 #### Notes
 
 - 即使沒有文件，也會返回陣列
 - 若沒有 `BuildingInfo` row，`building_info` 會返回 `null` 或空字串值
-- 目前程式碼使用 `btype='audition'` 查詢審計報告；若資料使用 `auditreport`，在程式碼對齊前，這些文件不會出現在此端點
+- AJO 會員態代理會將 `auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` 統一收斂到 `documents.audit_reports`；upstream 端點仍必須返回其中一種文件分組
 - AJO Web `大廈財務` 使用本接口顯示 `管理處總覽`、`財務報表` 與 `核數報表`
-- AJO 後端會員態代理會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_reports`、`mfinreport` / `financial_reports`
+- AJO 後端會員態代理會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` / `audit_reports`、`mfinreport` / `financial_reports`
 
 ### 3.2 提交大廈意見
 
@@ -1530,7 +1538,7 @@
 - 多個支付查詢使用 raw SQL 與手動 timezone shifting
 - `PosPaymentToIsmart` 目前未啟用 IP 白名單保護
 - `qfpayapi` 不驗證回調簽名
-- `ExternalBuildingInfoApi` 目前使用 `btype='audition'` 查詢審計報告
+- `ExternalBuildingInfoApi` 的審計報告 `btype` 命名需要與資料來源保持一致
 - 門禁列表權限邏輯與遠端開門權限邏輯不完全一致
 
 ## 方法設計建議
@@ -1657,7 +1665,7 @@ AJO 後端提供以下會員態入口：
 |---|---|---|---|
 | `我的大廈` | `大廈財務 > 管理處總覽` | `/api/v1/me/ismart/building-info`, `/api/v1/me/ismart/management-fees`, `/api/v1/me/ismart/other-fees` | 顯示管理處資料、管理費應收摘要與其他費用應收摘要。 |
 | `我的大廈` | `大廈財務 > 財務報表` | `/api/v1/me/ismart/building-info` | 使用 `documents.financial_reports`，兼容舊 `mfinreport`。 |
-| `我的大廈` | `大廈財務 > 核數報表` | `/api/v1/me/ismart/building-info` | 使用 `documents.audit_reports`，兼容舊 `auditreport` 與 `audition`。 |
+| `我的大廈` | `大廈財務 > 核數報表` | `/api/v1/me/ismart/building-info` | 使用 `documents.audit_reports`，兼容舊 `auditreport`、`audition` 及常見 audit 別名。 |
 | `我的大廈` | `業戶帳目 > 未繳費賬單列表` | `/api/v1/me/payments/pos/bills` | 按目前登入會員可見單位讀取未繳賬單；前端不可直接調用 `/api/v1/integration/payments/unpaid-invoices/`。 |
 | `我的大廈` | `業戶帳目 > 繳費記錄` | `/api/v1/me/payments/pos/history` | 按目前登入會員可見單位讀取付款歷史；前端不可直接調用 `/api/v1/integration/payments/transactions/by-unit/` 或 `/api/v1/integration/payments/transactions/by-date/`。 |
 
@@ -1675,6 +1683,6 @@ ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
 
 - 為生產整合配置 `EXTERNAL_APP_ALLOWED_IPS`
 - 決定 `PosPaymentToIsmart` 是否應受 `POS_PAYMENT_ALLOWED_IPS` 保護
-- 若審計文件必須出現在 `/api/v1/integration/buildings/info/`，需對齊 audit report 的 `btype` 命名
+- 若審計文件必須出現在 `/api/v1/integration/buildings/info/`，需保持 audit report 的 `btype` 命名與資料來源一致
 - 針對目標硬體環境測試遠端開門與 QR 生成
 - 將 `test_webhook/` 視為非生產端點；如不需要，應停用或加保護
