@@ -18,6 +18,13 @@ import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
 
 import { useFurniturePage } from './composables/useFurniturePage';
 
+interface FurniturePriceRangeOption {
+  value: string;
+  label: string;
+  min: number;
+  max: number;
+}
+
 // 1. 路由
 const router = useRouter();
 
@@ -57,17 +64,17 @@ const {
 // 2. 價格快捷選項
 const selectedPriceRange = ref('');
 const isFilterOpen = ref(false);
-const furniturePriceRangeOptions = [
-  { value: 'under_1000', label: '$1k以下', min: 0, max: 1000 },
-  { value: '1000_3000', label: '$1k-3k', min: 1000, max: 3000 },
-  { value: '3000_5000', label: '$3k-5k', min: 3000, max: 5000 },
-  { value: 'over_10000', label: '$10k+', min: 10000, max: maxPriceLimit },
-];
+const furniturePriceRangeOptions = computed<FurniturePriceRangeOption[]>(() => [
+  { value: 'under_1000', label: t('channels.furniture.priceUnder', { price: '$1k' }), min: 0, max: 1000 },
+  { value: '1000_3000', label: t('channels.furniture.priceBetween', { min: '$1k', max: '$3k' }), min: 1000, max: 3000 },
+  { value: '3000_5000', label: t('channels.furniture.priceBetween', { min: '$3k', max: '$5k' }), min: 3000, max: 5000 },
+  { value: 'over_10000', label: t('channels.furniture.priceOver', { price: '$10k' }), min: 10000, max: maxPriceLimit },
+]);
 
 const selectedPriceRangeFromValues = computed(() => {
   const minValue = Number(minPrice.value || 0);
   const maxValue = Number(maxPrice.value || maxPriceLimit);
-  const matched = furniturePriceRangeOptions.find((option) =>
+  const matched = furniturePriceRangeOptions.value.find((option) =>
     option.min === minValue && option.max === maxValue,
   );
 
@@ -97,7 +104,7 @@ const mobileAreaOptions = computed(() =>
 const paginationButtons = computed(() => {
   const buttons: Array<{ label: string | number; key: string | number; pageValue: number; active?: boolean; disabled?: boolean }> = [
     {
-      label: '上一頁',
+      label: t('marketplace.filter.previousPage'),
       key: 'prev',
       pageValue: page.value - 1,
       disabled: page.value <= 1,
@@ -116,7 +123,7 @@ const paginationButtons = computed(() => {
   }
 
   buttons.push({
-    label: '下一頁',
+    label: t('marketplace.filter.nextPage'),
     key: 'next',
     pageValue: page.value + 1,
     disabled: page.value >= totalPages.value,
@@ -126,7 +133,7 @@ const paginationButtons = computed(() => {
 });
 
 // 4. 套用價格區間
-const applyPriceRange = (option?: (typeof furniturePriceRangeOptions)[number]): void => {
+const applyPriceRange = (option?: FurniturePriceRangeOption): void => {
   selectedPriceRange.value = option?.value ?? '';
   minPrice.value = String(option?.min ?? 0);
   maxPrice.value = String(option?.max ?? maxPriceLimit);
@@ -146,7 +153,7 @@ const handleFilterToggle = (groupKey: string, optionValue: string): void => {
   }
 
   if (groupKey === 'price') {
-    const target = furniturePriceRangeOptions.find((option) => option.value === optionValue);
+    const target = furniturePriceRangeOptions.value.find((option) => option.value === optionValue);
     applyPriceRange(target);
     return;
   }
@@ -193,7 +200,7 @@ const handleMobileFilterChange = (groupKey: 'category' | 'price' | 'condition' |
   }
 
   if (groupKey === 'price') {
-    applyPriceRange(furniturePriceRangeOptions.find((option) => option.value === value));
+    applyPriceRange(furniturePriceRangeOptions.value.find((option) => option.value === value));
     return;
   }
 
@@ -603,7 +610,7 @@ watch(
         <nav
           v-if="!loading && totalResults > 0"
           class="market-pagination"
-          aria-label="家具市集分頁"
+          :aria-label="t('channels.furniture.paginationAria')"
         >
           <span class="market-pagination-info">
             {{ t('marketplace.list.pageLabel') }} {{ page }} / {{ totalPages }}
@@ -627,7 +634,7 @@ watch(
       <!-- 右側廣告欄 -->
       <aside
         class="market-ad-aside"
-        aria-label="家具市集展示廣告"
+        :aria-label="t('channels.furniture.advertisingAria')"
       >
         <ListingSideAds channel="furniture" />
       </aside>

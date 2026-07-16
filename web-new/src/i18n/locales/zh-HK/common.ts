@@ -1,3 +1,8 @@
+/*
+ * 全站共用繁體中文文案。
+ * 1. 提供品牌、操作、狀態、頁尾及共用元件文字。
+ * 2. 與 English 共用資源保持 key 對齊。
+ */
 export default {
   brand: {
     name: 'AJO Living',
@@ -35,6 +40,10 @@ export default {
   },
   price: {
     free: '免費',
+  },
+  ad: {
+    label: '廣告',
+    slot: '廣告位',
   },
   unit: {
     sqft: '{value} 平方呎',

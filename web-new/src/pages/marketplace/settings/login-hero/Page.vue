@@ -401,7 +401,7 @@ const {
   white-space: nowrap;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .login-hero-panel {
     grid-template-columns: 1fr;
   }

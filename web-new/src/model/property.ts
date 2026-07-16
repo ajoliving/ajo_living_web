@@ -117,6 +117,22 @@ export interface PropertySalePayload {
   inquiry_count?: number;
 }
 
+// 4.1 已通過代理資料的公開安全快照
+export interface PropertyAgentSnapshot {
+  profile_type: 'individual' | 'company';
+  name: string;
+  name_zh: string;
+  name_en: string;
+  license_number: string;
+  default_avatar: 'male' | 'female' | 'custom' | '';
+  avatar_url: string;
+  signature_zh: string;
+  signature_en: string;
+  company_card_url: string;
+  wechat_url: string;
+  wechat_qr_url: string;
+}
+
 // 4. 定義樓盤地址聯想結果
 export interface PropertyAddressSuggestion {
   address_id: string;
@@ -220,6 +236,7 @@ export interface PropertyListingSummaryResponse {
   property_sale?: PropertySalePayload | null;
   serviced_apartment?: ServicedApartmentPayload | null;
   is_favorite?: boolean;
+  agent_snapshot?: PropertyAgentSnapshot | null;
 }
 
 // 8. 定義物業詳情
@@ -264,7 +281,6 @@ export interface UpsertPropertySalePayload {
   description_en?: string;
   district_code: string;
   community_id: string;
-  publisher_identity_type: string;
   property_no?: string;
   transaction_type?: PropertyTransactionType;
   location_scope?: string;
@@ -350,7 +366,18 @@ export interface PropertyReportResponse {
   review_status: string;
 }
 
-// 12. 定義服務式住宅儲存請求
+// 12. 定義樓盤內容翻譯請求與回應
+export interface PropertyContentTranslationPayload {
+  title: string;
+  description: string;
+}
+
+export interface PropertyContentTranslationResponse {
+  title_en: string;
+  description_en: string;
+}
+
+// 13. 定義服務式住宅儲存請求
 export interface UpsertServicedApartmentPayload {
   title: string;
   title_en?: string;

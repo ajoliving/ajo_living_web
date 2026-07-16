@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -27,6 +28,7 @@ import type {
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import AppBreadcrumb from '@/shared/components/navigation/AppBreadcrumb.vue';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 
 type CheckoutMethodKey =
   | 'POS_WECHAT'
@@ -38,7 +40,7 @@ type CheckoutMethodKey =
 
 interface CheckoutMethod {
   key: CheckoutMethodKey;
-  label: string;
+  labelKey: string;
   shortLabel: string;
   category: 'online' | 'offline';
   payType: POSPaymentMethodKey;
@@ -70,7 +72,9 @@ interface PaymentAPIError {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 const rows = ref<POSPaymentRow[]>([]);
 const orders = ref<POSPaymentRow[]>([]);
 const context = ref<POSPaymentContext | undefined>();
@@ -90,11 +94,11 @@ const resultMessage = ref('');
 const voucherInput = ref<HTMLInputElement | null>(null);
 const voucherImages = ref<VoucherImage[]>([]);
 const posPaymentExpireSeconds = 180;
-const breadcrumbItems = [
-  { label: '首頁', to: '/' },
-  { label: 'AJO Pay', to: '/payments' },
-  { label: '付款' },
-];
+const breadcrumbItems = computed(() => [
+  { label: t('account.payments.checkout.breadcrumbHome'), to: '/' },
+  { label: t('account.payments.checkout.breadcrumbPayment'), to: '/payments' },
+  { label: t('account.payments.checkout.breadcrumbCheckout') },
+]);
 
 const offlineForm = reactive({
   tranDateTime: '',
@@ -132,10 +136,15 @@ const readPaymentAmountValue = (row: POSPaymentRow): number => {
 
 // 3. 格式化港幣金額
 const formatHKD = (value: number): string =>
-  `HK$${value.toLocaleString('en-HK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 
 // 4. 讀取賬單標題
-const readBillTitle = (row: POSPaymentRow, fallback = '賬單'): string =>
+const readBillTitle = (row: POSPaymentRow, fallback = t('account.payments.checkout.billFallback')): string =>
   readPaymentText(row, [
     'invoice_no',
     'bill_no',
@@ -149,7 +158,7 @@ const readBillTitle = (row: POSPaymentRow, fallback = '賬單'): string =>
 
 // 5. 讀取賬單名稱
 const readBillName = (row: POSPaymentRow): string =>
-  readPaymentText(row, ['item_name', 'item_id', 'name', 'fee_name', 'item']) || '物業費';
+  readPaymentText(row, ['item_name', 'item_id', 'name', 'fee_name', 'item']) || t('account.payments.checkout.defaultBillName');
 
 // 6. 讀取賬單日期
 const readBillDate = (row: POSPaymentRow): string =>
@@ -221,12 +230,12 @@ const requiresBankAccount = computed(() => isBankTransferMethod.value);
 const contextLabel = computed(() => {
   if (!context.value) {
     if (profileRequired.value) {
-      return '請先於會員中心綁定繳費單位';
+      return t('account.payments.checkout.contextBindUnit');
     }
     if (posLoginRequired.value) {
-      return '請先於會員中心綁定或更新 iSmart 帳戶';
+      return t('account.payments.checkout.contextBindIsmart');
     }
-    return '尚未載入單位資料';
+    return t('account.payments.checkout.contextUnavailable');
   }
   return [
     context.value.building_name || context.value.building_id,
@@ -256,15 +265,15 @@ const canSubmit = computed(() => (
 ));
 const confirmButtonLabel = computed(() => {
   if (isSubmitting.value) {
-    return '提交中';
+    return t('account.payments.checkout.submitting');
   }
   if (selectedRows.value.length === 0) {
-    return '請先選擇付款項目';
+    return t('account.payments.checkout.selectItemsFirst');
   }
   if (!selectedMethod.value) {
-    return '請選擇付款方式';
+    return t('account.payments.checkout.selectMethodFirst');
   }
-  return `確認支付 ${formatHKD(finalAmount.value)}`;
+  return t('account.payments.checkout.confirmAmount', { amount: formatHKD(finalAmount.value) });
 });
 const resultPayData = computed(() =>
   resultOrder.value ? readPaymentText(resultOrder.value, ['pay_data', 'payData']) : '',
@@ -319,7 +328,15 @@ const normalizeFeeRate = (value: unknown): number => {
 
 // 14. 格式化費率
 const formatFeeRate = (feeRate: number): string =>
-  `${(feeRate * 100).toFixed(2)}%`;
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(feeRate);
+
+// 14.1 格式化整數
+const formatInteger = (value: number): string =>
+  new Intl.NumberFormat(preferenceStore.locale, { maximumFractionDigits: 0 }).format(value);
 
 // 15. 計算單筆手續費
 const calculateFeeAmount = (amount: number, feeRate: number): number => {
@@ -344,12 +361,12 @@ const prefersQRPayment = (): boolean => {
 
 // 18. 建立預設支付方式
 const fallbackMethods = (): CheckoutMethod[] => [
-  { key: 'POS_WECHAT', label: '微信支付', shortLabel: 'WX', category: 'online', payType: 'POS_WECHAT', variant: 'wechat', feeRate: 0.027 },
-  { key: 'POS_ALIPAY_CN', label: '支付寶（大陸）', shortLabel: 'AP', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'CN', feeRate: 0.027 },
-  { key: 'POS_ALIPAY_HK', label: '支付寶香港', shortLabel: 'HK', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'HK', feeRate: 0.027 },
-  { key: 'POS_YSF_QR', label: '雲閃付', shortLabel: 'YF', category: 'online', payType: 'POS_YSF_QR', variant: 'ysf', feeRate: 0.027 },
-  { key: 'POS_BANK', label: '銀行轉賬', shortLabel: 'BT', category: 'offline', payType: 'POS_BANK', feeRate: 0 },
-  { key: 'POS_CHEQUE', label: '支票', shortLabel: 'CQ', category: 'offline', payType: 'POS_CHEQUE', feeRate: 0 },
+  { key: 'POS_WECHAT', labelKey: 'account.payments.methods.wechat', shortLabel: 'WX', category: 'online', payType: 'POS_WECHAT', variant: 'wechat', feeRate: 0.027 },
+  { key: 'POS_ALIPAY_CN', labelKey: 'account.payments.methods.mainlandAlipay', shortLabel: 'AP', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'CN', feeRate: 0.027 },
+  { key: 'POS_ALIPAY_HK', labelKey: 'account.payments.methods.alipayHK', shortLabel: 'HK', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'HK', feeRate: 0.027 },
+  { key: 'POS_YSF_QR', labelKey: 'account.payments.methods.unionpay', shortLabel: 'YF', category: 'online', payType: 'POS_YSF_QR', variant: 'ysf', feeRate: 0.027 },
+  { key: 'POS_BANK', labelKey: 'account.payments.methods.bankTransfer', shortLabel: 'BT', category: 'offline', payType: 'POS_BANK', feeRate: 0 },
+  { key: 'POS_CHEQUE', labelKey: 'account.payments.methods.cheque', shortLabel: 'CQ', category: 'offline', payType: 'POS_CHEQUE', feeRate: 0 },
 ];
 
 // 19. 按 POS pay_type 映射支付方式
@@ -360,23 +377,23 @@ const mapFeeRowsToMethods = (feeRows: POSPaymentRow[]): CheckoutMethod[] => {
     const feeRate = normalizeFeeRate(row.markup);
     if (code === 'POS_ALIWE' || code === 'WEBPOS_WECHAT' || code === 'WEBPOS_ALIPAY') {
       if (code !== 'WEBPOS_ALIPAY') {
-        mapped.push({ key: 'POS_WECHAT', label: '微信支付', shortLabel: 'WX', category: 'online', payType: 'POS_WECHAT', variant: 'wechat', feeRate });
+        mapped.push({ key: 'POS_WECHAT', labelKey: 'account.payments.methods.wechat', shortLabel: 'WX', category: 'online', payType: 'POS_WECHAT', variant: 'wechat', feeRate });
       }
       if (code !== 'WEBPOS_WECHAT') {
         mapped.push(
-          { key: 'POS_ALIPAY_CN', label: '支付寶（大陸）', shortLabel: 'AP', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'CN', feeRate },
-          { key: 'POS_ALIPAY_HK', label: '支付寶香港', shortLabel: 'HK', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'HK', feeRate },
+          { key: 'POS_ALIPAY_CN', labelKey: 'account.payments.methods.mainlandAlipay', shortLabel: 'AP', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'CN', feeRate },
+          { key: 'POS_ALIPAY_HK', labelKey: 'account.payments.methods.alipayHK', shortLabel: 'HK', category: 'online', payType: 'POS_ALIPAY', variant: 'alipay', walletType: 'HK', feeRate },
         );
       }
     }
     if (code === 'POS_YSF_QR' || code === 'WEBPOS_YSF') {
-      mapped.push({ key: 'POS_YSF_QR', label: '雲閃付', shortLabel: 'YF', category: 'online', payType: 'POS_YSF_QR', variant: 'ysf', feeRate });
+      mapped.push({ key: 'POS_YSF_QR', labelKey: 'account.payments.methods.unionpay', shortLabel: 'YF', category: 'online', payType: 'POS_YSF_QR', variant: 'ysf', feeRate });
     }
     if (code === 'POS_BANK' || code === 'WEBPOS_BANK') {
-      mapped.push({ key: 'POS_BANK', label: '銀行轉賬', shortLabel: 'BT', category: 'offline', payType: 'POS_BANK', feeRate: 0 });
+      mapped.push({ key: 'POS_BANK', labelKey: 'account.payments.methods.bankTransfer', shortLabel: 'BT', category: 'offline', payType: 'POS_BANK', feeRate: 0 });
     }
     if (code === 'POS_CHEQUE' || code === 'WEBPOS_CHEQUE') {
-      mapped.push({ key: 'POS_CHEQUE', label: '支票', shortLabel: 'CQ', category: 'offline', payType: 'POS_CHEQUE', feeRate: 0 });
+      mapped.push({ key: 'POS_CHEQUE', labelKey: 'account.payments.methods.cheque', shortLabel: 'CQ', category: 'offline', payType: 'POS_CHEQUE', feeRate: 0 });
     }
   });
 
@@ -440,7 +457,7 @@ const loadPaymentSettings = async (): Promise<void> => {
     methods.value = mappedMethods.length > 0 ? mappedMethods : fallbackMethods();
     bankAccounts.value = (bankResponse.data.data.items ?? [])
       .map((item) => ({
-        label: readPaymentText(item, ['title', 'account_no', 'bank_name']) || '銀行戶口',
+        label: readPaymentText(item, ['title', 'account_no', 'bank_name']) || t('account.payments.checkout.bankAccountFallback'),
         value: readPaymentText(item, ['account_no', 'id']),
       }))
       .filter((item) => item.value !== '');
@@ -480,7 +497,7 @@ const loadBills = async (): Promise<void> => {
     profileRequired.value = response?.status === 400 || message.includes('profile') || message.includes('residence');
     posLoginRequired.value = response?.status === 401 || message.includes('ismart');
     if (!profileRequired.value && !posLoginRequired.value) {
-      feedbackStore.pushToast('賬單載入失敗。', 'error');
+      feedbackStore.pushToast(t('account.payments.checkout.billLoadError'), 'error');
     }
   } finally {
     isLoading.value = false;
@@ -499,11 +516,11 @@ const validateSelectedBills = async (): Promise<boolean> => {
   for (const row of selectedRows.value) {
     const latestAmount = latestAmountMap.get(billIdentityKey(row));
     if (latestAmount === undefined) {
-      feedbackStore.pushToast('賬單已更新，請重新整理後再付款。', 'error');
+      feedbackStore.pushToast(t('account.payments.checkout.billChanged'), 'error');
       return false;
     }
     if (readPaymentAmountValue(row) - latestAmount > 0.01) {
-      feedbackStore.pushToast('賬單金額已更新，請重新整理後再付款。', 'error');
+      feedbackStore.pushToast(t('account.payments.checkout.billAmountChanged'), 'error');
       return false;
     }
   }
@@ -517,7 +534,7 @@ const buildBillObjects = (feeRate: number): POSPaymentRow[] => selectedRows.valu
   return {
     flat_code: readPaymentText(row, ['flat_code', 'unit', 'unit_name']),
     unit_name: readPaymentText(row, ['unit_name', 'unit', 'flat_code']),
-    item_id: readPaymentText(row, ['item_name', 'item_id', 'name']) || '賬單項目',
+    item_id: readPaymentText(row, ['item_name', 'item_id', 'name']) || t('account.payments.checkout.defaultBillItem'),
     trs_to: readPaymentText(row, ['trs_to', 'term', 'period']),
     bill_dt: readBillDate(row),
     net_amount: amountCents,
@@ -563,15 +580,17 @@ const readOrderAmount = (row: POSPaymentRow): string => {
 const readOrderStatus = (row: POSPaymentRow): string => {
   const state = readPaymentText(row, ['state', 'status', 'gateway_state_code', 'business_state']).toLowerCase();
   if (['success', 'succeeded', 'paid', '2'].includes(state)) {
-    return '支付成功';
+    return t('account.payments.checkout.statusSuccess');
   }
   if (['failed', 'expired', 'revoked'].includes(state)) {
-    return '支付失敗';
+    return t('account.payments.checkout.statusFailed');
   }
   if (['closed', 'cancelled', 'canceled'].includes(state)) {
-    return '已關閉';
+    return t('account.payments.checkout.statusClosed');
   }
-  return state ? '支付中' : '待確認';
+  return state
+    ? t('account.payments.checkout.statusProcessing')
+    : t('account.payments.checkout.statusPending');
 };
 
 // 32. 讀取圖片
@@ -579,7 +598,7 @@ const readFileAsDataURL = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(new Error('圖片讀取失敗'));
+    reader.onerror = () => reject(new Error('voucher image read failed'));
     reader.readAsDataURL(file);
   });
 
@@ -598,7 +617,7 @@ const onVoucherChange = async (event: Event): Promise<void> => {
     })));
     voucherImages.value = [...voucherImages.value, ...mapped];
   } catch {
-    feedbackStore.pushToast('圖片讀取失敗。', 'error');
+    feedbackStore.pushToast(t('account.payments.checkout.voucherReadError'), 'error');
   } finally {
     input.value = '';
   }
@@ -633,7 +652,7 @@ const submitOnline = async (method: CheckoutMethod): Promise<void> => {
   });
   resultOrder.value = readOrderData(response.data.data);
   resultReceipt.value = '';
-  resultMessage.value = '訂單已建立，請按付款方式完成支付。';
+  resultMessage.value = t('account.payments.checkout.orderCreated');
   await loadPaymentSettings();
 };
 
@@ -660,7 +679,9 @@ const submitOffline = async (method: CheckoutMethod): Promise<void> => {
   resultReceipt.value = readPaymentText(result, ['receipt_id', 'receipt_no']) ||
     readPaymentText((result.ismart_receipt_no as POSPaymentRow | undefined) ?? {}, ['receipt_id', 'receipt_no']);
   resultOrder.value = null;
-  resultMessage.value = resultReceipt.value ? `繳費已提交：${resultReceipt.value}` : '繳費已提交。';
+  resultMessage.value = resultReceipt.value
+    ? t('account.payments.checkout.paymentReportedWithReceipt', { receipt: resultReceipt.value })
+    : t('account.payments.checkout.paymentReported');
   voucherImages.value.forEach((item) => URL.revokeObjectURL(item.previewUrl));
   voucherImages.value = [];
   selectedBillKeys.value = [];
@@ -684,9 +705,9 @@ const submitPayment = async (): Promise<void> => {
     } else {
       await submitOffline(method);
     }
-    feedbackStore.pushToast('付款資料已提交。', 'success');
+    feedbackStore.pushToast(t('account.payments.checkout.submitSuccess'), 'success');
   } catch {
-    feedbackStore.pushToast('付款提交失敗，請稍後再試。', 'error');
+    feedbackStore.pushToast(t('account.payments.checkout.submitError'), 'error');
   } finally {
     isSubmitting.value = false;
   }
@@ -716,9 +737,9 @@ const loadRouteOrder = async (): Promise<void> => {
           real_gateway: true,
         };
     resultOrder.value = readOrderData((await queryPOSPaymentOrder(payload)).data.data);
-    resultMessage.value = '已讀取付款訂單狀態。';
+    resultMessage.value = t('account.payments.checkout.orderLoaded');
   } catch {
-    feedbackStore.pushToast('訂單狀態查詢失敗。', 'error');
+    feedbackStore.pushToast(t('account.payments.checkout.orderQueryError'), 'error');
   }
 };
 
@@ -739,7 +760,7 @@ const refreshResultOrder = async (): Promise<void> => {
       : readOrderData((await queryPOSPaymentOrder({ ...paymentQuery.value, pay_order_id: payOrderId, retry_business: true, real_gateway: true })).data.data);
     await loadPaymentSettings();
   } catch {
-    feedbackStore.pushToast('訂單刷新失敗。', 'error');
+    feedbackStore.pushToast(t('account.payments.checkout.orderRefreshError'), 'error');
   } finally {
     isRefreshingOrder.value = false;
   }
@@ -770,7 +791,7 @@ watch(hasContext, (ready) => {
     <AppBreadcrumb :items="breadcrumbItems" />
 
     <section class="ajo-pay-checkout__header">
-      <h1>付款頁面</h1>
+      <h1>{{ t('account.payments.checkout.title') }}</h1>
       <p>{{ contextLabel }}</p>
 
       <div class="ajo-pay-checkout__steps">
@@ -784,12 +805,12 @@ watch(hasContext, (ready) => {
           <strong>
             {{
               step === 1
-                ? '選擇付款項目'
+                ? t('account.payments.checkout.stepItems')
                 : step === 2
-                  ? '選擇付款方式'
+                  ? t('account.payments.checkout.stepMethod')
                   : step === 3
-                    ? '確認付款'
-                    : '訂單'
+                    ? t('account.payments.checkout.stepConfirm')
+                    : t('account.payments.checkout.stepOrder')
             }}
           </strong>
         </div>
@@ -800,12 +821,18 @@ watch(hasContext, (ready) => {
       v-if="profileRequired || posLoginRequired"
       class="ajo-pay-checkout__notice"
     >
-      <p>{{ profileRequired ? '請先於會員中心選擇繳費單位。' : '請先於會員中心綁定或更新 iSmart 帳戶。' }}</p>
+      <p>
+        {{
+          profileRequired
+            ? t('account.payments.checkout.bindUnitNotice')
+            : t('account.payments.checkout.bindIsmartNotice')
+        }}
+      </p>
       <button
         type="button"
         @click="goProfile"
       >
-        前往會員中心
+        {{ t('account.payments.checkout.accountAction') }}
       </button>
     </section>
 
@@ -813,7 +840,7 @@ watch(hasContext, (ready) => {
       <section class="ajo-pay-checkout__section">
         <div class="ajo-pay-checkout__section-head">
           <span>1</span>
-          <strong>付款項目</strong>
+          <strong>{{ t('account.payments.checkout.paymentItems') }}</strong>
         </div>
         <div class="ajo-pay-checkout__card">
           <template v-if="payableRows.length > 0">
@@ -825,10 +852,16 @@ watch(hasContext, (ready) => {
               :class="{ 'ajo-pay-checkout__bill--selected': selectedBillKeySet.has(billKey(row, index)) }"
               @click="toggleBill(row, index)"
             >
-              <span class="ajo-pay-checkout__bill-icon">{{ isManagementBill(row) ? '樓' : '費' }}</span>
+              <span class="ajo-pay-checkout__bill-icon">
+                {{
+                  isManagementBill(row)
+                    ? t('account.payments.checkout.managementIcon')
+                    : t('account.payments.checkout.feeIcon')
+                }}
+              </span>
               <span class="ajo-pay-checkout__bill-copy">
                 <strong>{{ readBillName(row) }}</strong>
-                <small>{{ readBillTitle(row, '賬單') }} · {{ readBillDate(row) }}</small>
+                <small>{{ readBillTitle(row) }} · {{ readBillDate(row) }}</small>
               </span>
               <b>{{ formatHKD(readPaymentAmountValue(row)) }}</b>
               <i>✓</i>
@@ -838,10 +871,10 @@ watch(hasContext, (ready) => {
             v-else
             class="ajo-pay-checkout__empty"
           >
-            {{ isLoading ? '載入中' : '暫時沒有待繳賬單' }}
+            {{ isLoading ? t('account.payments.checkout.loading') : t('account.payments.checkout.noBills') }}
           </div>
           <div class="ajo-pay-checkout__total">
-            <span>總計</span>
+            <span>{{ t('account.payments.checkout.total') }}</span>
             <strong>{{ formatHKD(selectedAmount) }}</strong>
           </div>
           <button
@@ -850,7 +883,11 @@ watch(hasContext, (ready) => {
             class="ajo-pay-checkout__link-button"
             @click="toggleAllBills"
           >
-            {{ allPayableBillsSelected ? '取消全部賬單' : '選擇全部賬單' }}
+            {{
+              allPayableBillsSelected
+                ? t('account.payments.checkout.deselectAll')
+                : t('account.payments.checkout.selectAll')
+            }}
           </button>
         </div>
       </section>
@@ -858,7 +895,7 @@ watch(hasContext, (ready) => {
       <section class="ajo-pay-checkout__section">
         <div class="ajo-pay-checkout__section-head">
           <span>2</span>
-          <strong>選擇付款方式</strong>
+          <strong>{{ t('account.payments.checkout.paymentMethod') }}</strong>
         </div>
         <button
           v-for="method in methods"
@@ -875,37 +912,37 @@ watch(hasContext, (ready) => {
           <b :class="{ 'ajo-pay-checkout__method-logo--fps': method.key === 'POS_YSF_QR' }">
             {{ method.shortLabel }}
           </b>
-          <strong>{{ method.label }}</strong>
-          <small>手續費 {{ formatFeeRate(method.feeRate) }}</small>
+          <strong>{{ t(method.labelKey) }}</strong>
+          <small>{{ t('account.payments.checkout.feeRate', { rate: formatFeeRate(method.feeRate) }) }}</small>
         </button>
       </section>
 
       <section class="ajo-pay-checkout__section">
         <div class="ajo-pay-checkout__section-head">
           <span>3</span>
-          <strong>確認付款</strong>
+          <strong>{{ t('account.payments.checkout.confirmPayment') }}</strong>
         </div>
         <div class="ajo-pay-checkout__coin-box">
           <div>
-            <span>+1% 回贈</span>
-            <strong>AJO Coin 回贈計劃</strong>
-            <small>預計賺取：</small>
-            <b>{{ rewardCoins }} AJO Coins</b>
+            <span>{{ t('account.payments.checkout.rewardRate') }}</span>
+            <strong>{{ t('account.payments.checkout.rewardProgram') }}</strong>
+            <small>{{ t('account.payments.checkout.estimatedReward') }}</small>
+            <b>{{ t('account.payments.checkout.rewardCoins', { count: formatInteger(rewardCoins) }) }}</b>
           </div>
           <i>A</i>
         </div>
 
         <div class="ajo-pay-checkout__summary-box">
           <div>
-            <span>管理費</span>
+            <span>{{ t('account.payments.checkout.managementFee') }}</span>
             <strong>{{ formatHKD(managementAmount) }}</strong>
           </div>
           <div>
-            <span>其他費用</span>
+            <span>{{ t('account.payments.checkout.otherFees') }}</span>
             <strong>{{ formatHKD(otherAmount) }}</strong>
           </div>
           <div>
-            <span>手續費</span>
+            <span>{{ t('account.payments.checkout.handlingFee') }}</span>
             <strong>{{ formatHKD(feeAmount) }}</strong>
           </div>
         </div>
@@ -915,22 +952,30 @@ watch(hasContext, (ready) => {
           class="ajo-pay-checkout__offline"
         >
           <label>
-            <span>交易時間</span>
+            <span>{{ t('account.payments.checkout.transactionTime') }}</span>
             <input
               v-model="offlineForm.tranDateTime"
               type="datetime-local"
             >
           </label>
           <label>
-            <span>{{ isChequeMethod ? '支票號碼' : '交易參考' }}</span>
+            <span>
+              {{
+                isChequeMethod
+                  ? t('account.payments.checkout.chequeNumber')
+                  : t('account.payments.checkout.transactionReference')
+              }}
+            </span>
             <input
               v-model="offlineForm.tranRefNo"
               type="text"
-              :placeholder="isChequeMethod ? 'Cheque no.' : 'Reference no.'"
+              :placeholder="isChequeMethod
+                ? t('account.payments.checkout.chequePlaceholder')
+                : t('account.payments.checkout.referencePlaceholder')"
             >
           </label>
           <label v-if="requiresBankAccount">
-            <span>銀行戶口</span>
+            <span>{{ t('account.payments.checkout.bankAccount') }}</span>
             <select v-model="offlineForm.bankAccountNo">
               <option
                 v-for="account in bankAccounts"
@@ -942,7 +987,7 @@ watch(hasContext, (ready) => {
             </select>
           </label>
           <label>
-            <span>備註</span>
+            <span>{{ t('account.payments.checkout.remark') }}</span>
             <textarea
               v-model="offlineForm.remark"
               rows="3"
@@ -963,9 +1008,15 @@ watch(hasContext, (ready) => {
               type="button"
               @click="voucherInput?.click()"
             >
-              上傳交易憑證
+              {{ t('account.payments.checkout.uploadVoucher') }}
             </button>
-            <span>{{ voucherImages.length === 0 ? '未上傳' : `${voucherImages.length} 張圖片` }}</span>
+            <span>
+              {{
+                voucherImages.length === 0
+                  ? t('account.payments.checkout.noVoucher')
+                  : t('account.payments.checkout.voucherCount', { count: voucherImages.length })
+              }}
+            </span>
           </div>
           <div
             v-if="voucherImages.length > 0"
@@ -984,7 +1035,7 @@ watch(hasContext, (ready) => {
                 type="button"
                 @click="removeVoucher(index)"
               >
-                移除
+                {{ t('account.payments.checkout.removeVoucher') }}
               </button>
             </article>
           </div>
@@ -999,17 +1050,17 @@ watch(hasContext, (ready) => {
           {{ confirmButtonLabel }}
         </button>
         <p class="ajo-pay-checkout__hint">
-          確認後將按所選付款方式提交，付款狀態會於訂單步驟顯示。
+          {{ t('account.payments.checkout.submitHint') }}
         </p>
       </section>
 
       <section class="ajo-pay-checkout__section">
         <div class="ajo-pay-checkout__section-head">
           <span>4</span>
-          <strong>訂單</strong>
+          <strong>{{ t('account.payments.checkout.order') }}</strong>
         </div>
         <div class="ajo-pay-checkout__complete-note">
-          {{ resultMessage || '訂單建立後，可於此查看訂單狀態與最近付款訂單。' }}
+          {{ resultMessage || t('account.payments.checkout.orderIntro') }}
         </div>
 
         <article
@@ -1017,8 +1068,8 @@ watch(hasContext, (ready) => {
           class="ajo-pay-checkout__order-result"
         >
           <div>
-            <span>付款訂單</span>
-            <strong>{{ readOrderKey(resultOrder) || '付款訂單' }}</strong>
+            <span>{{ t('account.payments.checkout.paymentOrder') }}</span>
+            <strong>{{ readOrderKey(resultOrder) || t('account.payments.checkout.paymentOrder') }}</strong>
             <small>{{ readOrderStatus(resultOrder) }} · {{ readOrderAmount(resultOrder) }}</small>
           </div>
           <button
@@ -1026,7 +1077,11 @@ watch(hasContext, (ready) => {
             :disabled="isRefreshingOrder"
             @click="refreshResultOrder"
           >
-            {{ isRefreshingOrder ? '刷新中' : '刷新狀態' }}
+            {{
+              isRefreshingOrder
+                ? t('account.payments.checkout.refreshing')
+                : t('account.payments.checkout.refreshStatus')
+            }}
           </button>
         </article>
 
@@ -1037,12 +1092,12 @@ watch(hasContext, (ready) => {
           <img
             v-if="resultQrImageUrl"
             :src="resultQrImageUrl"
-            alt="付款二維碼"
+            :alt="t('account.payments.checkout.qrAlt')"
           >
           <QrCodeImage
             v-else
             :text="resultQrText"
-            alt="付款二維碼"
+            :alt="t('account.payments.checkout.qrAlt')"
             :size="220"
           />
           <a
@@ -1051,7 +1106,7 @@ watch(hasContext, (ready) => {
             target="_blank"
             rel="noreferrer"
           >
-            開啟付款鏈接
+            {{ t('account.payments.checkout.openPaymentLink') }}
           </a>
         </div>
 
@@ -1059,18 +1114,18 @@ watch(hasContext, (ready) => {
           v-if="resultReceipt"
           class="ajo-pay-checkout__receipt"
         >
-          <strong>已提交</strong>
+          <strong>{{ t('account.payments.checkout.submitted') }}</strong>
           <span>{{ resultReceipt }}</span>
         </div>
 
-        <div class="ajo-pay-checkout__record-title">付款訂單</div>
+        <div class="ajo-pay-checkout__record-title">{{ t('account.payments.checkout.paymentOrder') }}</div>
         <div class="ajo-pay-checkout__records">
           <article
             v-for="order in displayedOrders"
             :key="readOrderKey(order)"
             class="ajo-pay-checkout__record"
           >
-            <span>{{ readOrderKey(order) || '付款訂單' }}</span>
+            <span>{{ readOrderKey(order) || t('account.payments.checkout.paymentOrder') }}</span>
             <strong>{{ readOrderAmount(order) }}</strong>
             <small>{{ readOrderStatus(order) }}</small>
           </article>
@@ -1078,7 +1133,7 @@ watch(hasContext, (ready) => {
             v-if="displayedOrders.length === 0"
             class="ajo-pay-checkout__empty"
           >
-            暫時沒有付款訂單
+            {{ t('account.payments.checkout.noOrders') }}
           </div>
         </div>
       </section>
@@ -1088,17 +1143,19 @@ watch(hasContext, (ready) => {
 
 <style scoped>
 .ajo-pay-checkout {
-  --pay-brand: #f26419;
-  --pay-brand-dark: #c44f0e;
-  --pay-brand-light: #fff3eb;
-  --pay-brand-mid: #fda96a;
-  --pay-ink: #12122a;
-  --pay-ink-2: #454566;
-  --pay-ink-3: #8888aa;
-  --pay-surface: #ffffff;
-  --pay-surface-2: #f6f6fb;
-  --pay-border: #e2e2ee;
-  --pay-border-2: #cacade;
+  --pay-brand: rgb(var(--color-primary));
+  --pay-brand-dark: rgb(var(--color-brand-dark));
+  --pay-brand-light: rgb(var(--color-primary-soft));
+  --pay-brand-mid: rgb(var(--color-brand-mid));
+  --pay-ink: rgb(var(--color-text));
+  --pay-ink-2: rgb(var(--color-ink-2));
+  --pay-ink-3: rgb(var(--color-ink-3));
+  --pay-surface: rgb(var(--color-surface));
+  --pay-surface-2: rgb(var(--color-surface-2));
+  --pay-border: rgb(var(--color-border));
+  --pay-border-2: rgb(var(--color-border-2));
+  --pay-info-surface: rgb(var(--color-surface-3));
+  --pay-success: rgb(var(--color-success));
   display: grid;
   gap: 0;
   min-height: calc(100svh - var(--nav-h, 52px));
@@ -1312,7 +1369,7 @@ watch(hasContext, (ready) => {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 11px;
-  background: #eef3ff;
+  background: var(--pay-info-surface);
   color: var(--pay-ink);
   font-size: 18px;
   font-weight: 800;
@@ -1748,7 +1805,7 @@ watch(hasContext, (ready) => {
 }
 
 .ajo-pay-checkout__receipt strong {
-  color: #0b9a57;
+  color: var(--pay-success);
 }
 
 .ajo-pay-checkout__record-title {
@@ -1767,7 +1824,7 @@ watch(hasContext, (ready) => {
 }
 
 .ajo-pay-checkout__record small {
-  color: #0b9a57;
+  color: var(--pay-success);
   font-size: 11px;
   font-weight: 700;
 }

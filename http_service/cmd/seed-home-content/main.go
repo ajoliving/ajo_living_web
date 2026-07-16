@@ -37,12 +37,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	otpProvider, err := service.NewOTPProvider(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	runtime := &service.Runtime{
 		Config:          cfg,
 		DB:              db,
 		Logger:          logg,
-		OTPProvider:     service.NewOTPProvider(cfg),
+		OTPProvider:     otpProvider,
 		MailSender:      service.NewMailSender(cfg),
 		StorageProvider: storageProvider,
 		OTPStore:        service.NewOTPStore(),

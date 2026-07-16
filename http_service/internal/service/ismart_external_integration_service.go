@@ -68,7 +68,79 @@ type IsmartPaymentTransactionsByDateParams struct {
 	PayMethod  string
 }
 
-// 8. RegisterAccount proxies authenticated iSmart direct account registration.
+// 8. IsmartDirectRegistrationParams defines AJO-controlled iSmart account creation input.
+type IsmartDirectRegistrationParams struct {
+	Phone          string
+	Email          string
+	EngName        string
+	ChiName        string
+	LegalEntity    string
+	IDCard         string
+	Remark         string
+	Gender         string
+	IsReceiveEmail bool
+	Password       string
+}
+
+// 9. RegisterDirectAccount creates one iSmart account during AJO registration.
+func (s *IsmartExternalService) RegisterDirectAccount(ctx context.Context, params IsmartDirectRegistrationParams) (*IsmartMessage, error) {
+	payload := map[string]any{
+		"phone":            strings.TrimSpace(params.Phone),
+		"email":            normalizeEmail(params.Email),
+		"eng_name":         strings.TrimSpace(params.EngName),
+		"chi_name":         strings.TrimSpace(params.ChiName),
+		"legal_entity":     strings.TrimSpace(params.LegalEntity),
+		"id_card":          strings.TrimSpace(params.IDCard),
+		"remark":           strings.TrimSpace(params.Remark),
+		"gender":           strings.TrimSpace(params.Gender),
+		"is_receive_email": params.IsReceiveEmail,
+		"password":         params.Password,
+	}
+	result, err := s.postIntegration(ctx, "/auth/register/", payload)
+	if err != nil {
+		return nil, err
+	}
+	data := paymentMapValue(result.Payload)
+	message := &IsmartMessage{
+		UserID:   paymentInt64Value(data["user_id"]),
+		Username: strings.TrimSpace(paymentStringValue(data["username"])),
+		Email:    normalizeEmail(paymentStringValue(data["email"])),
+		Phone:    strings.TrimSpace(paymentStringValue(data["phone"])),
+	}
+	if message.UserID <= 0 || message.Username == "" {
+		return nil, errcode.New(errcode.CodeInternalError, "invalid ismart registration response")
+	}
+	if message.Email == "" {
+		message.Email = normalizeEmail(params.Email)
+	}
+	if message.Phone == "" {
+		message.Phone = strings.TrimSpace(params.Phone)
+	}
+	message.RawMessage = sanitizeIsmartRawMessage(data)
+	message.ProfileSnapshot = ismartRegistrationProfileSnapshot(data, message, params)
+	return message, nil
+}
+
+// 10. ismartRegistrationProfileSnapshot builds the member-center-safe iSmart registration snapshot.
+func ismartRegistrationProfileSnapshot(data map[string]any, message *IsmartMessage, params IsmartDirectRegistrationParams) map[string]any {
+	return map[string]any{
+		"account_code":    firstLegacyText(data, message.Username, "account_code", "account_no", "account_number", "username", "memberno"),
+		"account_phone":   firstLegacyText(data, message.Phone, "account_phone", "memberphone", "phone", "tel"),
+		"account_email":   firstLegacyText(data, message.Email, "account_email", "memberemail", "email", "billing_email"),
+		"owner_name_en":   firstLegacyText(data, params.EngName, "owner_name_en", "memberengname", "eng_name", "english_name"),
+		"owner_name_zh":   firstLegacyText(data, params.ChiName, "owner_name_zh", "memberchiname", "chi_name", "chinese_name"),
+		"identity_number": firstLegacyText(data, params.IDCard, "identity_number", "memberid", "id_number", "hkid"),
+		"legal_entity":    firstLegacyText(data, params.LegalEntity, "legal_entity", "member_legalentity", "legalentity"),
+		"gender":          firstLegacyText(data, params.Gender, "gender", "membergender"),
+		"birth_date":      firstLegacyText(data, "", "birth_date", "birthday", "date_of_birth", "dob"),
+		"contact_name":    firstLegacyText(data, "", "contact_name", "contact_person", "contactperson"),
+		"contact_phone":   firstLegacyText(data, message.Phone, "contact_phone", "contact_tel", "contactphone"),
+		"billing_email":   firstLegacyText(data, message.Email, "billing_email", "bill_email", "memberemail"),
+		"billing_address": firstLegacyText(data, "", "billing_address", "bill_address", "address"),
+	}
+}
+
+// 11. RegisterAccount proxies authenticated iSmart direct account registration.
 func (s *IsmartExternalService) RegisterAccount(ctx context.Context, userID int64, payload map[string]any) (map[string]any, error) {
 	if userID <= 0 {
 		return nil, errcode.New(errcode.CodeAuthRequired, "login required")
@@ -84,17 +156,17 @@ func (s *IsmartExternalService) RegisterAccount(ctx context.Context, userID int6
 	return decorateIsmartPayload(result.Payload, "", nil, result.Message, false), nil
 }
 
-// 9. ListManagementFees returns visible building management-fee receivables.
+// 12. ListManagementFees returns visible building management-fee receivables.
 func (s *IsmartExternalService) ListManagementFees(ctx context.Context, userID int64, params IsmartReceivableParams) (map[string]any, error) {
 	return s.listBuildingReceivables(ctx, userID, params, "/buildings/receivables/management-fees/", "/api/v1/building-mf-table/", "table")
 }
 
-// 10. ListOtherFees returns visible building other-fee receivables.
+// 13. ListOtherFees returns visible building other-fee receivables.
 func (s *IsmartExternalService) ListOtherFees(ctx context.Context, userID int64, params IsmartReceivableParams) (map[string]any, error) {
 	return s.listBuildingReceivables(ctx, userID, params, "/buildings/receivables/other-fees/", "/api/v1/building-of-list/", "list")
 }
 
-// 11. ListBuildingNotices returns visible building notices.
+// 14. ListBuildingNotices returns visible building notices.
 func (s *IsmartExternalService) ListBuildingNotices(ctx context.Context, userID int64, params IsmartBuildingParams) (map[string]any, error) {
 	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
 	if err != nil {
@@ -114,16 +186,40 @@ func (s *IsmartExternalService) ListBuildingNotices(ctx context.Context, userID 
 	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
 }
 
-// 12. SubmitOwnerBindingRequest submits an owner-role binding request for current iSmart user.
+// 15. SubmitOwnerBindingRequest submits an owner-role binding request for current iSmart user.
 func (s *IsmartExternalService) SubmitOwnerBindingRequest(ctx context.Context, userID int64, params IsmartOwnerBindingParams) (map[string]any, error) {
-	account, err := s.loadIsmartAccount(ctx, userID)
+	account, buildingID, payload, err := s.ownerBindingPayload(ctx, userID, params)
 	if err != nil {
 		return nil, err
+	}
+
+	result, err := s.postIntegration(ctx, "/buildings/building-flat-owner-binding-requests/", payload)
+	if err != nil {
+		return nil, err
+	}
+	return decorateIsmartPayload(result.Payload, buildingID, nil, result.Message, account.IsStaff), nil
+}
+
+// 16. SubmitOwnerBindingRequestAccepted treats any upstream HTTP 2xx response as an accepted OwnerReg application.
+func (s *IsmartExternalService) SubmitOwnerBindingRequestAccepted(ctx context.Context, userID int64, params IsmartOwnerBindingParams) error {
+	_, _, payload, err := s.ownerBindingPayload(ctx, userID, params)
+	if err != nil {
+		return err
+	}
+
+	return s.postIntegrationAccepted(ctx, "/buildings/building-flat-owner-binding-requests/", payload)
+}
+
+// 17. ownerBindingPayload prepares one OwnerReg request from the current linked iSmart account.
+func (s *IsmartExternalService) ownerBindingPayload(ctx context.Context, userID int64, params IsmartOwnerBindingParams) (*model.UserIsmartAccount, string, map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, "", nil, err
 	}
 	buildingID := strings.TrimSpace(params.BuildingID)
 	ownedFlat := normalizeStringSlice(params.OwnedFlat)
 	if buildingID == "" || len(ownedFlat) == 0 {
-		return nil, errcode.New(errcode.CodeValidationError, "building id and owned flat are required")
+		return nil, "", nil, errcode.New(errcode.CodeValidationError, "building id and owned flat are required")
 	}
 
 	payload := map[string]any{
@@ -146,14 +242,10 @@ func (s *IsmartExternalService) SubmitOwnerBindingRequest(ctx context.Context, u
 	copyOptionalString(payload, "cli_id_card", params.ClientIDCard)
 	copyOptionalString(payload, "cli_tel", params.ClientTel)
 
-	result, err := s.postIntegration(ctx, "/buildings/building-flat-owner-binding-requests/", payload)
-	if err != nil {
-		return nil, err
-	}
-	return decorateIsmartPayload(result.Payload, buildingID, nil, result.Message, account.IsStaff), nil
+	return account, buildingID, payload, nil
 }
 
-// 13. ListSubaccounts lists current authorized sub users for owner-controlled units.
+// 18. ListSubaccounts lists current authorized sub users for owner-controlled units.
 func (s *IsmartExternalService) ListSubaccounts(ctx context.Context, userID int64, queryParams IsmartSubaccountQuery) (map[string]any, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -177,17 +269,17 @@ func (s *IsmartExternalService) ListSubaccounts(ctx context.Context, userID int6
 	return decorateIsmartPayload(result.Payload, "", nil, result.Message, account.IsStaff), nil
 }
 
-// 14. GrantSubaccount grants one authorized sub user through iSmart.
+// 17. GrantSubaccount grants one authorized sub user through iSmart.
 func (s *IsmartExternalService) GrantSubaccount(ctx context.Context, userID int64, params IsmartSubaccountMutationParams) (map[string]any, error) {
 	return s.mutateSubaccount(ctx, userID, params, "/buildings/subaccounts/grant/")
 }
 
-// 15. RevokeSubaccount revokes one authorized sub user through iSmart.
+// 18. RevokeSubaccount revokes one authorized sub user through iSmart.
 func (s *IsmartExternalService) RevokeSubaccount(ctx context.Context, userID int64, params IsmartSubaccountMutationParams) (map[string]any, error) {
 	return s.mutateSubaccount(ctx, userID, params, "/buildings/subaccounts/revoke/")
 }
 
-// 16. ListPaymentUnpaidInvoices proxies unit unpaid invoice lookup.
+// 19. ListPaymentUnpaidInvoices proxies unit unpaid invoice lookup.
 func (s *IsmartExternalService) ListPaymentUnpaidInvoices(ctx context.Context, params IsmartPaymentUnpaidInvoiceParams) (any, error) {
 	unitID := strings.TrimSpace(params.UnitID)
 	if unitID == "" {
@@ -203,7 +295,7 @@ func (s *IsmartExternalService) ListPaymentUnpaidInvoices(ctx context.Context, p
 	return result.Payload, nil
 }
 
-// 17. ListPaymentTransactionsByUnit proxies unit payment history lookup.
+// 20. ListPaymentTransactionsByUnit proxies unit payment history lookup.
 func (s *IsmartExternalService) ListPaymentTransactionsByUnit(ctx context.Context, params IsmartPaymentTransactionsByUnitParams) (any, error) {
 	unitIDs := normalizeStringSlice(params.UnitIDList)
 	if len(unitIDs) == 0 {
@@ -221,7 +313,7 @@ func (s *IsmartExternalService) ListPaymentTransactionsByUnit(ctx context.Contex
 	return normalizeIntegrationPaymentTransactionsPayload(result.Payload), nil
 }
 
-// 18. ListPaymentTransactionsByDate proxies building payment history date lookup.
+// 21. ListPaymentTransactionsByDate proxies building payment history date lookup.
 func (s *IsmartExternalService) ListPaymentTransactionsByDate(ctx context.Context, params IsmartPaymentTransactionsByDateParams) (any, error) {
 	buildingID := strings.TrimSpace(params.BuildingID)
 	fromDate := strings.TrimSpace(params.FromDate)
@@ -248,7 +340,7 @@ func (s *IsmartExternalService) ListPaymentTransactionsByDate(ctx context.Contex
 	return normalizeIntegrationPaymentTransactionsPayload(result.Payload), nil
 }
 
-// 19. listBuildingReceivables proxies one visible building receivable endpoint.
+// 22. listBuildingReceivables proxies one visible building receivable endpoint.
 func (s *IsmartExternalService) listBuildingReceivables(ctx context.Context, userID int64, params IsmartReceivableParams, integrationPath string, legacyPath string, defaultStructure string) (map[string]any, error) {
 	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
 	if err != nil {
@@ -274,7 +366,7 @@ func (s *IsmartExternalService) listBuildingReceivables(ctx context.Context, use
 	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
 }
 
-// 20. mutateSubaccount runs one grant or revoke request.
+// 23. mutateSubaccount runs one grant or revoke request.
 func (s *IsmartExternalService) mutateSubaccount(ctx context.Context, userID int64, params IsmartSubaccountMutationParams, path string) (map[string]any, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -304,13 +396,13 @@ func (s *IsmartExternalService) mutateSubaccount(ctx context.Context, userID int
 	return decorateIsmartPayload(result.Payload, "", nil, result.Message, account.IsStaff), nil
 }
 
-// 21. unitVisible checks current iSmart account unit permissions.
+// 24. unitVisible checks current iSmart account unit permissions.
 func (s *IsmartExternalService) unitVisible(account *model.UserIsmartAccount, unitID string) bool {
 	units := s.visibleUnitIDs(account)
 	return len(units) == 0 || containsString(units, strings.TrimSpace(unitID))
 }
 
-// 22. visibleUnitIDs resolves the iSmart unit permission list.
+// 25. visibleUnitIDs resolves the iSmart unit permission list.
 func (s *IsmartExternalService) visibleUnitIDs(account *model.UserIsmartAccount) []string {
 	if account == nil {
 		return []string{}
@@ -321,14 +413,14 @@ func (s *IsmartExternalService) visibleUnitIDs(account *model.UserIsmartAccount)
 	return resolveIsmartBoundUnits(message)
 }
 
-// 23. copyOptionalString copies one non-empty string payload field.
+// 26. copyOptionalString copies one non-empty string payload field.
 func copyOptionalString(payload map[string]any, key string, value string) {
 	if strings.TrimSpace(value) != "" {
 		payload[key] = strings.TrimSpace(value)
 	}
 }
 
-// 24. normalizeIntegrationPaymentTransactionsPayload keeps payment history in documented shape.
+// 27. normalizeIntegrationPaymentTransactionsPayload keeps payment history in documented shape.
 func normalizeIntegrationPaymentTransactionsPayload(payload any) map[string]any {
 	payloadMap := paymentMapValue(payload)
 	rows := normalizePOSRows(payloadMap, "payment_objs")

@@ -45,7 +45,41 @@ func (s *IsmartExternalService) postIntegration(ctx context.Context, path string
 	return s.requestJSON(ctx, http.MethodPost, s.integrationURL(path), nil, payload)
 }
 
-// 6. requestJSON sends one JSON request to iSmart and decodes the response.
+// 6. postIntegrationAccepted posts an OwnerReg request where HTTP 2xx alone means acceptance.
+func (s *IsmartExternalService) postIntegrationAccepted(ctx context.Context, path string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.integrationURL(path), bytes.NewReader(raw))
+	if err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to prepare ismart request")
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := s.httpClient().Do(request)
+	if err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to call ismart service")
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 8*1024*1024))
+	if err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to read ismart response")
+	}
+	_, decodeErr := decodeIsmartProxyResponse(response.StatusCode, responseBody)
+	if decodeErr != nil {
+		return decodeErr
+	}
+
+	return errcode.New(errcode.CodeInternalError, "ismart service request failed")
+}
+
+// 7. requestJSON sends one JSON request to iSmart and decodes the response.
 func (s *IsmartExternalService) requestJSON(ctx context.Context, method string, requestURL string, query url.Values, payload any) (*ismartProxyResult, error) {
 	var requestBody io.Reader
 	if payload != nil {
@@ -180,7 +214,7 @@ func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult,
 // 13. ismartHTTPErrorCode maps upstream status into AJO error codes.
 func ismartHTTPErrorCode(statusCode int) string {
 	switch statusCode {
-	case http.StatusBadRequest:
+	case http.StatusBadRequest, http.StatusConflict:
 		return errcode.CodeValidationError
 	case http.StatusForbidden:
 		return errcode.CodeAuthForbidden

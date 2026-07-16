@@ -306,7 +306,8 @@
 
 .management-dialog-panel {
   width: min(100%, 30rem);
-  overflow: hidden;
+  max-height: calc(100svh - 2rem);
+  overflow-y: auto;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   background: rgb(var(--color-surface-raised));
@@ -322,6 +323,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   width: min(100%, 72rem);
   max-height: calc(100svh - 2rem);
+  overflow: hidden;
 }
 
 .management-dialog-header {
@@ -517,6 +519,20 @@
 .management-dialog-enter-from .management-dialog-panel,
 .management-dialog-leave-to .management-dialog-panel {
   transform: translateY(0.5rem);
+}
+
+@media (max-width: 1023px) {
+  .management-dialog {
+    place-items: end center;
+    padding:
+      var(--app-safe-top)
+      var(--layout-page-padding-inline)
+      calc(var(--app-safe-bottom) + 10px);
+  }
+
+  .management-dialog-panel {
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+  }
 }
 
 @media (max-width: 767px) {

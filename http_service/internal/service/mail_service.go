@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"mime"
 	"net"
 	"net/smtp"
 	"strings"
@@ -125,7 +126,7 @@ func buildEmailMessage(from string, recipient string, subject string, body strin
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	buffer.WriteString(fmt.Sprintf("To: %s\r\n", recipient))
-	buffer.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	buffer.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject)))
 	buffer.WriteString("MIME-Version: 1.0\r\n")
 	buffer.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 	buffer.WriteString("Content-Transfer-Encoding: 8bit\r\n")

@@ -301,13 +301,13 @@ const resolvePriceText = (listing: PropertyListingSummaryResponse): string =>
 
 // 14. 輸出地區及位置
 const resolveLocationText = (listing: PropertyListingSummaryResponse): string =>
-  `${resolvePropertyCommunityName(listing)} · ${resolvePropertyDistrict(listing, preferenceStore.locale)}`;
+  `${resolvePropertyCommunityName(listing, preferenceStore.locale)} · ${resolvePropertyDistrict(listing, preferenceStore.locale)}`;
 
 // 15. 輸出面積及房型
 const resolveSpecText = (listing: PropertyListingSummaryResponse): string => {
   const area = resolvePropertyArea(listing);
   const areaText = area > 0 ? t('common.unit.sqft', { value: area }) : '-';
-  return `${areaText} · ${resolvePropertyRooms(listing)}`;
+  return `${areaText} · ${resolvePropertyRooms(listing, preferenceStore.locale)}`;
 };
 
 // 16. 輸出類型
@@ -522,7 +522,7 @@ onMounted(() => {
               <img
                 v-if="resolvePropertyCoverImage(listing)"
                 :src="resolvePropertyCoverImage(listing)?.url"
-                :alt="resolvePropertyTitle(listing)"
+                :alt="resolvePropertyTitle(listing, preferenceStore.locale)"
               />
               <div
                 v-else
@@ -537,7 +537,7 @@ onMounted(() => {
 
             <div class="property-item__content">
               <div class="property-item__heading">
-                <strong>{{ resolvePropertyTitle(listing) }}</strong>
+                <strong>{{ resolvePropertyTitle(listing, preferenceStore.locale) }}</strong>
                 <span
                   class="property-status-pill"
                   :class="`property-status-pill--${resolvePropertyStatus(listing)}`"
@@ -545,7 +545,7 @@ onMounted(() => {
                   {{ resolveStatusLabel(listing) }}
                 </span>
               </div>
-              <p>{{ resolvePropertySummary(listing) }}</p>
+              <p>{{ resolvePropertySummary(listing, preferenceStore.locale) }}</p>
               <strong class="property-item__price">{{ resolvePriceText(listing) }}</strong>
             </div>
           </div>
@@ -671,7 +671,7 @@ onMounted(() => {
               </span>
               <div
                 class="property-editor-dialog__progress"
-                aria-label="發布步驟"
+                :aria-label="t('property.editor.publishSteps')"
               >
                 <span
                   v-for="(step, stepIndex) in editorDialogSteps.slice(0, editorStepTotal)"

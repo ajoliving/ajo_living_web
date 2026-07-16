@@ -15,6 +15,7 @@ import {
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate } from '@/utils/format';
 import { resolvePropertyPriceText, resolvePropertyPublisherRole, resolvePropertyStatus } from '@/utils/property';
 
@@ -45,6 +46,7 @@ const {
   fetcher: fetchStaffPropertySales,
   loadErrorKey: 'marketplace.management.loadPropertySalesError',
 });
+const preferenceStore = usePreferenceStore();
 const editorOpen = ref(false);
 const editorListingId = ref('');
 const propertyEditorDialog = ref<PropertyEditorDialogInstance | null>(null);
@@ -56,11 +58,11 @@ const formatStatus = (listing: PropertyListingSummaryResponse): string =>
 
 // 2. 格式化發布者
 const formatOwner = (listing: PropertyListingSummaryResponse): string =>
-  listing.owner?.display_name?.trim() || resolvePropertyPublisherRole(listing);
+  listing.owner?.display_name?.trim() || resolvePropertyPublisherRole(listing, preferenceStore.locale);
 
 // 3. 格式化價格
 const formatPriceText = (listing: PropertyListingSummaryResponse): string =>
-  resolvePropertyPriceText(listing, 'zh-HK');
+  resolvePropertyPriceText(listing, preferenceStore.locale);
 
 // 4. 開啟管理編輯器
 const openEditor = (listingId: string): void => {
@@ -91,7 +93,7 @@ const handleEditorDone = async (): Promise<void> => {
     <header class="management-list-header">
       <div>
         <p class="management-list-kicker">
-          Staff
+          {{ t('marketplace.management.staffKicker') }}
         </p>
         <h1>{{ t('marketplace.management.propertySales') }}</h1>
         <p>{{ t('marketplace.management.propertySalesDescription') }}</p>
@@ -187,7 +189,7 @@ const handleEditorDone = async (): Promise<void> => {
               <td>
                 <span class="management-status-pill">{{ formatStatus(listing) }}</span>
               </td>
-              <td>{{ formatDate(listing.updated_at) }}</td>
+              <td>{{ formatDate(listing.updated_at, preferenceStore.locale) }}</td>
               <td
                 class="management-table-actions"
               >
@@ -255,7 +257,7 @@ const handleEditorDone = async (): Promise<void> => {
           <section class="management-dialog-panel management-dialog-panel--editor">
             <header class="management-dialog-header">
               <div>
-                <p>Staff</p>
+                <p>{{ t('marketplace.management.staffKicker') }}</p>
                 <h2>{{ t('property.editor.editMode') }}</h2>
               </div>
               <button

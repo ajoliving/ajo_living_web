@@ -16,6 +16,7 @@ const {
   emailAction,
   emailActionSwitchLabel,
   emailPlaceholder,
+  ensureBuildingsLoaded,
   footerPrompt,
   formState,
   handleForgotPassword,
@@ -32,6 +33,7 @@ const {
   submitLabel,
   toggleEmailAction,
   unitsLoading,
+  validationErrors,
 } = useLoginPage();
 </script>
 
@@ -41,6 +43,7 @@ const {
       <LoginHero :hero="selectedHero" />
       <LoginFormPanel
         v-model:eng-name="formState.engName"
+        v-model:chi-name="formState.chiName"
         v-model:email="formState.email"
         v-model:password="formState.password"
         v-model:phone="formState.phone"
@@ -50,6 +53,10 @@ const {
         v-model:primary-community-id="formState.primaryCommunityID"
         v-model:residence-floor="formState.residenceFloor"
         v-model:residence-unit="formState.residenceUnit"
+        v-model:id-card="formState.idCard"
+        v-model:remark="formState.remark"
+        v-model:gender="formState.gender"
+        v-model:is-receive-email="formState.isReceiveEmail"
         v-model:remember-me="rememberMe"
         :auth-mode="authMode"
         :email-action="emailAction"
@@ -65,7 +72,9 @@ const {
         :is-authenticated="isAuthenticated"
         :publisher-identity-options="publisherIdentityOptions"
         :submit-label="submitLabel"
+        :validation-errors="validationErrors"
         @forgot-password="handleForgotPassword"
+        @load-buildings="ensureBuildingsLoaded"
         @set-auth-mode="setAuthMode"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"

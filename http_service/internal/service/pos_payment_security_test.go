@@ -2,6 +2,7 @@
  * POS 物業繳費安全回歸測試。
  * 1. 驗證線下繳費 payload 必須與 AJO 單位上下文一致。
  * 2. 驗證 H5 訂單可見性缺少單位時拒絕通過。
+ * 3. 驗證一般會員可按所屬屋苑使用支付功能。
  */
 package service
 
@@ -464,8 +465,8 @@ func TestPOSPaymentHistoryCanonicalizesMemberUnitID(t *testing.T) {
 	}
 }
 
-// 12. TestPOSPaymentHistoryInfersStaffBuildingFromUnitID verifies Staff unit history does not use the first building.
-func TestPOSPaymentHistoryInfersStaffBuildingFromUnitID(t *testing.T) {
+// 12. TestPOSPaymentHistoryInfersResidentBuildingFromUnitID verifies unit history uses the resident building.
+func TestPOSPaymentHistoryInfersResidentBuildingFromUnitID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
 		switch {
@@ -478,7 +479,7 @@ func TestPOSPaymentHistoryInfersStaffBuildingFromUnitID(t *testing.T) {
 			}
 			unitIDs := payload["unit_id_list"]
 			if len(unitIDs) != 1 || unitIDs[0] != "09999000211" {
-				t.Fatalf("expected requested Staff unit id, got %#v", payload)
+				t.Fatalf("expected requested resident unit id, got %#v", payload)
 			}
 			_, _ = response.Write([]byte(`{"payment_objs":{"payment_objs":[{"payment_id":"PAY-STAFF-001","receipt_id":"RCPT-STAFF-001"}]}}`))
 		default:
@@ -542,12 +543,12 @@ func TestPOSPaymentHistoryInfersStaffBuildingFromUnitID(t *testing.T) {
 	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
 		UserID:                             user.ID,
 		IsmartUserID:                       90,
-		Username:                           "staff-owner-a",
+		Username:                           "resident-a",
 		IsStaff:                            true,
 		Building:                           buildingJSON,
 		StaffBuildingPermissions:           buildingJSON,
-		ClientBuildingPermissions:          []byte("[]"),
-		ClientBuildingFlatUnitsPermissions: []byte("[]"),
+		ClientBuildingPermissions:          buildingJSON,
+		ClientBuildingFlatUnitsPermissions: unitJSON,
 		RawMessage:                         []byte("{}"),
 		RelayTokenEncrypted:                tokenEncrypted,
 	}).Error; err != nil {
@@ -558,12 +559,78 @@ func TestPOSPaymentHistoryInfersStaffBuildingFromUnitID(t *testing.T) {
 		Selection: POSPaymentSelection{UnitID: "09999000211"},
 	})
 	if err != nil {
-		t.Fatalf("load staff unit history: %v", err)
+		t.Fatalf("load resident unit history: %v", err)
 	}
 	if result.Context == nil || result.Context.BuildingID != "0999900" || result.Context.UnitID != "09999000211" {
-		t.Fatalf("expected unit-derived Staff context, got %+v", result.Context)
+		t.Fatalf("expected unit-derived resident context, got %+v", result.Context)
 	}
 	if len(result.Items) != 1 || result.Items[0]["payment_id"] != "PAY-STAFF-001" {
-		t.Fatalf("expected Staff unit history row, got %#v", result.Items)
+		t.Fatalf("expected resident unit history row, got %#v", result.Items)
+	}
+}
+
+// 13. TestPOSPaymentMemberBuildingAccessAllowsRegularMembers verifies payment features do not require Staff.
+func TestPOSPaymentMemberBuildingAccessAllowsRegularMembers(t *testing.T) {
+	runtimeValue := newAuthTestRuntime(
+		t,
+		nil,
+		&model.User{},
+		&model.UserProfile{},
+		&model.UserIsmartAccount{},
+		&model.Community{},
+	)
+	user := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234571",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsStaff:          false,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserProfile{UserID: user.ID}).Error; err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	buildingJSON, err := marshalJSON([]string{"0999900"})
+	if err != nil {
+		t.Fatalf("marshal building json: %v", err)
+	}
+	unitJSON, err := marshalJSON([]string{"09999000012"})
+	if err != nil {
+		t.Fatalf("marshal unit json: %v", err)
+	}
+	tokenEncrypted, err := utils.EncryptString(runtimeValue.Config.EncryptionKey, "relay-token")
+	if err != nil {
+		t.Fatalf("encrypt relay token: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             user.ID,
+		IsmartUserID:                       191,
+		Username:                           "resident-payment-member",
+		IsStaff:                            false,
+		Building:                           []byte("[]"),
+		StaffBuildingPermissions:           []byte("[]"),
+		ClientBuildingPermissions:          buildingJSON,
+		ClientBuildingFlatUnitsPermissions: unitJSON,
+		RawMessage:                         []byte("{}"),
+		ProfileSnapshot:                    []byte("{}"),
+		RelayTokenEncrypted:                tokenEncrypted,
+	}).Error; err != nil {
+		t.Fatalf("create iSmart account: %v", err)
+	}
+
+	contextValue, token, err := NewPOSPaymentService(runtimeValue).memberBuildingAccess(
+		context.Background(),
+		user.ID,
+		POSPaymentSelection{BuildingID: "0999900"},
+	)
+	if err != nil {
+		t.Fatalf("resolve regular member building access: %v", err)
+	}
+	if contextValue.BuildingID != "0999900" || token != "relay-token" {
+		t.Fatalf("unexpected regular member building access: context=%+v token=%q", contextValue, token)
 	}
 }

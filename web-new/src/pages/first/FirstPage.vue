@@ -24,25 +24,25 @@ const { t } = useI18n();
         to="/serviced-residences"
         class="channel-page__link channel-page__link--primary"
       >
-        進入列表
+        {{ t('servicedResidence.channel.openList') }}
       </RouterLink>
     </section>
 
     <section class="channel-page__grid">
       <article class="channel-page__card">
-        <span>Public</span>
-        <strong>短租與月租列表</strong>
-        <p>查看公開服務式住宅房型、租金與基礎配套資料。</p>
+        <span>{{ t('servicedResidence.channel.public') }}</span>
+        <strong>{{ t('servicedResidence.channel.publicTitle') }}</strong>
+        <p>{{ t('servicedResidence.channel.publicDescription') }}</p>
       </article>
       <article class="channel-page__card">
-        <span>Operation</span>
-        <strong>房型與入住資訊</strong>
-        <p>逐步整合房型、最短入住期、服務與補充資訊的正式展示入口。</p>
+        <span>{{ t('servicedResidence.channel.operation') }}</span>
+        <strong>{{ t('servicedResidence.channel.operationTitle') }}</strong>
+        <p>{{ t('servicedResidence.channel.operationDescription') }}</p>
       </article>
       <article class="channel-page__card">
-        <span>Next</span>
-        <strong>頻道入口統一中</strong>
-        <p>此頁將保留作為服務住宅入口，並持續收斂到與樓盤頻道一致的正式列表體驗。</p>
+        <span>{{ t('servicedResidence.channel.next') }}</span>
+        <strong>{{ t('servicedResidence.channel.nextTitle') }}</strong>
+        <p>{{ t('servicedResidence.channel.nextDescription') }}</p>
       </article>
     </section>
   </main>

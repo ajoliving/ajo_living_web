@@ -5,67 +5,107 @@
  * 3. 供綜合優惠列表與商品詳情頁共用。
  */
 import type { SupermarketProduct, SupermarketStorePrice } from '@/model/supermarket-offers';
+import type { AppLocale } from '@/stores/preferences';
 
-const STORE_LABELS: Record<string, string> = {
-  AEON: 'AEON',
-  WELLCOME: '惠康',
-  PARKNSHOP: '百佳',
-  JASONS: 'Market Place',
-  LUNGFUNG: '龍豐',
-  DCHFOOD: '大昌食品',
-  WATSONS: '屈臣氏',
-  MANNINGS: '萬寧',
-  SASA: '莎莎',
+const STORE_LABELS: Record<AppLocale, Record<string, string>> = {
+  'zh-HK': {
+    AEON: 'AEON',
+    WELLCOME: '惠康',
+    PARKNSHOP: '百佳',
+    JASONS: 'Market Place',
+    LUNGFUNG: '龍豐',
+    DCHFOOD: '大昌食品',
+    WATSONS: '屈臣氏',
+    MANNINGS: '萬寧',
+    SASA: '莎莎',
+  },
+  en: {
+    AEON: 'AEON',
+    WELLCOME: 'Wellcome',
+    PARKNSHOP: 'PARKnSHOP',
+    JASONS: 'Market Place',
+    LUNGFUNG: 'Lung Fung',
+    DCHFOOD: 'DCH Food Mart',
+    WATSONS: 'Watsons',
+    MANNINGS: 'Mannings',
+    SASA: 'Sa Sa',
+  },
 };
 
 // 1. 標準化超市代碼
 export const normalizeSupermarketStoreCode = (value: string): string => value.trim().toUpperCase();
 
 // 2. 顯示超市名稱
-export const displaySupermarketStore = (value: string): string => {
-  const label = STORE_LABELS[normalizeSupermarketStoreCode(value)] ?? value.trim();
-  return label || '未提供商店';
+export const displaySupermarketStore = (value: string, locale: AppLocale = 'zh-HK'): string => {
+  const label = STORE_LABELS[locale][normalizeSupermarketStoreCode(value)] ?? value.trim();
+  return label || (locale === 'en' ? 'Store not provided' : '未提供商店');
 };
 
 // 3. 顯示商品分類
-export const displaySupermarketCategory = (value: string): string => {
+export const displaySupermarketCategory = (value: string, locale: AppLocale = 'zh-HK'): string => {
   const normalized = value.split('/')[0]?.trim() ?? value;
-  if (normalized.includes('個人護理')) return '個人護理';
-  if (normalized.includes('飲品')) return '飲品 / 水';
-  if (normalized.includes('糖果')) return '零食 / 食品';
-  if (normalized.includes('奶粉')) return '奶粉嬰兒';
-  if (normalized.includes('家居')) return '家居用品';
-  if (normalized.includes('米')) return '米油雜貨';
-  if (normalized.includes('粉麵')) return '粉麵食品';
-  return normalized || '未提供分類';
+  const labels = locale === 'en'
+    ? {
+        personalCare: 'Personal care',
+        drinks: 'Drinks / Water',
+        snacks: 'Snacks / Food',
+        babyFormula: 'Baby formula',
+        household: 'Household goods',
+        groceries: 'Rice, oil and groceries',
+        noodles: 'Noodles and pasta',
+        fallback: 'Category not provided',
+      }
+    : {
+        personalCare: '個人護理',
+        drinks: '飲品 / 水',
+        snacks: '零食 / 食品',
+        babyFormula: '奶粉嬰兒',
+        household: '家居用品',
+        groceries: '米油雜貨',
+        noodles: '粉麵食品',
+        fallback: '未提供分類',
+      };
+  if (normalized.includes('個人護理')) return labels.personalCare;
+  if (normalized.includes('飲品')) return labels.drinks;
+  if (normalized.includes('糖果')) return labels.snacks;
+  if (normalized.includes('奶粉')) return labels.babyFormula;
+  if (normalized.includes('家居')) return labels.household;
+  if (normalized.includes('米')) return labels.groceries;
+  if (normalized.includes('粉麵')) return labels.noodles;
+  return normalized || labels.fallback;
 };
 
 // 4. 格式化港幣
-export const formatSupermarketHKPrice = (value: number | null | undefined): string => {
+export const formatSupermarketHKPrice = (
+  value: number | null | undefined,
+  locale: AppLocale = 'zh-HK',
+): string => {
   const numericValue = Number(value ?? 0);
   const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
-  return `HK$ ${safeValue.toLocaleString('zh-HK', {
+  return `HK$ ${safeValue.toLocaleString(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 };
 
 // 5. 格式化日期
-export const formatSupermarketDate = (value: string | undefined): string => {
+export const formatSupermarketDate = (value: string | undefined, locale: AppLocale = 'zh-HK'): string => {
   if (!value) return '';
-  const parts = value.split('-');
-  if (parts.length === 3) {
-    return `${parts[0]}年${parts[1]}月${parts[2]}日`;
-  }
-  return value;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 };
 
 // 6. 格式化日期時間
-export const formatSupermarketDateTime = (value: string | undefined): string => {
+export const formatSupermarketDateTime = (value: string | undefined, locale: AppLocale = 'zh-HK'): string => {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-HK', {
+  return date.toLocaleString(locale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -81,7 +121,7 @@ export const supermarketCategoryText = (product: SupermarketProduct): string =>
 
 // 8. 建立後備價格列
 export const supermarketFallbackStorePrice = (product: SupermarketProduct): SupermarketStorePrice => ({
-  store: product.bestStore || product.stores?.[0] || '未提供商店',
+  store: product.bestStore || product.stores?.[0] || '',
   listPrice: Number(product.listPrice ?? product.maxPrice ?? 0),
   effectiveUnitPrice: Number(product.effectiveUnitPrice ?? product.bestEffectiveUnitPrice ?? product.minPrice ?? 0),
   offer: product.bestOffer ?? '',
@@ -90,11 +130,14 @@ export const supermarketFallbackStorePrice = (product: SupermarketProduct): Supe
 });
 
 // 9. 標準化商品各商店價格
-export const supermarketStorePrices = (product: SupermarketProduct): SupermarketStorePrice[] => {
+export const supermarketStorePrices = (
+  product: SupermarketProduct,
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] => {
   if (product.storePrices && product.storePrices.length > 0) {
     return [...product.storePrices].sort((a, b) => {
       if (a.effectiveUnitPrice === b.effectiveUnitPrice) {
-        return displaySupermarketStore(a.store).localeCompare(displaySupermarketStore(b.store), 'zh-HK');
+        return displaySupermarketStore(a.store, locale).localeCompare(displaySupermarketStore(b.store, locale), locale);
       }
       return a.effectiveUnitPrice - b.effectiveUnitPrice;
     });
@@ -117,10 +160,13 @@ export const supermarketStorePrices = (product: SupermarketProduct): Supermarket
 };
 
 // 10. 取得目前商店價格排序
-export const supermarketCurrentStorePrices = (stores: SupermarketStorePrice[]): SupermarketStorePrice[] =>
+export const supermarketCurrentStorePrices = (
+  stores: SupermarketStorePrice[],
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] =>
   [...stores].sort((a, b) => {
     if (a.effectiveUnitPrice === b.effectiveUnitPrice) {
-      return displaySupermarketStore(a.store).localeCompare(displaySupermarketStore(b.store), 'zh-HK');
+      return displaySupermarketStore(a.store, locale).localeCompare(displaySupermarketStore(b.store, locale), locale);
     }
     return a.effectiveUnitPrice - b.effectiveUnitPrice;
   });
@@ -130,8 +176,11 @@ export const supermarketPriceDiscountRate = (price: SupermarketStorePrice): numb
   price.listPrice > 0 ? Math.max(0, ((price.listPrice - price.effectiveUnitPrice) / price.listPrice) * 100) : 0;
 
 // 12. 取得有折扣的商店價格排序
-export const supermarketDiscountStorePrices = (stores: SupermarketStorePrice[]): SupermarketStorePrice[] =>
-  supermarketCurrentStorePrices(stores)
+export const supermarketDiscountStorePrices = (
+  stores: SupermarketStorePrice[],
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] =>
+  supermarketCurrentStorePrices(stores, locale)
     .filter((item) => supermarketPriceDiscountRate(item) > 0)
     .sort((a, b) => {
       const rateDiff = supermarketPriceDiscountRate(b) - supermarketPriceDiscountRate(a);
@@ -142,22 +191,31 @@ export const supermarketDiscountStorePrices = (stores: SupermarketStorePrice[]):
     });
 
 // 13. 取得最低價商店
-export const supermarketBestStorePrices = (product: SupermarketProduct): SupermarketStorePrice[] => {
-  const prices = supermarketStorePrices(product);
+export const supermarketBestStorePrices = (
+  product: SupermarketProduct,
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] => {
+  const prices = supermarketStorePrices(product, locale);
   const lowestPrice = Math.min(...prices.map((item) => item.effectiveUnitPrice));
   return prices.filter((item) => item.effectiveUnitPrice === lowestPrice);
 };
 
 // 14. 取得主要顯示價格
-export const supermarketPrimaryPrice = (product: SupermarketProduct): SupermarketStorePrice =>
-  supermarketBestStorePrices(product)[0] ?? supermarketFallbackStorePrice(product);
+export const supermarketPrimaryPrice = (
+  product: SupermarketProduct,
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice =>
+  supermarketBestStorePrices(product, locale)[0] ?? supermarketFallbackStorePrice(product);
 
 // 15. 取得最優惠商店
-export const supermarketBestDealStorePrices = (stores: SupermarketStorePrice[]): SupermarketStorePrice[] => {
-  const discountedStores = supermarketDiscountStorePrices(stores);
+export const supermarketBestDealStorePrices = (
+  stores: SupermarketStorePrice[],
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] => {
+  const discountedStores = supermarketDiscountStorePrices(stores, locale);
   const primaryStore = discountedStores[0];
   if (!primaryStore) {
-    return supermarketCurrentStorePrices(stores).slice(0, 1);
+    return supermarketCurrentStorePrices(stores, locale).slice(0, 1);
   }
 
   const bestRate = supermarketPriceDiscountRate(primaryStore);
@@ -165,8 +223,11 @@ export const supermarketBestDealStorePrices = (stores: SupermarketStorePrice[]):
 };
 
 // 16. 取得商品優惠文字
-export const supermarketOfferTexts = (product: SupermarketProduct): string[] => {
-  const values = supermarketBestStorePrices(product).map((price) => price.offer).filter(Boolean);
+export const supermarketOfferTexts = (
+  product: SupermarketProduct,
+  locale: AppLocale = 'zh-HK',
+): string[] => {
+  const values = supermarketBestStorePrices(product, locale).map((price) => price.offer).filter(Boolean);
   if (values.length === 0 && product.bestOffer) {
     values.push(product.bestOffer);
   }

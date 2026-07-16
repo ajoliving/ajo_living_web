@@ -47,11 +47,17 @@ type emailPasswordRequest struct {
 	Email                 string `json:"email"`
 	Password              string `json:"password" binding:"required"`
 	EngName               string `json:"eng_name"`
+	ChiName               string `json:"chi_name"`
 	DisplayName           string `json:"display_name"`
 	PhoneCountryCode      string `json:"phone_country_code"`
 	PhoneNumber           string `json:"phone_number"`
 	Username              string `json:"username"`
 	PublisherIdentityType string `json:"publisher_identity_type"`
+	AccountType           string `json:"account_type"`
+	IDCard                string `json:"id_card"`
+	Remark                string `json:"remark"`
+	Gender                string `json:"gender"`
+	IsReceiveEmail        *bool  `json:"is_receive_email"`
 	PrimaryCommunityID    string `json:"primary_community_id"`
 	PrimaryCommunityName  string `json:"primary_community_name"`
 	ResidenceFloor        string `json:"residence_floor"`
@@ -222,11 +228,17 @@ func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 		Email:                 strings.TrimSpace(request.Email),
 		Password:              request.Password,
 		EngName:               strings.TrimSpace(request.EngName),
+		ChiName:               strings.TrimSpace(request.ChiName),
 		DisplayName:           strings.TrimSpace(request.DisplayName),
 		PhoneCountryCode:      strings.TrimSpace(request.PhoneCountryCode),
 		PhoneNumber:           strings.TrimSpace(request.PhoneNumber),
 		Username:              strings.TrimSpace(request.Username),
 		PublisherIdentityType: strings.TrimSpace(request.PublisherIdentityType),
+		AccountType:           strings.TrimSpace(request.AccountType),
+		IDCard:                strings.TrimSpace(request.IDCard),
+		Remark:                strings.TrimSpace(request.Remark),
+		Gender:                strings.TrimSpace(request.Gender),
+		IsReceiveEmail:        request.IsReceiveEmail,
 		PrimaryCommunityID:    strings.TrimSpace(request.PrimaryCommunityID),
 		PrimaryCommunityName:  strings.TrimSpace(request.PrimaryCommunityName),
 		ResidenceFloor:        strings.TrimSpace(request.ResidenceFloor),

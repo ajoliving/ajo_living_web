@@ -327,7 +327,7 @@ const {
   font-size: 0.9rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .home-hero-card {
     grid-template-columns: 1fr;
   }

@@ -19,6 +19,7 @@ WEB_DOMAIN="ajoliving.skylinedances.com"
 APP_PORT="${APP_PORT:-20042}"
 WEB_PORT="${WEB_PORT:-20041}"
 DB_PORT="${DB_PORT:-45432}"
+REDIS_PORT="${REDIS_PORT:-6382}"
 APP_PUBLIC_BASE_URL="${APP_PUBLIC_BASE_URL:-https://$WEB_DOMAIN}"
 APP_API_PUBLIC_BASE_URL="${APP_API_PUBLIC_BASE_URL:-https://$APP_DOMAIN}"
 OSS_CALLBACK_ENABLED="${OSS_CALLBACK_ENABLED:-1}"
@@ -102,6 +103,7 @@ ssh admin@"$APP_SERVER" \
   APP_PORT="$APP_PORT" \
   WEB_PORT="$WEB_PORT" \
   DB_PORT="$DB_PORT" \
+  REDIS_PORT="$REDIS_PORT" \
   APP_PUBLIC_BASE_URL="$APP_PUBLIC_BASE_URL" \
   APP_API_PUBLIC_BASE_URL="$APP_API_PUBLIC_BASE_URL" \
   OSS_CALLBACK_ENABLED="$OSS_CALLBACK_ENABLED" \
@@ -201,6 +203,11 @@ set_env "APP_PUBLIC_BASE_URL" "$APP_PUBLIC_BASE_URL"
 set_env "APP_API_PUBLIC_BASE_URL" "$APP_API_PUBLIC_BASE_URL"
 set_env "DB_DRIVER" "postgres"
 set_env "DB_DSN" "host=127.0.0.1 user=postgres password=postgres dbname=ajoliving port=$DB_PORT sslmode=disable TimeZone=Asia/Shanghai"
+set_env "REDIS_ENABLED" "true"
+set_env "REDIS_ADDR" "127.0.0.1:$REDIS_PORT"
+set_env "REDIS_PASSWORD" ""
+set_env "REDIS_DB" "0"
+set_env "ISMART_BUILDING_CACHE_TTL" "5m"
 set_env "WEB_PUBLIC_DIR" "$WEB_DIR/current_public"
 set_env "OSS_CALLBACK_ENABLED" "$OSS_CALLBACK_ENABLED"
 set_env "OSS_CALLBACK_URL" "$OSS_CALLBACK_URL"
@@ -223,6 +230,19 @@ services:
       - "127.0.0.1:$DB_PORT:5432"
     volumes:
       - ajoliving_postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    container_name: ajoliving_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:$REDIS_PORT:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 volumes:
   ajoliving_postgres_data:
 YAML
@@ -240,6 +260,19 @@ done
 
 if [ "$db_ready" != "1" ]; then
   echo "PostgreSQL is not ready"; exit 1
+fi
+
+redis_ready="0"
+for i in {1..30}; do
+  if sudo docker exec ajoliving_redis redis-cli ping 2>/dev/null | grep -q '^PONG$'; then
+    redis_ready="1"
+    break
+  fi
+  sleep 2
+done
+
+if [ "$redis_ready" != "1" ]; then
+  echo "Redis is not ready"; exit 1
 fi
 
 # 8. Take a server-side production backup before backend startup runs migrations.

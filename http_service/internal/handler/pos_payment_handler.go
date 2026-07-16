@@ -1,7 +1,7 @@
 /*
  * POS 物業繳費 HTTP 介面。
  * 1. 提供會員 POS 繳費概覽、賬單、訂單與歷史查詢。
- * 2. 提供 Staff 會計資料查詢入口。
+ * 2. 提供會員可見屋苑會計資料查詢入口。
  * 3. 所有請求均透過 AJO 登入態與 service 層權限校驗。
  */
 package handler
@@ -168,7 +168,7 @@ func (h *POSPaymentHandler) ListHistory(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 9. ListAccounting returns Staff POS accounting entries.
+// 9. ListAccounting returns visible POS accounting entries.
 func (h *POSPaymentHandler) ListAccounting(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

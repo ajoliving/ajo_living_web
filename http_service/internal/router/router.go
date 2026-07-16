@@ -33,6 +33,7 @@ type Dependencies struct {
 	WalletService           *service.WalletService
 	SecondhandService       *service.SecondhandService
 	PropertyService         *service.PropertyService
+	AgencyCompanyService    *service.AgencyCompanyService
 	ChatService             *service.ChatService
 	OrderService            *service.OrderService
 	NotificationService     *service.NotificationService
@@ -45,6 +46,7 @@ func New(deps *Dependencies) *gin.Engine {
 	engine := gin.New()
 	limiter := middleware.NewInMemoryLimiter()
 	requireAuth := middleware.RequireAuth(deps.AuthService)
+	requireActive := middleware.RequireActiveMember(deps.AuthService)
 	requireStaff := middleware.RequireStaff(deps.AuthService)
 	optionalAuth := middleware.OptionalAuth(deps.AuthService)
 
@@ -67,6 +69,7 @@ func New(deps *Dependencies) *gin.Engine {
 	staffWalletHandler := handler.NewStaffWalletHandler(deps.WalletService)
 	secondhandHandler := handler.NewSecondhandHandler(deps.SecondhandService)
 	propertyHandler := handler.NewPropertyHandler(deps.PropertyService)
+	agencyCompanyHandler := handler.NewAgencyCompanyHandler(deps.AgencyCompanyService)
 	staffListingHandler := handler.NewStaffListingHandler(deps.SecondhandService, deps.PropertyService)
 	chatHandler := handler.NewChatHandler(deps.ChatService)
 	orderHandler := handler.NewOrderHandler(deps.OrderService)
@@ -79,20 +82,22 @@ func New(deps *Dependencies) *gin.Engine {
 	registerPublicPOSPaymentRoutes(api, posBuildingHandler, walletHandler)
 	registerPublicIsmartIntegrationRoutes(api, ismartHandler)
 	registerAuthRoutes(api, authHandler, requireAuth, limiter)
-	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth)
-	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireAuth)
-	registerIsmartRoutes(api, ismartHandler, requireAuth)
-	registerSecurityRoutes(api, securityICCTVHandler, requireAuth)
-	registerWalletRoutes(api, walletHandler, requireAuth)
+	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth, requireActive)
+	registerAgencyCompanyMemberRoutes(api, agencyCompanyHandler, requireAuth)
+	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireActive)
+	registerIsmartRoutes(api, ismartHandler, requireActive)
+	registerSecurityRoutes(api, securityICCTVHandler, requireActive)
+	registerWalletRoutes(api, walletHandler, requireActive)
 	registerUploadRoutes(api, uploadHandler, requireAuth)
-	registerSecondhandRoutes(api, secondhandHandler, requireAuth)
-	registerPropertyRoutes(api, propertyHandler, requireAuth)
-	registerContactRoutes(api, secondhandHandler, propertyHandler, chatHandler, requireAuth, limiter)
-	registerChatRoutes(api, chatHandler, requireAuth, limiter)
-	registerOrderRoutes(api, orderHandler, requireAuth)
-	registerNotificationRoutes(api, notificationHandler, requireAuth)
-	registerSupermarketMemberRoutes(api, supermarketOfferHandler, requireAuth)
+	registerSecondhandRoutes(api, secondhandHandler, requireActive)
+	registerPropertyRoutes(api, propertyHandler, requireActive, limiter)
+	registerContactRoutes(api, secondhandHandler, propertyHandler, chatHandler, requireActive, limiter)
+	registerChatRoutes(api, chatHandler, requireActive, limiter)
+	registerOrderRoutes(api, orderHandler, requireActive)
+	registerNotificationRoutes(api, notificationHandler, requireActive)
+	registerSupermarketMemberRoutes(api, supermarketOfferHandler, requireActive)
 	registerStaffRoutes(api, staffHandler, staffWalletHandler, staffListingHandler, homeContentHandler, secondhandHandler, requireStaff)
+	registerAgencyCompanyStaffRoutes(api, agencyCompanyHandler, requireStaff)
 	registerStaffNoticeRoutes(api, notificationHandler, requireStaff)
 
 	return engine

@@ -9,7 +9,8 @@
  * 7. CSS 變量與 class 名稱嚴格對齊 HTML 設計稿。
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import { favoritePropertySale, fetchPropertySaleListings, unfavoritePropertySale } from '@/httpapis/properties';
@@ -29,6 +30,7 @@ import type { PropertyListParams, PropertyListingSummaryResponse } from '@/model
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
 import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+import { usePreferenceStore } from '@/stores/preferences';
 import {
   resolvePropertyArea,
   resolvePropertyCommunityName,
@@ -45,6 +47,8 @@ import {
 
 // 1. 路由
 const router = useRouter();
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const pageSize = 12;
 
 // 2. 搜尋關鍵字
@@ -71,11 +75,11 @@ interface AutocompleteItem {
 }
 const autocompleteItems = computed<AutocompleteItem[]>(() =>
   items.value.slice(0, 6).map((listing) => {
-    const value = resolvePropertyCommunityName(listing);
+    const value = resolvePropertyCommunityName(listing, preferenceStore.locale);
     return {
       value,
       prefix: value.slice(0, 1),
-      suffix: value.slice(1) || resolvePropertyTitle(listing),
+      suffix: value.slice(1) || resolvePropertyTitle(listing, preferenceStore.locale),
       icon: listing.property_sale?.property_type === 'house' ? 'home' : 'building',
     };
   }),
@@ -92,54 +96,71 @@ interface FilterGroup {
   options: FilterOption[];
   activeValue: string;
 }
-const filterGroups = ref<FilterGroup[]>([
+const activeFilterValues = reactive<Record<string, string>>({
+  region: '',
+  transaction: '',
+  property_type: '',
+  price: '',
+  area: '',
+  bedroom: '',
+  renovation: '',
+  publisher: '',
+});
+const translateFilterOptions = (groupKey: string, options: FilterOption[]): FilterOption[] => {
+  const localeKey = groupKey === 'property_type' ? 'propertyType' : groupKey;
+  return options.map((option) => ({
+    value: option.value,
+    label: t(`property.publicList.filterOptions.${localeKey}.${option.value || 'all'}`),
+  }));
+};
+const filterGroups = computed<FilterGroup[]>(() => [
   {
     key: 'region',
-    title: '地區',
-    options: propertyRegionFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.region'),
+    options: translateFilterOptions('region', propertyRegionFilterOptions),
+    activeValue: activeFilterValues.region,
   },
   {
     key: 'transaction',
-    title: '性質',
-    options: propertyTransactionTypeFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.transaction'),
+    options: translateFilterOptions('transaction', propertyTransactionTypeFilterOptions),
+    activeValue: activeFilterValues.transaction,
   },
   {
     key: 'property_type',
-    title: '物業類型',
-    options: propertyTypeFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.propertyType'),
+    options: translateFilterOptions('property_type', propertyTypeFilterOptions),
+    activeValue: activeFilterValues.property_type,
   },
   {
     key: 'price',
-    title: '售價範圍',
-    options: propertyPriceRangeFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.price'),
+    options: translateFilterOptions('price', propertyPriceRangeFilterOptions),
+    activeValue: activeFilterValues.price,
   },
   {
     key: 'area',
-    title: '實用面積',
-    options: propertyAreaRangeFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.area'),
+    options: translateFilterOptions('area', propertyAreaRangeFilterOptions),
+    activeValue: activeFilterValues.area,
   },
   {
     key: 'bedroom',
-    title: '房間',
-    options: propertyBedroomFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.bedroom'),
+    options: translateFilterOptions('bedroom', propertyBedroomFilterOptions),
+    activeValue: activeFilterValues.bedroom,
   },
   {
     key: 'renovation',
-    title: '裝修',
-    options: propertyRenovationFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.renovation'),
+    options: translateFilterOptions('renovation', propertyRenovationFilterOptions),
+    activeValue: activeFilterValues.renovation,
   },
   {
     key: 'publisher',
-    title: '發布者',
-    options: propertyPublisherFilterOptions,
-    activeValue: '',
+    title: t('property.publicList.filterTitles.publisher'),
+    options: translateFilterOptions('publisher', propertyPublisherFilterOptions),
+    activeValue: activeFilterValues.publisher,
   },
 ]);
 const activeFilterCount = computed(() =>
@@ -162,6 +183,11 @@ interface PropertyCard {
   location: string;
   sub: string;
   agent?: string;
+  agentAvatarUrl?: string;
+  agentDefaultAvatar?: 'male' | 'female' | 'custom' | '';
+  agentLicense?: string;
+  agentSignature?: string;
+  agentCompanyCardUrl?: string;
   priceKind: 'sale' | 'rent';
   price: string;
   priceUnit: string;
@@ -188,19 +214,19 @@ const paginationPages = computed<PaginationPage[]>(() => {
   const numericPages = [...pages].filter((page) => page >= 1 && page <= totalPages.value).sort((a, b) => a - b);
 
   return [
-    { label: '上一頁', key: 'prev', page: Math.max(1, currentPage.value - 1), disabled: currentPage.value <= 1 },
+    { label: t('property.publicList.previous'), key: 'prev', page: Math.max(1, currentPage.value - 1), disabled: currentPage.value <= 1 },
     ...numericPages.map((page) => ({ label: page, key: page, page, active: page === currentPage.value })),
-    { label: '下一頁', key: 'next', page: Math.min(totalPages.value, currentPage.value + 1), disabled: currentPage.value >= totalPages.value },
+    { label: t('property.publicList.next'), key: 'next', page: Math.min(totalPages.value, currentPage.value + 1), disabled: currentPage.value >= totalPages.value },
   ];
 });
 
 const resultRangeText = computed(() => {
   if (pagination.value.total === 0) {
-    return '暫無樓盤';
+    return t('property.publicList.noProperties');
   }
   const start = (currentPage.value - 1) * pageSize + 1;
   const end = Math.min(currentPage.value * pageSize, pagination.value.total);
-  return `第 ${start}-${end} 筆，共 ${pagination.value.total} 筆`;
+  return t('property.publicList.resultRange', { start, end, total: pagination.value.total });
 });
 
 // 9. 載入樓盤列表
@@ -212,7 +238,7 @@ const loadListings = async (): Promise<void> => {
     items.value = data.data.items;
     pagination.value = data.data.pagination;
   } catch {
-    errorMessage.value = '暫時無法讀取樓盤列表。';
+    errorMessage.value = t('property.publicList.loadError');
     items.value = [];
     pagination.value = { page: currentPage.value, page_size: pageSize, total: 0 };
   } finally {
@@ -258,9 +284,8 @@ const activeValue = (groupKey: string): string =>
 
 // 12. 切換篩選標籤（同組互斥）
 const handleFilterToggle = (groupKey: string, optionValue: string) => {
-  const group = filterGroups.value.find((g) => g.key === groupKey);
-  if (group) {
-    group.activeValue = optionValue;
+  if (groupKey in activeFilterValues) {
+    activeFilterValues[groupKey] = optionValue;
   }
   currentPage.value = 1;
   void loadListings();
@@ -277,8 +302,8 @@ const closeFilterSheet = (): void => {
 
 // 14. 清除樓盤篩選條件
 const clearFilters = (): void => {
-  filterGroups.value.forEach((group) => {
-    group.activeValue = '';
+  Object.keys(activeFilterValues).forEach((groupKey) => {
+    activeFilterValues[groupKey] = '';
   });
   currentPage.value = 1;
   void loadListings();
@@ -331,7 +356,7 @@ const toggleFavorite = async (card: PropertyCard): Promise<void> => {
     await favoritePropertySale(card.id);
     patchFavorite(card.id, true);
   } catch {
-    errorMessage.value = '收藏操作失敗。';
+    errorMessage.value = t('property.publicList.favoriteError');
   }
 };
 
@@ -353,13 +378,27 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
   const priceKind = resolvePropertyTransactionType(listing);
   const area = resolvePropertyArea(listing);
   const price = resolvePropertyPrice(listing);
-  const unitPrice = area > 0 && price > 0 ? `@${formatHKD(Math.round(price / area))}/呎` : '';
+  const unitPrice = area > 0 && price > 0
+    ? t('property.publicList.unitPrice', { price: formatHKD(Math.round(price / area)) })
+    : '';
   const cover = resolvePropertyCoverImage(listing);
-  const district = resolvePropertyDistrict(listing, 'zh-HK');
-  const community = resolvePropertyCommunityName(listing);
-  const role = listing.publisher_identity_type === 'agent' ? '代理盤' : '業主盤';
-  const typeLabel = resolvePropertyTypeLabel(listing, 'zh-HK');
-  const agent = sale?.agency_company_name?.trim() || (role === '代理盤' ? sale?.publisher_role_label || role : '業主自讓');
+  const district = resolvePropertyDistrict(listing, preferenceStore.locale);
+  const community = resolvePropertyCommunityName(listing, preferenceStore.locale);
+  const isAgent = listing.publisher_identity_type === 'agent';
+  const role = isAgent
+    ? t('property.publicList.agentListing')
+    : t('property.publicList.ownerListing');
+  const typeLabel = resolvePropertyTypeLabel(listing, preferenceStore.locale);
+  const agent = (preferenceStore.locale === 'en'
+    ? listing.agent_snapshot?.name_en?.trim() || listing.agent_snapshot?.name_zh?.trim()
+    : listing.agent_snapshot?.name_zh?.trim() || listing.agent_snapshot?.name_en?.trim())
+    || sale?.agency_company_name?.trim()
+    || (isAgent
+      ? preferenceStore.locale === 'en' ? role : sale?.publisher_role_label || role
+      : t('property.publicList.ownerDirect'));
+  const publicLocation = preferenceStore.locale === 'en'
+    ? sale?.address_text_en || sale?.public_location_text
+    : sale?.public_location_text;
 
   return {
     id: listing.listing_id,
@@ -367,27 +406,38 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
     typeStack: [typeLabel, role],
     imageUrl: cover?.url,
     tags: [{ label: district }, { label: typeLabel, dark: priceKind === 'rent' }],
-    title: resolvePropertyTitle(listing),
+    title: resolvePropertyTitle(listing, preferenceStore.locale),
     location: `${district} · ${community}`,
     sub: [
-      sale?.public_location_text,
-      resolvePropertyRooms(listing),
+      publicLocation,
+      resolvePropertyRooms(listing, preferenceStore.locale),
       sale?.direction,
     ].filter(Boolean).join(' · '),
     agent,
+    agentAvatarUrl: listing.agent_snapshot?.avatar_url || undefined,
+    agentDefaultAvatar: listing.agent_snapshot?.default_avatar,
+    agentLicense: listing.agent_snapshot?.license_number || undefined,
+    agentSignature: preferenceStore.locale === 'en'
+      ? listing.agent_snapshot?.signature_en || listing.agent_snapshot?.signature_zh || undefined
+      : listing.agent_snapshot?.signature_zh || listing.agent_snapshot?.signature_en || undefined,
+    agentCompanyCardUrl: listing.agent_snapshot?.company_card_url || undefined,
     priceKind,
-    price: resolvePropertyPriceText(listing, 'zh-HK'),
-    priceUnit: priceKind === 'rent' ? '/ 月' : '',
-    area: `實用面積 ${area.toLocaleString('zh-HK')}呎`,
+    price: resolvePropertyPriceText(listing, preferenceStore.locale),
+    priceUnit: priceKind === 'rent' ? t('property.publicList.rentUnit') : '',
+    area: t('property.publicList.usableArea', { area: area.toLocaleString(preferenceStore.locale) }),
     areaPrice: unitPrice,
-    pills: resolvePropertyTagLabels(listing, 'zh-HK', 4),
+    pills: resolvePropertyTagLabels(listing, preferenceStore.locale, 4),
     favorite: Boolean(listing.is_favorite),
   };
 };
 
 // 24. 格式化港幣
 const formatHKD = (value: number): string =>
-  `HK$${value.toLocaleString('zh-HK')}`;
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    maximumFractionDigits: 0,
+  }).format(value);
 
 // 25. 顯示自動補全
 const showAC = () => {
@@ -420,7 +470,7 @@ onMounted(() => {
         v-if="isFilterOpen"
         type="button"
         class="filter-backdrop"
-        aria-label="關閉篩選條件"
+        :aria-label="t('property.publicList.closeFilters')"
         @click="closeFilterSheet"
       ></button>
 
@@ -435,13 +485,13 @@ onMounted(() => {
       >
         <header class="filter-sheet-header">
           <div>
-            <span class="filter-sheet-eyebrow">樓盤放售</span>
-            <h2 id="property-filter-title">篩選條件</h2>
+            <span class="filter-sheet-eyebrow">{{ t('property.publicList.eyebrow') }}</span>
+            <h2 id="property-filter-title">{{ t('property.publicList.filters') }}</h2>
           </div>
           <button
             type="button"
             class="filter-sheet-close"
-            aria-label="關閉篩選條件"
+            :aria-label="t('property.publicList.closeFilters')"
             @click="closeFilterSheet"
           >
             <AppIcon
@@ -460,7 +510,7 @@ onMounted(() => {
             <input
               v-model="keyword"
               class="sinput"
-              placeholder="搜尋樓盤…"
+              :placeholder="t('property.publicList.searchPlaceholder')"
               autocomplete="off"
               @input="showAC"
               @blur="hideAC"
@@ -524,7 +574,7 @@ onMounted(() => {
             type="button"
             class="sbtn"
             @click="submitSearch"
-          >搜</button>
+          >{{ t('property.publicList.search') }}</button>
         </div>
 
         <!-- 1.2 篩選群組 -->
@@ -552,12 +602,12 @@ onMounted(() => {
             type="button"
             class="filter-sheet-reset"
             @click="clearFilters"
-          >全部清除</button>
+          >{{ t('property.publicList.clearAll') }}</button>
           <button
             type="button"
             class="filter-sheet-apply"
             @click="closeFilterSheet"
-          >查看 {{ pagination.total }} 個結果</button>
+          >{{ t('property.publicList.viewResults', { count: pagination.total }) }}</button>
         </div>
       </aside>
 
@@ -573,7 +623,7 @@ onMounted(() => {
                 <input
                   v-model="keyword"
                   class="sinput"
-                  placeholder="搜尋樓盤…"
+                  :placeholder="t('property.publicList.searchPlaceholder')"
                   autocomplete="off"
                   @input="showAC"
                   @blur="hideAC"
@@ -596,7 +646,7 @@ onMounted(() => {
               <button
                 type="submit"
                 class="mobile-search-button"
-                aria-label="搜尋樓盤"
+                :aria-label="t('property.publicList.searchAria')"
               >
                 <AppIcon
                   name="search"
@@ -608,7 +658,7 @@ onMounted(() => {
 
           <div
             class="mobile-filter-rail"
-            aria-label="樓盤快捷篩選"
+            :aria-label="t('property.publicList.quickFiltersAria')"
           >
             <select
               v-for="group in mobileQuickFilterGroups"
@@ -628,13 +678,13 @@ onMounted(() => {
             <select
               v-model="sortBy"
               class="mobile-filter-select mobile-sort-select"
-              aria-label="樓盤排序"
+              :aria-label="t('property.publicList.sortAria')"
               @change="handleSortChange"
             >
-              <option value="latest">最新更新</option>
-              <option value="price_asc">價格低至高</option>
-              <option value="price_desc">價格高至低</option>
-              <option value="usable_area_desc">面積大至小</option>
+              <option value="latest">{{ t('property.publicList.sortLatest') }}</option>
+              <option value="price_asc">{{ t('property.publicList.sortPriceAsc') }}</option>
+              <option value="price_desc">{{ t('property.publicList.sortPriceDesc') }}</option>
+              <option value="usable_area_desc">{{ t('property.publicList.sortAreaDesc') }}</option>
             </select>
             <button
               type="button"
@@ -643,7 +693,7 @@ onMounted(() => {
               :aria-expanded="isFilterOpen"
               @click="openFilterSheet"
             >
-              <span>更多</span>
+              <span>{{ t('property.publicList.more') }}</span>
               <AppIcon
                 name="chevron-down"
                 :size="16"
@@ -658,29 +708,31 @@ onMounted(() => {
               type="button"
               class="mobile-filter-reset"
               @click="clearFilters"
-            >重設</button>
+            >{{ t('property.publicList.reset') }}</button>
           </div>
         </div>
 
         <!-- 2.1 排序欄 -->
         <div class="sort-row listing-sort-row">
           <div class="listing-result-tools">
-            <div class="listing-top-filters" aria-label="樓盤快速篩選">
-              <span class="ft">住宅</span><span class="ft">車位</span><span class="ft">工業</span><span class="ft">商廈</span>
+            <div class="listing-top-filters" :aria-label="t('property.publicList.quickFiltersAria')">
+              <span class="ft">{{ t('property.publicList.quickFilters.residential') }}</span><span class="ft">{{ t('property.publicList.quickFilters.carPark') }}</span><span class="ft">{{ t('property.publicList.quickFilters.industrial') }}</span><span class="ft">{{ t('property.publicList.quickFilters.office') }}</span>
               <span class="listing-filter-divider" aria-hidden="true">｜</span>
-              <span class="ft">業主</span><span class="ft">代理</span>
+              <span class="ft">{{ t('property.publicList.quickFilters.owner') }}</span><span class="ft">{{ t('property.publicList.quickFilters.agent') }}</span>
             </div>
-            <span class="rn">{{ loading ? '讀取中' : `${pagination.total} 個結果` }}</span>
+            <span class="rn">{{ loading
+              ? t('property.publicList.loadingShort')
+              : t('property.publicList.results', { count: pagination.total }) }}</span>
           </div>
           <select
             v-model="sortBy"
             class="ssel"
             @change="handleSortChange"
           >
-            <option value="latest">最新更新</option>
-            <option value="price_asc">價格低至高</option>
-            <option value="price_desc">價格高至低</option>
-            <option value="usable_area_desc">面積大至小</option>
+            <option value="latest">{{ t('property.publicList.sortLatest') }}</option>
+            <option value="price_asc">{{ t('property.publicList.sortPriceAsc') }}</option>
+            <option value="price_desc">{{ t('property.publicList.sortPriceDesc') }}</option>
+            <option value="usable_area_desc">{{ t('property.publicList.sortAreaDesc') }}</option>
           </select>
         </div>
 
@@ -694,13 +746,13 @@ onMounted(() => {
           v-else-if="loading && cards.length === 0"
           class="listing-state"
         >
-          正在讀取樓盤。
+          {{ t('property.publicList.loading') }}
         </p>
         <p
           v-else-if="!loading && cards.length === 0"
           class="listing-state"
         >
-          暫時未有符合條件的樓盤。
+          {{ t('property.publicList.empty') }}
         </p>
 
         <!-- 2.2 列表視圖 -->
@@ -760,30 +812,31 @@ onMounted(() => {
                   v-if="card.agent"
                   class="listing-agent"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M4 21V7l8-4 8 4v14"
-                      stroke-width="1.8"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M9 21v-7h6v7M8 9h.01M12 9h.01M16 9h.01"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                  {{ card.agent }}
+                  <div class="listing-agent-avatar" :class="card.agentDefaultAvatar ? `listing-agent-avatar--${card.agentDefaultAvatar}` : ''">
+                    <img v-if="card.agentAvatarUrl" :src="card.agentAvatarUrl" :alt="card.agent">
+                    <span v-else>{{ card.agent.slice(0, 1) }}</span>
+                  </div>
+                  <div class="listing-agent-copy">
+                    <strong>{{ card.agent }}</strong>
+                    <span v-if="card.agentLicense">{{ t('property.publicDetail.agentLicense', { license: card.agentLicense }) }}</span>
+                    <span v-if="card.agentSignature">{{ card.agentSignature }}</span>
+                  </div>
+                  <a
+                    v-if="card.agentCompanyCardUrl"
+                    class="listing-agent-card-link"
+                    :href="card.agentCompanyCardUrl"
+                    target="_blank"
+                    rel="noreferrer"
+                    @click.stop
+                  >{{ t('property.publicDetail.companyCard') }}</a>
                 </div>
                 <div class="gprice">
                   <span
                     class="listing-price-kind"
                     :class="card.priceKind"
-                  >{{ card.priceKind === 'sale' ? '售' : '租' }}</span>{{ card.price }}<span v-if="card.priceUnit"> {{ card.priceUnit }}</span>
+                  >{{ card.priceKind === 'sale'
+                    ? t('property.publicList.sale')
+                    : t('property.publicList.rent') }}</span>{{ card.price }}<span v-if="card.priceUnit"> {{ card.priceUnit }}</span>
                 </div>
                 <div class="garea">
                   {{ card.area }} <span class="garea-price">{{ card.areaPrice }}</span>
@@ -805,17 +858,17 @@ onMounted(() => {
                   type="button"
                   class="gc-action-btn"
                   @click.stop="toggleFavorite(card)"
-                >{{ card.favorite ? '已收藏' : '收藏' }}</button>
+                >{{ card.favorite ? t('property.publicList.favorited') : t('property.publicList.favorite') }}</button>
                 <button
                   type="button"
                   class="gc-action-btn"
                   @click.stop="openAppointment(card)"
-                >睇樓</button>
+                >{{ t('property.publicList.appointment') }}</button>
                 <button
                   type="button"
                   class="gc-action-btn primary"
                   @click.stop="handleCardClick(card.id)"
-                >查看</button>
+                >{{ t('property.publicList.view') }}</button>
               </div>
             </div>
 
@@ -825,7 +878,7 @@ onMounted(() => {
         <!-- 2.3 分頁 -->
         <div
           class="listing-pagination"
-          aria-label="樓盤租售分頁"
+          :aria-label="t('property.publicList.paginationAria')"
         >
           <span class="listing-pagination-info">{{ resultRangeText }}</span>
           <div class="listing-pagination-actions">
@@ -845,7 +898,7 @@ onMounted(() => {
       <!-- 3. 右側廣告欄 -->
       <aside
         class="listing-ad-aside"
-        aria-label="樓盤租售展示廣告"
+        :aria-label="t('property.publicList.advertisingAria')"
       >
         <ListingSideAds channel="property_sale" />
       </aside>
@@ -1204,7 +1257,8 @@ onMounted(() => {
 
 /* 18. 代理公司 */
 .listing-agent {
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   margin-top: 6px;
@@ -1214,12 +1268,54 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-.listing-agent svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  stroke: currentColor;
-  fill: none;
+.listing-agent-avatar {
+  display: grid;
+  overflow: hidden;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sur-2);
+}
+
+.listing-agent-avatar--male {
+  background: #e8f1f6;
+  color: #315b70;
+}
+
+.listing-agent-avatar--female {
+  background: #f5e9ed;
+  color: #7f4758;
+}
+
+.listing-agent-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.listing-agent-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.listing-agent-copy strong,
+.listing-agent-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listing-agent-copy span {
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.listing-agent-card-link {
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  text-decoration: underline;
 }
 
 /* 19. 價格 */

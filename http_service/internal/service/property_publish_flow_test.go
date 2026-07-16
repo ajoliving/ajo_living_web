@@ -4,11 +4,13 @@
  * 2. Publish the draft and verify public listing visibility and privacy fields.
  * 3. Verify serviced apartment field derivation for xlsx range fields.
  * 4. Verify residential owner and agent form validation rules.
+ * 5. Verify sale publisher identity comes from the registered account.
  */
 package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +72,31 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		t.Fatalf("create wallet: %v", err)
 	}
 
+	agent := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "62345678",
+		MemberStatus:     "active",
+		MemberType:       "user",
+		IsVerifiedPhone:  true,
+	}
+	if err := db.Create(&agent).Error; err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := db.Create(&model.UserProfile{UserID: agent.ID, DisplayName: "測試代理", PublisherIdentityType: "agent"}).Error; err != nil {
+		t.Fatalf("create agent profile: %v", err)
+	}
+	agentDraft, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:           agent.ID,
+		PublisherIdentityType: "owner",
+	})
+	if err != nil {
+		t.Fatalf("create agent property draft: %v", err)
+	}
+	if agentDraft.PublisherIdentityType != "owner" {
+		t.Fatalf("expected requested owner identity to override profile, got %q", agentDraft.PublisherIdentityType)
+	}
+
 	cover := model.MediaAsset{
 		PublicID:        utils.NewPublicID(),
 		StorageProvider: "oss",
@@ -85,7 +112,8 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	}
 
 	incompleteDraft, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
-		OwnerUserID: owner.ID,
+		OwnerUserID:           owner.ID,
+		PublisherIdentityType: "owner",
 	})
 	if err != nil {
 		t.Fatalf("create incomplete property draft: %v", err)
@@ -94,14 +122,15 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		t.Fatalf("unexpected incomplete draft detail: %#v", incompleteDraft)
 	}
 	updatedIncompleteDraft, err := propertyService.UpdatePropertySale(context.Background(), UpsertPropertySaleParams{
-		OwnerUserID:     owner.ID,
-		ListingPublicID: incompleteDraft.ListingID,
-		Title:           "未完成草稿",
+		OwnerUserID:           owner.ID,
+		ListingPublicID:       incompleteDraft.ListingID,
+		Title:                 "未完成草稿",
+		PublisherIdentityType: "owner",
 	})
 	if err != nil {
 		t.Fatalf("update incomplete property draft: %v", err)
 	}
-	if updatedIncompleteDraft.Title != "未完成草稿" || updatedIncompleteDraft.PublicationStatus != "draft" {
+	if updatedIncompleteDraft.Title != "未完成草稿" || updatedIncompleteDraft.PublicationStatus != "draft" || updatedIncompleteDraft.PublisherIdentityType != "owner" {
 		t.Fatalf("unexpected updated incomplete draft detail: %#v", updatedIncompleteDraft)
 	}
 	if _, err := propertyService.PublishProperty(context.Background(), PropertyChannelSale, owner.ID, incompleteDraft.ListingID); err == nil {
@@ -151,10 +180,19 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 			{MediaAssetID: cover.PublicID, SortOrder: 1, IsCover: true},
 		},
 		Contact: PropertyContactInput{
-			ContactNameZH:   "測試業主",
-			ContactNameEN:   "Test Owner",
-			Phone:           "61234567",
+			ContactNameZH: "測試業主",
+			ContactNameEN: "Test Owner",
+			Phone:         "61234567",
+			Phone2:        "62345678",
+			WhatsApp:      "61234567",
+			ContactAttributes: map[string]string{
+				"phone_country_code":       "+852",
+				"phone_2_country_code":     "+86",
+				"phone_whatsapp_enabled":   "yes",
+				"phone_2_whatsapp_enabled": "yes",
+			},
 			ShowPhone:       true,
+			ShowWhatsApp:    true,
 			ShowInquiryForm: true,
 		},
 	})
@@ -163,6 +201,9 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	}
 	if detail.ListingID == "" || detail.PublicationStatus != "draft" {
 		t.Fatalf("unexpected draft detail: %#v", detail)
+	}
+	if detail.PublisherIdentityType != "owner" {
+		t.Fatalf("expected profile owner identity to override request, got %q", detail.PublisherIdentityType)
 	}
 	if detail.PropertySale == nil || detail.PropertySale.UnitName != "A" || detail.PropertySale.PrivateNote == "" {
 		t.Fatalf("owner draft detail did not retain private fields: %#v", detail.PropertySale)
@@ -205,6 +246,23 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if publicSale.PublicLocationText != "仁英大廈高層(21-25|40/F)" {
 		t.Fatalf("unexpected public location text: %q", publicSale.PublicLocationText)
 	}
+	contactAccess, err := propertyService.GrantPropertyContactAccess(
+		context.Background(),
+		PropertyChannelSale,
+		owner.ID,
+		detail.ListingID,
+		"127.0.0.1",
+		"property-test",
+	)
+	if err != nil {
+		t.Fatalf("grant property contact access: %v", err)
+	}
+	if !strings.Contains(contactAccess.ContactPayload["phone_whatsapp_url"], "wa.me/85261234567") {
+		t.Fatalf("unexpected phone 1 whatsapp url: %q", contactAccess.ContactPayload["phone_whatsapp_url"])
+	}
+	if !strings.Contains(contactAccess.ContactPayload["phone_2_whatsapp_url"], "wa.me/8662345678") {
+		t.Fatalf("unexpected phone 2 whatsapp url: %q", contactAccess.ContactPayload["phone_2_whatsapp_url"])
+	}
 
 	if err := propertyService.DeactivateProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID); err != nil {
 		t.Fatalf("deactivate property sale: %v", err)
@@ -222,6 +280,30 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	}
 	if republished.PublicationStatus != "active" || republished.BusinessStatus != "available" || republished.PointsCharged != 1500 {
 		t.Fatalf("unexpected republished detail: %#v", republished)
+	}
+
+	if err := db.Model(&model.UserProfile{}).Where("user_id = ?", owner.ID).Update("publisher_identity_type", "tenant").Error; err != nil {
+		t.Fatalf("change account identity for publication check: %v", err)
+	}
+	if err := propertyService.DeactivateProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID); err != nil {
+		t.Fatalf("deactivate property for identity check: %v", err)
+	}
+	legacyRepublished, err := propertyService.RepublishProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID)
+	if err != nil {
+		t.Fatalf("republish property with legacy account identity: %v", err)
+	}
+	if legacyRepublished.PublisherIdentityType != "owner" {
+		t.Fatalf("expected legacy account identity to default to owner, got %q", legacyRepublished.PublisherIdentityType)
+	}
+	ownerDraft, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:           owner.ID,
+		PublisherIdentityType: "owner",
+	})
+	if err != nil {
+		t.Fatalf("create property draft with selected owner identity: %v", err)
+	}
+	if ownerDraft.PublisherIdentityType != "owner" {
+		t.Fatalf("expected selected owner draft identity, got %q", ownerDraft.PublisherIdentityType)
 	}
 }
 
@@ -428,12 +510,100 @@ func TestValidateServicedApartmentSheetFields(t *testing.T) {
 	}
 }
 
-// 5. ptrInt returns an int pointer for optional area fields.
+// 5. TestPropertySaleDraftSaveChargesPoints verifies draft persistence and billing are atomic.
+func TestPropertySaleDraftSaveChargesPoints(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+utils.NewPublicID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+
+	now := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	runtime := &Runtime{
+		Config: &config.Config{EncryptionKey: "property-draft-charge-test-key"},
+		DB:     db,
+		Now:    func() time.Time { return now },
+	}
+	runtime.WalletService = NewWalletService(runtime)
+	propertyService := NewPropertyService(runtime)
+
+	owner := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234567",
+		MemberStatus:     "active",
+		MemberType:       "user",
+		IsVerifiedPhone:  true,
+	}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := db.Create(&model.UserProfile{UserID: owner.ID, PublisherIdentityType: "owner"}).Error; err != nil {
+		t.Fatalf("create owner profile: %v", err)
+	}
+	if err := db.Create(&model.WalletAccount{UserID: owner.ID, Balance: 2500}).Error; err != nil {
+		t.Fatalf("create wallet: %v", err)
+	}
+
+	draft, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:     owner.ID,
+		Title:           "首次草稿",
+		ChargeDraftSave: true,
+	})
+	if err != nil {
+		t.Fatalf("create charged property draft: %v", err)
+	}
+	if draft.PublicationStatus != "draft" || draft.PointsCharged != 1000 || draft.PointsBalanceAfter == nil || *draft.PointsBalanceAfter != 1500 {
+		t.Fatalf("unexpected charged draft detail: %#v", draft)
+	}
+
+	now = now.Add(time.Second)
+	updated, err := propertyService.UpdatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:     owner.ID,
+		ListingPublicID: draft.ListingID,
+		Title:           "第二次草稿",
+		ChargeDraftSave: true,
+	})
+	if err != nil {
+		t.Fatalf("update charged property draft: %v", err)
+	}
+	if updated.Title != "第二次草稿" || updated.PointsCharged != 1000 || updated.PointsBalanceAfter == nil || *updated.PointsBalanceAfter != 500 {
+		t.Fatalf("unexpected updated charged draft: %#v", updated)
+	}
+
+	now = now.Add(time.Second)
+	if _, err := propertyService.UpdatePropertySale(context.Background(), UpsertPropertySaleParams{
+		OwnerUserID:     owner.ID,
+		ListingPublicID: draft.ListingID,
+		Title:           "不應保存的草稿",
+		ChargeDraftSave: true,
+	}); err == nil {
+		t.Fatal("expected insufficient points draft save to fail")
+	}
+	retained, err := propertyService.GetPropertyDetail(context.Background(), PropertyChannelSale, draft.ListingID, &owner.ID)
+	if err != nil {
+		t.Fatalf("load retained property draft: %v", err)
+	}
+	if retained.Title != "第二次草稿" {
+		t.Fatalf("insufficient points changed draft title: %q", retained.Title)
+	}
+	var wallet model.WalletAccount
+	if err := db.Where("user_id = ?", owner.ID).First(&wallet).Error; err != nil {
+		t.Fatalf("load wallet: %v", err)
+	}
+	if wallet.Balance != 500 || wallet.TotalSpent != 2000 {
+		t.Fatalf("unexpected wallet after draft saves: %#v", wallet)
+	}
+}
+
+// 6. ptrInt returns an int pointer for optional area fields.
 func ptrInt(value int) *int {
 	return &value
 }
 
-// 6. TestDeriveServicedApartmentRentRange verifies project-level room rent range fields.
+// 7. TestDeriveServicedApartmentRentRange verifies project-level room rent range fields.
 func TestDeriveServicedApartmentRentRange(t *testing.T) {
 	derived := deriveServicedApartmentFields(UpsertServicedApartmentParams{
 		LowestMonthlyRentHKD:  20000,

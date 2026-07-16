@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import { fetchServicedApartmentListings } from '@/httpapis/properties';
@@ -26,6 +27,7 @@ import {
 } from '@/utils/property';
 
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const loading = ref(false);
@@ -40,15 +42,19 @@ const hasPrevious = computed(() => pagination.value.page > 1);
 const hasNext = computed(() => pagination.value.page * pagination.value.page_size < pagination.value.total);
 const resultText = computed(() => {
   if (loading.value) {
-    return '正在載入';
+    return t('servicedResidence.list.loading');
   }
   if (pagination.value.total <= 0) {
-    return '未有服務式住宅';
+    return t('servicedResidence.list.empty');
   }
 
   const start = (pagination.value.page - 1) * pagination.value.page_size + 1;
   const end = Math.min(pagination.value.page * pagination.value.page_size, pagination.value.total);
-  return `${start}-${end} / ${pagination.value.total}`;
+  return t('servicedResidence.list.resultRange', {
+    start,
+    end,
+    total: pagination.value.total,
+  });
 });
 
 // 1. 建立列表查詢參數
@@ -69,8 +75,8 @@ const loadListings = async (targetPage = 1): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '服務式住宅列表載入失敗'
-        : '服務式住宅列表載入失敗',
+        ? error.response?.data?.message ?? t('servicedResidence.list.loadError')
+        : t('servicedResidence.list.loadError'),
       'error',
     );
     listings.value = [];
@@ -116,6 +122,19 @@ const resolveCardTags = (listing: PropertyListingSummaryResponse): string[] => [
 const resolveCardPriceMode = (listing: PropertyListingSummaryResponse): 'daily' | 'monthly' =>
   Number(listing.serviced_apartment?.lowest_daily_rent_hkd || 0) > 0 ? 'daily' : 'monthly';
 
+// 8. 取得卡片面積或房型摘要
+const resolveCardMeta = (listing: PropertyListingSummaryResponse): string => {
+  const area = resolvePropertyArea(listing);
+  if (area > 0) {
+    return t('servicedResidence.list.sqftFrom', { area });
+  }
+
+  const roomCount = listing.serviced_apartment?.room_types.length ?? 0;
+  return roomCount > 0
+    ? t('servicedResidence.detail.roomTypeCount', { count: roomCount }, roomCount)
+    : resolvePropertyRooms(listing, preferenceStore.locale);
+};
+
 onMounted(() => {
   void loadListings(1);
 });
@@ -125,19 +144,19 @@ onMounted(() => {
   <div class="sv-page">
     <section class="sv-hero pat">
       <div class="sv-hero-text">
-        <div class="hero-eyebrow">SERVICE APARTMENTS</div>
+        <div class="hero-eyebrow">{{ t('servicedResidence.list.heroEyebrow') }}</div>
         <h2 class="sv-hero-title">
-          靈活短租<br />全城精選
+          {{ t('servicedResidence.list.heroTitleTop') }}<br />{{ t('servicedResidence.list.heroTitleBottom') }}
         </h2>
         <p class="sv-hero-desc">
-          酒店式管理，家的感覺。按日、按週、按月靈活租用，適合商務出行及過渡期居住。
+          {{ t('servicedResidence.list.heroDescription') }}
         </p>
       </div>
     </section>
 
     <section class="sv-section">
       <div class="sv-section-head">
-        <div class="home-sec-title">精選服務式住宅</div>
+        <div class="home-sec-title">{{ t('servicedResidence.list.featured') }}</div>
         <div class="sv-result-count">{{ resultText }}</div>
       </div>
 
@@ -145,14 +164,14 @@ onMounted(() => {
         v-if="loading"
         class="sv-state"
       >
-        正在載入
+        {{ t('servicedResidence.list.loading') }}
       </section>
 
       <section
         v-else-if="listings.length === 0"
         class="sv-state"
       >
-        未有服務式住宅
+        {{ t('servicedResidence.list.empty') }}
       </section>
 
       <section
@@ -175,7 +194,9 @@ onMounted(() => {
           <div class="sv-body">
             <div class="gtags">
               <span class="gtag dark">
-                {{ listing.serviced_apartment?.min_stay_unit === 'day' ? '可短租' : '月租' }}
+                {{ listing.serviced_apartment?.min_stay_unit === 'day'
+                  ? t('servicedResidence.list.shortStay')
+                  : t('servicedResidence.list.monthly') }}
               </span>
               <span
                 v-for="tag in resolveCardTags(listing)"
@@ -185,11 +206,13 @@ onMounted(() => {
                 {{ tag }}
               </span>
             </div>
-            <div class="gtitle">{{ resolvePropertyTitle(listing) }}</div>
-            <div class="gsub">{{ resolvePropertySummary(listing) }}</div>
+            <div class="gtitle">{{ resolvePropertyTitle(listing, preferenceStore.locale) }}</div>
+            <div class="gsub">{{ resolvePropertySummary(listing, preferenceStore.locale) }}</div>
             <div class="gprice">
               {{ resolvePropertyPriceText(listing, preferenceStore.locale, resolveCardPriceMode(listing)) }}
-              <span>{{ resolveCardPriceMode(listing) === 'daily' ? '/ 日起' : '/ 月起' }}</span>
+              <span>{{ resolveCardPriceMode(listing) === 'daily'
+                ? t('servicedResidence.list.perDayFrom')
+                : t('servicedResidence.list.perMonthFrom') }}</span>
             </div>
             <div class="gpills">
               <span
@@ -203,9 +226,9 @@ onMounted(() => {
           </div>
           <div class="gfoot">
             <span class="grooms">
-              {{ resolvePropertyArea(listing) > 0 ? `${resolvePropertyArea(listing)}呎起` : resolvePropertyRooms(listing) }}
+              {{ resolveCardMeta(listing) }}
             </span>
-            <span class="gview">查看 →</span>
+            <span class="gview">{{ t('servicedResidence.list.view') }} →</span>
           </div>
         </article>
       </section>
@@ -217,7 +240,7 @@ onMounted(() => {
           :disabled="!hasPrevious || loading"
           @click="loadPage(pagination.page - 1)"
         >
-          上一頁
+          {{ t('servicedResidence.list.previous') }}
         </button>
         <span>{{ pagination.page }}</span>
         <button
@@ -226,7 +249,7 @@ onMounted(() => {
           :disabled="!hasNext || loading"
           @click="loadPage(pagination.page + 1)"
         >
-          下一頁
+          {{ t('servicedResidence.list.next') }}
         </button>
       </div>
     </section>

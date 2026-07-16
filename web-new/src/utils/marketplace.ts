@@ -94,30 +94,43 @@ export const resolveListingPrice = (listing: MarketplaceListingLike) => {
 };
 
 // 9. 取得帖子社區名稱
-export const resolveListingCommunityName = (listing: MarketplaceListingLike) => {
+export const resolveListingCommunityName = (
+  listing: MarketplaceListingLike,
+  locale: AppLocale = 'zh-HK',
+) => {
   if (!isApiListing(listing)) {
     return listing.community.name;
   }
 
   if (!listing.community) {
-    return getMarketplaceDistrictLabel(listing.district_code, 'zh-HK');
+    return getMarketplaceDistrictLabel(listing.district_code, locale);
   }
 
+  const localizedName = locale === 'en'
+    ? listing.community.name_en.trim()
+    : listing.community.name_zh.trim();
+  const fallbackName = locale === 'en'
+    ? listing.community.name_zh.trim()
+    : listing.community.name_en.trim();
+
   return (
-    listing.community.name_zh.trim() ||
-    listing.community.name_en.trim() ||
+    localizedName ||
+    fallbackName ||
     listing.community.address_text.trim() ||
-    getMarketplaceDistrictLabel(listing.community.district_code, 'zh-HK')
+    getMarketplaceDistrictLabel(listing.community.district_code, locale)
   );
 };
 
 // 10. 取得帖子社區次標題
-export const resolveListingCommunitySecondary = (listing: MarketplaceListingLike) => {
+export const resolveListingCommunitySecondary = (
+  listing: MarketplaceListingLike,
+  locale: AppLocale = 'zh-HK',
+) => {
   if (!isApiListing(listing)) {
     return listing.community.district;
   }
 
-  return getMarketplaceDistrictLabel(listing.community?.district_code || listing.district_code, 'zh-HK');
+  return getMarketplaceDistrictLabel(listing.community?.district_code || listing.district_code, locale);
 };
 
 // 11. 取得帖子發布者名稱

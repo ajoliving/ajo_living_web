@@ -109,7 +109,7 @@ const {
     <section class="account-profile-summary-grid">
       <article class="account-profile-summary-card">
         <div class="account-profile-summary-card__title">
-          帳戶資料
+          {{ t('account.profile.accountInfo') }}
         </div>
         <section class="account-profile-section">
           <dl class="account-profile-list">
@@ -127,7 +127,7 @@ const {
 
       <article class="account-profile-summary-card">
         <div class="account-profile-summary-card__title">
-          身份狀態
+          {{ t('account.profile.identityInfo') }}
         </div>
         <section class="account-profile-section">
           <dl class="account-profile-list">
@@ -150,7 +150,7 @@ const {
               {{ role }}
             </span>
             <span class="account-profile-role-note">
-              {{ permissionChips.length > 0 ? permissionChips[0] : '尚未分配權限' }}
+              {{ permissionChips.length > 0 ? permissionChips[0] : t('marketplace.myProfile.noPermissions') }}
             </span>
           </div>
         </section>
@@ -160,7 +160,7 @@ const {
     <article class="account-profile-panel">
       <section class="account-profile-permissions">
         <div class="account-profile-summary-card__title">
-          相關權限
+          {{ t('account.profile.permissions') }}
         </div>
 
         <div class="account-profile-chip-group">
@@ -176,7 +176,7 @@ const {
 
       <section class="account-profile-unit">
         <div class="account-profile-summary-card__title">
-          綁定單位
+          {{ t('account.profile.bindUnit') }}
         </div>
         <div class="account-profile-unit__header">
           <p>{{ selectedUnitDisplay }}</p>
@@ -186,13 +186,13 @@ const {
             :disabled="!canSaveUnit || isSavingUnit"
             @click="handleSaveUnit"
           >
-            {{ isSavingUnit ? '儲存中' : '儲存單位' }}
+            {{ isSavingUnit ? t('account.profile.savingUnit') : t('account.profile.saveUnit') }}
           </BaseButton>
         </div>
 
         <div class="account-profile-unit__fields">
           <label>
-            <span>大廈</span>
+            <span>{{ t('account.profile.building') }}</span>
             <AppGlassSelect
               :model-value="selectedBuildingID"
               :options="buildingOptions"
@@ -202,7 +202,7 @@ const {
           </label>
 
           <label>
-            <span>樓層</span>
+            <span>{{ t('account.profile.floor') }}</span>
             <AppGlassSelect
               :model-value="selectedFloor"
               :options="floorOptions"
@@ -212,7 +212,7 @@ const {
           </label>
 
           <label>
-            <span>單位</span>
+            <span>{{ t('account.profile.unit') }}</span>
             <AppGlassSelect
               v-model="selectedUnitID"
               :options="unitOptions"
@@ -313,14 +313,6 @@ const {
               />
             </label>
           </div>
-
-          <label class="account-profile-field">
-            <span>{{ t('account.profile.publisherIdentity') }}</span>
-            <BaseInput
-              :model-value="formState.publisher_identity_type"
-              @update:model-value="formState.publisher_identity_type = $event"
-            />
-          </label>
 
           <label class="account-profile-field">
             <span>{{ t('account.profile.districtCode') }}</span>
@@ -686,6 +678,8 @@ const {
 
 .account-profile-dialog {
   width: min(100%, 36rem);
+  max-height: calc(100svh - 2.5rem);
+  overflow-y: auto;
   border: 1px solid rgb(var(--color-border));
   border-radius: 0.75rem;
   background: rgb(var(--color-surface));
@@ -860,6 +854,20 @@ const {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.25rem;
+}
+
+@media (max-width: 1023px) {
+  .account-profile-modal {
+    place-items: end center;
+    padding:
+      var(--app-safe-top)
+      var(--layout-page-padding-inline)
+      calc(var(--app-safe-bottom) + 10px);
+  }
+
+  .account-profile-dialog {
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+  }
 }
 
 @media (max-width: 767px) {

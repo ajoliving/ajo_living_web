@@ -21,14 +21,15 @@ import (
 	"ajoliving_web/http_service/internal/utils"
 )
 
-// 1. upsertPropertySale creates or updates a sale listing aggregate.
-func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertPropertySaleParams, creating bool) (string, error) {
+// 1. upsertPropertySale creates or updates a sale listing aggregate and optionally charges a draft save.
+func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertPropertySaleParams, creating bool, chargeDraftSave bool) (string, *PointsChargeResponse, error) {
 	communityID, err := s.resolveCommunityID(ctx, params.CommunityID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	returnPublicID := params.ListingPublicID
+	var charge *PointsChargeResponse
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		listing, err := s.preparePropertyRoot(ctx, tx, PropertyChannelSale, creating, propertyRootInput{
 			OwnerUserID:           params.OwnerUserID,
@@ -124,13 +125,23 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			return err
 		}
 
-		return s.savePropertyContactAndImages(ctx, tx, listing.ID, params.OwnerUserID, params.Contact, params.ContactMethod, params.Images)
+		if err := s.savePropertyContactAndImages(ctx, tx, listing.ID, params.OwnerUserID, params.Contact, params.ContactMethod, params.Images); err != nil {
+			return err
+		}
+		if chargeDraftSave {
+			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, WalletActionSaveDraft)
+			if err != nil {
+				return err
+			}
+			charge = chargeResult
+		}
+		return nil
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return returnPublicID, nil
+	return returnPublicID, charge, nil
 }
 
 // 2. normalizeAnnualPrepayOption normalizes annual prepay discount options.
@@ -185,8 +196,14 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 		}
 		returnPublicID = listing.PublicID
 
+		chargeAction := ""
 		if shouldChargeListingEdit(listing) {
-			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, WalletActionEdit)
+			chargeAction = WalletActionEdit
+		} else if params.ChargeDraftSave {
+			chargeAction = WalletActionSaveDraft
+		}
+		if chargeAction != "" {
+			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, chargeAction)
 			if err != nil {
 				return err
 			}
@@ -691,10 +708,6 @@ func validateSaleContactParams(params UpsertPropertySaleParams) error {
 		return errcode.New(errcode.CodeValidationError, "invalid publisher identity type")
 	}
 	if publisherType == "agent" {
-		if strings.TrimSpace(params.Contact.ContactAttributes["agency_company_profile"]) == "" ||
-			strings.TrimSpace(params.Contact.ContactAttributes["agency_contact_profile"]) == "" {
-			return errcode.New(errcode.CodeValidationError, "agency company and contact profiles are required")
-		}
 		return nil
 	}
 	if params.ListingPublicID == "" &&
@@ -1155,12 +1168,38 @@ func (s *PropertyService) buildPropertySummaries(ctx context.Context, channel Pr
 	if err != nil {
 		return nil, err
 	}
+	agentMap, err := s.loadPropertyAgentSnapshots(ctx, listingIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	result := make([]PropertyListingSummary, 0, len(rows))
 	for _, item := range rows {
-		result = append(result, s.toPropertySummary(channel, item, imageMap, ownerMap, communityMap))
+		summary := s.toPropertySummary(channel, item, imageMap, ownerMap, communityMap)
+		summary.AgentSnapshot = agentMap[item.ID]
+		result = append(result, summary)
 	}
 
+	return result, nil
+}
+
+// 12.1 loadPropertyAgentSnapshots returns public-safe listing snapshots.
+func (s *PropertyService) loadPropertyAgentSnapshots(ctx context.Context, listingIDs []int64) (map[int64]*PropertyAgentSnapshot, error) {
+	result := make(map[int64]*PropertyAgentSnapshot)
+	if len(listingIDs) == 0 {
+		return result, nil
+	}
+	var contacts []model.ListingContact
+	if err := s.runtime.DB.WithContext(ctx).Where("listing_id IN ?", listingIDs).Find(&contacts).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load property agent snapshots")
+	}
+	for _, contact := range contacts {
+		attrs := decodeStringMapBytes(contact.ContactAttributes)
+		if attrs["agency_profile_type"] == "" {
+			continue
+		}
+		result[contact.ListingID] = &PropertyAgentSnapshot{ProfileType: attrs["agency_profile_type"], Name: attrs["agency_name"], NameZH: attrs["agency_name_zh"], NameEN: attrs["agency_name_en"], LicenseNumber: attrs["agency_license_number"], DefaultAvatar: attrs["agency_default_avatar"], AvatarURL: attrs["agency_avatar_url"], SignatureZH: attrs["agency_signature_zh"], SignatureEN: attrs["agency_signature_en"], CompanyCardURL: attrs["agency_company_card_url"], WechatURL: attrs["agency_wechat_url"], WechatQRURL: attrs["agency_wechat_qr_url"]}
+	}
 	return result, nil
 }
 
@@ -1335,7 +1374,13 @@ func (s *PropertyService) loadOwnedPropertyListingWithTx(ctx context.Context, tx
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load listing")
 	}
 	if listing.OwnerUserID != ownerUserID {
-		return nil, nil, errcode.New(errcode.CodeAuthForbidden, "listing does not belong to the current user")
+		allowed, err := s.canCompanyOwnerManageChildListing(ctx, tx, ownerUserID, listing.OwnerUserID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !allowed {
+			return nil, nil, errcode.New(errcode.CodeAuthForbidden, "listing does not belong to the current user")
+		}
 	}
 
 	var contact model.ListingContact
@@ -1344,6 +1389,18 @@ func (s *PropertyService) loadOwnedPropertyListingWithTx(ctx context.Context, tx
 	}
 
 	return &listing, &contact, nil
+}
+
+// 16.1 canCompanyOwnerManageChildListing authorizes a company owner over linked child listings.
+func (s *PropertyService) canCompanyOwnerManageChildListing(ctx context.Context, tx *gorm.DB, requesterUserID int64, listingOwnerUserID int64) (bool, error) {
+	if err := NewAgencyCompanyService(s.runtime).requireApprovedCompanyOwner(ctx, tx, requesterUserID); err != nil {
+		return false, nil
+	}
+	var count int64
+	if err := tx.WithContext(ctx).Model(&model.AgencyCompanySubaccount{}).Where("company_owner_user_id = ? AND child_user_id = ?", requesterUserID, listingOwnerUserID).Count(&count).Error; err != nil {
+		return false, errcode.New(errcode.CodeInternalError, "failed to validate company listing access")
+	}
+	return count == 1, nil
 }
 
 // 17. buildPropertyContact builds the encrypted contact record.
@@ -2098,7 +2155,181 @@ func fallbackPropertyPublisherIdentity(identity string) string {
 	return strings.TrimSpace(identity)
 }
 
-// 46. publisherRoleLabel returns display label for owner type.
+// 46.1 propertySalePublisher contains the authorized per-listing publisher choice.
+type propertySalePublisher struct {
+	Identity          string
+	AgencyCompanyName string
+	NameZH            string
+	NameEN            string
+	ProfileType       string
+	LicenseNumber     string
+	PhoneCountryCode  string
+	PhoneNumber       string
+	PhoneWhatsApp     bool
+	Phone2CountryCode string
+	Phone2Number      string
+	Phone2WhatsApp    bool
+	WechatID          string
+	WechatURL         string
+	WechatQRURL       string
+	DefaultAvatar     string
+	SignatureZH       string
+	SignatureEN       string
+	AvatarURL         string
+	CompanyCardURL    string
+	IsOverseas        bool
+	HasHKLicense      bool
+}
+
+// 46.2 resolvePropertySalePublisher derives publishing identity from the account and approved profile.
+func (s *PropertyService) resolvePropertySalePublisher(ctx context.Context, tx *gorm.DB, userID int64, _ string, requiredPermission string) (propertySalePublisher, error) {
+	var user model.User
+	var account model.UserProfile
+	if err := tx.WithContext(ctx).First(&user, userID).Error; err != nil || user.MemberStatus != "active" {
+		return propertySalePublisher{}, errcode.New(errcode.CodeAuthForbidden, "active member account is required")
+	}
+	if err := tx.WithContext(ctx).Where("user_id = ?", userID).First(&account).Error; err != nil {
+		return propertySalePublisher{}, errcode.New(errcode.CodeInternalError, "failed to load publisher account")
+	}
+	accountType, profileOwnerID := normalizeAccountType(account.AccountType), userID
+	if err := s.requireSubaccountPropertyPermission(ctx, tx, userID, requiredPermission); err != nil {
+		return propertySalePublisher{}, err
+	}
+	if accountType == AccountTypePersonal {
+		return propertySalePublisher{Identity: "owner"}, nil
+	}
+	if accountType == AccountTypeAgencyCompanySubaccount {
+		var link model.AgencyCompanySubaccount
+		if err := tx.WithContext(ctx).Where("child_user_id = ? AND status = ?", userID, "active").First(&link).Error; err != nil {
+			return propertySalePublisher{}, errcode.New(errcode.CodeAuthForbidden, "company subaccount is disabled")
+		}
+		profileOwnerID = link.CompanyOwnerUserID
+	}
+	var binding model.AgencyProfileBinding
+	if err := tx.WithContext(ctx).Where("user_id = ?", profileOwnerID).First(&binding).Error; err != nil || binding.ActiveProfileID == nil {
+		return propertySalePublisher{}, errcode.New(errcode.CodeAuthForbidden, "approved agency profile is required")
+	}
+	var profile model.AgencyProfile
+	if err := tx.WithContext(ctx).Where("id = ? AND user_id = ? AND status = ?", *binding.ActiveProfileID, profileOwnerID, AgencyProfileStatusApproved).First(&profile).Error; err != nil {
+		return propertySalePublisher{}, errcode.New(errcode.CodeAuthForbidden, "approved agency profile is required")
+	}
+	return s.toPropertySalePublisher(ctx, tx, &profile), nil
+}
+
+// 46.3 requireSubaccountPropertyPermission enforces current child permissions on every property write.
+func (s *PropertyService) requireSubaccountPropertyPermission(ctx context.Context, tx *gorm.DB, userID int64, permission string) error {
+	var account model.UserProfile
+	if err := tx.WithContext(ctx).Where("user_id = ?", userID).First(&account).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to load property account")
+	}
+	if normalizeAccountType(account.AccountType) != AccountTypeAgencyCompanySubaccount {
+		return nil
+	}
+	var link model.AgencyCompanySubaccount
+	if err := tx.WithContext(ctx).Where("child_user_id = ? AND status = ?", userID, "active").First(&link).Error; err != nil {
+		return errcode.New(errcode.CodeAuthForbidden, "company subaccount is disabled")
+	}
+	if err := NewAgencyCompanyService(s.runtime).requireApprovedCompanyOwner(ctx, tx, link.CompanyOwnerUserID); err != nil {
+		return err
+	}
+	var permissions []string
+	_ = json.Unmarshal(link.Permissions, &permissions)
+	if !containsString(permissions, permission) {
+		return errcode.New(errcode.CodeAuthForbidden, "company subaccount "+permission+" permission is required")
+	}
+	return nil
+}
+
+// 46.4 applyPropertySalePublisher writes only backend-authorized publisher fields.
+func applyPropertySalePublisher(params *UpsertPropertySaleParams, publisher propertySalePublisher) {
+	params.PublisherIdentityType = publisher.Identity
+	params.AgencyCompanyName = publisher.AgencyCompanyName
+	if publisher.Identity != "agent" {
+		return
+	}
+	params.Contact.ContactNameZH = firstNonBlank(publisher.NameZH, publisher.AgencyCompanyName)
+	params.Contact.ContactNameEN = firstNonBlank(publisher.NameEN, publisher.AgencyCompanyName)
+	params.Contact.Phone = publisher.PhoneNumber
+	params.Contact.Phone2 = publisher.Phone2Number
+	params.Contact.Email = ""
+	params.Contact.ShowPhone = publisher.PhoneNumber != ""
+	params.Contact.ShowWhatsApp = publisher.PhoneWhatsApp || publisher.Phone2WhatsApp
+	params.Contact.ShowChat = true
+	params.Contact.ShowInquiryForm = true
+	params.Contact.WhatsApp = ""
+	if publisher.PhoneWhatsApp {
+		params.Contact.WhatsApp = publisher.PhoneNumber
+	}
+	params.Contact.WeChat = publisher.WechatID
+	params.Contact.ContactAttributes = preserveNonAgencyContactAttributes(params.Contact.ContactAttributes)
+	params.Contact.ContactAttributes["agency_profile_type"] = publisher.ProfileType
+	params.Contact.ContactAttributes["phone_country_code"] = publisher.PhoneCountryCode
+	params.Contact.ContactAttributes["phone_whatsapp_enabled"] = yesNo(publisher.PhoneWhatsApp)
+	params.Contact.ContactAttributes["phone_2_country_code"] = publisher.Phone2CountryCode
+	params.Contact.ContactAttributes["phone_2_whatsapp_enabled"] = yesNo(publisher.Phone2WhatsApp)
+	params.Contact.ContactAttributes["agency_wechat_url"] = publisher.WechatURL
+	params.Contact.ContactAttributes["agency_wechat_qr_url"] = publisher.WechatQRURL
+	params.Contact.ContactAttributes["agency_default_avatar"] = publisher.DefaultAvatar
+	params.Contact.ContactAttributes["agency_name"] = publisher.AgencyCompanyName
+	params.Contact.ContactAttributes["agency_name_zh"] = publisher.NameZH
+	params.Contact.ContactAttributes["agency_name_en"] = publisher.NameEN
+	params.Contact.ContactAttributes["agency_license_number"] = publisher.LicenseNumber
+	params.Contact.ContactAttributes["agency_signature_zh"] = publisher.SignatureZH
+	params.Contact.ContactAttributes["agency_signature_en"] = publisher.SignatureEN
+	params.Contact.ContactAttributes["agency_avatar_url"] = publisher.AvatarURL
+	params.Contact.ContactAttributes["agency_company_card_url"] = publisher.CompanyCardURL
+}
+
+// 46.5 preserveNonAgencyContactAttributes removes stale controlled keys without dropping business metadata.
+func preserveNonAgencyContactAttributes(source map[string]string) map[string]string {
+	result := make(map[string]string)
+	for key, value := range source {
+		if strings.HasPrefix(key, "agency_") || key == "phone_country_code" || key == "phone_2_country_code" || key == "phone_whatsapp_enabled" || key == "phone_2_whatsapp_enabled" {
+			continue
+		}
+		result[key] = value
+	}
+	return result
+}
+
+// 46.6 toPropertySalePublisher builds a public-safe approved profile snapshot.
+func (s *PropertyService) toPropertySalePublisher(ctx context.Context, tx *gorm.DB, profile *model.AgencyProfile) propertySalePublisher {
+	avatarID := profile.AvatarAssetID
+	if profile.ProfileType == AgencyProfileTypeCompany {
+		avatarID = profile.LogoAssetID
+	}
+	return propertySalePublisher{Identity: "agent", AgencyCompanyName: firstNonBlank(profile.NameZH, profile.NameEN), NameZH: profile.NameZH, NameEN: profile.NameEN, ProfileType: profile.ProfileType, LicenseNumber: profile.LicenseNumber, PhoneCountryCode: profile.Phone1CountryCode, PhoneNumber: profile.Phone1Number, PhoneWhatsApp: profile.Phone1WhatsApp, Phone2CountryCode: profile.Phone2CountryCode, Phone2Number: profile.Phone2Number, Phone2WhatsApp: profile.Phone2WhatsApp, WechatID: profile.WechatID, WechatURL: profile.WechatURL, WechatQRURL: s.agencyPublicAssetURL(ctx, tx, profile.WechatQRAssetID), DefaultAvatar: profile.DefaultAvatar, SignatureZH: profile.SignatureZH, SignatureEN: profile.SignatureEN, AvatarURL: s.agencyPublicAssetURL(ctx, tx, avatarID), CompanyCardURL: s.agencyPublicAssetURL(ctx, tx, profile.CompanyCardAssetID), IsOverseas: profile.IsOverseas, HasHKLicense: strings.TrimSpace(profile.LicenseNumber) != "" && profile.EAALicenseAssetID != nil}
+}
+
+// 46.5 yesNo stores contact boolean flags in the existing unlock contract.
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
+// 46.5 validateAgencyPublisherLocation blocks unlicensed overseas agents from local listings.
+func validateAgencyPublisherLocation(publisher propertySalePublisher, locationScope string) error {
+	if publisher.Identity == "agent" && publisher.IsOverseas && !publisher.HasHKLicense && normalizePropertyLocationScope(locationScope) == "local" {
+		return errcode.New(errcode.CodeAuthForbidden, "overseas agents without a Hong Kong licence cannot publish Hong Kong property")
+	}
+	return nil
+}
+
+// 46.6 agencyPublicAssetURL resolves only approved public presentation assets.
+func (s *PropertyService) agencyPublicAssetURL(ctx context.Context, tx *gorm.DB, assetID *int64) string {
+	if assetID == nil {
+		return ""
+	}
+	var asset model.MediaAsset
+	if tx.WithContext(ctx).First(&asset, *assetID).Error != nil {
+		return ""
+	}
+	return buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
+}
+
+// 46.6 publisherRoleLabel returns display label for owner type.
 func publisherRoleLabel(identity string) string {
 	switch strings.TrimSpace(identity) {
 	case "agent", "professional_seller":
@@ -2131,4 +2362,18 @@ func isAllowedPropertyDistrict(value string) bool {
 func buildPropertyWhatsAppURL(phone string, title string, listingPublicID string, baseURL string, channel PropertyChannel) string {
 	digits := strings.NewReplacer("+", "", " ", "", "-", "", "(", "", ")", "").Replace(phone)
 	return "https://wa.me/" + digits
+}
+
+// 50. propertyWhatsAppPhoneNumber adds the saved country code to local phone numbers.
+func propertyWhatsAppPhoneNumber(phone string, countryCode string) string {
+	trimmedPhone := strings.TrimSpace(phone)
+	trimmedCountryCode := strings.TrimSpace(countryCode)
+	if trimmedPhone == "" || trimmedCountryCode == "" || strings.HasPrefix(trimmedPhone, "+") {
+		return trimmedPhone
+	}
+	if strings.HasPrefix(trimmedPhone, strings.TrimPrefix(trimmedCountryCode, "+")) {
+		return trimmedPhone
+	}
+
+	return trimmedCountryCode + trimmedPhone
 }

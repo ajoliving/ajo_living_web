@@ -1,7 +1,7 @@
 /*
  * POS 物業繳費擴展 HTTP 介面。
  * 1. 提供手續費、銀行賬戶、線下繳費與歷史詳情接口。
- * 2. 提供 H5 訂單查詢、關閉、取消與 Staff 清機接口。
+ * 2. 提供 H5 訂單查詢、關閉、取消與所屬屋苑清機接口。
  * 3. 保持所有舊 POS 操作經由 AJO 後端登入態與權限校驗。
  */
 package handler
@@ -74,7 +74,7 @@ func (h *POSPaymentHandler) ReportPayment(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 4. PayByTerminal submits one Staff POS terminal payment.
+// 4. PayByTerminal submits one member POS terminal payment.
 func (h *POSPaymentHandler) PayByTerminal(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -147,7 +147,7 @@ func (h *POSPaymentHandler) CancelOrder(c *gin.Context) {
 	h.handleOrderAction(c, "cancel")
 }
 
-// 8. SimulateOrder simulates one H5 order in non-production Staff flow.
+// 8. SimulateOrder simulates one visible H5 order in non-production.
 func (h *POSPaymentHandler) SimulateOrder(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -227,7 +227,7 @@ func (h *POSPaymentHandler) ClearAccounting(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 11. ListAccountingRecords returns Staff accounting clear records.
+// 11. ListAccountingRecords returns visible accounting clear records.
 func (h *POSPaymentHandler) ListAccountingRecords(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -243,7 +243,7 @@ func (h *POSPaymentHandler) ListAccountingRecords(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 12. GetAccountingRecord returns one Staff accounting clear record detail.
+// 12. GetAccountingRecord returns one visible accounting clear record detail.
 func (h *POSPaymentHandler) GetAccountingRecord(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

@@ -62,14 +62,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	otpProvider, err := service.NewOTPProvider(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cacheStore, err := service.NewRedisCacheStore(context.Background(), cfg)
+	if err != nil {
+		logg.Warn("redis cache unavailable; requests will use upstream services", "error", err)
+	}
+	if cacheStore != nil {
+		defer cacheStore.Close()
+	}
 
 	runtime := &service.Runtime{
 		Config:          cfg,
 		DB:              db,
 		Logger:          logg,
-		OTPProvider:     service.NewOTPProvider(cfg),
+		OTPProvider:     otpProvider,
 		MailSender:      service.NewMailSender(cfg),
 		StorageProvider: storageProvider,
+		CacheStore:      cacheStore,
 		OTPStore:        service.NewOTPStore(),
 		Now:             time.Now,
 	}
@@ -87,6 +99,7 @@ func main() {
 	securityICCTVService := service.NewSecurityICCTVService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
 	propertyService := service.NewPropertyService(runtime)
+	agencyCompanyService := service.NewAgencyCompanyService(runtime)
 	notificationService := service.NewNotificationService(runtime)
 	supermarketOfferService := service.NewSupermarketOfferService(runtime)
 	marketTrendService := service.NewMarketTrendService(runtime)
@@ -125,6 +138,7 @@ func main() {
 		WalletService:           walletService,
 		SecondhandService:       secondhandService,
 		PropertyService:         propertyService,
+		AgencyCompanyService:    agencyCompanyService,
 		ChatService:             chatService,
 		OrderService:            orderService,
 		NotificationService:     notificationService,

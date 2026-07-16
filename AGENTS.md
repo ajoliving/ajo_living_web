@@ -80,6 +80,7 @@
 - 前端統一使用 `Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS + Axios`。
 - 如需元件庫，統一使用 `Ant Design Vue 4`。
 - 後端統一使用 `Go + Gin + GORM + PostgreSQL`。
+- 共用外部唯讀資料快取使用 Redis；快取不得取代 AJO 的身份、權限與資源可見範圍校驗。
 - 檔案儲存統一使用阿里雲 `OSS`，所有上傳、訪問與媒體管理能力基於 `OSS` 實現。
 - 反向代理統一使用 `Nginx`。
 - 部署方式以 `Docker Compose` 起步。
@@ -191,5 +192,7 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 2026-07-08: 補充 docs prompt、部署 prompt、前端 pages 與後端 internal 的本地記憶入口。
 2026-07-08: 將 docs product、prototypes、backups 歸入 `docs/archive/`，不作後續 prompt/context 入口。
 2026-07-09: 補充每次修改後必須執行 prompt/context 記憶檢查的默認規則。
+2026-07-16: 補充個人註冊先完成 iSmart 與本地帳戶建立、再提交 OwnerReg 審批申請；pending 申請不得被視為已綁定物業。
+2026-07-16: 補充 iSmart 共用大廈資料使用 Redis 短時快取，會員權限與個人回應欄位維持即時校驗及組裝。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

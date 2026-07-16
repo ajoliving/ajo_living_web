@@ -117,7 +117,7 @@ const submitRenewal = async (): Promise<void> => {
     <header class="management-list-header furniture-list-header">
       <div class="furniture-list-title-block">
         <p class="management-list-kicker">
-          Staff
+          {{ t('marketplace.management.staffKicker') }}
         </p>
         <h1>{{ t('marketplace.management.secondhandListings') }}</h1>
         <p>{{ t('marketplace.management.secondhandListingsDescription') }}</p>
@@ -240,7 +240,7 @@ const submitRenewal = async (): Promise<void> => {
               <td>
                 <span class="management-status-pill">{{ formatStatus(listing) }}</span>
               </td>
-              <td>{{ formatDate(listing.updated_at) }}</td>
+              <td>{{ formatDate(listing.updated_at, preferenceStore.locale) }}</td>
               <td
                 class="management-table-actions"
               >

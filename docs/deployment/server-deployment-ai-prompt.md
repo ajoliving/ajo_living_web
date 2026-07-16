@@ -436,6 +436,7 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 3311 | 47.239.117.108 | MySQL(pos_web) | 127.0.0.1 |
 | 3312 | 47.239.117.108 | MySQL(icctv) | 127.0.0.1 |
 | 6381 | 47.239.117.108 | Redis(iboard) | 127.0.0.1 |
+| 6382 | 47.239.117.108 | ajoliving Redis(Docker) | 127.0.0.1 |
 | 45432 | 47.239.117.108 | ajoliving PostgreSQL(Docker) | 127.0.0.1 |
 | 55432 | 47.239.117.108 | good-price PostgreSQL(Docker) | 127.0.0.1 |
 
@@ -533,6 +534,8 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"in
 - 前端本地地址：`127.0.0.1:20041`
 - 数据库容器：`ajoliving_postgres`
 - 数据库端口：`127.0.0.1:45432`
+- Redis 容器：`ajoliving_redis`
+- Redis 端口：`127.0.0.1:6382`
 
 ### 2. frpc 代理（应用服务器）
 
@@ -553,8 +556,8 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"in
 ├── web/                       # Vue 3 前端
 │   ├── dist/                  # 编译产物（nginx 托管）
 │   └── public/                # 静态资源
-└── db/                        # 数据库容器配置
-    ├── docker-compose.yml     # PostgreSQL 16
+└── db/                        # 資料庫與快取容器配置
+    ├── docker-compose.yml     # PostgreSQL 16 + Redis 7
     └── backups/               # 部署前生产库备份
 ```
 
@@ -574,6 +577,7 @@ cd /Users/yangliu/Documents/Code/ajoliving_web
 - 会在后端重启前备份服务器生产库到 `/home/admin/ajoliving/db/backups/ajoliving_<release_id>.dump`。
 - 后端启动时会执行 GORM `AutoMigrate`，新增字段会自动补齐；正常情况下不会删除已有表或已有字段。
 - `.env` 默认保留服务器现有版本；只有显式设置 `SYNC_ENV=1` 才会用本地 `.env` 覆盖服务器 `.env`。
+- 會以 Docker Compose 啟動 `ajoliving_redis`，只綁定 `127.0.0.1:6382`；Redis 僅保存可重建快取，不配置持久化 volume。
 - 每次部署的话，我想你能先ssh然后能将服务的配置搞懂后再部署，部署的话尽量奥卡姆剃刀原理，不要添加到了无关的服务或者文件啥的，要简单些尽量
 
 ### 4.1 iSmart integration 環境變數
@@ -584,9 +588,44 @@ AJO 後端同時保留舊 external app API 與新 integration API，生產 `.env
 ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
 ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
 ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
+REDIS_ENABLED=true
+REDIS_ADDR=127.0.0.1:6382
+REDIS_PASSWORD=
+REDIS_DB=0
+ISMART_BUILDING_CACHE_TTL=5m
 ```
 
 `/api/v1/me/ismart/...` 會員態接口優先使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
+
+### 4.2 Redis 生產快取狀態（已驗證）
+
+2026-07-16 已在應用伺服器完成實際請求驗證：
+
+- `ajoliving_redis` 狀態為 `healthy`，`redis-cli ping` 返回 `PONG`。
+- Redis 只綁定 `127.0.0.1:6382`，不經 frpc、nginx 或公網提供服務。
+- iSmart 大廈資料使用 `ajo:ismart:building-info:v1:<building_id>` key，TTL 為 300 秒。
+- 首次會員大廈資料請求會在 Redis 未命中後回源 iSmart，成功後建立快取。
+- 相同大廈的第二次請求會增加 `keyspace_hits`，不增加 `keyspace_misses`；TTL 繼續倒數而不重設，表示實際讀取既有快取。
+- 兩次請求的業務 `data` 一致；共享快取不保存 `building_options`、`selected_building_id` 或其他會員個人欄位。
+- Redis 故障或快取過期時，後端會直接回源 iSmart；Redis 重新啟動後快取遺失屬正常行為，不影響 PostgreSQL 或會員主資料。
+
+生產快取驗收：
+
+```bash
+# 容器健康與連線
+ssh admin@47.239.117.108 "sudo docker inspect --format '{{.State.Health.Status}}' ajoliving_redis"
+ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli ping"
+
+# 查詢快取統計與現有 iSmart 大廈 key
+ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli INFO stats | grep -E '^(keyspace_hits|keyspace_misses):'"
+ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli --scan --pattern 'ajo:ismart:building-info:v1:*'"
+
+# 使用有效會員 access token 請求一次後，確認 TTL 接近 300 秒
+curl -H "Authorization: Bearer <access_token>" \
+  "https://ajoliving.server.skylinedances.com/api/v1/me/ismart/building-info?building_id=<building_id>"
+ssh admin@47.239.117.108 \
+  "sudo docker exec ajoliving_redis redis-cli TTL ajo:ismart:building-info:v1:<building_id>"
+```
 
 危险操作：
 
@@ -610,6 +649,9 @@ ssh admin@47.239.117.108 "sudo supervisorctl status ajoliving_server frpc"
 
 # 数据库容器
 ssh admin@47.239.117.108 "sudo docker ps --filter name=ajoliving_postgres"
+
+# Redis 快取容器
+ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli ping"
 
 # 最近生产库备份
 ssh admin@47.239.117.108 "ls -lt /home/admin/ajoliving/db/backups | head"

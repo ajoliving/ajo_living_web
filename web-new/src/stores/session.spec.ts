@@ -2,6 +2,7 @@
  * 會員登入狀態測試。
  * 1. 鎖定啟動還原登入狀態的並發等待行為。
  * 2. 避免路由守衛在會員資料尚未完成載入時誤判 staff 權限。
+ * 3. 驗證註冊請求使用三類帳戶類型而非可切換發布身份。
  */
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,12 @@ import { useSessionStore } from './session';
 
 const mocks = vi.hoisted(() => ({
   fetchMe: vi.fn(),
+  registerWithEmail: vi.fn(),
+}));
+
+vi.mock('@/httpapis/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/httpapis/auth')>()),
+  registerWithEmail: mocks.registerWithEmail,
 }));
 
 vi.mock('@/httpapis/me', () => ({
@@ -55,6 +62,7 @@ describe('session store hydration', () => {
     setActivePinia(createPinia());
     window.localStorage.clear();
     mocks.fetchMe.mockReset();
+    mocks.registerWithEmail.mockReset();
   });
 
   it('waits for an in-flight hydrate call before exposing loaded staff state', async () => {
@@ -77,5 +85,33 @@ describe('session store hydration', () => {
     expect(sessionStore.isLoaded).toBe(true);
     expect(sessionStore.isHydrating).toBe(false);
     expect(sessionStore.currentUser.is_staff).toBe(true);
+  });
+
+  it('submits the selected agency account type during registration', async () => {
+    mocks.registerWithEmail.mockResolvedValue({
+      data: { data: { access_token: 'access-token', refresh_token: 'refresh-token', expires_in: 3600 } },
+    });
+    mocks.fetchMe.mockResolvedValue({
+      data: { data: { ...buildStaffMember(), account_type: 'individual_agent', member_status: 'pending_profile' } },
+    });
+
+    const sessionStore = useSessionStore();
+    await sessionStore.registerEmailAccount({
+      email: 'agent@example.com',
+      password: 'password123',
+      eng_name: 'Agent Chan',
+      phone_country_code: '+852',
+      phone_number: '61234567',
+      account_type: 'individual_agent',
+      chi_name: '陳代理',
+      is_receive_email: true,
+    });
+
+    expect(mocks.registerWithEmail).toHaveBeenCalledWith(expect.objectContaining({
+      account_type: 'individual_agent',
+      chi_name: '陳代理',
+      is_receive_email: true,
+    }));
+    expect(mocks.registerWithEmail.mock.calls[0]?.[0]).not.toHaveProperty('publisher_identity_type');
   });
 });

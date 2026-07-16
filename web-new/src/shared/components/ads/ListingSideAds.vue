@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import { fetchPublicDisplayAds } from '@/httpapis/wallet';
 import type { PublicDisplayAdResponse } from '@/model/payments';
@@ -15,6 +16,7 @@ const props = defineProps<{
   channel: PublicDisplayAdResponse['display_channel'];
 }>();
 
+const { t } = useI18n();
 const ads = ref<PublicDisplayAdResponse[]>([]);
 const loading = ref(false);
 
@@ -90,7 +92,7 @@ onMounted(() => {
 <template>
   <aside
     class="listing-side-ads"
-    aria-label="廣告"
+    :aria-label="t('common.ad.label')"
   >
     <template
       v-for="slot in displaySlots"
@@ -106,6 +108,7 @@ onMounted(() => {
         :href="slot.ad.target_url || undefined"
         :target="slot.ad.target_url ? '_blank' : undefined"
         rel="noopener noreferrer"
+        :data-ad-label="t('common.ad.label')"
       >
         <img
           v-if="resolveImageURL(slot.ad)"
@@ -113,7 +116,7 @@ onMounted(() => {
           :alt="resolveTitle(slot.ad)"
         />
         <div class="listing-side-ads__body">
-          <p>廣告</p>
+          <p>{{ t('common.ad.label') }}</p>
           <h2>{{ resolveTitle(slot.ad) }}</h2>
           <span v-if="resolveText(slot.ad)">{{ resolveText(slot.ad) }}</span>
         </div>
@@ -123,8 +126,9 @@ onMounted(() => {
         v-else
         class="listing-side-ads__slot listing-side-ads__slot--placeholder"
         :class="`listing-side-ads__slot--${slot.kind}`"
+        :data-ad-label="t('common.ad.slot')"
       >
-        <span>{{ loading ? '廣告' : slot.label }}</span>
+        <span>{{ loading ? t('common.ad.label') : slot.label }}</span>
       </div>
     </template>
   </aside>
@@ -159,7 +163,7 @@ onMounted(() => {
   top: 5px;
   right: 8px;
   color: #aaaaaa;
-  content: '廣告';
+  content: attr(data-ad-label);
   font-size: 9px;
   letter-spacing: 0.5px;
 }
@@ -240,10 +244,6 @@ onMounted(() => {
   color: #aaaaaa;
   font-size: 11px;
   letter-spacing: 0.5px;
-}
-
-.listing-side-ads__slot--placeholder::before {
-  content: '廣告位';
 }
 
 .listing-side-ads__slot--placeholder span {

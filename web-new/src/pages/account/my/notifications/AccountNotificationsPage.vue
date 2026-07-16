@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import {
   fetchNotifications,
@@ -15,38 +16,40 @@ import {
 } from '@/httpapis/notifications';
 import type { NotificationItem } from '@/model/notification';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 
 type NotificationFilter = 'all' | 'offers' | 'system' | 'property' | 'payment';
 type NotificationTone = 'orange' | 'blue' | 'green' | 'gray';
-type NotificationGroup = '今日' | '昨日' | '更早';
+type NotificationGroup = 'today' | 'yesterday' | 'earlier';
 
 interface NotificationViewItem {
   id: string;
   filter: NotificationFilter;
   group: NotificationGroup;
-  icon: string;
   tone: NotificationTone;
   title: string;
   description: string;
-  time: string;
+  createdAt: string;
   unread: boolean;
 }
 
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 
 const loading = ref(false);
 const activeFilter = ref<NotificationFilter>('all');
 const notifications = ref<NotificationViewItem[]>([]);
 
-const filterItems: Array<{ key: NotificationFilter; label: string }> = [
-  { key: 'all', label: '全部' },
-  { key: 'offers', label: '優惠提醒' },
-  { key: 'system', label: '系統通知' },
-  { key: 'property', label: '物業消息' },
-  { key: 'payment', label: '支付提醒' },
-];
+const filterItems = computed<Array<{ key: NotificationFilter; label: string }>>(() => [
+  { key: 'all', label: t('account.notifications.all') },
+  { key: 'offers', label: t('account.notifications.offers') },
+  { key: 'system', label: t('account.notifications.system') },
+  { key: 'property', label: t('account.notifications.property') },
+  { key: 'payment', label: t('account.notifications.payment') },
+]);
 
-const groupOrder: NotificationGroup[] = ['今日', '昨日', '更早'];
+const groupOrder: NotificationGroup[] = ['today', 'yesterday', 'earlier'];
 
 const filteredNotifications = computed(() =>
   activeFilter.value === 'all'
@@ -57,7 +60,7 @@ const filteredNotifications = computed(() =>
 const unreadCount = computed(() => notifications.value.filter((item) => item.unread).length);
 
 const activeTitle = computed(() =>
-  filterItems.find((item) => item.key === activeFilter.value)?.label ?? '全部',
+  filterItems.value.find((item) => item.key === activeFilter.value)?.label ?? t('account.notifications.all'),
 );
 
 // 1. 映射通知類型
@@ -79,15 +82,15 @@ const resolveFilter = (item: NotificationItem): NotificationFilter => {
 
 // 2. 映射通知圖示
 const resolveIcon = (filter: NotificationFilter): string => {
-  const iconMap: Record<NotificationFilter, string> = {
-    all: '通',
-    offers: '惠',
-    system: '告',
-    property: '樓',
-    payment: '費',
+  const iconKeyMap: Record<NotificationFilter, string> = {
+    all: 'account.notifications.icons.all',
+    offers: 'account.notifications.icons.offers',
+    system: 'account.notifications.icons.system',
+    property: 'account.notifications.icons.property',
+    payment: 'account.notifications.icons.payment',
   };
 
-  return iconMap[filter];
+  return t(iconKeyMap[filter]);
 };
 
 // 3. 映射通知色調
@@ -112,13 +115,13 @@ const resolveGroup = (value: string): NotificationGroup => {
   startOfYesterday.setDate(startOfToday.getDate() - 1);
 
   if (createdAt >= startOfToday) {
-    return '今日';
+    return 'today';
   }
   if (createdAt >= startOfYesterday) {
-    return '昨日';
+    return 'yesterday';
   }
 
-  return '更早';
+  return 'earlier';
 };
 
 // 5. 格式化時間文字
@@ -128,7 +131,7 @@ const resolveTime = (value: string): string => {
     return value;
   }
 
-  return createdAt.toLocaleString('zh-HK', {
+  return createdAt.toLocaleString(preferenceStore.locale, {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -144,11 +147,10 @@ const mapNotificationItem = (item: NotificationItem): NotificationViewItem => {
     id: item.notification_id,
     filter,
     group: resolveGroup(item.created_at),
-    icon: resolveIcon(filter),
     tone: resolveTone(filter),
     title: item.title,
     description: item.body,
-    time: resolveTime(item.created_at),
+    createdAt: item.created_at,
     unread: !item.is_read,
   };
 };
@@ -163,8 +165,8 @@ const loadNotifications = async (): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '通知載入失敗'
-        : '通知載入失敗',
+        ? error.response?.data?.message ?? t('account.notifications.loadError')
+        : t('account.notifications.loadError'),
       'error',
     );
     notifications.value = [];
@@ -189,8 +191,8 @@ const handleMarkAllRead = async (): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '更新通知失敗'
-        : '更新通知失敗',
+        ? error.response?.data?.message ?? t('account.notifications.updateError')
+        : t('account.notifications.updateError'),
       'error',
     );
   }
@@ -211,8 +213,8 @@ const handleMarkRead = async (id: string): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '更新通知失敗'
-        : '更新通知失敗',
+        ? error.response?.data?.message ?? t('account.notifications.updateError')
+        : t('account.notifications.updateError'),
       'error',
     );
   }
@@ -227,7 +229,7 @@ onMounted(() => {
   <main class="notif-wrap">
     <aside class="notif-sidebar">
       <div class="notif-sidebar-title">
-        通知中心
+        {{ t('account.notifications.title') }}
       </div>
 
       <div class="notif-filter">
@@ -253,15 +255,15 @@ onMounted(() => {
     <section class="notif-main">
       <header class="notif-main-head">
         <div>
-          <p>Notifications</p>
-          <h1>{{ activeFilter === 'all' ? '所有通知' : activeTitle }}</h1>
+          <p>{{ t('account.notifications.title') }}</p>
+          <h1>{{ activeFilter === 'all' ? t('account.notifications.allTitle') : activeTitle }}</h1>
         </div>
         <button
           type="button"
           :disabled="unreadCount === 0 || loading"
           @click="handleMarkAllRead"
         >
-          全部標為已讀
+          {{ t('account.notifications.markAllRead') }}
         </button>
       </header>
 
@@ -269,9 +271,9 @@ onMounted(() => {
         v-if="loading"
         class="notif-empty"
       >
-        <div>通知</div>
-        <strong>正在載入</strong>
-        <span>請稍候。</span>
+        <div>{{ t('account.notifications.title') }}</div>
+        <strong>{{ t('account.notifications.loadingShort') }}</strong>
+        <span>{{ t('account.notifications.loadingHint') }}</span>
       </div>
 
       <template
@@ -284,7 +286,7 @@ onMounted(() => {
           class="notif-group"
         >
           <div class="notif-group-title">
-            {{ group }}
+            {{ t(`account.notifications.groups.${group}`) }}
           </div>
           <div class="notif-list">
             <article
@@ -302,7 +304,7 @@ onMounted(() => {
                 class="notif-icon"
                 :class="`notif-icon--${item.tone}`"
               >
-                {{ item.icon }}
+                {{ resolveIcon(item.filter) }}
               </div>
               <div class="notif-content">
                 <div class="notif-title">
@@ -312,7 +314,7 @@ onMounted(() => {
                   {{ item.description }}
                 </div>
                 <div class="notif-time">
-                  {{ item.time }}
+                  {{ resolveTime(item.createdAt) }}
                 </div>
               </div>
               <button
@@ -321,7 +323,7 @@ onMounted(() => {
                 class="notif-read-button"
                 @click.stop="handleMarkRead(item.id)"
               >
-                標記已讀
+                {{ t('account.notifications.markRead') }}
               </button>
             </article>
           </div>
@@ -332,9 +334,9 @@ onMounted(() => {
         v-if="!loading && filteredNotifications.length === 0"
         class="notif-empty"
       >
-        <div>通知</div>
-        <strong>目前沒有通知</strong>
-        <span>新的優惠提醒、支付提醒與系統通知會顯示在這裡。</span>
+        <div>{{ t('account.notifications.title') }}</div>
+        <strong>{{ t('account.notifications.emptyTitle') }}</strong>
+        <span>{{ t('account.notifications.emptyAllDescription') }}</span>
       </section>
     </section>
   </main>
@@ -573,7 +575,7 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .notif-wrap {
     grid-template-columns: 1fr;
   }

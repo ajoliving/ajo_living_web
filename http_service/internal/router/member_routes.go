@@ -19,14 +19,15 @@ func registerMemberRoutes(
 	propertyHandler *handler.PropertyHandler,
 	orderHandler *handler.OrderHandler,
 	requireAuth gin.HandlerFunc,
+	requireActive gin.HandlerFunc,
 ) {
 	api.GET("/me", requireAuth, userHandler.GetMe)
-	api.PATCH("/me/profile", requireAuth, userHandler.UpdateProfile)
-	api.POST("/me/ismart/bind", requireAuth, userHandler.BindIsmart)
-	api.GET("/me/secondhand/listings", requireAuth, secondhandHandler.MyListings)
-	api.GET("/me/secondhand/favorites", requireAuth, secondhandHandler.MyFavorites)
-	api.GET("/me/property-sales", requireAuth, propertyHandler.MyPropertySales)
-	api.GET("/me/property-sales/favorites", requireAuth, propertyHandler.MyFavoritePropertySales)
-	api.GET("/me/serviced-apartments", requireAuth, propertyHandler.MyServicedApartments)
-	api.GET("/me/orders", requireAuth, orderHandler.MyOrders)
+	api.PATCH("/me/profile", requireActive, userHandler.UpdateProfile)
+	api.POST("/me/ismart/bind", requireActive, userHandler.BindIsmart)
+	api.GET("/me/secondhand/listings", requireActive, secondhandHandler.MyListings)
+	api.GET("/me/secondhand/favorites", requireActive, secondhandHandler.MyFavorites)
+	api.GET("/me/property-sales", requireActive, propertyHandler.MyPropertySales)
+	api.GET("/me/property-sales/favorites", requireActive, propertyHandler.MyFavoritePropertySales)
+	api.GET("/me/serviced-apartments", requireActive, propertyHandler.MyServicedApartments)
+	api.GET("/me/orders", requireActive, orderHandler.MyOrders)
 }

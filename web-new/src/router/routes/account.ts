@@ -6,6 +6,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 const AccountMyPage = () => import('@/pages/account/my/AccountMyPage.vue');
+const AccountAgencyCompanyPage = () => import('@/pages/account/my/agency-company/Page.vue');
 const AccountWalletPage = () => import('@/pages/account/my/profile/wallet/Page.vue');
 const ForgotPasswordPage = () => import('@/pages/account/forgot-password/Page.vue');
 const LoginPage = () => import('@/pages/account/login/LoginPage.vue');
@@ -96,6 +97,10 @@ export const accountRoutes: RouteRecordRaw[] = [
     redirect: () => managementTabRoute('admin-homes'),
   },
   {
+    path: '/account/marketplace/management/agency-companies',
+    redirect: () => managementTabRoute('admin-agency-companies'),
+  },
+  {
     path: '/account/marketplace/management/reward-ad-editor/:taskId?',
     name: 'MarketplaceManagementRewardAdEditor',
     component: MarketplaceManagementRewardAdEditorPage,
@@ -167,6 +172,16 @@ export const accountRoutes: RouteRecordRaw[] = [
       {
         path: 'profile/info',
         redirect: '/account/profile',
+      },
+      {
+        path: 'profile/agency-profile',
+        name: 'AccountAgencyProfile',
+        component: AccountAgencyCompanyPage,
+        meta: { titleKey: 'account.agencyCompany.title', requiresAuth: true },
+      },
+      {
+        path: 'profile/agency-company',
+        redirect: '/account/profile/agency-profile',
       },
       {
         path: 'profile/wallet',

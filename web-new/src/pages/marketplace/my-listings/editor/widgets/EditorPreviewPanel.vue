@@ -133,7 +133,7 @@ const runPrimaryAction = (): void => {
           :disabled="props.isFirstStep || props.isSaving || props.isPublishing"
           @click="goPreviousStep"
         >
-          上一步
+          {{ t('marketplace.editor.previousStep') }}
         </button>
         <button
           v-if="!props.isLastStep"
@@ -142,7 +142,7 @@ const runPrimaryAction = (): void => {
           :disabled="props.isSaving || props.isPublishing"
           @click="goNextStep"
         >
-          下一步
+          {{ t('marketplace.editor.nextStep') }}
         </button>
       </div>
       <button

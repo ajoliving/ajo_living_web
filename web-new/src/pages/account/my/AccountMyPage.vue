@@ -15,6 +15,7 @@
  */
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
 import { isIntegrationBusinessAuthError } from '@/httpapis';
@@ -32,18 +33,23 @@ import {
 import { updateMe } from '@/httpapis/me';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
 import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
+import { resolveResidentUnitDisplays } from './composables/unit-display';
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 
 // 1. 面板索引類型
 type PanelKey =
   | 'profile-account'
+  | 'profile-agency-company'
   | 'profile-subaccounts'
   | 'profile-property-binding'
   | 'profile-wallet'
@@ -54,17 +60,27 @@ type PanelKey =
   | 'profile-saved';
 
 // 2. 導覽項目（對齊 HTML data-work-target）
-const navItems: { key: PanelKey; label: string; needsApi?: boolean }[] = [
-  { key: 'profile-account', label: '帳號管理' },
-  { key: 'profile-subaccounts', label: '授權副戶' },
-  { key: 'profile-property-binding', label: '物業綁定' },
-  { key: 'profile-wallet', label: 'AJO 錢包' },
-  { key: 'profile-chat', label: '訊息管理' },
-  { key: 'profile-properties', label: '我的樓盤' },
-  { key: 'profile-homes', label: '我的住宅' },
-  { key: 'profile-furniture', label: '我的家具' },
-  { key: 'profile-saved', label: '我的收藏' },
-];
+const isRestrictedAgencyAccount = computed(() =>
+  ['individual_agent', 'agency_company'].includes(sessionStore.me?.account_type ?? '')
+  && ['pending_profile', 'pending_review', 'rejected'].includes(sessionStore.me?.member_status ?? ''),
+);
+
+const navItems = computed<Array<{ key: PanelKey; label: string; needsApi?: boolean }>>(() => isRestrictedAgencyAccount.value
+  ? [{ key: 'profile-agency-company', label: t('account.center.nav.agencyCompany') }]
+  : [
+  { key: 'profile-account', label: t('account.center.nav.account') },
+  ...(['individual_agent', 'agency_company'].includes(sessionStore.me?.account_type ?? '')
+    ? [{ key: 'profile-agency-company' as PanelKey, label: t('account.center.nav.agencyCompany') }]
+    : []),
+  { key: 'profile-subaccounts', label: t('account.center.nav.subaccounts') },
+  { key: 'profile-property-binding', label: t('account.center.nav.propertyBinding') },
+  { key: 'profile-wallet', label: t('account.center.nav.wallet') },
+  { key: 'profile-chat', label: t('account.center.nav.messages') },
+  { key: 'profile-properties', label: t('account.center.nav.properties') },
+  { key: 'profile-homes', label: t('account.center.nav.homes') },
+  { key: 'profile-furniture', label: t('account.center.nav.furniture') },
+  { key: 'profile-saved', label: t('account.center.nav.favorites') },
+  ]);
 
 // 3. 當前面板
 const activePanel = ref<PanelKey>('profile-account');
@@ -72,6 +88,7 @@ const isSigningOut = ref(false);
 
 const routePanelPaths = [
   '/account/profile/wallet',
+  '/account/profile/agency-profile',
   '/account/chat',
   '/account/properties',
   '/account/listings',
@@ -87,6 +104,7 @@ const shouldRenderRoutePanel = computed(() =>
 // 5. 切換面板
 const switchPanel = (key: PanelKey) => {
   const routeMap: Partial<Record<PanelKey, string>> = {
+    'profile-agency-company': '/account/profile/agency-profile',
     'profile-wallet': '/account/profile/wallet',
     'profile-chat': '/account/chat',
     'profile-properties': '/account/properties/sale',
@@ -106,6 +124,10 @@ const switchPanel = (key: PanelKey) => {
 
 // 6. 根據路由同步會員中心面板
 const syncActivePanelFromRoute = (path: string) => {
+  if (path.startsWith('/account/profile/agency-profile')) {
+    activePanel.value = 'profile-agency-company';
+    return;
+  }
   if (path.startsWith('/account/profile/wallet')) {
     activePanel.value = 'profile-wallet';
     return;
@@ -131,7 +153,9 @@ const syncActivePanelFromRoute = (path: string) => {
     return;
   }
   if (path === '/account/profile' || path === '/account/profile/info') {
-    activePanel.value = 'profile-account';
+    activePanel.value = route.query.panel === 'property-binding'
+      ? 'profile-property-binding'
+      : 'profile-account';
   }
 };
 
@@ -140,10 +164,10 @@ interface AccountDisplayField {
   value: string;
 }
 
-const unsetText = '未設定';
+const unsetText = computed(() => t('account.center.common.unset'));
 
 // 7. 格式化會員資料顯示值
-const displayText = (value: unknown, fallback = unsetText): string => {
+const displayText = (value: unknown, fallback = unsetText.value): string => {
   const text = String(value ?? '').trim();
   return text || fallback;
 };
@@ -151,7 +175,7 @@ const displayText = (value: unknown, fallback = unsetText): string => {
 // 8. 遮罩證件編號
 const maskIdentityNumber = (value: unknown): string => {
   const text = String(value ?? '').trim();
-  return text ? '********' : unsetText;
+  return text ? '********' : unsetText.value;
 };
 
 const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
@@ -160,7 +184,7 @@ const accountAvatarText = computed(() => accountDisplayName.value.trim().slice(0
 const memberPhoneText = computed(() => {
   const member = sessionStore.me;
   if (!member) {
-    return unsetText;
+    return unsetText.value;
   }
   if (isSystemPhonePlaceholder(member.phone_country_code)) {
     return displayText(member.ismart_bound_phone || ismartProfile.value?.account_phone || member.ismart_msg?.phone);
@@ -170,27 +194,36 @@ const memberPhoneText = computed(() => {
   return displayText([countryCode, phoneNumber].filter(Boolean).join(' '));
 });
 
-// 9. 帳號管理資料
-const accountProfile = computed(() => ({
-  displayName: accountDisplayName.value,
-  ismartAccount: displayText(
-    sessionStore.me?.ismart_username || sessionStore.me?.ismart_msg?.username || ismartProfile.value?.account_code,
-  ),
-  email: displayText(sessionStore.me?.email, '尚未綁定電郵'),
-  phone: memberPhoneText.value,
-  password: sessionStore.me ? '可於個人資料中更新' : unsetText,
-  publisherRole: displayText(sessionStore.me?.publisher_identity_type),
-  regionCode: displayText(sessionStore.me?.district_code),
-  managedBuildings: managedBuildingNameText.value,
-}));
+// 9. 帳號管理 AJO 專屬資料
+const ajoAccountData = computed<AccountDisplayField[]>(() => [
+  {
+    label: t('account.profile.localPassword'),
+    value: sessionStore.me ? t('account.center.account.passwordManaged') : unsetText.value,
+  },
+  {
+    label: t('auth.publisherIdentityType'),
+    value: t(`auth.accountType${({
+      personal: 'Personal',
+      individual_agent: 'IndividualAgent',
+      agency_company: 'AgencyCompany',
+      agency_company_subaccount: 'AgencyCompanySubaccount',
+    } as Record<string, string>)[sessionStore.me?.account_type ?? 'personal'] ?? 'Personal'}`),
+  },
+  { label: t('account.profile.districtCode'), value: displayText(sessionStore.me?.district_code) },
+  { label: t('account.center.account.residentUnits'), value: residentUnitNameText.value },
+]);
 
 const identityStatus = computed(() => ({
   memberNo: displayText(sessionStore.me?.public_id),
   memberStatus: displayText(sessionStore.me?.member_status),
   memberType: displayText(sessionStore.me?.member_type),
   primaryRole: displayText(sessionStore.me?.role),
-  profileCompleteness: sessionStore.me?.profile_completed ? '已完成' : '未完成',
-  staffPermission: sessionStore.me?.is_staff ? '已啟用' : '未啟用',
+  profileCompleteness: sessionStore.me?.profile_completed
+    ? t('account.center.account.profileComplete')
+    : t('account.center.account.profileIncomplete'),
+  staffPermission: sessionStore.me?.is_staff
+    ? t('account.center.account.staffEnabled')
+    : t('account.center.account.staffDisabled'),
 }));
 const accountRoles = computed(() => {
   const roles = sessionStore.me?.roles?.filter(Boolean) ?? [];
@@ -198,8 +231,8 @@ const accountRoles = computed(() => {
 });
 const accountPermissionText = computed(() =>
   (sessionStore.me?.permissions?.length ?? 0) > 0
-    ? `${sessionStore.me?.permissions?.length ?? 0} 項權限`
-    : '尚未分配權限',
+    ? t('account.center.account.permissionCount', { count: sessionStore.me?.permissions?.length ?? 0 })
+    : t('account.center.account.noPermissions'),
 );
 
 interface BindOption {
@@ -209,6 +242,7 @@ interface BindOption {
 
 const bindBuildings = ref<PosBuilding[]>([]);
 const bindUnits = ref<PosBuildingUnit[]>([]);
+const residentUnitDetails = ref<PosBuildingUnit[]>([]);
 const bindBuildingID = ref('');
 const bindFloor = ref('');
 const bindUnitID = ref('');
@@ -218,7 +252,7 @@ const bindSaving = ref(false);
 const integrationAuthUnavailable = ref(false);
 let latestBindUnitsRequestID = 0;
 let isSyncingBindProfile = false;
-const bindUnassignedFloor = '未指定樓層';
+const bindUnassignedFloor = '__unassigned__';
 
 // 6.1 判斷是否為系統佔位電話帳號
 const isSystemPhonePlaceholder = (countryCode?: string): boolean =>
@@ -227,14 +261,38 @@ const isSystemPhonePlaceholder = (countryCode?: string): boolean =>
 // 6.2 讀取 POS 大廈與單位欄位
 const getBindBuildingID = (item: PosBuilding): string =>
   String(item.building_id ?? item.id ?? '').trim();
-const getBindBuildingName = (item: PosBuilding): string =>
-  String(item.buildname_chi ?? item.buildname ?? item.name ?? getBindBuildingID(item)).trim();
+const getBindBuildingName = (item: PosBuilding): string => {
+  const buildingID = getBindBuildingID(item);
+  const name = String(
+    preferenceStore.locale === 'en'
+      ? item.buildname ?? item.name ?? item.buildname_chi ?? ''
+      : item.buildname_chi ?? item.buildname ?? item.name ?? '',
+  ).trim();
+  if (name && name !== buildingID) {
+    return name;
+  }
+
+  const community = sessionStore.me?.primary_community;
+  if (community?.public_id?.trim() !== buildingID) {
+    return '';
+  }
+  const communityName = String(
+    preferenceStore.locale === 'en'
+      ? community.name_en || community.name_zh || community.address_text || ''
+      : community.name_zh || community.name_en || community.address_text || '',
+  ).trim();
+  return communityName === buildingID ? '' : communityName;
+};
+const getBindBuildingLabel = (item: PosBuilding): string =>
+  getBindBuildingName(item) || t('account.center.common.buildingCodeLabel', { id: getBindBuildingID(item) });
 const getBindUnitID = (item: PosBuildingUnit): string =>
   String(item.unit_id ?? item.id ?? '').trim();
 const getBindUnitFloor = (item: PosBuildingUnit): string =>
   String(item.floor ?? '').trim();
 const getBindDisplayUnitFloor = (item: PosBuildingUnit): string =>
   getBindUnitFloor(item) || bindUnassignedFloor;
+const formatBindFloorLabel = (value: string): string =>
+  value === bindUnassignedFloor ? t('account.center.common.unassignedFloor') : value;
 const getBindUnitName = (item: PosBuildingUnit): string =>
   String(item.unit ?? item.unit_name ?? item.name ?? '').trim();
 const getBindDigitsOnly = (value: unknown): string =>
@@ -256,7 +314,43 @@ const normalizeBindList = (values: string[] | undefined): string[] => {
   return result;
 };
 
-// 6.4 建立大廈 ID 與名稱索引
+// 6.4 正規化可顯示的 POS 單位權限碼
+const normalizeBindFlatUnitPermissions = (values: string[] | undefined): string[] => {
+  const result: string[] = [];
+  normalizeBindList(values).forEach((value) => {
+    const unitID = getBindDigitsOnly(value);
+    if (unitID.length < 11) {
+      return;
+    }
+
+    const normalizedUnitID = unitID.slice(0, 11);
+    if (!result.includes(normalizedUnitID)) {
+      result.push(normalizedUnitID);
+    }
+  });
+  return result;
+};
+
+// 6.6 取得住戶有效單位權限
+const bindAllowedUnitIDs = computed(() =>
+  normalizeBindFlatUnitPermissions(
+    sessionStore.me?.ismart_msg?.client_building_flat_units_permissions ?? sessionStore.me?.bound_flat_unit_ids,
+  ),
+);
+
+// 6.7 從住戶單位權限取得所屬屋苑
+const bindResidentBuildingIDs = computed(() => {
+  const result: string[] = [];
+  bindAllowedUnitIDs.value.forEach((unitID) => {
+    const buildingID = unitID.slice(0, 7);
+    if (buildingID && !result.includes(buildingID)) {
+      result.push(buildingID);
+    }
+  });
+  return result;
+});
+
+// 6.8 建立大廈 ID 與名稱索引
 const bindBuildingNameMap = computed<Record<string, string>>(() =>
   bindBuildings.value.reduce<Record<string, string>>((result, item) => {
     const buildingID = getBindBuildingID(item);
@@ -267,26 +361,19 @@ const bindBuildingNameMap = computed<Record<string, string>>(() =>
   }, {}),
 );
 
-const managedBuildingIDs = computed(() => {
-  const message = sessionStore.me?.ismart_msg;
-  if (message?.staff_building_permissions?.length) {
-    return normalizeBindList(message.staff_building_permissions);
-  }
-  if (message?.building?.length) {
-    return normalizeBindList(message.building);
-  }
-  return normalizeBindList(sessionStore.me?.bound_building_ids);
-});
-
-const managedBuildingNameText = computed(() =>
+// 6.11 顯示住戶所屬屋苑、樓層與單位
+const residentUnitNameText = computed(() =>
   displayText(
-    managedBuildingIDs.value
-      .map((buildingID) => bindBuildingNameMap.value[buildingID] || buildingID)
-      .join(', '),
+    resolveResidentUnitDisplays(bindAllowedUnitIDs.value, residentUnitDetails.value).map(({ buildingID, floor, unit }) => {
+      const floorLabel = floor || t('account.center.common.unassignedFloor');
+      const buildingName = bindBuildingNameMap.value[buildingID]
+        || t('account.center.common.buildingCodeLabel', { id: buildingID });
+      return [buildingName, floorLabel, unit].filter(Boolean).join(' / ');
+    }).join(', '),
   ),
 );
 
-// 6.5 判斷 POS 單位是否可選
+// 6.14 判斷 POS 單位是否可選
 const isSelectableBindUnit = (buildingID: string, item: PosBuildingUnit): boolean => {
   const normalizedBuildingID = getBindDigitsOnly(buildingID).slice(0, 7);
   const normalizedUnitID = getBindDigitsOnly(getBindUnitID(item));
@@ -295,7 +382,7 @@ const isSelectableBindUnit = (buildingID: string, item: PosBuildingUnit): boolea
   return !(normalizedBuildingID && normalizedUnitID === normalizedBuildingID && !hasFloor && !hasUnit);
 };
 
-// 6.6 由 POS 權限 ID 建立可選單位
+// 6.15 由 POS 權限 ID 建立可選單位
 const buildBindUnitsFromFlatUnitPermissions = (
   buildingID: string,
   flatUnitPermissions: string[],
@@ -337,13 +424,13 @@ const buildBindUnitsFromFlatUnitPermissions = (
   return units.sort((left, right) => getBindUnitID(left).localeCompare(getBindUnitID(right), 'en', { numeric: true }));
 };
 
-// 6.7 轉換 POS 權限碼
+// 6.16 轉換 POS 權限碼
 const toBindTwoDigitCode = (value: unknown): string => {
   const digits = getBindDigitsOnly(value);
   return digits ? digits.slice(-2).padStart(2, '0') : '';
 };
 
-// 6.8 取得單位權限碼
+// 6.17 取得單位權限碼
 const getBindUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): string => {
   const normalizedBuildingID = getBindDigitsOnly(buildingID).slice(0, 7);
   const unitID = getBindDigitsOnly(getBindUnitID(item));
@@ -356,7 +443,7 @@ const getBindUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): s
   return normalizedBuildingID && floorCode && unitCode ? `${normalizedBuildingID}${floorCode}${unitCode}` : '';
 };
 
-// 6.9 判斷單位是否符合 POS 權限
+// 6.18 判斷單位是否符合 POS 權限
 const matchesBindUnitPermission = (
   buildingID: string,
   item: PosBuildingUnit,
@@ -389,7 +476,7 @@ const matchesBindUnitPermission = (
   });
 };
 
-// 6.10 按權限過濾 POS 單位
+// 6.19 按權限過濾 POS 單位
 const filterBindUnitsByPermission = (
   buildingID: string,
   units: PosBuildingUnit[],
@@ -399,45 +486,64 @@ const filterBindUnitsByPermission = (
     .filter((item) => isSelectableBindUnit(buildingID, item))
     .filter((item) => matchesBindUnitPermission(buildingID, item, flatUnitPermissions));
 
-// 6.11 POS 顯示排序
+// 6.20 載入住戶權限單位詳情
+const loadResidentUnitDetails = async (): Promise<void> => {
+  if (bindResidentBuildingIDs.value.length === 0) {
+    residentUnitDetails.value = [];
+    return;
+  }
+
+  const results = await Promise.allSettled(
+    bindResidentBuildingIDs.value.map(async (buildingID) => {
+      const fallbackUnits = buildBindUnitsFromFlatUnitPermissions(buildingID, bindAllowedUnitIDs.value);
+      const units = await fetchMemberPosBuildingUnits(buildingID);
+      const actualUnits = filterBindUnitsByPermission(buildingID, units, bindAllowedUnitIDs.value);
+      const actualUnitMap = new Map(
+        actualUnits.map((item) => [getBindDigitsOnly(getBindUnitID(item)).slice(0, 11), item]),
+      );
+      return fallbackUnits.map((item) =>
+        actualUnitMap.get(getBindDigitsOnly(getBindUnitID(item)).slice(0, 11)) ?? item,
+      );
+    }),
+  );
+  const unitMap = new Map<string, PosBuildingUnit>();
+  results.forEach((result, index) => {
+    const buildingID = bindResidentBuildingIDs.value[index] ?? '';
+    const units = result.status === 'fulfilled'
+      ? result.value
+      : buildBindUnitsFromFlatUnitPermissions(buildingID, bindAllowedUnitIDs.value);
+    units.forEach((item) => {
+      const unitID = getBindDigitsOnly(getBindUnitID(item)).slice(0, 11);
+      if (unitID) {
+        unitMap.set(unitID, item);
+      }
+    });
+  });
+  residentUnitDetails.value = Array.from(unitMap.values());
+};
+
+// 6.21 POS 顯示排序
 const compareBindCodes = (left: string, right: string): number =>
   left.localeCompare(right, 'en', {
     numeric: true,
     sensitivity: 'base',
   });
 
-const bindIsPOSStaff = computed(() =>
-  Boolean(sessionStore.me?.is_staff || sessionStore.me?.ismart_msg?.is_staff),
-);
 const bindAllowedBuildingIDs = computed(() => {
   const message = sessionStore.me?.ismart_msg;
   const primaryCommunityID = sessionStore.me?.primary_community?.public_id?.trim() ?? '';
   if (message) {
-    if (bindIsPOSStaff.value) {
-      const staffBuildings = normalizeBindList(message.staff_building_permissions);
-      return staffBuildings.length > 0 ? staffBuildings : normalizeBindList(message.building);
-    }
-    const values = normalizeBindList(message.client_building_permissions);
-    return values.length > 0 || !primaryCommunityID ? values : [primaryCommunityID];
+    return bindResidentBuildingIDs.value;
   }
-  const values = normalizeBindList(sessionStore.me?.bound_building_ids);
-  return values.length > 0 || !primaryCommunityID ? values : [primaryCommunityID];
+  return bindResidentBuildingIDs.value.length > 0 || !primaryCommunityID
+    ? bindResidentBuildingIDs.value
+    : [primaryCommunityID];
 });
-const bindAllowedUnitIDs = computed(() =>
-  bindIsPOSStaff.value
-    ? []
-    : normalizeBindList(
-      sessionStore.me?.ismart_msg?.client_building_flat_units_permissions ?? sessionStore.me?.bound_flat_unit_ids,
-    ),
-);
 const visibleBindBuildings = computed(() => {
   const allowed = new Set(bindAllowedBuildingIDs.value);
   return bindBuildings.value.filter((item) => allowed.has(getBindBuildingID(item)));
 });
 const visibleBindUnits = computed(() => {
-  if (bindIsPOSStaff.value) {
-    return bindUnits.value;
-  }
   return bindUnits.value.filter((item) =>
     matchesBindUnitPermission(bindBuildingID.value, item, bindAllowedUnitIDs.value),
   );
@@ -445,16 +551,16 @@ const visibleBindUnits = computed(() => {
 const bindBuildingOptions = computed<BindOption[]>(() =>
   visibleBindBuildings.value
     .slice()
-    .sort((left, right) => getBindBuildingName(left).localeCompare(getBindBuildingName(right), 'en', {
+    .sort((left, right) => getBindBuildingLabel(left).localeCompare(getBindBuildingLabel(right), 'en', {
       numeric: true,
       sensitivity: 'base',
     }))
-    .map((item) => ({ label: getBindBuildingName(item), value: getBindBuildingID(item) })),
+    .map((item) => ({ label: getBindBuildingLabel(item), value: getBindBuildingID(item) })),
 );
 const bindFloorOptions = computed<BindOption[]>(() =>
   Array.from(new Set(visibleBindUnits.value.map((item) => getBindDisplayUnitFloor(item)).filter(Boolean)))
     .sort(compareBindCodes)
-    .map((floor) => ({ label: floor, value: floor })),
+    .map((floor) => ({ label: formatBindFloorLabel(floor), value: floor })),
 );
 const bindUnitOptions = computed<BindOption[]>(() =>
   visibleBindUnits.value
@@ -464,7 +570,13 @@ const bindUnitOptions = computed<BindOption[]>(() =>
     .map((item) => ({ label: getBindUnitName(item), value: getBindUnitID(item) }))
     .filter((item) => item.label.length > 0 && item.value.length > 0),
 );
+const bindSelectedBuilding = computed(() =>
+  visibleBindBuildings.value.find((item) => getBindBuildingID(item) === bindBuildingID.value),
+);
 const bindSelectedBuildingName = computed(() =>
+  bindSelectedBuilding.value ? getBindBuildingName(bindSelectedBuilding.value) : '',
+);
+const bindSelectedBuildingLabel = computed(() =>
   bindBuildingOptions.value.find((item) => item.value === bindBuildingID.value)?.label ?? '',
 );
 const bindSelectedUnit = computed(() =>
@@ -474,7 +586,11 @@ const bindSelectedUnitName = computed(() =>
   bindSelectedUnit.value ? getBindUnitName(bindSelectedUnit.value) : '',
 );
 const bindCurrent = computed(() =>
-  [bindSelectedBuildingName.value, bindFloor.value, bindSelectedUnitName.value].filter(Boolean).join(' / ') || '尚未選擇單位',
+  [
+    bindSelectedBuildingLabel.value,
+    bindFloor.value ? formatBindFloorLabel(bindFloor.value) : '',
+    bindSelectedUnitName.value,
+  ].filter(Boolean).join(' / ') || t('account.center.common.noUnitSelected'),
 );
 const canSaveBindUnit = computed(() =>
   bindBuildingID.value.length > 0 &&
@@ -490,15 +606,17 @@ const syncBindFromProfile = (): void => {
   bindBuildingID.value = bindAllowedBuildingIDs.value.includes(profileBuildingID)
     ? profileBuildingID
     : bindAllowedBuildingIDs.value[0] ?? '';
-  bindFloor.value = sessionStore.me?.residence_floor || '';
+  const residenceFloor = sessionStore.me?.residence_floor?.trim() ?? '';
+  const residenceUnit = sessionStore.me?.residence_unit?.trim() ?? '';
+  bindFloor.value = residenceFloor || (residenceUnit ? bindUnassignedFloor : '');
   bindUnitID.value = '';
 };
 
 // 6.7 按已保存樓層與單位名稱同步 POS 單位
 const syncBindUnitFromProfile = (): void => {
-  const floor = sessionStore.me?.residence_floor?.trim() ?? '';
+  const floor = sessionStore.me?.residence_floor?.trim() || bindUnassignedFloor;
   const unitName = sessionStore.me?.residence_unit?.trim() ?? '';
-  if (!floor || !unitName) {
+  if (!unitName) {
     bindUnitID.value = '';
     return;
   }
@@ -513,16 +631,43 @@ const syncBindUnitFromProfile = (): void => {
 const loadBindBuildings = async (): Promise<void> => {
   bindLoading.value = true;
   try {
-    bindBuildings.value = await fetchMemberPosBuildings();
+    const memberBuildings = await fetchMemberPosBuildings();
+    integrationAuthUnavailable.value = false;
+    let publicBuildings: PosBuilding[] = [];
+    if (memberBuildings.some((item) => !getBindBuildingName(item))) {
+      try {
+        publicBuildings = await fetchPosBuildings();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    const publicBuildingMap = new Map(publicBuildings.map((item) => [getBindBuildingID(item), item]));
+    bindBuildings.value = memberBuildings.map((item) => {
+      if (getBindBuildingName(item)) {
+        return item;
+      }
+      return publicBuildingMap.get(getBindBuildingID(item)) ?? item;
+    });
   } catch (error) {
     integrationAuthUnavailable.value = isIntegrationBusinessAuthError(error);
-    const fallbackBuildings = bindAllowedBuildingIDs.value.map((buildingID) => ({
-      building_id: buildingID,
-      buildname: buildingID,
-    }));
+    let publicBuildings: PosBuilding[] = [];
+    try {
+      publicBuildings = await fetchPosBuildings();
+    } catch (publicError) {
+      console.error(publicError);
+    }
+    const allowedBuildingIDs = new Set(bindAllowedBuildingIDs.value);
+    const visiblePublicBuildings = publicBuildings.filter((item) => allowedBuildingIDs.has(getBindBuildingID(item)));
+    const loadedBuildingIDs = new Set(visiblePublicBuildings.map((item) => getBindBuildingID(item)));
+    const fallbackBuildings = [
+      ...visiblePublicBuildings,
+      ...bindAllowedBuildingIDs.value
+        .filter((buildingID) => !loadedBuildingIDs.has(buildingID))
+        .map((buildingID) => ({ building_id: buildingID })),
+    ];
     bindBuildings.value = fallbackBuildings;
     if (fallbackBuildings.length === 0) {
-      feedbackStore.pushToast('大廈資料載入失敗。', 'error');
+      feedbackStore.pushToast(t('account.center.account.buildingLoadError'), 'error');
     }
   } finally {
     bindLoading.value = false;
@@ -568,7 +713,7 @@ const loadBindUnits = async (buildingID: string): Promise<void> => {
     const fallbackUnits = buildBindUnitsFromFlatUnitPermissions(value, bindAllowedUnitIDs.value);
     bindUnits.value = fallbackUnits;
     if (fallbackUnits.length === 0) {
-      feedbackStore.pushToast('單位資料載入失敗。', 'error');
+      feedbackStore.pushToast(t('account.center.account.unitLoadError'), 'error');
     }
   } finally {
     if (requestID === latestBindUnitsRequestID) {
@@ -580,7 +725,7 @@ const loadBindUnits = async (buildingID: string): Promise<void> => {
 // 6.9 儲存會員繳費單位
 const handleSaveBindUnit = async (): Promise<void> => {
   if (!canSaveBindUnit.value) {
-    feedbackStore.pushToast('請先選擇大廈、樓層與單位。', 'error');
+    feedbackStore.pushToast(t('account.center.account.selectUnitRequired'), 'error');
     return;
   }
 
@@ -599,36 +744,45 @@ const handleSaveBindUnit = async (): Promise<void> => {
       primary_community_name: bindSelectedBuildingName.value,
       bound_building_ids: [bindBuildingID.value],
       bound_flat_unit_ids: [bindUnitID.value],
-      residence_floor: bindFloor.value,
+      residence_floor: bindFloor.value === bindUnassignedFloor ? '' : bindFloor.value,
       residence_unit: bindSelectedUnitName.value,
       district_code: sessionStore.me?.district_code ?? '',
     });
     sessionStore.me = data.data;
-    feedbackStore.pushToast('繳費單位已更新。', 'success');
+    feedbackStore.pushToast(t('account.center.account.unitSaved'), 'success');
   } catch {
-    feedbackStore.pushToast('繳費單位儲存失敗，請稍後再試。', 'error');
+    feedbackStore.pushToast(t('account.center.account.unitSaveError'), 'error');
   } finally {
     bindSaving.value = false;
   }
 };
 
 const ismartAccountData = computed<AccountDisplayField[]>(() => [
-  { label: '帳戶編號', value: displayText(ismartProfile.value?.account_code) },
-  { label: '帳戶電話', value: displayText(ismartProfile.value?.account_phone) },
-  { label: '帳戶電郵', value: displayText(ismartProfile.value?.account_email) },
-  { label: '業戶名稱(英)', value: displayText(ismartProfile.value?.owner_name_en) },
-  { label: '業戶名稱(中)', value: displayText(ismartProfile.value?.owner_name_zh) },
-  { label: '證件編號', value: maskIdentityNumber(ismartProfile.value?.identity_number) },
+  {
+    label: t('account.center.account.accountCode'),
+    value: displayText(ismartProfile.value?.account_code || sessionStore.me?.ismart_username || sessionStore.me?.ismart_msg?.username),
+  },
+  {
+    label: t('account.center.account.accountPhone'),
+    value: displayText(ismartProfile.value?.account_phone || sessionStore.me?.ismart_bound_phone || sessionStore.me?.ismart_msg?.phone),
+  },
+  {
+    label: t('account.center.account.accountEmail'),
+    value: displayText(ismartProfile.value?.account_email || sessionStore.me?.ismart_msg?.email),
+  },
+  { label: t('account.center.account.ownerNameEnglish'), value: displayText(ismartProfile.value?.owner_name_en) },
+  { label: t('account.center.account.ownerNameChinese'), value: displayText(ismartProfile.value?.owner_name_zh) },
+  { label: t('account.center.account.identityNumber'), value: maskIdentityNumber(ismartProfile.value?.identity_number) },
 ]);
 
 const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
-  { label: '法體類型', value: displayText(ismartProfile.value?.legal_entity) },
-  { label: '性別', value: displayText(ismartProfile.value?.gender) },
-  { label: '出生日期', value: displayText(ismartProfile.value?.birth_date) },
-  { label: '聯絡人名稱', value: displayText(ismartProfile.value?.contact_name) },
-  { label: '聯絡人電話', value: displayText(ismartProfile.value?.contact_phone) },
-  { label: '帳單電郵', value: displayText(ismartProfile.value?.billing_email) },
-  { label: '帳單地址', value: displayText(ismartProfile.value?.billing_address) },
+  { label: t('account.center.account.legalEntity'), value: displayText(ismartProfile.value?.legal_entity) },
+  { label: t('account.center.account.gender'), value: displayText(ismartProfile.value?.gender) },
+  { label: t('account.center.account.birthDate'), value: displayText(ismartProfile.value?.birth_date) },
+  { label: t('account.center.account.contactName'), value: displayText(ismartProfile.value?.contact_name) },
+  { label: t('account.center.account.contactPhone'), value: displayText(ismartProfile.value?.contact_phone) },
+  { label: t('account.center.account.billingEmail'), value: displayText(ismartProfile.value?.billing_email) },
+  { label: t('account.center.account.billingAddress'), value: displayText(ismartProfile.value?.billing_address) },
 ]);
 
 interface SubaccountDisplayRow {
@@ -638,7 +792,7 @@ interface SubaccountDisplayRow {
   user: string;
   meta: string;
   role: string;
-  historyCount: string;
+  historyCount: number;
   targetUserID: string;
 }
 
@@ -705,10 +859,10 @@ const buildSubaccountDisplayRow = (
     key: rowKey || `subaccount-${index}`,
     relationInfoID: toSubaccountText(row.relation_info_id, '-'),
     location: toSubaccountText(row.unit_display, groupName),
-    user: toSubaccountText(row.target_name || row.target_username || row.target_client_id || targetUserID, '未命名用戶'),
+    user: toSubaccountText(row.target_name || row.target_username || row.target_client_id || targetUserID),
     meta: buildSubaccountMeta(row),
-    role: toSubaccountText(row.role, '授權用戶'),
-    historyCount: Number.isFinite(historyCount) ? `${historyCount} 次` : '0 次',
+    role: toSubaccountText(row.role),
+    historyCount: Number.isFinite(historyCount) ? historyCount : 0,
     targetUserID,
   };
 };
@@ -727,7 +881,8 @@ const createSubaccountGroup = (unit: SubaccountUnitContext, rows: IsmartSubaccou
 
 // 7.7 建立授權副戶單位名稱
 const buildSubaccountUnitName = (buildingID: string, item: PosBuildingUnit): string => {
-  const buildingName = bindBuildingNameMap.value[buildingID] || buildingID;
+  const buildingName = bindBuildingNameMap.value[buildingID]
+    || t('account.center.common.buildingCodeLabel', { id: buildingID });
   const floor = getBindUnitFloor(item);
   const unitName = getBindUnitName(item);
   return [buildingName, floor, unitName].filter(Boolean).join(' ') || getBindUnitID(item);
@@ -741,31 +896,24 @@ const loadSubaccountUnitContexts = async (): Promise<SubaccountUnitContext[]> =>
     return [];
   }
 
-  const settled = await Promise.allSettled(
-    buildingIDs.map(async (buildingID) => {
-      const units = await fetchMemberPosBuildingUnits(buildingID);
-      const filteredUnits = filterBindUnitsByPermission(buildingID, units, unitPermissions);
-      const fallbackUnits = buildBindUnitsFromFlatUnitPermissions(buildingID, unitPermissions);
-      return filteredUnits.length > 0 ? filteredUnits : fallbackUnits;
-    }),
-  );
+  if (residentUnitDetails.value.length === 0) {
+    await loadResidentUnitDetails();
+  }
   const unitMap = new Map<string, SubaccountUnitContext>();
-  settled.forEach((result, index) => {
-    const buildingID = buildingIDs[index] ?? '';
-    const units = result.status === 'fulfilled'
-      ? result.value
-      : buildBindUnitsFromFlatUnitPermissions(buildingID, unitPermissions);
-    units.forEach((unit) => {
-      const unitID = getBindUnitID(unit);
-      if (!unitID || unitMap.has(unitID)) {
-        return;
-      }
-      unitMap.set(unitID, {
-        unitID,
-        buildingID,
-        name: buildSubaccountUnitName(buildingID, unit),
+  buildingIDs.forEach((buildingID) => {
+    residentUnitDetails.value
+      .filter((unit) => getBindDigitsOnly(getBindUnitID(unit)).startsWith(buildingID))
+      .forEach((unit) => {
+        const unitID = getBindUnitID(unit);
+        if (!unitID || unitMap.has(unitID)) {
+          return;
+        }
+        unitMap.set(unitID, {
+          unitID,
+          buildingID,
+          name: buildSubaccountUnitName(buildingID, unit),
+        });
       });
-    });
   });
 
   return Array.from(unitMap.values()).sort((left, right) =>
@@ -789,7 +937,7 @@ const loadSubaccountRowsForGroup = async (group: SubaccountGroup): Promise<Subac
     return {
       ...group,
       rows: [],
-      error: readAccountApiErrorMessage(error, '授權副戶資料載入失敗。'),
+      error: readAccountApiErrorMessage(error, t('account.center.subaccounts.loadError')),
     };
   }
 };
@@ -824,7 +972,7 @@ const loadSubaccountGroups = async (): Promise<void> => {
   try {
     if (integrationAuthUnavailable.value) {
       subaccountGroups.value = [];
-      subaccountsError.value = '請重新登入 iSmart 以查看授權副戶。';
+      subaccountsError.value = t('account.center.subaccounts.reloginIsmart');
       return;
     }
     const unitContexts = await loadSubaccountUnitContexts();
@@ -838,7 +986,7 @@ const loadSubaccountGroups = async (): Promise<void> => {
     subaccountGroups.value = settledGroups.filter((group): group is SubaccountGroup => Boolean(group));
   } catch (error) {
     subaccountGroups.value = [];
-    subaccountsError.value = readAccountApiErrorMessage(error, '授權副戶資料載入失敗。');
+    subaccountsError.value = readAccountApiErrorMessage(error, t('account.center.subaccounts.loadError'));
   } finally {
     subaccountsLoading.value = false;
     subaccountsLoaded.value = true;
@@ -871,7 +1019,7 @@ const canSubmitSubaccountGrant = (group: SubaccountGroup): boolean =>
 const handleGrantSubaccount = async (group: SubaccountGroup): Promise<void> => {
   const targetUserID = Number(group.grantTargetUserID.trim());
   if (!Number.isSafeInteger(targetUserID) || targetUserID <= 0) {
-    feedbackStore.pushToast('請輸入有效的用戶 ID。', 'error');
+    feedbackStore.pushToast(t('account.center.subaccounts.invalidUserId'), 'error');
     return;
   }
 
@@ -886,9 +1034,9 @@ const handleGrantSubaccount = async (group: SubaccountGroup): Promise<void> => {
     group.grantRemark = '';
     activeSubaccountGrantUnitID.value = '';
     await refreshSubaccountGroup(group);
-    feedbackStore.pushToast('授權副戶已新增。', 'success');
+    feedbackStore.pushToast(t('account.center.subaccounts.grantSuccess'), 'success');
   } catch (error) {
-    feedbackStore.pushToast(readAccountApiErrorMessage(error, '新增授權副戶失敗。'), 'error');
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.center.subaccounts.grantError')), 'error');
   } finally {
     group.isGranting = false;
   }
@@ -898,10 +1046,10 @@ const handleGrantSubaccount = async (group: SubaccountGroup): Promise<void> => {
 const handleRevokeSubaccount = async (group: SubaccountGroup, row: SubaccountDisplayRow): Promise<void> => {
   const targetUserID = Number(row.targetUserID);
   if (!Number.isSafeInteger(targetUserID) || targetUserID <= 0) {
-    feedbackStore.pushToast('授權副戶用戶 ID 無效。', 'error');
+    feedbackStore.pushToast(t('account.center.subaccounts.invalidTarget'), 'error');
     return;
   }
-  if (!window.confirm('確認撤銷此授權副戶？')) {
+  if (!window.confirm(t('account.center.subaccounts.revokeConfirm'))) {
     return;
   }
 
@@ -912,9 +1060,9 @@ const handleRevokeSubaccount = async (group: SubaccountGroup, row: SubaccountDis
       target_user_id: targetUserID,
     });
     await refreshSubaccountGroup(group);
-    feedbackStore.pushToast('授權副戶已撤銷。', 'success');
+    feedbackStore.pushToast(t('account.center.subaccounts.revokeSuccess'), 'success');
   } catch (error) {
-    feedbackStore.pushToast(readAccountApiErrorMessage(error, '撤銷授權副戶失敗。'), 'error');
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.center.subaccounts.revokeError')), 'error');
   } finally {
     revokingSubaccountKey.value = '';
   }
@@ -929,20 +1077,48 @@ interface BindingStatusItem {
 }
 
 // 8. 物業綁定申請
-const bindingSteps = [
-  { num: '1', title: '選擇單位', desc: '選擇申請綁定的大廈、樓層與單位。' },
-  { num: '2', title: '填寫資料', desc: '提供申請身份、姓名與聯絡方式。' },
-  { num: '3', title: '等待審批', desc: '提交後由管理處或職員審批。' },
-];
+const bindingSteps = computed(() => [
+  {
+    num: '1',
+    title: t('account.center.binding.selectUnitStep'),
+    desc: t('account.center.binding.selectUnitStepDescription'),
+  },
+  {
+    num: '2',
+    title: t('account.center.binding.detailsStep'),
+    desc: t('account.center.binding.detailsStepDescription'),
+  },
+  {
+    num: '3',
+    title: t('account.center.binding.approvalStep'),
+    desc: t('account.center.binding.approvalStepDescription'),
+  },
+]);
 
-const bindingDocs = [
-  { title: '身份證明', desc: '身份證、護照或公司授權人身份文件。' },
-  { title: '物業關係證明', desc: '業權文件、租約、住戶證明或授權書。' },
-  { title: '最近賬單或收據', desc: '管理費賬單、水電煤賬單或管理處認可文件。' },
-  { title: '補充文件', desc: '如管理處要求，可後續補交其他證明。' },
-];
+const bindingDocs = computed(() => [
+  {
+    title: t('account.center.binding.identityDocument'),
+    desc: t('account.center.binding.identityDocumentDescription'),
+  },
+  {
+    title: t('account.center.binding.relationshipDocument'),
+    desc: t('account.center.binding.relationshipDocumentDescription'),
+  },
+  {
+    title: t('account.center.binding.recentBill'),
+    desc: t('account.center.binding.recentBillDescription'),
+  },
+  {
+    title: t('account.center.binding.supportingDocument'),
+    desc: t('account.center.binding.supportingDocumentDescription'),
+  },
+]);
 
-const bindingRoleOptions = ['業主', '住戶代表', '公司授權人'];
+const bindingRoleOptions = computed(() => [
+  { value: '業主', label: t('account.center.binding.ownerRole') },
+  { value: '住戶代表', label: t('account.center.binding.residentRole') },
+  { value: '公司授權人', label: t('account.center.binding.companyRole') },
+]);
 const bindingBuildings = ref<PosBuilding[]>([]);
 const bindingUnits = ref<PosBuildingUnit[]>([]);
 const bindingBuildingID = ref('');
@@ -964,11 +1140,11 @@ let latestBindingUnitsRequestID = 0;
 const bindingBuildingOptions = computed<BindOption[]>(() =>
   bindingBuildings.value
     .slice()
-    .sort((left, right) => getBindBuildingName(left).localeCompare(getBindBuildingName(right), 'en', {
+    .sort((left, right) => getBindBuildingLabel(left).localeCompare(getBindBuildingLabel(right), 'en', {
       numeric: true,
       sensitivity: 'base',
     }))
-    .map((item) => ({ label: getBindBuildingName(item), value: getBindBuildingID(item) }))
+    .map((item) => ({ label: getBindBuildingLabel(item), value: getBindBuildingID(item) }))
     .filter((item) => item.label.length > 0 && item.value.length > 0),
 );
 
@@ -979,7 +1155,7 @@ const visibleBindingUnits = computed(() => bindingUnits.value);
 const bindingFloorOptions = computed<BindOption[]>(() =>
   Array.from(new Set(visibleBindingUnits.value.map((item) => getBindDisplayUnitFloor(item)).filter(Boolean)))
     .sort(compareBindCodes)
-    .map((floor) => ({ label: floor, value: floor })),
+    .map((floor) => ({ label: formatBindFloorLabel(floor), value: floor })),
 );
 const bindingUnitOptions = computed<BindOption[]>(() =>
   visibleBindingUnits.value
@@ -1001,8 +1177,16 @@ const bindingSelectedUnitName = computed(() =>
   bindingSelectedUnit.value ? getBindUnitName(bindingSelectedUnit.value) : '',
 );
 const bindingCurrent = computed(() =>
-  [bindingSelectedBuildingName.value, bindingFloor.value, bindingSelectedUnitName.value].filter(Boolean).join(' / ') || '尚未選擇單位',
+  [
+    bindingSelectedBuildingName.value,
+    bindingFloor.value ? formatBindFloorLabel(bindingFloor.value) : '',
+    bindingSelectedUnitName.value,
+  ].filter(Boolean).join(' / ') || t('account.center.common.noUnitSelected'),
 );
+const bindingRoleLabel = computed(() =>
+  bindingRoleOptions.value.find((role) => role.value === bindingRole.value)?.label ?? bindingRole.value,
+);
+const hasPendingResidenceBinding = computed(() => sessionStore.me?.residence_binding_status === 'pending');
 const canSubmitOwnerBinding = computed(() =>
   bindingBuildingID.value.length > 0 &&
   bindingFloor.value.length > 0 &&
@@ -1010,16 +1194,17 @@ const canSubmitOwnerBinding = computed(() =>
   bindingRole.value.trim().length > 0 &&
   bindingApplicantName.value.trim().length > 0 &&
   bindingPhone.value.trim().length > 0 &&
+  !hasPendingResidenceBinding.value &&
   !bindingSubmitting.value,
 );
 
 // 8.5 同步物業綁定預設聯絡資料
 const syncOwnerBindingContactFromProfile = (): void => {
   if (!bindingApplicantName.value.trim()) {
-    bindingApplicantName.value = accountDisplayName.value === unsetText ? '' : accountDisplayName.value;
+    bindingApplicantName.value = accountDisplayName.value === unsetText.value ? '' : accountDisplayName.value;
   }
   if (!bindingPhone.value.trim()) {
-    bindingPhone.value = memberPhoneText.value === unsetText ? '' : memberPhoneText.value;
+    bindingPhone.value = memberPhoneText.value === unsetText.value ? '' : memberPhoneText.value;
   }
   if (!bindingEmail.value.trim()) {
     bindingEmail.value = sessionStore.me?.email?.trim()
@@ -1048,7 +1233,7 @@ const loadOwnerBindingBuildings = async (): Promise<void> => {
   } catch {
     bindingBuildings.value = visibleBindBuildings.value;
     if (bindingBuildings.value.length === 0) {
-      feedbackStore.pushToast('物業綁定大廈資料載入失敗。', 'error');
+      feedbackStore.pushToast(t('account.center.binding.buildingLoadError'), 'error');
     }
   } finally {
     bindingBuildingsLoading.value = false;
@@ -1083,7 +1268,7 @@ const loadOwnerBindingUnits = async (buildingID: string): Promise<void> => {
       return;
     }
     bindingUnits.value = [];
-    feedbackStore.pushToast('物業綁定單位資料載入失敗。', 'error');
+    feedbackStore.pushToast(t('account.center.binding.unitLoadError'), 'error');
   } finally {
     if (requestID === latestBindingUnitsRequestID) {
       bindingUnitsLoading.value = false;
@@ -1099,8 +1284,13 @@ const optionalBindingValue = (value: string): string | undefined => {
 
 // 8.10 提交物業綁定申請
 const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
+  if (hasPendingResidenceBinding.value) {
+    feedbackStore.pushToast(t('account.center.binding.pendingSubmitBlocked'), 'error');
+    return;
+  }
+
   if (!canSubmitOwnerBinding.value) {
-    feedbackStore.pushToast('請填寫大廈、單位、申請身份、姓名及電話。', 'error');
+    feedbackStore.pushToast(t('account.center.binding.requiredFields'), 'error');
     return;
   }
 
@@ -1118,7 +1308,7 @@ const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
       cli_tel: optionalBindingValue(bindingPhone.value),
     });
 
-    const submittedAt = new Date().toLocaleDateString('zh-HK', {
+    const submittedAt = new Date().toLocaleDateString(preferenceStore.locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -1128,30 +1318,58 @@ const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
       title: [bindingSelectedBuildingName.value || bindingBuildingID.value, bindingFloor.value, bindingSelectedUnitName.value || bindingUnitID.value]
         .filter(Boolean)
         .join(' / '),
-      meta: `${bindingRole.value}身份 · 已於 ${submittedAt} 提交審批`,
-      chip: '審批中',
+      meta: t('account.center.binding.statusMeta', { role: bindingRoleLabel.value, date: submittedAt }),
+      chip: t('account.center.binding.pending'),
       chipType: 'warn',
     };
     bindingStatusList.value = [pendingStatus, ...bindingStatusList.value].slice(0, 5);
-    feedbackStore.pushToast('物業綁定申請已提交。', 'success');
+    feedbackStore.pushToast(t('account.center.binding.submitSuccess'), 'success');
   } catch (error) {
-    feedbackStore.pushToast(readAccountApiErrorMessage(error, '物業綁定申請提交失敗。'), 'error');
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.center.binding.submitError')), 'error');
   } finally {
     bindingSubmitting.value = false;
   }
 };
 
 // 9. 住宅 mock 資料
-const homeListings = [
-  { name: '康睦庭園第二座 / 02 / D', identity: 'staff', status: '已綁定', chipType: 'good', updatedAt: '2026年6月5日' },
-  { name: 'Harbour Residence', identity: '申請人', status: '待確認', chipType: 'warn', updatedAt: '2026年5月22日' },
-];
+const homeListings = computed(() => [
+  {
+    name: '康睦庭園第二座 / 02 / D',
+    identity: t('marketplace.management.staffKicker'),
+    status: t('account.center.homes.linked'),
+    chipType: 'good',
+    updatedAt: new Intl.DateTimeFormat(preferenceStore.locale, { dateStyle: 'medium' }).format(new Date('2026-06-05')),
+  },
+  {
+    name: 'Harbour Residence',
+    identity: t('account.center.homes.applicant'),
+    status: t('account.center.homes.pending'),
+    chipType: 'warn',
+    updatedAt: new Intl.DateTimeFormat(preferenceStore.locale, { dateStyle: 'medium' }).format(new Date('2026-05-22')),
+  },
+]);
 
 // 10. 收藏 mock 資料
-const savedItems = [
-  { name: '佐敦高級住宅', category: '樓盤', price: 'HK$36,000/月', savedAt: '今天 12:30' },
-  { name: '纖柔牙刷 精巧頭 3支裝', category: '綜合優惠', price: 'HK$14.50', savedAt: '昨天 17:20' },
-];
+const savedItems = computed(() => [
+  {
+    name: '佐敦高級住宅',
+    category: t('account.center.favorites.property'),
+    price: t('account.center.favorites.monthlyPrice', {
+      price: new Intl.NumberFormat(preferenceStore.locale, { style: 'currency', currency: 'HKD' }).format(36000),
+    }),
+    savedAt: t('account.center.favorites.today'),
+  },
+  {
+    name: '纖柔牙刷 精巧頭 3支裝',
+    category: t('account.center.favorites.offers'),
+    price: new Intl.NumberFormat(preferenceStore.locale, {
+      style: 'currency',
+      currency: 'HKD',
+      minimumFractionDigits: 2,
+    }).format(14.5),
+    savedAt: t('account.center.favorites.yesterday'),
+  },
+]);
 
 // 11. 退出登入
 const handleLogout = async (): Promise<void> => {
@@ -1187,6 +1405,7 @@ onMounted(async () => {
     syncOwnerBindingContactFromProfile();
     syncBindFromProfile();
     await loadBindBuildings();
+    await loadResidentUnitDetails();
     await loadOwnerBindingBuildings();
     const previousBindingBuildingID = bindingBuildingID.value;
     syncOwnerBindingBuildingFromOptions();
@@ -1244,8 +1463,8 @@ watch(
 );
 
 watch(
-  () => route.path,
-  (path) => {
+  [() => route.path, () => route.query.panel],
+  ([path]) => {
     syncActivePanelFromRoute(path);
   },
   { immediate: true },
@@ -1260,7 +1479,7 @@ watch(
     <div class="work-shell">
       <!-- 1. 左側導覽 -->
       <aside class="work-sidebar">
-        <h1>會員中心</h1>
+        <h1>{{ t('account.center.nav.title') }}</h1>
         <nav class="work-nav">
           <button
             v-for="item in navItems"
@@ -1271,7 +1490,7 @@ watch(
             @click="switchPanel(item.key)"
           >
             <span class="work-nav-label">{{ item.label }}</span>
-            <span v-if="item.needsApi" class="work-nav-note">（需要接口）</span>
+            <span v-if="item.needsApi" class="work-nav-note">{{ t('account.center.nav.apiRequired') }}</span>
           </button>
         </nav>
       </aside>
@@ -1287,7 +1506,7 @@ watch(
                   <div class="work-account-avatar">{{ accountAvatarText }}</div>
                   <div>
                     <div class="work-account-name">{{ accountDisplayName }}</div>
-                    <div class="work-account-sub">個人資料</div>
+                    <div class="work-account-sub">{{ t('account.center.account.personalProfile') }}</div>
                   </div>
                 </div>
               </div>
@@ -1298,34 +1517,34 @@ watch(
                   :disabled="isSigningOut"
                   @click="handleLogout"
                 >
-                  {{ isSigningOut ? '退出中' : '退出登入' }}
+                  {{ isSigningOut ? t('account.center.account.signingOut') : t('account.actions.signOut') }}
                 </button>
-                <button type="button" class="work-account-btn primary">編輯資料</button>
-                <button type="button" class="work-account-btn">更新 iSmart</button>
+                <button type="button" class="work-account-btn primary">{{ t('account.center.account.editProfile') }}</button>
+                <button type="button" class="work-account-btn">{{ t('account.center.account.updateIsmart') }}</button>
               </div>
             </div>
           </section>
 
           <section class="work-account-grid">
             <div class="work-account-card">
-              <div class="work-card-title">帳戶資料</div>
-              <div class="work-account-field"><span>顯示名稱</span><strong>{{ accountProfile.displayName }}</strong></div>
-              <div class="work-account-field"><span>ISMART 帳戶</span><strong>{{ accountProfile.ismartAccount }}</strong></div>
-              <div class="work-account-field"><span>電郵地址</span><strong>{{ accountProfile.email }}</strong></div>
-              <div class="work-account-field"><span>電話號碼</span><strong>{{ accountProfile.phone }}</strong></div>
-              <div class="work-account-field"><span>登入密碼</span><strong>{{ accountProfile.password }}</strong></div>
-              <div class="work-account-field"><span>發布者身份</span><strong>{{ accountProfile.publisherRole }}</strong></div>
-              <div class="work-account-field"><span>地區代碼</span><strong>{{ accountProfile.regionCode }}</strong></div>
-              <div class="work-account-field"><span>員工管理屋苑</span><strong>{{ accountProfile.managedBuildings }}</strong></div>
+              <div class="work-card-title">{{ t('account.center.account.accountInfo') }}</div>
+              <div
+                v-for="item in ajoAccountData"
+                :key="item.label"
+                class="work-account-field"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
             </div>
             <div class="work-account-card">
-              <div class="work-card-title">身份狀態</div>
-              <div class="work-account-field"><span>會員編號</span><strong>{{ identityStatus.memberNo }}</strong></div>
-              <div class="work-account-field"><span>會員狀態</span><strong>{{ identityStatus.memberStatus }}</strong></div>
-              <div class="work-account-field"><span>會員類型</span><strong>{{ identityStatus.memberType }}</strong></div>
-              <div class="work-account-field"><span>主要角色</span><strong>{{ identityStatus.primaryRole }}</strong></div>
-              <div class="work-account-field"><span>資料完整度</span><strong>{{ identityStatus.profileCompleteness }}</strong></div>
-              <div class="work-account-field"><span>員工權限</span><strong>{{ identityStatus.staffPermission }}</strong></div>
+              <div class="work-card-title">{{ t('account.center.account.identityStatus') }}</div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberId') }}</span><strong>{{ identityStatus.memberNo }}</strong></div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberStatus') }}</span><strong>{{ identityStatus.memberStatus }}</strong></div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberType') }}</span><strong>{{ identityStatus.memberType }}</strong></div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.primaryRole') }}</span><strong>{{ identityStatus.primaryRole }}</strong></div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.profileCompleted') }}</span><strong>{{ identityStatus.profileCompleteness }}</strong></div>
+              <div class="work-account-field"><span>{{ t('marketplace.myProfile.staffAccess') }}</span><strong>{{ identityStatus.staffPermission }}</strong></div>
               <div class="work-role-strip">
                 <span
                   v-for="role in accountRoles"
@@ -1340,18 +1559,18 @@ watch(
           </section>
 
           <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">綁定單位</div>
+            <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
             <div class="work-bind-wrap">
               <div class="work-bind-current">{{ bindCurrent }}</div>
               <div class="work-bind-grid">
                 <div class="work-bind-field">
-                  <label class="work-bind-label">大廈</label>
+                  <label class="work-bind-label">{{ t('account.center.common.building') }}</label>
                   <select
                     v-model="bindBuildingID"
                     class="work-bind-select"
                     :disabled="bindLoading || bindBuildingOptions.length === 0"
                   >
-                    <option value="">{{ bindLoading ? '載入中' : '請選擇大廈' }}</option>
+                    <option value="">{{ bindLoading ? t('account.center.common.loading') : t('account.center.common.selectBuilding') }}</option>
                     <option
                       v-for="item in bindBuildingOptions"
                       :key="item.value"
@@ -1362,13 +1581,13 @@ watch(
                   </select>
                 </div>
                 <div class="work-bind-field">
-                  <label class="work-bind-label">樓層</label>
+                  <label class="work-bind-label">{{ t('account.center.common.floor') }}</label>
                   <select
                     v-model="bindFloor"
                     class="work-bind-select"
                     :disabled="!bindBuildingID || bindUnitsLoading || bindFloorOptions.length === 0"
                   >
-                    <option value="">{{ bindUnitsLoading ? '載入中' : '請選擇樓層' }}</option>
+                    <option value="">{{ bindUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectFloor') }}</option>
                     <option
                       v-for="item in bindFloorOptions"
                       :key="item.value"
@@ -1379,13 +1598,13 @@ watch(
                   </select>
                 </div>
                 <div class="work-bind-field">
-                  <label class="work-bind-label">單位</label>
+                  <label class="work-bind-label">{{ t('account.center.common.unit') }}</label>
                   <select
                     v-model="bindUnitID"
                     class="work-bind-select"
                     :disabled="!bindFloor || bindUnitsLoading || bindUnitOptions.length === 0"
                   >
-                    <option value="">{{ bindUnitsLoading ? '載入中' : '請選擇單位' }}</option>
+                    <option value="">{{ bindUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectUnit') }}</option>
                     <option
                       v-for="item in bindUnitOptions"
                       :key="item.value"
@@ -1403,17 +1622,17 @@ watch(
                   :disabled="!canSaveBindUnit || bindSaving"
                   @click="handleSaveBindUnit"
                 >
-                  {{ bindSaving ? '儲存中' : '儲存單位' }}
+                  {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
                 </button>
               </div>
             </div>
           </section>
 
           <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">iSmart 帳號資料</div>
+            <div class="work-card-title">{{ t('account.center.account.ismartData') }}</div>
             <div class="work-ismart-grid">
               <div class="work-ismart-card">
-                <div class="work-card-sub">帳號資料</div>
+                <div class="work-card-sub">{{ t('account.center.account.ismartAccountData') }}</div>
                 <div v-for="item in ismartAccountData" :key="item.label" class="work-row">
                   <div>
                     <strong>{{ item.label }}</strong>
@@ -1422,7 +1641,7 @@ watch(
                 </div>
               </div>
               <div class="work-ismart-card">
-                <div class="work-card-sub">業戶資料</div>
+                <div class="work-card-sub">{{ t('account.center.account.ismartHouseholdData') }}</div>
                 <div v-for="item in ismartHouseholdData" :key="item.label" class="work-row">
                   <div>
                     <strong>{{ item.label }}</strong>
@@ -1434,34 +1653,39 @@ watch(
           </section>
 
           <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">提示設定</div>
+            <div class="work-card-title">{{ t('account.center.account.reminderSettings') }}</div>
             <div class="work-setting-box">
               <label class="work-setting-check">
                 <input type="checkbox" checked>
-                <span>接收大廈通告電郵提示</span>
+                <span>{{ t('account.center.account.receiveNoticeEmail') }}</span>
               </label>
-              <button type="button" class="work-action work-compact-action">提交</button>
+              <button type="button" class="work-action work-compact-action">{{ t('account.center.common.submit') }}</button>
             </div>
           </section>
         </div>
 
-        <!-- 2.2 授權副戶 -->
+        <!-- 2.2 地產代理公司 -->
+        <div v-show="activePanel === 'profile-agency-company'" class="work-panel on" data-work-panel="profile-agency-company">
+          <RouterView v-if="activePanel === 'profile-agency-company'" />
+        </div>
+
+        <!-- 2.3 授權副戶 -->
         <div v-show="activePanel === 'profile-subaccounts'" class="work-panel on" data-work-panel="profile-subaccounts">
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Subaccounts</div>
-              <h2 class="work-title">授權副戶</h2>
-              <p class="work-desc">顯示各單位目前有效的授權副戶，並可由已審批業主新增或撤銷授權。</p>
+              <div class="work-kicker">{{ t('account.center.subaccounts.kicker') }}</div>
+              <h2 class="work-title">{{ t('account.center.subaccounts.title') }}</h2>
+              <p class="work-desc">{{ t('account.center.subaccounts.description') }}</p>
             </div>
           </section>
           <section class="work-subaccount-group">
-            <div v-if="subaccountsLoading" class="work-subaccount-state">正在載入授權副戶資料。</div>
+            <div v-if="subaccountsLoading" class="work-subaccount-state">{{ t('account.center.subaccounts.loading') }}</div>
             <div v-else-if="subaccountsError" class="work-subaccount-state error">
               <span>{{ subaccountsError }}</span>
-              <button type="button" class="work-action secondary" @click="loadSubaccountGroups">重新載入</button>
+              <button type="button" class="work-action secondary" @click="loadSubaccountGroups">{{ t('account.center.subaccounts.retry') }}</button>
             </div>
             <div v-else-if="subaccountsLoaded && subaccountGroups.length === 0" class="work-subaccount-state">
-              目前未有可管理單位或授權副戶資料
+              {{ t('account.center.subaccounts.emptyGroups') }}
             </div>
             <template v-else>
               <div v-for="group in subaccountGroups" :key="group.unitID" class="work-subaccount-card">
@@ -1472,27 +1696,31 @@ watch(
                     class="work-action"
                     @click="toggleSubaccountGrantForm(group.unitID)"
                   >
-                    {{ activeSubaccountGrantUnitID === group.unitID ? '收起' : '新增授權' }}
+                    {{
+                      activeSubaccountGrantUnitID === group.unitID
+                        ? t('account.center.subaccounts.collapse')
+                        : t('account.center.subaccounts.addGrant')
+                    }}
                   </button>
                 </div>
                 <div v-if="activeSubaccountGrantUnitID === group.unitID" class="work-subaccount-form">
                   <label>
-                    <span>用戶 ID</span>
+                    <span>{{ t('account.center.subaccounts.userId') }}</span>
                     <input
                       v-model="group.grantTargetUserID"
                       type="number"
                       min="1"
                       inputmode="numeric"
-                      placeholder="CustomUser ID"
+                      :placeholder="t('account.center.subaccounts.userIdPlaceholder')"
                     >
                   </label>
                   <label>
-                    <span>備註</span>
+                    <span>{{ t('account.center.subaccounts.remark') }}</span>
                     <input
                       v-model="group.grantRemark"
                       type="text"
                       maxlength="120"
-                      placeholder="可選"
+                      :placeholder="t('account.center.subaccounts.optional')"
                     >
                   </label>
                   <div class="work-subaccount-form-actions">
@@ -1502,7 +1730,7 @@ watch(
                       :disabled="!canSubmitSubaccountGrant(group)"
                       @click="handleGrantSubaccount(group)"
                     >
-                      {{ group.isGranting ? '提交中' : '提交授權' }}
+                      {{ group.isGranting ? t('account.center.common.submitting') : t('account.center.subaccounts.submitGrant') }}
                     </button>
                     <button
                       type="button"
@@ -1510,21 +1738,29 @@ watch(
                       :disabled="group.isGranting"
                       @click="toggleSubaccountGrantForm(group.unitID)"
                     >
-                      取消
+                      {{ t('account.center.common.cancel') }}
                     </button>
                   </div>
                 </div>
                 <table class="work-table">
-                  <thead><tr><th>地點</th><th>用戶</th><th>角色</th><th>記錄</th><th>操作</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>{{ t('account.center.subaccounts.location') }}</th>
+                      <th>{{ t('account.center.subaccounts.user') }}</th>
+                      <th>{{ t('account.center.subaccounts.role') }}</th>
+                      <th>{{ t('account.center.subaccounts.history') }}</th>
+                      <th>{{ t('account.center.subaccounts.actions') }}</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     <tr v-for="row in group.rows" :key="row.key">
                       <td>{{ row.location }}</td>
                       <td>
-                        <strong>{{ row.user }}</strong>
+                        <strong>{{ row.user || t('account.center.subaccounts.unnamedUser') }}</strong>
                         <span v-if="row.meta" class="work-subaccount-user-meta">{{ row.meta }}</span>
                       </td>
-                      <td>{{ row.role }}</td>
-                      <td>{{ row.historyCount }}</td>
+                      <td>{{ row.role || t('account.center.subaccounts.authorisedUser') }}</td>
+                      <td>{{ t('account.center.subaccounts.historyCount', { count: row.historyCount }) }}</td>
                       <td>
                         <button
                           type="button"
@@ -1532,7 +1768,11 @@ watch(
                           :disabled="revokingSubaccountKey === row.key"
                           @click="handleRevokeSubaccount(group, row)"
                         >
-                          {{ revokingSubaccountKey === row.key ? '撤銷中' : '撤銷' }}
+                          {{
+                            revokingSubaccountKey === row.key
+                              ? t('account.center.subaccounts.revoking')
+                              : t('account.center.subaccounts.revoke')
+                          }}
                         </button>
                       </td>
                     </tr>
@@ -1540,7 +1780,7 @@ watch(
                       <td colspan="5" class="work-subaccount-empty">{{ group.error }}</td>
                     </tr>
                     <tr v-else-if="group.rows.length === 0">
-                      <td colspan="5" class="work-subaccount-empty">目前未有授權副戶資料</td>
+                      <td colspan="5" class="work-subaccount-empty">{{ t('account.center.subaccounts.emptyRows') }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1553,13 +1793,13 @@ watch(
         <div v-show="activePanel === 'profile-property-binding'" class="work-panel on" data-work-panel="profile-property-binding">
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Property Binding</div>
-              <h2 class="work-title">物業綁定</h2>
-              <p class="work-desc">提交大廈與單位資料予管理處審批。</p>
+              <div class="work-kicker">{{ t('account.center.binding.kicker') }}</div>
+              <h2 class="work-title">{{ t('account.center.binding.title') }}</h2>
+              <p class="work-desc">{{ t('account.center.binding.description') }}</p>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">申請流程</div>
+            <div class="work-card-title">{{ t('account.center.binding.processTitle') }}</div>
             <div class="binding-flow">
               <div v-for="step in bindingSteps" :key="step.num" class="binding-step">
                 <div class="binding-step-num">{{ step.num }}</div>
@@ -1569,26 +1809,30 @@ watch(
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">審批說明</div>
+            <div class="work-card-title">{{ t('account.center.binding.reviewTitle') }}</div>
             <div class="binding-review-box">
-              <strong>審批責任</strong>
-              <span>此申請會提交至 iSmart OwnerReg 業主角色綁定流程，由職員審批後生效。</span>
+              <strong>{{ t('account.center.binding.reviewResponsibility') }}</strong>
+              <span>{{ t('account.center.binding.reviewDescription') }}</span>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">綁定申請</div>
+            <div class="work-card-title">{{ t('account.center.binding.applicationTitle') }}</div>
+            <div v-if="hasPendingResidenceBinding" class="binding-review-box binding-pending-state">
+              <strong>{{ t('account.center.binding.pendingTitle') }}</strong>
+              <span>{{ t('account.center.binding.pendingDescription') }}</span>
+            </div>
             <div class="binding-platform-panel">
-              <div class="binding-subtitle">申請單位</div>
+              <div class="binding-subtitle">{{ t('account.center.binding.applicationUnit') }}</div>
               <div class="work-bind-current">{{ bindingCurrent }}</div>
               <div class="acct-form-grid">
                 <div class="acct-field">
-                  <label>大廈</label>
+                  <label>{{ t('account.center.common.building') }}</label>
                   <select
                     v-model="bindingBuildingID"
                     class="acct-select"
-                    :disabled="bindingBuildingsLoading || bindingBuildingOptions.length === 0"
+                    :disabled="hasPendingResidenceBinding || bindingBuildingsLoading || bindingBuildingOptions.length === 0"
                   >
-                    <option value="">{{ bindingBuildingsLoading ? '載入中' : '請選擇大廈' }}</option>
+                    <option value="">{{ bindingBuildingsLoading ? t('account.center.common.loading') : t('account.center.common.selectBuilding') }}</option>
                     <option
                       v-for="item in bindingBuildingOptions"
                       :key="item.value"
@@ -1599,13 +1843,13 @@ watch(
                   </select>
                 </div>
                 <div class="acct-field">
-                  <label>樓層</label>
+                  <label>{{ t('account.center.common.floor') }}</label>
                   <select
                     v-model="bindingFloor"
                     class="acct-select"
-                    :disabled="!bindingBuildingID || bindingUnitsLoading || bindingFloorOptions.length === 0"
+                    :disabled="hasPendingResidenceBinding || !bindingBuildingID || bindingUnitsLoading || bindingFloorOptions.length === 0"
                   >
-                    <option value="">{{ bindingUnitsLoading ? '載入中' : '請選擇樓層' }}</option>
+                    <option value="">{{ bindingUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectFloor') }}</option>
                     <option
                       v-for="item in bindingFloorOptions"
                       :key="item.value"
@@ -1616,13 +1860,13 @@ watch(
                   </select>
                 </div>
                 <div class="acct-field">
-                  <label>單位</label>
+                  <label>{{ t('account.center.common.unit') }}</label>
                   <select
                     v-model="bindingUnitID"
                     class="acct-select"
-                    :disabled="!bindingFloor || bindingUnitsLoading || bindingUnitOptions.length === 0"
+                    :disabled="hasPendingResidenceBinding || !bindingFloor || bindingUnitsLoading || bindingUnitOptions.length === 0"
                   >
-                    <option value="">{{ bindingUnitsLoading ? '載入中' : '請選擇單位' }}</option>
+                    <option value="">{{ bindingUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectUnit') }}</option>
                     <option
                       v-for="item in bindingUnitOptions"
                       :key="item.value"
@@ -1633,14 +1877,14 @@ watch(
                   </select>
                 </div>
                 <div class="acct-field">
-                  <label>申請身份</label>
-                  <select v-model="bindingRole" class="acct-select">
+                  <label>{{ t('account.center.binding.applicantRole') }}</label>
+                  <select v-model="bindingRole" class="acct-select" :disabled="hasPendingResidenceBinding">
                     <option
                       v-for="role in bindingRoleOptions"
-                      :key="role"
-                      :value="role"
+                      :key="role.value"
+                      :value="role.value"
                     >
-                      {{ role }}
+                      {{ role.label }}
                     </option>
                   </select>
                 </div>
@@ -1648,29 +1892,30 @@ watch(
             </div>
             <div class="acct-form-grid binding-common-grid">
               <div class="acct-field">
-                <label>申請人姓名</label>
-                <input v-model="bindingApplicantName" class="acct-input" type="text" autocomplete="name">
+                <label>{{ t('account.center.binding.applicantName') }}</label>
+                <input v-model="bindingApplicantName" class="acct-input" type="text" autocomplete="name" :readonly="hasPendingResidenceBinding">
               </div>
               <div class="acct-field">
-                <label>聯絡電話</label>
-                <input v-model="bindingPhone" class="acct-input" type="tel" autocomplete="tel">
+                <label>{{ t('account.center.binding.phone') }}</label>
+                <input v-model="bindingPhone" class="acct-input" type="tel" autocomplete="tel" :readonly="hasPendingResidenceBinding">
               </div>
               <div class="acct-field full">
-                <label>聯絡電郵</label>
-                <input v-model="bindingEmail" class="acct-input" type="email" autocomplete="email">
+                <label>{{ t('account.center.binding.email') }}</label>
+                <input v-model="bindingEmail" class="acct-input" type="email" autocomplete="email" :readonly="hasPendingResidenceBinding">
               </div>
               <div class="acct-field full">
-                <label>備註</label>
+                <label>{{ t('account.center.binding.remark') }}</label>
                 <textarea
                   v-model="bindingNote"
                   class="acct-textarea"
-                  placeholder="可補充與審批人核對所需資料"
+                  :placeholder="t('account.center.binding.remarkPlaceholder')"
+                  :readonly="hasPendingResidenceBinding"
                 ></textarea>
               </div>
             </div>
             <label class="binding-check">
-              <input v-model="bindingReceiveEmail" type="checkbox">
-              <span>接收此申請的電郵通知</span>
+              <input v-model="bindingReceiveEmail" type="checkbox" :disabled="hasPendingResidenceBinding">
+              <span>{{ t('account.center.binding.receiveEmail') }}</span>
             </label>
             <div class="work-bind-actions work-doc-actions">
               <button
@@ -1679,12 +1924,16 @@ watch(
                 :disabled="!canSubmitOwnerBinding"
                 @click="handleSubmitOwnerBindingRequest"
               >
-                {{ bindingSubmitting ? '提交中' : '提交審批' }}
+                {{ bindingSubmitting
+                  ? t('account.center.common.submitting')
+                  : hasPendingResidenceBinding
+                    ? t('account.center.binding.pending')
+                    : t('account.center.binding.submitApproval') }}
               </button>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">所需文件</div>
+            <div class="work-card-title">{{ t('account.center.binding.requiredDocuments') }}</div>
             <div class="binding-doc-grid">
               <div v-for="doc in bindingDocs" :key="doc.title" class="binding-doc-card">
                 <div class="binding-doc-title">{{ doc.title }}</div>
@@ -1693,10 +1942,17 @@ watch(
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">申請狀態</div>
+            <div class="work-card-title">{{ t('account.center.binding.applicationStatus') }}</div>
             <div class="binding-status-list">
-              <div v-if="bindingStatusList.length === 0" class="binding-empty-state">
-                目前未有本次提交記錄。
+              <div v-if="hasPendingResidenceBinding" class="binding-status-item">
+                <div>
+                  <div class="binding-status-title">{{ t('account.center.binding.pendingTitle') }}</div>
+                  <div class="binding-status-meta">{{ t('account.center.binding.pendingDescription') }}</div>
+                </div>
+                <span class="work-chip warn">{{ t('account.center.binding.pending') }}</span>
+              </div>
+              <div v-else-if="bindingStatusList.length === 0" class="binding-empty-state">
+                {{ t('account.center.binding.noSubmission') }}
               </div>
               <div v-for="item in bindingStatusList" :key="item.key" class="binding-status-item">
                 <div>
@@ -1736,15 +1992,22 @@ watch(
           <template v-else>
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Residential</div>
-              <h2 class="work-title">我的住宅</h2>
-              <p class="work-desc">查看已綁定住宅與服務式住宅申請。</p>
+              <div class="work-kicker">{{ t('account.center.homes.kicker') }}</div>
+              <h2 class="work-title">{{ t('account.center.homes.title') }}</h2>
+              <p class="work-desc">{{ t('account.center.homes.description') }}</p>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">住宅列表</div>
+            <div class="work-card-title">{{ t('account.center.homes.listTitle') }}</div>
             <table class="work-table">
-              <thead><tr><th>住宅</th><th>身份</th><th>狀態</th><th>更新時間</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>{{ t('account.center.homes.residence') }}</th>
+                  <th>{{ t('account.center.homes.identity') }}</th>
+                  <th>{{ t('account.center.homes.status') }}</th>
+                  <th>{{ t('account.center.homes.updatedAt') }}</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="(item, idx) in homeListings" :key="idx">
                   <td>{{ item.name }}</td>
@@ -1764,21 +2027,21 @@ watch(
           <template v-else>
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Furniture</div>
-              <h2 class="work-title">我的家具</h2>
-              <p class="work-desc">管理二手家具發布、上架、續期與交易狀態。</p>
+              <div class="work-kicker">{{ t('account.center.furniture.kicker') }}</div>
+              <h2 class="work-title">{{ t('account.center.furniture.title') }}</h2>
+              <p class="work-desc">{{ t('account.center.furniture.description') }}</p>
             </div>
-            <button type="button" class="work-action" @click="openFurnitureCreate">新增家具</button>
+            <button type="button" class="work-action" @click="openFurnitureCreate">{{ t('account.center.furniture.add') }}</button>
           </section>
           <section class="work-card">
-            <div class="work-card-title">家具列表</div>
+            <div class="work-card-title">{{ t('account.center.furniture.listTitle') }}</div>
             <div class="work-account-field">
-              <span>資料來源</span>
-              <strong>我的家具列表已接入真實二手帖子資料。</strong>
+              <span>{{ t('account.center.furniture.dataSource') }}</span>
+              <strong>{{ t('account.center.furniture.dataSourceDescription') }}</strong>
             </div>
             <div class="work-table-actions">
-              <button type="button" class="work-mini-btn primary" @click="openFurnitureListings">查看家具列表</button>
-              <button type="button" class="work-mini-btn" @click="openFurnitureCreate">新增家具</button>
+              <button type="button" class="work-mini-btn primary" @click="openFurnitureListings">{{ t('account.center.furniture.viewList') }}</button>
+              <button type="button" class="work-mini-btn" @click="openFurnitureCreate">{{ t('account.center.furniture.add') }}</button>
             </div>
           </section>
           </template>
@@ -1790,15 +2053,22 @@ watch(
           <template v-else>
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Saved</div>
-              <h2 class="work-title">我的收藏</h2>
-              <p class="work-desc">查看已收藏樓盤、家具與優惠商品。</p>
+              <div class="work-kicker">{{ t('account.center.favorites.kicker') }}</div>
+              <h2 class="work-title">{{ t('account.center.favorites.title') }}</h2>
+              <p class="work-desc">{{ t('account.center.favorites.description') }}</p>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">收藏列表</div>
+            <div class="work-card-title">{{ t('account.center.favorites.listTitle') }}</div>
             <table class="work-table">
-              <thead><tr><th>項目</th><th>分類</th><th>價格</th><th>收藏時間</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>{{ t('account.center.favorites.item') }}</th>
+                  <th>{{ t('account.center.favorites.category') }}</th>
+                  <th>{{ t('account.center.favorites.price') }}</th>
+                  <th>{{ t('account.center.favorites.savedAt') }}</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="(item, idx) in savedItems" :key="idx">
                   <td>{{ item.name }}</td>
@@ -2828,7 +3098,7 @@ watch(
 }
 
 /* 24. 響應式 - 平板 */
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .work-shell {
     grid-template-columns: 1fr;
     padding: 14px;

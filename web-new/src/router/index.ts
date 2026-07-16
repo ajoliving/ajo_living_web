@@ -19,7 +19,24 @@ import { trendRoutes } from '@/router/routes/trend';
 import { pinia } from '@/pinia';
 import { useSessionStore } from '@/stores/session';
 
-// 1. 組裝模組路由
+// 1. 解析代理帳戶受限頁面跳轉
+export const resolveAgencyAccountRedirect = (
+  accountType: string,
+  memberStatus: string,
+  targetPath: string,
+): string | null => {
+  const agencyProfilePath = '/account/profile/agency-profile';
+  const isAgencyOwner = ['individual_agent', 'agency_company'].includes(accountType);
+  if (isAgencyOwner && ['pending_profile', 'pending_review', 'rejected'].includes(memberStatus) && targetPath !== agencyProfilePath) {
+    return agencyProfilePath;
+  }
+  if (targetPath === agencyProfilePath && !isAgencyOwner) {
+    return '/account/profile';
+  }
+  return null;
+};
+
+// 2. 組裝模組路由
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -54,11 +71,24 @@ router.beforeEach(async (to) => {
     };
   }
 
+  const agencyRedirect = sessionStore.isAuthenticated
+    ? resolveAgencyAccountRedirect(sessionStore.me?.account_type ?? '', sessionStore.me?.member_status ?? '', to.path)
+    : null;
+  if (agencyRedirect) {
+    return { path: agencyRedirect };
+  }
+
   if (to.meta.requiresStaff && !sessionStore.currentUser.is_staff) {
     return { path: '/profile' };
   }
 
   if (to.path === '/login' && sessionStore.isAuthenticated) {
+    const restrictedRedirect = resolveAgencyAccountRedirect(
+      sessionStore.me?.account_type ?? '', sessionStore.me?.member_status ?? '', '/',
+    );
+    if (restrictedRedirect) {
+      return { path: restrictedRedirect };
+    }
     const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : '/';
     return redirect === '/login' ? '/' : redirect;
   }
@@ -66,12 +96,15 @@ router.beforeEach(async (to) => {
   return true;
 });
 
-// 3. 切頁時同步更新文件標題
-router.afterEach((to) => {
-  const titleKey =
-    typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'common.brand.name';
+// 3. 統一同步文件標題，供切頁與語系切換共用
+export const updateDocumentTitle = (titleKey?: string): void => {
+  const resolvedTitleKey = titleKey || 'common.brand.name';
+  document.title = `${i18n.global.t(resolvedTitleKey)} | AJO Living`;
+};
 
-  document.title = `${i18n.global.t(titleKey)} | AJO Living`;
+// 4. 切頁時同步更新文件標題
+router.afterEach((to) => {
+  updateDocumentTitle(typeof to.meta.titleKey === 'string' ? to.meta.titleKey : undefined);
 });
 
 export default router;

@@ -60,6 +60,10 @@
     text-decoration: none;
   }
 
+  :where(h1, h2, h3, h4, h5, h6, p, li, dt, dd, a, button, label, span) {
+    overflow-wrap: anywhere;
+  }
+
   :where(button, a, input, select, textarea, [role='button']) {
     -webkit-tap-highlight-color: rgb(var(--color-primary) / 0.12);
   }
@@ -140,6 +144,27 @@
 
   .app-field-label {
     @apply mb-2 block text-sm font-semibold text-text;
+  }
+
+  .form-field--required > span:first-child::before {
+    content: '*';
+    margin-right: 4px;
+    color: rgb(var(--color-primary));
+    font-weight: 700;
+  }
+
+  .form-field-error-message {
+    display: block;
+    margin-top: 6px;
+    color: rgb(var(--color-danger));
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .form-field--error :is(input, select, textarea) {
+    border-color: rgb(var(--color-danger));
+    box-shadow: 0 0 0 3px rgb(var(--color-danger) / 0.1);
   }
 
   .app-input,

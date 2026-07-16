@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
 import { createOrReusePropertyChat } from '@/httpapis/chats';
@@ -52,6 +53,7 @@ interface ContactRow {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
@@ -91,21 +93,24 @@ const serviceContentSections = computed(() => {
 
   return [
     {
-      title: '服務介紹',
-      body: serviced.value.service_intro,
-      bodyEn: serviced.value.service_intro_en,
+      title: t('servicedResidence.detail.serviceIntro'),
+      body: preferenceStore.locale === 'en'
+        ? serviced.value.service_intro_en || serviced.value.service_intro
+        : serviced.value.service_intro || serviced.value.service_intro_en,
     },
     {
-      title: '設施簡介',
-      body: serviced.value.benefits_text,
-      bodyEn: serviced.value.benefits_text_en,
+      title: t('servicedResidence.detail.benefits'),
+      body: preferenceStore.locale === 'en'
+        ? serviced.value.benefits_text_en || serviced.value.benefits_text
+        : serviced.value.benefits_text || serviced.value.benefits_text_en,
     },
     {
-      title: '額外收費',
-      body: serviced.value.extra_charges_text,
-      bodyEn: serviced.value.extra_charges_text_en,
+      title: t('servicedResidence.detail.extraCharges'),
+      body: preferenceStore.locale === 'en'
+        ? serviced.value.extra_charges_text_en || serviced.value.extra_charges_text
+        : serviced.value.extra_charges_text || serviced.value.extra_charges_text_en,
     },
-  ].filter((item) => item.body || item.bodyEn);
+  ].filter((item) => item.body);
 });
 const tags = computed(() => {
   if (!listing.value) {
@@ -113,7 +118,7 @@ const tags = computed(() => {
   }
 
   return [
-    '服務式住宅',
+    t('servicedResidence.detail.title'),
     resolvePropertyDistrict(listing.value, preferenceStore.locale),
     ...resolvePropertyTagLabels(listing.value, preferenceStore.locale, 4),
   ].filter(Boolean);
@@ -126,19 +131,21 @@ const stats = computed<DetailStat[]>(() => {
   return [
     {
       value: formatProjectArea(),
-      label: '實用呎數起',
+      label: t('servicedResidence.detail.areaFrom'),
     },
     {
       value: String(serviced.value.room_types.length),
-      label: '房型',
+      label: t('servicedResidence.detail.roomType'),
     },
     {
       value: formatMinimumStay(serviced.value.min_stay_value, serviced.value.min_stay_unit),
-      label: '最短入住',
+      label: t('servicedResidence.detail.minimumStay'),
     },
     {
-      value: serviced.value.location_scope === 'overseas' ? '海外' : '香港',
-      label: '地區',
+      value: serviced.value.location_scope === 'overseas'
+        ? t('servicedResidence.detail.overseas')
+        : t('servicedResidence.detail.hongKong'),
+      label: t('servicedResidence.detail.region'),
     },
   ];
 });
@@ -159,8 +166,38 @@ const hasMonthlyRentRange = computed(() =>
   Number(serviced.value?.highest_monthly_rent_hkd || 0) >
   Number(serviced.value?.lowest_monthly_rent_hkd || 0),
 );
+const projectName = computed(() => {
+  if (!serviced.value) {
+    return '';
+  }
+
+  return preferenceStore.locale === 'en'
+    ? serviced.value.project_name_en || serviced.value.project_name
+    : serviced.value.project_name || serviced.value.project_name_en || '';
+});
+const propertyAddress = computed(() => {
+  if (!serviced.value) {
+    return '';
+  }
+
+  return preferenceStore.locale === 'en'
+    ? serviced.value.address_text_en || serviced.value.address_text
+    : serviced.value.address_text || serviced.value.address_text_en || '';
+});
+const residenceDescription = computed(() => {
+  if (!listing.value || !serviced.value) {
+    return '';
+  }
+
+  return preferenceStore.locale === 'en'
+    ? serviced.value.description_en || listing.value.description || listing.value.summary
+    : listing.value.description || listing.value.summary || serviced.value.description_en || '';
+});
 const mapSrc = computed(() => {
-  const address = serviced.value?.address_text || resolvePropertyTitle(listing.value as PropertyListingSummaryResponse);
+  const address = propertyAddress.value || resolvePropertyTitle(
+    listing.value as PropertyListingSummaryResponse,
+    preferenceStore.locale,
+  );
 
   return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
 });
@@ -168,8 +205,14 @@ const mapSrc = computed(() => {
 // 1. 解析房型分類
 const resolveRoomCategory = (category = ''): string => {
   const option = servicedRoomCategoryOptions.find((item) => item.value === category);
-  return option ? getPropertyOptionLabel(option, preferenceStore.locale) : category || '房型';
+  return option
+    ? getPropertyOptionLabel(option, preferenceStore.locale)
+    : category || t('servicedResidence.detail.roomType');
 };
+
+// 2. 取得房型名稱
+const resolveRoomName = (room: ServicedApartmentRoomType): string =>
+  preferenceStore.locale === 'en' ? room.name_en || room.name : room.name || room.name_en || '';
 
 // 2. 建立電話連結
 const buildPhoneHref = (phone: string): string => {
@@ -208,16 +251,16 @@ const buildContactHref = (key: string, value: string): string => {
 // 5. 輸出聯絡欄位標籤
 const resolveContactLabel = (key: string): string => {
   if (key === 'contact_name_zh') {
-    return '中文名';
+    return t('servicedResidence.detail.contactNameZh');
   }
   if (key === 'contact_name_en') {
-    return '英文名';
+    return t('servicedResidence.detail.contactNameEn');
   }
   if (key === 'phone') {
-    return '電話';
+    return t('servicedResidence.detail.phone');
   }
   if (key === 'phone_2') {
-    return '電話2';
+    return t('servicedResidence.detail.phone2');
   }
   if (key === 'wechat') {
     return 'WeChat';
@@ -233,10 +276,12 @@ const resolveContactLabel = (key: string): string => {
 const formatMinimumStay = (value?: number, unit?: string): string => {
   const safeValue = Number(value || 1);
   if (unit === 'week') {
-    return `${safeValue}周`;
+    return t('servicedResidence.detail.minimumStayWeek', { value: safeValue });
   }
 
-  return unit === 'day' ? `${safeValue}日` : `${safeValue}個月`;
+  return unit === 'day'
+    ? t('servicedResidence.detail.minimumStayDay', { value: safeValue })
+    : t('servicedResidence.detail.minimumStayMonth', { value: safeValue });
 };
 
 // 7. 格式化項目面積
@@ -259,21 +304,43 @@ const formatRoomPrice = (room: ServicedApartmentRoomType): string => {
   const dailyMax = Number(room.daily_rent_max_hkd || 0);
   const monthlyMin = Number(room.monthly_rent_min_hkd || room.monthly_rent_hkd || 0);
   const monthlyMax = Number(room.monthly_rent_max_hkd || 0);
-  const rentUnitLabel = room.rent_unit === 'week' ? '周' : '月';
+  const rentUnitLabel = room.rent_unit === 'week'
+    ? t('servicedResidence.detail.weekly')
+    : t('servicedResidence.detail.monthly');
   const rentSuffix = room.rent_suffix_plus ? '+' : '';
 
   if (dailyMin > 0) {
     return dailyMax > dailyMin
-      ? `${formatPrice(dailyMin, preferenceStore.locale)}-${formatPrice(dailyMax, preferenceStore.locale)} / 日`
-      : `${formatPrice(dailyMin, preferenceStore.locale)}${rentSuffix} / 日${rentSuffix ? '' : '起'}`;
+      ? t('servicedResidence.detail.priceRangePerUnit', {
+          min: formatPrice(dailyMin, preferenceStore.locale),
+          max: formatPrice(dailyMax, preferenceStore.locale),
+          unit: t('servicedResidence.detail.daily'),
+        })
+      : t('servicedResidence.detail.priceFromPerUnit', {
+          price: formatPrice(dailyMin, preferenceStore.locale),
+          suffix: rentSuffix,
+          unit: t('servicedResidence.detail.daily'),
+          from: rentSuffix ? '' : t('servicedResidence.detail.from'),
+        });
   }
   if (monthlyMin > 0) {
     return monthlyMax > monthlyMin
-      ? `${formatPrice(monthlyMin, preferenceStore.locale)}-${formatPrice(monthlyMax, preferenceStore.locale)} / ${rentUnitLabel}`
-      : `${formatPrice(monthlyMin, preferenceStore.locale)}${rentSuffix} / ${rentUnitLabel}${rentSuffix ? '' : '起'}`;
+      ? t('servicedResidence.detail.priceRangePerUnit', {
+          min: formatPrice(monthlyMin, preferenceStore.locale),
+          max: formatPrice(monthlyMax, preferenceStore.locale),
+          unit: rentUnitLabel,
+        })
+      : t('servicedResidence.detail.priceFromPerUnit', {
+          price: formatPrice(monthlyMin, preferenceStore.locale),
+          suffix: rentSuffix,
+          unit: rentUnitLabel,
+          from: rentSuffix ? '' : t('servicedResidence.detail.from'),
+        });
   }
 
-  return serviced.value?.price_negotiable ? '面議' : '價格僅供參考';
+  return serviced.value?.price_negotiable
+    ? t('servicedResidence.detail.negotiable')
+    : t('servicedResidence.detail.referencePrice');
 };
 
 // 9. 格式化房型面積
@@ -284,10 +351,10 @@ const formatRoomArea = (room: ServicedApartmentRoomType): string => {
     return '-';
   }
   if (maxArea > minArea) {
-    return `${minArea}-${maxArea}呎`;
+    return t('servicedResidence.detail.sqftRange', { min: minArea, max: maxArea });
   }
 
-  return `${minArea}呎`;
+  return t('servicedResidence.detail.sqft', { area: minArea });
 };
 
 // 10. 讀取詳情
@@ -307,8 +374,8 @@ const loadDetail = async (): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '服務式住宅詳情載入失敗'
-        : '服務式住宅詳情載入失敗',
+        ? error.response?.data?.message ?? t('servicedResidence.detail.loadError')
+        : t('servicedResidence.detail.loadError'),
       'error',
     );
     listing.value = null;
@@ -361,12 +428,12 @@ const revealContact = async (): Promise<void> => {
   try {
     const response = await fetchServicedApartmentContactAccess(listing.value.listing_id);
     contactAccess.value = response.data.data;
-    feedbackStore.pushToast('聯絡方式已解鎖', 'success');
+    feedbackStore.pushToast(t('servicedResidence.detail.contactUnlockedToast'), 'success');
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '聯絡方式解鎖失敗'
-        : '聯絡方式解鎖失敗',
+        ? error.response?.data?.message ?? t('servicedResidence.detail.contactError')
+        : t('servicedResidence.detail.contactError'),
       'error',
     );
   } finally {
@@ -395,8 +462,8 @@ const openChat = async (): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '站內訊息開啟失敗'
-        : '站內訊息開啟失敗',
+        ? error.response?.data?.message ?? t('servicedResidence.detail.chatError')
+        : t('servicedResidence.detail.chatError'),
       'error',
     );
   } finally {
@@ -425,31 +492,33 @@ onMounted(() => {
         class="bc-link"
         to="/"
       >
-        首頁
+        {{ t('servicedResidence.detail.home') }}
       </RouterLink>
       <span class="bc-sep">›</span>
       <RouterLink
         class="bc-link"
         to="/serviced-residences"
       >
-        服務式住宅
+        {{ t('servicedResidence.detail.title') }}
       </RouterLink>
       <span class="bc-sep">›</span>
-      <span class="bc-current">{{ listing ? resolvePropertyTitle(listing) : '詳情' }}</span>
+      <span class="bc-current">{{ listing
+        ? resolvePropertyTitle(listing, preferenceStore.locale)
+        : t('servicedResidence.detail.detail') }}</span>
     </nav>
 
     <section
       v-if="loading"
       class="detail-state"
     >
-      正在載入
+      {{ t('servicedResidence.detail.loading') }}
     </section>
 
     <section
       v-else-if="!listing || !serviced"
       class="detail-state"
     >
-      未能載入服務式住宅詳情
+      {{ t('servicedResidence.detail.loadStateError') }}
     </section>
 
     <div
@@ -470,21 +539,24 @@ onMounted(() => {
               </span>
             </div>
 
-            <h2>{{ resolvePropertyTitle(listing) }}</h2>
+            <h2>{{ resolvePropertyTitle(listing, preferenceStore.locale) }}</h2>
             <div class="detail-subtitle">
-              {{ serviced.project_name }} · {{ resolvePropertyDistrict(listing, preferenceStore.locale) }}
+              {{ projectName }} · {{ resolvePropertyDistrict(listing, preferenceStore.locale) }}
             </div>
 
             <div class="detail-price-row">
               <div class="detail-price-main">
                 {{ resolvePropertyPriceText(listing, preferenceStore.locale) }}
-                <span class="detail-price-suffix">{{ hasMonthlyRentRange ? ' / 月' : ' / 月起' }}</span>
+                <span class="detail-price-suffix">{{ hasMonthlyRentRange
+                  ? t('servicedResidence.detail.monthlyPrice')
+                  : t('servicedResidence.detail.monthlyPriceFrom') }}</span>
               </div>
               <div
                 v-if="hasDailyRent"
                 class="detail-price-unit"
               >
-                {{ resolvePropertyPriceText(listing, preferenceStore.locale, 'daily') }} / 日起
+                {{ resolvePropertyPriceText(listing, preferenceStore.locale, 'daily') }}
+                {{ t('servicedResidence.detail.dailyPriceFrom') }}
               </div>
             </div>
 
@@ -503,7 +575,7 @@ onMounted(() => {
               v-if="facilityLabels.length > 0"
               class="detail-section"
             >
-              <div class="detail-section-title">設施服務</div>
+              <div class="detail-section-title">{{ t('servicedResidence.detail.facilitiesServices') }}</div>
               <div class="gpills">
                 <span
                   v-for="item in facilityLabels"
@@ -517,21 +589,21 @@ onMounted(() => {
 
             <section class="detail-section">
               <div class="service-room-tabs">
-                <div class="service-room-title">房型</div>
+                <div class="service-room-title">{{ t('servicedResidence.detail.roomType') }}</div>
                 <span class="service-room-currency">HKD</span>
               </div>
               <div
                 class="service-room-table"
                 role="table"
-                aria-label="房型"
+                :aria-label="t('servicedResidence.detail.roomType')"
               >
                 <div
                   class="service-room-row service-room-row-head"
                   role="row"
                 >
-                  <div>房型 / 面積</div>
-                  <div>租金</div>
-                  <div>最短入住</div>
+                  <div>{{ t('servicedResidence.detail.roomArea') }}</div>
+                  <div>{{ t('servicedResidence.detail.rent') }}</div>
+                  <div>{{ t('servicedResidence.detail.minimumStay') }}</div>
                 </div>
                 <div
                   v-for="room in serviced.room_types"
@@ -540,13 +612,7 @@ onMounted(() => {
                   role="row"
                 >
                   <div>
-                    <div class="service-room-type">{{ room.name }}</div>
-                    <div
-                      v-if="room.name_en"
-                      class="service-room-area"
-                    >
-                      {{ room.name_en }}
-                    </div>
+                    <div class="service-room-type">{{ resolveRoomName(room) }}</div>
                     <div class="service-room-area">
                       {{ resolveRoomCategory(room.room_category) }} · {{ formatRoomArea(room) }}
                     </div>
@@ -560,15 +626,15 @@ onMounted(() => {
             </section>
 
             <section class="detail-section">
-              <div class="detail-section-title">住宅描述</div>
-              <p class="body-text">{{ listing.description || listing.summary }}</p>
+              <div class="detail-section-title">{{ t('servicedResidence.detail.residenceDescription') }}</div>
+              <p class="body-text">{{ residenceDescription }}</p>
             </section>
 
             <section
               v-if="serviceContentSections.length > 0"
               class="detail-section"
             >
-              <div class="detail-section-title">服務內容與設施</div>
+              <div class="detail-section-title">{{ t('servicedResidence.detail.serviceFacilities') }}</div>
               <div class="detail-copy-grid">
                 <article
                   v-for="section in serviceContentSections"
@@ -576,7 +642,6 @@ onMounted(() => {
                 >
                   <strong>{{ section.title }}</strong>
                   <p v-if="section.body">{{ section.body }}</p>
-                  <p v-if="section.bodyEn">{{ section.bodyEn }}</p>
                 </article>
               </div>
             </section>
@@ -618,28 +683,28 @@ onMounted(() => {
             </div>
 
             <div class="detail-right-card">
-              <div class="label-text">物業位置</div>
+              <div class="label-text">{{ t('servicedResidence.detail.propertyLocation') }}</div>
               <iframe
                 class="building-map-frame"
-                title="服務式住宅地圖位置"
+                :title="t('servicedResidence.detail.mapTitle')"
                 :src="mapSrc"
                 allowfullscreen
                 loading="lazy"
                 referrerpolicy="no-referrer-when-downgrade"
               />
-              <p class="detail-location-text">{{ serviced.address_text }}</p>
+              <p class="detail-location-text">{{ propertyAddress }}</p>
             </div>
 
             <div class="detail-agent-card">
               <div class="detail-agent-profile">
                 <div class="detail-agent-avatar">A</div>
                 <div class="detail-agent-copy">
-                  <div class="detail-agent-kicker">服務住宅聯絡</div>
+                  <div class="detail-agent-kicker">{{ t('servicedResidence.detail.contactKicker') }}</div>
                   <div class="detail-agent-name">
                     {{ serviced.publisher_role_label || listing.owner?.display_name || 'AJO Living' }}
                   </div>
                   <div class="detail-agent-sub">
-                    聯絡方式按發布者設定顯示。
+                    {{ t('servicedResidence.detail.contactHint') }}
                   </div>
                 </div>
               </div>
@@ -660,7 +725,7 @@ onMounted(() => {
                     :rel="isWhatsAppContact(row.key) ? 'noopener' : undefined"
                   >
                     <span>{{ row.label }}</span>
-                    <strong>{{ row.label === 'WhatsApp' ? '開啟 WhatsApp' : row.value }}</strong>
+                    <strong>{{ row.label === 'WhatsApp' ? t('servicedResidence.detail.openWhatsApp') : row.value }}</strong>
                   </a>
                   <div
                     v-else
@@ -680,7 +745,11 @@ onMounted(() => {
                   :disabled="loadingContact"
                   @click="revealContact"
                 >
-                  {{ contactRows.length > 0 ? '已解鎖聯絡方式' : loadingContact ? '解鎖中' : '解鎖聯絡方式' }}
+                  {{ contactRows.length > 0
+                    ? t('servicedResidence.detail.contactUnlocked')
+                    : loadingContact
+                      ? t('servicedResidence.detail.unlocking')
+                      : t('servicedResidence.detail.unlockContact') }}
                 </button>
                 <button
                   v-if="canOpenChat"
@@ -689,7 +758,7 @@ onMounted(() => {
                   :disabled="openingChat"
                   @click="openChat"
                 >
-                  {{ openingChat ? '開啟中' : '站內訊息' }}
+                  {{ openingChat ? t('servicedResidence.detail.opening') : t('servicedResidence.detail.message') }}
                 </button>
               </div>
             </div>
@@ -698,7 +767,7 @@ onMounted(() => {
               v-if="similarResidences.length > 0 || loadingSimilar"
               class="similar-section"
             >
-              <div class="label-text">相似住宅</div>
+              <div class="label-text">{{ t('servicedResidence.detail.similar') }}</div>
               <div class="similar-scroll">
                 <button
                   v-for="item in similarResidences"
@@ -708,11 +777,13 @@ onMounted(() => {
                   @click="goSimilar(item.listing_id)"
                 >
                   <div class="sim-body">
-                    <div class="sim-name">{{ resolvePropertyTitle(item) }}</div>
+                    <div class="sim-name">{{ resolvePropertyTitle(item, preferenceStore.locale) }}</div>
                     <div class="sim-price">{{ resolvePropertyPriceText(item, preferenceStore.locale) }}</div>
                     <div class="sim-meta">
                       {{ resolvePropertyDistrict(item, preferenceStore.locale) }} ·
-                      {{ resolvePropertyArea(item) > 0 ? `${resolvePropertyArea(item)}呎起` : '服務式住宅' }}
+                      {{ resolvePropertyArea(item) > 0
+                        ? t('servicedResidence.list.sqftFrom', { area: resolvePropertyArea(item) })
+                        : t('servicedResidence.detail.servicedFallback') }}
                     </div>
                   </div>
                 </button>
@@ -1325,7 +1396,7 @@ onMounted(() => {
   font-size: 12px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .detail-layout {
     grid-template-columns: 1fr;
   }

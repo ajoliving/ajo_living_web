@@ -56,10 +56,32 @@ export const resolvePropertyDetailPath = (
 ) => `${resolvePropertyChannel(listing) === 'serviced' ? '/serviced-residences' : '/properties'}/${listing.listing_id}`;
 
 // 5. 取得物業標題
-export const resolvePropertyTitle = (listing: PropertyListingSummaryResponse) => listing.title;
+export const resolvePropertyTitle = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+) => {
+  if (locale === 'en') {
+    return listing.property_sale?.title_en ||
+      listing.serviced_apartment?.project_name_en ||
+      listing.title;
+  }
+
+  return listing.title;
+};
 
 // 6. 取得物業摘要
-export const resolvePropertySummary = (listing: PropertyListingSummaryResponse) => listing.summary;
+export const resolvePropertySummary = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+) => {
+  if (locale === 'en') {
+    return listing.property_sale?.description_en ||
+      listing.serviced_apartment?.description_en ||
+      listing.summary;
+  }
+
+  return listing.summary;
+};
 
 // 7. 取得樓盤交易類型
 export const resolvePropertyTransactionType = (listing: PropertyListingSummaryResponse) =>
@@ -117,17 +139,31 @@ export const resolvePropertyArea = (listing: PropertyListingSummaryResponse) =>
   0;
 
 // 12. 取得物業房間摘要
-export const resolvePropertyRooms = (listing: PropertyListingSummaryResponse) => {
+export const resolvePropertyRooms = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+) => {
   const sale = listing.property_sale;
   if (sale) {
-    const location = sale.public_location_text ? `${sale.public_location_text} · ` : '';
-    const bedroomText = sale.bedroom_count < 0 ? 'N/A' : `${sale.bedroom_count}房`;
-    const bathroomLabel = ['industrial', 'shop'].includes(sale.property_type) ? '廁' : '浴室';
-    return `${location}${bedroomText} ${sale.bathroom_count}${bathroomLabel}`;
+    const locationText = locale === 'en'
+      ? sale.address_text_en || sale.public_location_text
+      : sale.public_location_text;
+    const location = locationText ? `${locationText} · ` : '';
+    const bedroomText = sale.bedroom_count < 0
+      ? 'N/A'
+      : locale === 'en'
+        ? `${sale.bedroom_count} bed`
+        : `${sale.bedroom_count}房`;
+    const bathroomLabel = locale === 'en'
+      ? ['industrial', 'shop'].includes(sale.property_type) ? 'toilet' : 'bath'
+      : ['industrial', 'shop'].includes(sale.property_type) ? '廁' : '浴室';
+    return `${location}${bedroomText} ${sale.bathroom_count} ${bathroomLabel}`;
   }
 
   const roomCount = listing.serviced_apartment?.room_types.length ?? 0;
-  return roomCount > 0 ? `${roomCount} 種房型` : '-';
+  return roomCount > 0
+    ? locale === 'en' ? `${roomCount} room types` : `${roomCount} 種房型`
+    : '-';
 };
 
 // 13. 取得地區標籤
@@ -177,17 +213,30 @@ export const resolvePropertyImages = (listing: PropertyListingSummaryResponse) =
 };
 
 // 17. 取得屋苑或項目名稱
-export const resolvePropertyCommunityName = (listing: PropertyListingSummaryResponse) => {
+export const resolvePropertyCommunityName = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+) => {
   if (listing.serviced_apartment?.project_name) {
-    return listing.serviced_apartment.project_name;
+    return locale === 'en'
+      ? listing.serviced_apartment.project_name_en || listing.serviced_apartment.project_name
+      : listing.serviced_apartment.project_name;
+  }
+  if (locale === 'en' && listing.community) {
+    return (
+      listing.community.name_en.trim() ||
+      listing.property_sale?.address_text_en?.trim() ||
+      listing.property_sale?.estate_name?.trim() ||
+      listing.community.name_zh.trim()
+    );
   }
   if (listing.property_sale?.estate_name) {
     return listing.property_sale.estate_name;
   }
   if (listing.community) {
     return (
-      listing.community.name_zh.trim() ||
-      listing.community.name_en.trim() ||
+      (locale === 'en' ? listing.community.name_en : listing.community.name_zh).trim() ||
+      (locale === 'en' ? listing.community.name_zh : listing.community.name_en).trim() ||
       listing.community.address_text.trim()
     );
   }
@@ -208,10 +257,18 @@ export const resolvePropertyStatus = (listing: PropertyListingSummaryResponse) =
 };
 
 // 19. 取得聯絡角色
-export const resolvePropertyPublisherRole = (listing: PropertyListingSummaryResponse) =>
-  listing.property_sale?.publisher_role_label ||
-  listing.serviced_apartment?.publisher_role_label ||
-  resolvePublisherRoleLabel(listing.publisher_identity_type);
+export const resolvePropertyPublisherRole = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+) => {
+  if (locale === 'en') {
+    return resolvePublisherRoleLabel(listing.publisher_identity_type, locale);
+  }
+
+  return listing.property_sale?.publisher_role_label ||
+    listing.serviced_apartment?.publisher_role_label ||
+    resolvePublisherRoleLabel(listing.publisher_identity_type, locale);
+};
 
 // 20. 取得樓盤特色標籤文案
 export const resolvePropertyTagLabels = (
@@ -224,13 +281,21 @@ export const resolvePropertyTagLabels = (
   .map((tag) => getPropertyTagLabel(tag, locale));
 
 // 21. 取得發布身份標籤
-const resolvePublisherRoleLabel = (identityType: string) => {
-  const labels: Record<string, string> = {
-    agent: '代理人',
-    owner: '業主',
-    professional_seller: '代理人',
-    property_manager: '物業管理公司',
+const resolvePublisherRoleLabel = (identityType: string, locale: AppLocale) => {
+  const labels: Record<AppLocale, Record<string, string>> = {
+    'zh-HK': {
+      agent: '代理人',
+      owner: '業主',
+      professional_seller: '代理人',
+      property_manager: '物業管理公司',
+    },
+    en: {
+      agent: 'Agent',
+      owner: 'Owner',
+      professional_seller: 'Agent',
+      property_manager: 'Property manager',
+    },
   };
 
-  return labels[identityType] ?? humanizeCodeLabel(identityType);
+  return labels[locale][identityType] ?? humanizeCodeLabel(identityType);
 };

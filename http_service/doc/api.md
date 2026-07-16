@@ -50,7 +50,7 @@ go run ./http_service/cmd/server
 | 5 | /api/v1/auth/otp/verify | POST | 驗證 OTP 並登入 | 無 |
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
-| 49 | /api/v1/auth/email/register | POST | 建立手機密碼帳戶，可選綁定郵箱 | 無 |
+| 49 | /api/v1/auth/email/register | POST | 建立電郵與手機密碼帳戶 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
 | 50.2 | /api/v1/auth/password/email/request | POST | 申請電郵重設密碼驗證碼 | 無 |
 | 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
@@ -74,20 +74,20 @@ go run ./http_service/cmd/server
 | 82 | /api/v1/me/payments/pos/fees | GET | 查詢 POS 手續費與付款方式 | 會員 |
 | 83 | /api/v1/me/payments/pos/bank-accounts | GET | 查詢 POS 銀行賬戶 | 會員 |
 | 84 | /api/v1/me/payments/pos/payments/report | POST | 上報線下 POS 繳費 | 會員 |
-| 85 | /api/v1/me/payments/pos/terminal/pay | POST | Staff POS 機收款並入賬 | Staff |
+| 85 | /api/v1/me/payments/pos/terminal/pay | POST | 目前所屬單位 POS 機收款並入賬 | 會員 |
 | 86 | /api/v1/me/payments/pos/orders | GET | 查詢目前單位線上繳費訂單 | 會員 |
 | 87 | /api/v1/me/payments/pos/orders | POST | 建立 POS H5 / QR 線上繳費訂單 | 會員 |
 | 88 | /api/v1/me/payments/pos/orders/query | POST | 按商戶單號或支付單號查詢訂單 | 會員 |
 | 89 | /api/v1/me/payments/pos/orders/{mchOrderNo} | GET | 查詢單一 POS H5 / QR 線上繳費訂單 | 會員 |
 | 90 | /api/v1/me/payments/pos/orders/{mchOrderNo}/close | POST | 關閉 POS H5 / QR 訂單 | 會員 |
 | 91 | /api/v1/me/payments/pos/orders/{mchOrderNo}/cancel | POST | 取消 POS H5 / QR 訂單 | 會員 |
-| 92 | /api/v1/me/payments/pos/orders/{mchOrderNo}/simulate | POST | Staff 在非 production 模擬 H5 訂單 | Staff |
+| 92 | /api/v1/me/payments/pos/orders/{mchOrderNo}/simulate | POST | 會員在非 production 模擬可見 H5 訂單 | 會員 |
 | 93 | /api/v1/me/payments/pos/history | GET | 查詢 POS 交易歷史 | 會員 |
 | 94 | /api/v1/me/payments/pos/history/{paymentId} | GET | 查詢 POS 交易詳情 | 會員 |
-| 95 | /api/v1/me/payments/pos/accounting | GET | 查詢 Staff 可見 POS 會計資料 | Staff |
-| 96 | /api/v1/me/payments/pos/accounting/clear | POST | Staff 多選清機 | Staff |
-| 97 | /api/v1/me/payments/pos/accounting/records | GET | Staff 查詢清機歷史 | Staff |
-| 98 | /api/v1/me/payments/pos/accounting/records/{recordId} | GET | Staff 查詢清機詳情 | Staff |
+| 95 | /api/v1/me/payments/pos/accounting | GET | 查詢所屬屋苑 POS 會計資料 | 會員 |
+| 96 | /api/v1/me/payments/pos/accounting/clear | POST | 所屬屋苑多選清機 | 會員 |
+| 97 | /api/v1/me/payments/pos/accounting/records | GET | 查詢所屬屋苑清機歷史 | 會員 |
+| 98 | /api/v1/me/payments/pos/accounting/records/{recordId} | GET | 查詢所屬屋苑清機詳情 | 會員 |
 | 33 | /api/v1/me/orders | GET | 取得我的訂單列表 | 會員 |
 
 ### OSS 模組
@@ -129,6 +129,7 @@ go run ./http_service/cmd/server
 | 77 | /api/v1/property-sales | POST | 建立樓盤草稿 | 會員 |
 | 78 | /api/v1/property-sales/{listingId} | PATCH | 更新樓盤草稿或已發布樓盤 | 會員 |
 | 79 | /api/v1/property-addresses/search | GET | 查詢屋苑或大廈地址聯想 | 無 |
+| 79A | /api/v1/property-sales/translation | POST | 將樓盤標題及單位介紹翻譯成 English | 會員 |
 | 80 | /api/v1/market-trends/rent | GET | 香港住宅租金走勢 | 無 |
 
 ### Chat 模組
@@ -186,6 +187,20 @@ go run ./http_service/cmd/server
 | 69 | /api/v1/staff/property-sales/{listingId}/renew | POST | 管理頁續期樓盤租售 | Staff |
 | 70 | /api/v1/staff/serviced-apartments | GET | 管理頁查詢服務式住宅列表 | Staff |
 | 71 | /api/v1/staff/serviced-apartments/{listingId}/renew | POST | 管理頁續期服務式住宅 | Staff |
+
+---
+
+## 代理帳戶與資料審核
+
+- 註冊 `POST /api/v1/auth/email/register` 接受 `account_type`: `personal`、`individual_agent`、`agency_company`。代理帳戶註冊後狀態為 `pending_profile`；`pending_profile`、`pending_review`、`rejected` 均可使用電郵、手提電話或用戶名稱配合密碼取得受限 session，只可使用 `/me`、代理資料、代理專用 OSS 上傳及登出接口，以查看審核狀態、拒絕原因及重新提交。
+- 會員資料接口：`GET|POST|PATCH /api/v1/me/agency-profile`、`POST /api/v1/me/agency-profile/submit`。回應同時返回 `active_profile` 與 `revision`，修訂審核期間繼續使用已批准版本。
+- 個人代理必填中英文名、電話1及 WhatsApp 狀態、預設頭像；非海外代理另須牌照號碼及 EAA 圖片。公司必填中英文名及地址、電話1、牌照號碼、EAA 圖片及商業登記證。
+- 代理 OSS `purpose`：`agency_individual_avatar`、`agency_individual_eaa`、`agency_individual_company_card`、`agency_individual_wechat_qr`、`agency_company_logo`、`agency_company_eaa`、`agency_company_business_registration`、`agency_company_company_card`。
+- 管理審核接口：`GET /api/v1/staff/agency-profiles`、`GET /api/v1/staff/agency-profiles/{profileId}`、`POST /api/v1/staff/agency-profiles/{profileId}/review`。拒絕時 `review_note` 必填；列表支援 `status`、`profile_type`、`keyword`，`status=all` 表示全部。審核結果會寫入站內通知，註冊帳戶有電郵時另透過 `MailSender` 發送通過或拒絕郵件，拒絕郵件包含 `review_note`；郵件發送失敗不回滾已提交的審核交易。
+- 已批准公司子帳戶接口：`GET|POST /api/v1/me/agency-profile/subaccounts`、`PATCH /api/v1/me/agency-profile/subaccounts/{subaccountId}/status`、`DELETE /api/v1/me/agency-profile/subaccounts/{subaccountId}`。權限只接受 `property_publish`、`property_manage`；建立、發布及重新發布使用 `property_publish`，更新、下架及標記售出使用 `property_manage`。公司主帳戶可統一管理所屬子帳戶樓盤。
+- EAA 牌照及商業登記證物件強制使用 private ACL；會員本人及管理審核回應只返回有效 10 分鐘的 OSS 簽名下載地址，不使用公開 CDN 地址。Logo、頭像、公司卡片及微信 QR 等展示資產維持公開媒體 URL。
+- 樓盤發布身份由 `account_type` 及已批准代理資料派生，忽略請求的 `publisher_identity_type`。海外代理缺少香港牌照及 EAA 圖片時不可建立、修改、發布或重新發布本地樓盤。
+- 代理資料修訂在 `pending` 或 `rejected` 時，現有樓盤繼續使用舊已批准資料；修訂批准後，審核交易會刷新該代理及代理公司所有子帳戶的未刪除二手樓盤聯絡快照，包括草稿、已發布、已下架及已過期狀態。
 
 ---
 
@@ -325,8 +340,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/meta/communities" -Method G
 - **請求參數**
 ```json
 {
-  "phone_country_code": "+852", // 必填
-  "phone_number": "91234567", // 必填
+  "phone_country_code": "+86", // 必填
+  "phone_number": "13812345678", // 必填
   "scene": "login" // 可選
 }
 ```
@@ -336,8 +351,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/meta/communities" -Method G
   "code": "OK",
   "message": "success",
   "data": {
-    "expires_in": 300,
-    "mock_code": "123456"
+    "expires_in": 300
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:12:00Z"
@@ -348,8 +362,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/meta/communities" -Method G
 curl -X POST "http://127.0.0.1:8080/api/v1/auth/otp/request" \
   -H "Content-Type: application/json" \
   -d '{
-    "phone_country_code": "+852",
-    "phone_number": "91234567",
+    "phone_country_code": "+86",
+    "phone_number": "13812345678",
     "scene": "login"
   }'
 ```
@@ -357,12 +371,16 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/otp/request" \
 ```powershell
 $headers=@{"Content-Type"="application/json"}
 $body=@{
-  phone_country_code="+852"
-  phone_number="91234567"
+  phone_country_code="+86"
+  phone_number="13812345678"
   scene="login"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/otp/request" -Method POST -Headers $headers -Body $body
 ```
+
+- 生產環境不會返回驗證碼；`mock_code` 僅可能出現在本機 mock 環境。
+- 同一手機號碼在 `OTP_RESEND_COOLDOWN` 期間重複申請會返回 `RATE_LIMITED`。
+- 已接入的阿里雲國內短信驗證碼僅接受 `+86` 及 11 位中國大陸手提電話號碼。
 
 ---
 
@@ -371,8 +389,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/otp/request" -Method P
 - **請求參數**
 ```json
 {
-  "phone_country_code": "+852", // 必填
-  "phone_number": "91234567", // 必填
+  "phone_country_code": "+86", // 必填
+  "phone_number": "13812345678", // 必填
   "scene": "login", // 可選
   "code": "123456" // 必填
 }
@@ -414,8 +432,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/otp/request" -Method P
 curl -X POST "http://127.0.0.1:8080/api/v1/auth/otp/verify" \
   -H "Content-Type: application/json" \
   -d '{
-    "phone_country_code": "+852",
-    "phone_number": "91234567",
+    "phone_country_code": "+86",
+    "phone_number": "13812345678",
     "scene": "login",
     "code": "123456"
   }'
@@ -424,8 +442,8 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/otp/verify" \
 ```powershell
 $headers=@{"Content-Type"="application/json"}
 $body=@{
-  phone_country_code="+852"
-  phone_number="91234567"
+  phone_country_code="+86"
+  phone_number="13812345678"
   scene="login"
   code="123456"
 }|ConvertTo-Json
@@ -546,22 +564,30 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 ---
 
 ### 49. /api/v1/auth/email/register [POST]
-- **簡介**: 建立手機密碼帳戶，可選綁定郵箱
+- **簡介**: 建立電郵與手機密碼帳戶
 - **請求參數**
 ```json
 {
-  "email": "member@example.com", // 選填
+  "email": "member@example.com", // 必填
   "password": "safe-password-123", // 必填，至少 8 個字元
   "eng_name": "CHAN TAI MAN", // 必填，英文姓名；舊 display_name 仍兼容
+	"chi_name": "陳大文", // 選填，中文姓名，會同步至 iSmart
   "username": "email-member", // 選填，未提供時後端使用手機號碼生成本地登入名
   "phone_country_code": "+852", // 必填
   "phone_number": "91234567", // 必填
-  "publisher_identity_type": "owner", // 選填，owner / tenant / resident_representative / company_authorized_person
+	"id_card": "A1234567", // 選填，身份證或證件號碼
+	"remark": "registered from AJO", // 選填，iSmart 客戶備註
+	"gender": "M", // 選填，只接受 M 或 F
+	"is_receive_email": true, // 選填，預設 true
+	"account_type": "personal", // personal、individual_agent 或 agency_company
+  "publisher_identity_type": "owner", // 舊客戶端兼容欄位；後端按 account_type 派生並忽略此值
   "primary_community_id": "01KCOMMUNITY001", // 選填
   "residence_floor": "12", // 選填
   "residence_unit": "08" // 選填
 }
 ```
+- **iSmart 同步**: 註冊會先呼叫 iSmart `/api/v1/integration/auth/register/`，並以相同密碼建立 iSmart 帳戶；`individual_agent` 與 `agency_company` 固定傳送 `legal_entity=LE`，其餘帳戶傳送 `NA`。iSmart 建立失敗時不會建立本地 AJO 帳戶。
+- **物業綁定申請**: 個人帳戶同時提交 `primary_community_id`、`residence_floor`、`residence_unit` 時，AJO 會在本地帳戶及 iSmart 關聯建立後，按 POS 單位清單解析 `unit_id` 並提交 OwnerReg 審批申請。iSmart HTTP `2xx` 即視為申請已受理，不等待審批；回應 `/me.residence_binding_status` 為 `pending`，且 `bound_building_ids`、`bound_flat_unit_ids` 保持空。申請失敗時回應 `account created but property binding request failed`，帳戶及 iSmart 關聯會保留，會員可登入後重新申請。
 - **回應參數**
 ```json
 {
@@ -599,10 +625,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
   -H "Content-Type: application/json" \
   -d '{
+    "email": "member@example.com",
     "password": "safe-password-123",
     "eng_name": "CHAN TAI MAN",
+	"chi_name": "陳大文",
     "phone_country_code": "+852",
     "phone_number": "91234567",
+	"account_type": "personal",
     "publisher_identity_type": "owner",
     "primary_community_id": "01KCOMMUNITY001",
     "residence_floor": "12",
@@ -613,10 +642,13 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/email/register" \
 ```powershell
 $headers=@{"Content-Type"="application/json"}
 $body=@{
+  email="member@example.com"
   password="safe-password-123"
   eng_name="CHAN TAI MAN"
+	chi_name="陳大文"
   phone_country_code="+852"
   phone_number="91234567"
+	account_type="personal"
   publisher_identity_type="owner"
   primary_community_id="01KCOMMUNITY001"
   residence_floor="12"
@@ -845,6 +877,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/phone/login" -Method P
 
 ### 73. /api/v1/auth/ismart/login [POST]
 - **簡介**: 使用 ismart 帳戶登入並同步 POS 權限。後端預設呼叫 `https://pos.ismart.skylinedances.com/api/poslogin`，也可透過 `POS_LOGIN_URL` 覆蓋；成功後以 `ismart_msg.user_id` 綁定本地會員，若本地不存在會自動建立會員並簽發本系統 token。
+- **原始 iSmart 資料**: 登入回應 `data.user.ismart_raw` 及 `GET /api/v1/me` 的 `data.ismart_raw` 返回已保存的上游註冊 `data` 與 POS 登入 `msg` 業務欄位；未知欄位會保留，後續 POS 回應只補充可用欄位，不會以空值覆蓋註冊資料。`password`、`token`、`secret`、`authorization`、憑證與 session 類欄位會遞迴移除。`ismart_msg` 維持固定摘要欄位。
 - **帳號判斷**: `account` 若符合香港手機格式，會先以 8 位本地手機號登入，失敗後再用原始輸入登入；若 `account` 是用戶名且有傳入 `phone`，會在用戶名失敗後繼續嘗試手機候選值。全部失敗後才回傳帳號或密碼錯誤。
 - **請求參數**
 ```json
@@ -1036,7 +1069,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
   "phone_country_code": "+852", // 可選
   "phone_number": "91234567", // 可選
   "password": "new-password-123", // 可選，更新本系統登入密碼
-  "publisher_identity_type": "owner", // 可選
+  "publisher_identity_type": "owner", // 可選，owner / agent
   "primary_community_id": "01KCOMMUNITY001", // 可選
   "bound_building_ids": ["0999900"], // 可選，多個綁定屋苑或大廈
   "bound_flat_unit_ids": ["09999000012", "09999000111"], // 可選，多個綁定單位
@@ -1045,6 +1078,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
   "district_code": "hk_east" // 可選
 }
 ```
+- **身份規則**: `publisher_identity_type` 為樓盤發布身份，只接受 `owner` 或 `agent`；新帳戶及舊空值預設為 `owner`，會員可在帳號管理透過 `PATCH /me/profile` 修改。
 - **回應參數**
 ```json
 {
@@ -1067,6 +1101,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
     ],
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
+    "publisher_identity_type": "owner",
     "district_code": "hk_east",
     "bound_building_ids": ["0999900"],
     "bound_flat_unit_ids": ["09999000012", "09999000111"],
@@ -1083,7 +1118,6 @@ curl -X PATCH "http://127.0.0.1:8080/api/v1/me/profile" \
   -H "Content-Type: application/json" \
   -d '{
     "display_name": "Neighbour User",
-    "publisher_identity_type": "owner",
     "primary_community_id": "01KCOMMUNITY001",
     "bound_building_ids": ["0999900"],
     "bound_flat_unit_ids": ["09999000012"],
@@ -1157,7 +1191,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
   }
 }
 ```
-- **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。
+- **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。共享的大廈資料預設以 Redis 快取 5 分鐘；會員所屬大廈權限會在讀取快取前即時校驗，`building_options` 等會員資料不會寫入共享快取。
 
 ---
 
@@ -2498,8 +2532,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 ---
 
 ### 80-98. /api/v1/me/payments/pos/* [GET/POST]
-- **簡介**: AJO 會員支付中心的 POS 物業繳費接口。會員需先關聯 ismart，所有 POS 資料讀寫均由 AJO 後端代理；`accounting` 由 Staff 權限控制。
-- **查詢參數**: `overview`、`bills`、`fees`、`bank-accounts`、`orders`、`history`、`accounting` 支援 `building_id` 與 `unit_id`。`overview` 支援 `summary=false` 跳過賬單與訂單概覽統計。`history` 額外支援 `from_date`、`to_date`、`date_type`、`pay_method`、`unit_ids`。Staff 會計頁只需 `building_id`。
+- **簡介**: AJO 會員支付中心的 POS 物業繳費接口。會員需先關聯 ismart，所有 POS 資料讀寫均由 AJO 後端代理，並統一限制於 `client_building_permissions` 與 `client_building_flat_units_permissions` 所屬範圍，不要求 Staff 身份。
+- **查詢參數**: `overview`、`bills`、`fees`、`bank-accounts`、`orders`、`history`、`accounting` 支援 `building_id` 與 `unit_id`。`overview` 支援 `summary=false` 跳過賬單與訂單概覽統計。`history` 額外支援 `from_date`、`to_date`、`date_type`、`pay_method`、`unit_ids`。會計頁只需 `building_id`。
 - **接口**
 | 介面 | 方法 | 說明 |
 | --- | --- | --- |
@@ -2508,20 +2542,20 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
 | `/api/v1/me/payments/pos/fees` | GET | 返回選中大廈的 POS 手續費與可用付款方式。 |
 | `/api/v1/me/payments/pos/bank-accounts` | GET | 返回選中大廈的 POS 銀行賬戶。 |
 | `/api/v1/me/payments/pos/payments/report` | POST | 上報現金、支票、銀行轉賬等線下繳費。 |
-| `/api/v1/me/payments/pos/terminal/pay` | POST | Staff 使用服務端配置的 POS 機地址收款，成功後代理 `/bill` 入賬；不接受前端傳入設備地址。 |
+| `/api/v1/me/payments/pos/terminal/pay` | POST | 會員於所屬單位使用服務端配置的 POS 機地址收款，成功後代理 `/bill` 入賬；不接受前端傳入設備地址。 |
 | `/api/v1/me/payments/pos/orders` | GET | 返回選中單位的 H5 / QR 線上繳費訂單。 |
 | `/api/v1/me/payments/pos/orders` | POST | 建立選中單位賬單 H5 / QR 線上繳費訂單。 |
 | `/api/v1/me/payments/pos/orders/query` | POST | 按 `mch_order_no` 或 `pay_order_id` 查詢訂單。 |
 | `/api/v1/me/payments/pos/orders/{mchOrderNo}` | GET | 查詢單一 H5 / QR 線上繳費訂單。 |
 | `/api/v1/me/payments/pos/orders/{mchOrderNo}/close` | POST | 關閉單一 H5 / QR 線上繳費訂單。 |
 | `/api/v1/me/payments/pos/orders/{mchOrderNo}/cancel` | POST | 取消單一 H5 / QR 線上繳費訂單。 |
-| `/api/v1/me/payments/pos/orders/{mchOrderNo}/simulate` | POST | Staff 在非 production 模擬 H5 訂單狀態；正式環境關閉。 |
-| `/api/v1/me/payments/pos/history` | GET | 返回 POS 交易歷史；普通會員查目前單位，Staff 可按可見單位批量查。 |
+| `/api/v1/me/payments/pos/orders/{mchOrderNo}/simulate` | POST | 會員在非 production 模擬所屬單位的 H5 訂單狀態；正式環境關閉。 |
+| `/api/v1/me/payments/pos/history` | GET | 返回所屬單位的 POS 交易歷史，可按所屬單位批量查詢。 |
 | `/api/v1/me/payments/pos/history/{paymentId}` | GET | 返回單一 POS 交易詳情。 |
-| `/api/v1/me/payments/pos/accounting` | GET | 返回 Staff 選中屋苑的現金、支票待清機分組與清機歷史摘要。 |
-| `/api/v1/me/payments/pos/accounting/clear` | POST | Staff 多選現金或支票交易清機。 |
-| `/api/v1/me/payments/pos/accounting/records` | GET | 返回 Staff 清機歷史。 |
-| `/api/v1/me/payments/pos/accounting/records/{recordId}` | GET | 返回 Staff 清機詳情。 |
+| `/api/v1/me/payments/pos/accounting` | GET | 返回會員所屬屋苑的現金、支票待清機分組與清機歷史摘要。 |
+| `/api/v1/me/payments/pos/accounting/clear` | POST | 會員於所屬屋苑多選現金或支票交易清機。 |
+| `/api/v1/me/payments/pos/accounting/records` | GET | 返回會員所屬屋苑清機歷史。 |
+| `/api/v1/me/payments/pos/accounting/records/{recordId}` | GET | 返回會員所屬屋苑清機詳情。 |
 - **建立訂單請求**
 ```json
 {
@@ -2563,7 +2597,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
   "gateway_message": "manual test"
 }
 ```
-- **H5 模擬限制**: 只允許 Staff，且 `APP_ENV=production` 時固定拒絕。
+- **H5 模擬限制**: 只允許操作會員所屬單位，且 `APP_ENV=production` 時固定拒絕。
 
 ---
 
@@ -2602,7 +2636,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     ],
     "charge_rules": [
       { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "draft_save": 50, "edit": 100, "republish": 100, "renew": 50 },
-      { "biz_module": "property_sale", "label": "樓盤租售", "publish": 1000, "edit": 1000, "republish": 1000 },
+      { "biz_module": "property_sale", "label": "樓盤租售", "publish": 1000, "draft_save": 1000, "edit": 1000, "republish": 1000 },
       { "biz_module": "serviced_apartment", "label": "服務式住宅", "publish": 800, "edit": 800, "republish": 800 }
     ],
     "recharge_enabled": true,
@@ -3370,7 +3404,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 
 ---
 
-### 75-79. /api/v1/property-sales 與 /api/v1/property-addresses/search
+### 75-79A. /api/v1/property-sales 與 /api/v1/property-addresses/search
 - **簡介**: 樓盤發布支援物業編號、雙語標題與介紹、地址聯想、真實樓層保密、廣告套餐與權重排序。公開列表預設以 `ad_weight desc` 排序，再按刷新時間排序。
 - **建立 / 更新樓盤主要請求欄位**
 ```json
@@ -3389,7 +3423,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   "address_text_en": "Kornhill Road, Quarry Bay",
   "property_attributes": {
     "prn": "PRN-PRIVATE-001",
-    "new_completion": "yes",
     "rent_included_items": "rates_government_rent,management_fee"
   },
   "block_name": "3座",
@@ -3417,12 +3450,28 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   }
 }
 ```
-- **草稿規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。
-- **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片，並按 `ad_package_code` 扣除相應 AJO Points。建立草稿、圖片登記與 `publish` 為連續但獨立的請求。
+- **草稿規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。會員明確儲存草稿時，前端以 `charge_draft=true` 查詢參數提交，建立或更新成功會在同一交易扣除 1,000 AJO Points；餘額不足時資料與扣款均不生效。正式發布流程內部的暫存請求不帶此參數，避免重複扣款。
+- **發布者身份規則**: 會員建立、更新、發布或重新發布樓盤時，後端按 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生身份並忽略請求中的 `publisher_identity_type`；發布及重新發布會重新寫入當時有效的代理公開快照。
+- **樓層規則**: `floor_raw` 保存會員輸入的實際樓層，`floor_zone` 保存對外顯示的 `low`、`middle` 或 `high`；公開回應不洩露 `floor_raw`。
+- **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片，並按 `ad_package_code` 扣除相應 AJO Points。建立草稿、圖片登記與 `publish` 為連續但獨立的請求；直接儲存並發布只收取發布套餐費用，不另收草稿費用。
 - **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低周租或月租。
+- **聯絡資料規則**: 業主可在 `contact.contact_attributes` 以 `phone_whatsapp_enabled=yes` 與 `phone_2_whatsapp_enabled=yes` 分別標記電話1及電話2可使用 WhatsApp，並以 `phone_country_code` 與 `phone_2_country_code` 分別保存兩個電話區號。聯絡方式解鎖成功後，`contact_payload.phone_whatsapp_url` 與 `contact_payload.phone_2_whatsapp_url` 分別返回兩個號碼的 WhatsApp 入口，`whatsapp_url` 保留為舊版單一入口兼容欄位；舊資料缺少 `phone_2_country_code` 時，電話2會兼容使用 `phone_country_code`。`wechat` 欄位在前端顯示為 `Wechat ID`。
 - **公開回應規則**: `floor_raw` 只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
 - **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天。
 - **會員狀態操作**: `publish` 僅支援草稿；`republish` 支援過期或已下架樓盤重新上架；`deactivate` 會將樓盤設為已下架。
+- **內容翻譯**: `POST /api/v1/property-sales/translation` 接受繁體中文 `title` 與 `description`，返回 `title_en` 與 `description_en`。接口需要會員登入，並按會員限制為每 10 分鐘 20 次。後端以 `TRANSLATION_PROVIDER=deepl`、`DEEPL_API_BASE_URL`、`DEEPL_AUTH_KEY`、`TRANSLATION_REQUEST_TIMEOUT` 配置 DeepL；未配置時返回統一服務錯誤，不會把供應商錯誤內容寫入樓盤欄位。
+```json
+{
+  "title": "康怡花園高層兩房",
+  "description": "實用兩房，交通方便。"
+}
+```
+```json
+{
+  "title_en": "High-floor two-bedroom unit in Kornhill",
+  "description_en": "Practical two-bedroom unit with convenient transport."
+}
+```
 - **地址聯想**
 ```json
 {

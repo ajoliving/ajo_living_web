@@ -14,6 +14,7 @@ import { bindCurrentUserIsmart, updateMe } from '@/httpapis/me';
 import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 
 interface ProfileInfoRow {
@@ -30,15 +31,19 @@ interface ProfileUnitOption {
 const avatarObjectPrefix = 'ajo_living/account/';
 const maxAvatarFileSize = 5 * 1024 * 1024;
 const blockedUploadHeaders = new Set(['host', 'content-length']);
-const unassignedFloor = '未指定樓層';
+const unassignedFloorValue = '__unassigned__';
 
 // 1.0 讀取 POS 大廈 ID
 const getBuildingID = (item: PosBuilding): string =>
   String(item.building_id ?? item.id ?? '').trim();
 
 // 1.1 讀取 POS 大廈名稱
-const getBuildingName = (item: PosBuilding): string =>
-  String(item.buildname_chi ?? item.buildname ?? item.name ?? getBuildingID(item)).trim();
+const getBuildingName = (item: PosBuilding, locale = 'zh-HK'): string =>
+  String(
+    locale === 'en'
+      ? item.buildname ?? item.name ?? item.buildname_chi ?? getBuildingID(item)
+      : item.buildname_chi ?? item.buildname ?? item.name ?? getBuildingID(item),
+  ).trim();
 
 // 1.2 讀取 POS 單位 ID
 const getUnitID = (item: PosBuildingUnit): string =>
@@ -50,7 +55,7 @@ const getUnitFloor = (item: PosBuildingUnit): string =>
 
 // 1.4 讀取 POS 單位樓層顯示值
 const getDisplayUnitFloor = (item: PosBuildingUnit): string =>
-  getUnitFloor(item) || unassignedFloor;
+  getUnitFloor(item) || unassignedFloorValue;
 
 // 1.5 讀取 POS 單位名稱
 const getUnitName = (item: PosBuildingUnit): string =>
@@ -97,7 +102,24 @@ const normalizeTextList = (values: string[] | undefined): string[] => {
   return result;
 };
 
-// 1.9 排除 POS 回傳的樓宇佔位資料
+// 1.9 正規化可顯示的 POS 單位權限碼
+const normalizeFlatUnitPermissions = (values: string[] | undefined): string[] => {
+  const result: string[] = [];
+  normalizeTextList(values).forEach((value) => {
+    const unitID = digitsOnly(value);
+    if (unitID.length < 11) {
+      return;
+    }
+
+    const normalizedUnitID = unitID.slice(0, 11);
+    if (!result.includes(normalizedUnitID)) {
+      result.push(normalizedUnitID);
+    }
+  });
+  return result;
+};
+
+// 1.10 排除 POS 回傳的樓宇佔位資料
 const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean => {
   const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
   const normalizedUnitID = digitsOnly(getUnitID(item));
@@ -107,7 +129,7 @@ const isSelectableUnit = (buildingID: string, item: PosBuildingUnit): boolean =>
   return !(normalizedBuildingID && normalizedUnitID === normalizedBuildingID && !hasFloor && !hasUnit);
 };
 
-// 1.10 由 POS 權限 ID 建立可選單位
+// 1.11 由 POS 權限 ID 建立可選單位
 const buildUnitsFromFlatUnitPermissions = (
   buildingID: string,
   flatUnitPermissions: string[],
@@ -149,13 +171,13 @@ const buildUnitsFromFlatUnitPermissions = (
   return units.sort((left, right) => getUnitID(left).localeCompare(getUnitID(right), 'en', { numeric: true }));
 };
 
-// 1.11 轉換 POS 權限碼
+// 1.12 轉換 POS 權限碼
 const toTwoDigitCode = (value: unknown): string => {
   const digits = digitsOnly(value);
   return digits ? digits.slice(-2).padStart(2, '0') : '';
 };
 
-// 1.12 取得單位權限碼
+// 1.13 取得單位權限碼
 const getUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): string => {
   const normalizedBuildingID = digitsOnly(buildingID).slice(0, 7);
   const unitID = digitsOnly(getUnitID(item));
@@ -168,7 +190,7 @@ const getUnitPermissionCode = (buildingID: string, item: PosBuildingUnit): strin
   return normalizedBuildingID && floorCode && unitCode ? `${normalizedBuildingID}${floorCode}${unitCode}` : '';
 };
 
-// 1.13 判斷單位是否符合 POS 權限
+// 1.14 判斷單位是否符合 POS 權限
 const matchesUnitPermission = (
   buildingID: string,
   item: PosBuildingUnit,
@@ -201,7 +223,7 @@ const matchesUnitPermission = (
   });
 };
 
-// 1.14 按權限過濾 POS 單位
+// 1.15 按權限過濾 POS 單位
 const filterUnitsByPermission = (
   buildingID: string,
   units: PosBuildingUnit[],
@@ -211,7 +233,7 @@ const filterUnitsByPermission = (
     .filter((item) => isSelectableUnit(buildingID, item))
     .filter((item) => matchesUnitPermission(buildingID, item, flatUnitPermissions));
 
-// 1.15 取得 POS 顯示排序分組
+// 1.16 取得 POS 顯示排序分組
 const getDisplaySortBucket = (value: string): number => {
   const normalized = value.trim().toUpperCase();
   if (!normalized) {
@@ -226,7 +248,7 @@ const getDisplaySortBucket = (value: string): number => {
   return 2;
 };
 
-// 1.16 按 POS 顯示規則排序
+// 1.17 按 POS 顯示規則排序
 const compareDisplayCodes = (left: string, right: string): number => {
   const bucketDiff = getDisplaySortBucket(left) - getDisplaySortBucket(right);
   if (bucketDiff !== 0) {
@@ -261,6 +283,7 @@ export const useAccountProfilePage = () => {
   const { t } = useI18n();
   const router = useRouter();
   const feedbackStore = useFeedbackStore();
+  const preferenceStore = usePreferenceStore();
   const sessionStore = useSessionStore();
   const isSaving = ref(false);
   const isLoading = ref(false);
@@ -286,7 +309,6 @@ export const useAccountProfilePage = () => {
     phone_country_code: '+852',
     phone_number: '',
     district_code: '',
-    publisher_identity_type: '',
   });
   const ismartFormState = reactive({
     account: '',
@@ -315,51 +337,39 @@ export const useAccountProfilePage = () => {
   // 2.3 輸出缺省顯示文案
   const fallbackValue = computed(() => t('marketplace.myProfile.emptyValue'));
 
-  // 2.3.1 判斷 POS Staff 身份
-  const isPOSStaff = computed(() =>
-    Boolean(sessionStore.me?.is_staff || sessionStore.me?.ismart_msg?.is_staff),
-  );
+  // 2.3.4 顯示樓層名稱
+  const formatFloorLabel = (value: string): string =>
+    value === unassignedFloorValue ? t('account.profile.unassignedFloor') : value;
 
-  // 2.3.2 取得員工可管理大廈
-  const staffBuildingIDs = computed(() => {
-    const message = sessionStore.me?.ismart_msg;
-    if (!message) {
-      return normalizeTextList(sessionStore.me?.bound_building_ids);
-    }
-
-    const staffBuildings = normalizeTextList(message.staff_building_permissions);
-    return staffBuildings.length > 0 ? staffBuildings : normalizeTextList(message.building);
-  });
-
-  // 2.3.3 取得住戶可見大廈
-  const clientBuildingIDs = computed(() => {
-    const message = sessionStore.me?.ismart_msg;
-    const values = message
-      ? normalizeTextList(message.client_building_permissions)
-      : normalizeTextList(sessionStore.me?.bound_building_ids);
-    const primaryCommunityID = sessionStore.me?.primary_community?.public_id?.trim() ?? '';
-    return values.length > 0 || !primaryCommunityID ? values : [primaryCommunityID];
-  });
-
-  // 2.3.4 取得住戶可見單位
+  // 2.3.7 取得住戶可見單位
   const clientUnitIDs = computed(() => {
     const message = sessionStore.me?.ismart_msg;
-    return message
-      ? normalizeTextList(message.client_building_flat_units_permissions)
-      : normalizeTextList(sessionStore.me?.bound_flat_unit_ids);
+    return normalizeFlatUnitPermissions(
+      message ? message.client_building_flat_units_permissions : sessionStore.me?.bound_flat_unit_ids,
+    );
   });
 
-  // 2.3.5 取得目前可選大廈
-  const allowedBuildingIDs = computed(() =>
-    isPOSStaff.value ? staffBuildingIDs.value : clientBuildingIDs.value,
-  );
+  // 2.3.8 從住戶單位權限取得所屬屋苑
+  const clientUnitBuildingIDs = computed(() => {
+    const result: string[] = [];
+    clientUnitIDs.value.forEach((unitID) => {
+      const buildingID = unitID.slice(0, 7);
+      if (buildingID && !result.includes(buildingID)) {
+        result.push(buildingID);
+      }
+    });
+    return result;
+  });
 
-  // 2.3.6 建立 POS 大廈名稱索引
+  // 2.3.9 取得目前可選大廈
+  const allowedBuildingIDs = computed(() => clientUnitBuildingIDs.value);
+
+  // 2.3.10 建立 POS 大廈名稱索引
   const buildingNameMap = computed(() => {
     const map = new Map<string, string>();
     buildings.value.forEach((item) => {
       const id = getBuildingID(item);
-      const name = getBuildingName(item);
+      const name = getBuildingName(item, preferenceStore.locale);
       if (id && name) {
         buildBuildingIDKeys(id).forEach((key) => {
           map.set(key, name);
@@ -370,6 +380,7 @@ export const useAccountProfilePage = () => {
     const community = sessionStore.me?.primary_community;
     const communityID = community?.public_id?.trim() ?? '';
     const communityName =
+      (preferenceStore.locale === 'en' ? community?.name_en?.trim() : community?.name_zh?.trim()) ||
       community?.name_zh?.trim() ||
       community?.name_en?.trim() ||
       community?.address_text?.trim() ||
@@ -385,69 +396,46 @@ export const useAccountProfilePage = () => {
     return map;
   });
 
-  // 2.3.7 讀取大廈顯示名稱
+  // 2.3.11 讀取大廈顯示名稱
   const resolveBuildingName = (buildingID: string): string => {
     const matchedKey = buildBuildingIDKeys(buildingID).find((key) => buildingNameMap.value.has(key));
     return matchedKey ? buildingNameMap.value.get(matchedKey) ?? buildingID : buildingID;
   };
 
-  // 2.3.8 顯示員工管理屋苑
-  const managedBuildingsDisplay = computed(() => {
-    const names = staffBuildingIDs.value
-      .map((buildingID) => resolveBuildingName(buildingID))
-      .filter(Boolean);
-    return names.length > 0 ? names.join(', ') : fallbackValue.value;
-  });
-
-  // 2.3.9 取得目前大廈可見單位
-  const visibleSelectedUnits = computed(() => {
-    if (isPOSStaff.value) {
-      return selectedBuildingUnits.value;
-    }
-
-    return selectedBuildingUnits.value.filter((item) =>
+  // 2.3.13 取得目前大廈可見單位
+  const visibleSelectedUnits = computed(() =>
+    selectedBuildingUnits.value.filter((item) =>
       matchesUnitPermission(selectedBuildingID.value, item, clientUnitIDs.value),
-    );
-  });
+    ),
+  );
 
-  // 2.3.10 顯示住戶所屬大廈 / 樓層 / 單位
+  // 2.3.14 顯示住戶所屬屋苑、樓層與單位
   const residentUnitDisplay = computed(() => {
-    if (isPOSStaff.value) {
-      return '';
-    }
+    const loadedUnits = new Map(
+      memberVisibleUnits.value.map((item) => [digitsOnly(getUnitID(item)).slice(0, 11), item]),
+    );
+    const labels = clientUnitIDs.value.map((unitID) => {
+      const buildingID = unitID.slice(0, 7);
+      const fallbackUnit = buildUnitsFromFlatUnitPermissions(buildingID, [unitID])[0];
+      const unit = loadedUnits.get(unitID) ?? fallbackUnit;
+      if (!unit) {
+        return '';
+      }
 
-    const labels = memberVisibleUnits.value
-      .filter((item) => matchesUnitPermission(digitsOnly(getUnitID(item)).slice(0, 7), item, clientUnitIDs.value))
-      .map((item) => {
-        const buildingID = digitsOnly(getUnitID(item)).slice(0, 7);
-        return [
-          resolveBuildingName(buildingID),
-          getDisplayUnitFloor(item),
-          getUnitName(item),
-        ].filter(Boolean).join(' / ');
-      })
-      .filter(Boolean)
-      .sort(compareDisplayCodes);
+      return [
+        resolveBuildingName(buildingID),
+        formatFloorLabel(getDisplayUnitFloor(unit)),
+        getUnitName(unit),
+      ].filter(Boolean).join(' / ');
+    }).filter(Boolean);
 
-    if (labels.length > 0) {
-      return labels.join(', ');
-    }
-
-    const community = sessionStore.me?.primary_community;
-    const buildingName =
-      community?.name_zh?.trim() ||
-      community?.name_en?.trim() ||
-      community?.address_text?.trim() ||
-      '';
-    const floor = sessionStore.me?.residence_floor?.trim() ?? '';
-    const unit = sessionStore.me?.residence_unit?.trim() ?? '';
-    return [buildingName, floor, unit].filter(Boolean).join(' / ') || fallbackValue.value;
+    return labels.join(', ') || fallbackValue.value;
   });
 
-  // 2.3.11 建立綁定大廈選項
+  // 2.3.15 建立綁定大廈選項
   const buildingOptions = computed<ProfileUnitOption[]>(() => [
     {
-      label: isBuildingsLoading.value ? '載入中' : '請選擇大廈',
+      label: isBuildingsLoading.value ? t('common.status.loading') : t('account.profile.selectBuilding'),
       value: '',
     },
     ...allowedBuildingIDs.value
@@ -461,7 +449,7 @@ export const useAccountProfilePage = () => {
       .sort((left, right) => compareDisplayCodes(left.label, right.label)),
   ]);
 
-  // 2.3.12 建立綁定樓層選項
+  // 2.3.16 建立綁定樓層選項
   const floorOptions = computed<ProfileUnitOption[]>(() => {
     const floors = Array.from(
       new Set(visibleSelectedUnits.value.map((item) => getDisplayUnitFloor(item)).filter(Boolean)),
@@ -469,20 +457,20 @@ export const useAccountProfilePage = () => {
 
     return [
       {
-        label: isUnitsLoading.value ? '載入中' : '請選擇樓層',
+        label: isUnitsLoading.value ? t('common.status.loading') : t('account.profile.selectFloor'),
         value: '',
       },
       ...floors.map((floor) => ({
-        label: floor,
+        label: formatFloorLabel(floor),
         value: floor,
       })),
     ];
   });
 
-  // 2.3.13 建立綁定單位選項
+  // 2.3.17 建立綁定單位選項
   const unitOptions = computed<ProfileUnitOption[]>(() => [
     {
-      label: isUnitsLoading.value ? '載入中' : '請選擇單位',
+      label: isUnitsLoading.value ? t('common.status.loading') : t('account.profile.selectUnit'),
       value: '',
     },
     ...visibleSelectedUnits.value
@@ -496,21 +484,22 @@ export const useAccountProfilePage = () => {
       .filter((item) => item.label && item.value),
   ]);
 
-  // 2.3.14 取得目前選中單位
+  // 2.3.18 取得目前選中單位
   const selectedUnit = computed(() =>
     visibleSelectedUnits.value.find((item) => getUnitID(item) === selectedUnitID.value),
   );
 
-  // 2.3.15 顯示目前選中單位
+  // 2.3.19 顯示目前選中單位
   const selectedUnitDisplay = computed(() => {
     const buildingName = selectedBuildingID.value
       ? buildingOptions.value.find((item) => item.value === selectedBuildingID.value)?.label ?? ''
       : '';
     const unitName = selectedUnit.value ? getUnitName(selectedUnit.value) : '';
-    return [buildingName, selectedFloor.value, unitName].filter(Boolean).join(' / ') || '尚未選擇單位';
+    const floorLabel = selectedFloor.value ? formatFloorLabel(selectedFloor.value) : '';
+    return [buildingName, floorLabel, unitName].filter(Boolean).join(' / ') || t('account.profile.noUnitSelected');
   });
 
-  // 2.3.16 判斷能否儲存綁定單位
+  // 2.3.20 判斷能否儲存綁定單位
   const canSaveUnit = computed(() =>
     selectedBuildingID.value.length > 0 &&
     selectedFloor.value.length > 0 &&
@@ -565,29 +554,15 @@ export const useAccountProfilePage = () => {
         value: t('account.profile.passwordManaged'),
       },
       {
-        key: 'publisher_identity_type',
-        label: t('account.profile.publisherIdentity'),
-        value: sessionStore.me?.publisher_identity_type?.trim() || fallbackValue.value,
-      },
-      {
         key: 'district_code',
         label: t('account.profile.districtCode'),
         value: sessionStore.me?.district_code?.trim() || fallbackValue.value,
       },
     ];
 
-    if (isPOSStaff.value) {
-      rows.push({
-        key: 'managed_buildings',
-        label: '員工管理屋苑',
-        value: managedBuildingsDisplay.value,
-      });
-      return rows;
-    }
-
     rows.push({
       key: 'resident_units',
-      label: '所屬大廈 / 樓層 / 單位',
+      label: t('account.profile.residentUnits'),
       value: residentUnitDisplay.value,
     });
     return rows;
@@ -646,7 +621,6 @@ export const useAccountProfilePage = () => {
       ? ''
       : sessionStore.me?.phone_number ?? '';
     formState.district_code = sessionStore.me?.district_code ?? '';
-    formState.publisher_identity_type = sessionStore.me?.publisher_identity_type ?? '';
   };
 
   // 2.10 讀取會員資料
@@ -743,7 +717,6 @@ export const useAccountProfilePage = () => {
       const profileResponse = await updateMe({
         display_name: formState.display_name.trim(),
         ...buildPhonePayload(),
-        publisher_identity_type: formState.publisher_identity_type.trim(),
         district_code: formState.district_code.trim(),
         avatar_asset_id: completeResponse.data.data.media_asset_id,
       });
@@ -767,7 +740,6 @@ export const useAccountProfilePage = () => {
       const { data } = await updateMe({
         display_name: formState.display_name.trim(),
         ...buildPhonePayload(),
-        publisher_identity_type: formState.publisher_identity_type.trim(),
         district_code: formState.district_code.trim(),
       });
 
@@ -795,7 +767,7 @@ export const useAccountProfilePage = () => {
       }));
       buildings.value = fallbackBuildings;
       if (fallbackBuildings.length === 0) {
-        feedbackStore.pushToast(readErrorMessage(error, '大廈資料載入失敗。'), 'error');
+        feedbackStore.pushToast(readErrorMessage(error, t('account.profile.buildingLoadError')), 'error');
       }
     } finally {
       isBuildingsLoading.value = false;
@@ -804,12 +776,7 @@ export const useAccountProfilePage = () => {
 
   // 2.16 載入住戶權限單位詳情
   const loadMemberVisibleUnits = async (): Promise<void> => {
-    if (isPOSStaff.value) {
-      memberVisibleUnits.value = [];
-      return;
-    }
-
-    const buildingIDs = clientBuildingIDs.value;
+    const buildingIDs = clientUnitBuildingIDs.value;
     if (buildingIDs.length === 0) {
       memberVisibleUnits.value = [];
       return;
@@ -843,15 +810,17 @@ export const useAccountProfilePage = () => {
     selectedBuildingID.value = allowedBuildingIDs.value.includes(profileBuildingID)
       ? profileBuildingID
       : allowedBuildingIDs.value[0] ?? '';
-    selectedFloor.value = sessionStore.me?.residence_floor?.trim() ?? '';
+    const residenceFloor = sessionStore.me?.residence_floor?.trim() ?? '';
+    const residenceUnit = sessionStore.me?.residence_unit?.trim() ?? '';
+    selectedFloor.value = residenceFloor || (residenceUnit ? unassignedFloorValue : '');
     selectedUnitID.value = '';
   };
 
   // 2.18 按目前會員資料匹配單位 ID
   const syncSelectedUnitFromProfile = (): void => {
-    const floor = sessionStore.me?.residence_floor?.trim() ?? '';
+    const floor = sessionStore.me?.residence_floor?.trim() || unassignedFloorValue;
     const unitName = sessionStore.me?.residence_unit?.trim() ?? '';
-    if (!floor || !unitName) {
+    if (!unitName) {
       selectedUnitID.value = '';
       return;
     }
@@ -883,7 +852,7 @@ export const useAccountProfilePage = () => {
       selectedBuildingUnits.value = fallbackUnits;
       syncSelectedUnitFromProfile();
       if (fallbackUnits.length === 0) {
-        feedbackStore.pushToast(readErrorMessage(error, '單位資料載入失敗。'), 'error');
+        feedbackStore.pushToast(readErrorMessage(error, t('account.profile.unitLoadError')), 'error');
       }
     } finally {
       isUnitsLoading.value = false;
@@ -906,7 +875,7 @@ export const useAccountProfilePage = () => {
   // 2.22 儲存繳費單位
   const handleSaveUnit = async (): Promise<void> => {
     if (!canSaveUnit.value || !selectedUnit.value) {
-      feedbackStore.pushToast('請先選擇大廈、樓層與單位。', 'error');
+      feedbackStore.pushToast(t('account.profile.selectUnitRequired'), 'error');
       return;
     }
 
@@ -916,13 +885,12 @@ export const useAccountProfilePage = () => {
       const { data } = await updateMe({
         display_name: formState.display_name.trim() || sessionStore.currentUser.display_name,
         ...buildPhonePayload(),
-        publisher_identity_type: formState.publisher_identity_type.trim(),
         primary_community_id: selectedBuildingID.value,
         primary_community_name: buildingName,
         bound_building_ids: [selectedBuildingID.value],
         bound_flat_unit_ids: [selectedUnitID.value],
         district_code: formState.district_code.trim(),
-        residence_floor: selectedFloor.value,
+        residence_floor: selectedFloor.value === unassignedFloorValue ? '' : selectedFloor.value,
         residence_unit: getUnitName(selectedUnit.value),
       });
 
@@ -932,9 +900,9 @@ export const useAccountProfilePage = () => {
       syncUnitSelection();
       await loadMemberVisibleUnits();
       await loadSelectedBuildingUnits();
-      feedbackStore.pushToast('繳費單位已更新。', 'success');
+      feedbackStore.pushToast(t('account.profile.unitSaveSuccess'), 'success');
     } catch (error) {
-      feedbackStore.pushToast(readErrorMessage(error, '繳費單位儲存失敗，請稍後再試。'), 'error');
+      feedbackStore.pushToast(readErrorMessage(error, t('account.profile.unitSaveError')), 'error');
     } finally {
       isSyncingUnitSelection = false;
       isSavingUnit.value = false;
@@ -946,7 +914,7 @@ export const useAccountProfilePage = () => {
     const account = ismartFormState.account.trim();
     const password = ismartFormState.password.trim();
     if (!account || !password) {
-      feedbackStore.pushToast(t('auth.ismartRequiredFields'), 'error');
+      feedbackStore.pushToast(t('account.payments.home.ismartRequired'), 'error');
       return;
     }
 

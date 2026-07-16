@@ -8,6 +8,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -122,6 +123,17 @@ func (s *UploadService) buildMediaAssetResults(ctx context.Context, assets []mod
 
 	items := make([]CompleteUploadResult, 0, len(assets))
 	for _, asset := range assets {
+		assetURL := buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
+		if isPrivateAgencyEvidenceObjectKey(asset.ObjectKey) {
+			if s.runtime.StorageProvider == nil {
+				return nil, errcode.New(errcode.CodeInternalError, "private media storage is not configured")
+			}
+			signedURL, err := s.runtime.StorageProvider.PresignDownload(ctx, asset.ObjectKey, 10*time.Minute)
+			if err != nil {
+				return nil, errcode.New(errcode.CodeInternalError, "failed to authorize private media download")
+			}
+			assetURL = signedURL
+		}
 		items = append(items, CompleteUploadResult{
 			MediaAssetID:    asset.PublicID,
 			StorageProvider: asset.StorageProvider,
@@ -132,7 +144,7 @@ func (s *UploadService) buildMediaAssetResults(ctx context.Context, assets []mod
 			Height:          asset.Height,
 			FileSize:        asset.FileSize,
 			ChecksumSHA256:  asset.ChecksumSHA256,
-			URL:             buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey),
+			URL:             assetURL,
 			InUse:           usageMap[asset.ID],
 			CreatedAt:       asset.CreatedAt,
 		})
@@ -202,6 +214,17 @@ func (s *UploadService) loadMediaUsageMap(ctx context.Context, assetIDs []int64)
 	}
 	for _, row := range homeRows {
 		result[row.MediaAssetID] = true
+	}
+
+	for _, column := range []string{"avatar_asset_id", "wechat_qr_asset_id", "logo_asset_id", "eaa_license_asset_id", "business_registration_asset_id", "company_card_asset_id"} {
+		var rows []usageRow
+		if err := s.runtime.DB.WithContext(ctx).Model(&model.AgencyProfile{}).
+			Distinct(column+" AS media_asset_id").Where(column+" IN ?", assetIDs).Scan(&rows).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load agency profile media usage")
+		}
+		for _, row := range rows {
+			result[row.MediaAssetID] = true
+		}
 	}
 
 	return result, nil

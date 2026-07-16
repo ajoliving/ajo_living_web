@@ -146,7 +146,7 @@ func (s *POSPaymentService) Overview(ctx context.Context, userID int64, selectio
 		IsStaff:              isStaff,
 		ProfileRequired:      profileRequired,
 		POSLoginRequired:     account == nil || strings.TrimSpace(account.PasswordEncrypted) == "",
-		TerminalProxyEnabled: isStaff && contextValue != nil && s.TerminalProxyEnabled(contextValue.BuildingID),
+		TerminalProxyEnabled: contextValue != nil && s.TerminalProxyEnabled(contextValue.BuildingID),
 		Summary:              summary,
 	}, nil
 }
@@ -178,7 +178,7 @@ func (s *POSPaymentService) profilePaymentContext(ctx context.Context, userID in
 	if unitID == "" && len(unitOptions) == 1 {
 		unitID = unitOptions[0]
 	}
-	if unitID != "" && len(unitOptions) > 0 && !containsString(unitOptions, unitID) && (account == nil || !account.IsStaff) {
+	if unitID != "" && len(unitOptions) > 0 && !containsString(unitOptions, unitID) {
 		return nil
 	}
 
@@ -313,9 +313,9 @@ func (s *POSPaymentService) ListHistory(ctx context.Context, userID int64, selec
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: normalizePOSRows(response, "payment_objs")}, nil
 }
 
-// 17. ListAccounting returns staff cashier entries for the selected building.
+// 17. ListAccounting returns cashier entries for the selected visible building.
 func (s *POSPaymentService) ListAccounting(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
-	contextValue, token, err := s.staffBuildingAccess(ctx, userID, selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, userID, selection)
 	if err != nil {
 		return nil, err
 	}
@@ -424,27 +424,11 @@ func (s *POSPaymentService) memberPOSAccess(ctx context.Context, userID int64, s
 	return contextValue, token, nil
 }
 
-// 22. staffPOSAccess returns staff context and token.
-func (s *POSPaymentService) staffPOSAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
+// 22. memberBuildingAccess returns visible building context and POS relay token.
+func (s *POSPaymentService) memberBuildingAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
 		return nil, "", err
-	}
-	if !account.IsStaff {
-		return nil, "", errcode.New(errcode.CodeAuthForbidden, "staff access required")
-	}
-
-	return s.memberPOSAccess(ctx, userID, selection)
-}
-
-// 23. staffBuildingAccess returns staff building context and POS relay token.
-func (s *POSPaymentService) staffBuildingAccess(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSUnitContext, string, error) {
-	account, err := s.loadIsmartAccount(ctx, userID)
-	if err != nil {
-		return nil, "", err
-	}
-	if !account.IsStaff {
-		return nil, "", errcode.New(errcode.CodeAuthForbidden, "staff access required")
 	}
 
 	buildingOptions, _, err := s.memberPaymentBindings(ctx, userID, account)
@@ -489,8 +473,6 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 	if err != nil {
 		return nil, err
 	}
-	isStaff := account != nil && account.IsStaff
-
 	buildingID := strings.TrimSpace(selection.BuildingID)
 	profileBuildingID := ""
 	if profile.PrimaryCommunity != nil {
@@ -520,7 +502,7 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 		if unitID == "" {
 			return nil, err
 		}
-		if !isStaff && len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, unitID, unitOptions) {
+		if len(unitOptions) > 0 && !posUnitIDVisibleForPermissions(buildingID, unitID, unitOptions) {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		return &POSUnitContext{
@@ -552,10 +534,10 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 		if unitID == "" && !matchesProfile {
 			continue
 		}
-		if unitID != "" && len(unitOptions) == 0 && !isStaff && !matchesProfile {
+		if unitID != "" && len(unitOptions) == 0 && !matchesProfile {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
-		if !isStaff && len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, item, unitOptions) {
+		if len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, item, unitOptions) {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		selectedFloor := paymentFirstNonEmpty(posUnitFloor(item), floor)
@@ -572,7 +554,7 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 	}
 	if profileMatchedUnit != nil {
 		selectedUnitID := posUnitID(*profileMatchedUnit)
-		if !isStaff && len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, *profileMatchedUnit, unitOptions) {
+		if len(unitOptions) > 0 && !posUnitVisibleForPermissions(buildingID, *profileMatchedUnit, unitOptions) {
 			return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 		}
 		selectedFloor := paymentFirstNonEmpty(posUnitFloor(*profileMatchedUnit), floor)
@@ -587,7 +569,7 @@ func (s *POSPaymentService) resolveMemberUnitContext(ctx context.Context, userID
 			UnitLabel:    posUnitLabel(selectedFloor, selectedUnit),
 		}, nil
 	}
-	if unitID != "" && (isStaff || len(unitOptions) > 0) {
+	if unitID != "" && len(unitOptions) > 0 {
 		return &POSUnitContext{
 			BuildingID:   buildingID,
 			BuildingName: posPaymentBuildingName(profile.PrimaryCommunity, buildingID),
@@ -775,15 +757,13 @@ func (s *POSPaymentService) ListMemberUnits(ctx context.Context, userID int64, b
 	if !containsString(buildingOptions, value) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
 	}
-
 	units, err := s.memberPOSUnits(ctx, userID, value)
 	if err != nil {
 		return nil, err
 	}
-	if account.IsStaff || len(unitOptions) == 0 {
+	if len(unitOptions) == 0 {
 		return units, nil
 	}
-
 	visible := make([]POSUnitSummary, 0, len(units))
 	for _, unit := range units {
 		if posUnitVisibleForPermissions(value, unit, unitOptions) {

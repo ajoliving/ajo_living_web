@@ -58,6 +58,7 @@ export interface CurrentMemberProfile {
   phone_country_code: string;
   phone_number: string;
   member_status: string;
+  account_type?: 'personal' | 'individual_agent' | 'agency_company' | 'agency_company_subaccount';
   member_type: string;
   is_staff: boolean;
   role: string;
@@ -74,6 +75,7 @@ export interface CurrentMemberProfile {
   bound_flat_unit_ids?: string[];
   residence_floor?: string;
   residence_unit?: string;
+  residence_binding_status?: 'pending' | 'approved' | '';
   ismart_linked?: boolean;
   ismart_username?: string;
   ismart_bound_phone?: string;
@@ -88,6 +90,7 @@ export interface CurrentMemberProfile {
     client_building_permissions?: string[];
     client_building_flat_units_permissions?: string[];
   };
+  ismart_raw?: Record<string, unknown>;
   ismart_account_profile?: IsmartAccountProfile;
 }
 
@@ -98,6 +101,7 @@ export interface StaffUserSummary {
   phone_country_code: string;
   phone_number: string;
   member_status: string;
+  account_type?: 'personal' | 'individual_agent' | 'agency_company' | 'agency_company_subaccount';
   member_type: string;
   is_staff: boolean;
   role: string;

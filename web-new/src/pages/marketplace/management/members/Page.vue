@@ -12,6 +12,7 @@ import { grantStaffWalletPoints } from '@/httpapis/wallet';
 import type { RoleCatalogItem, StaffUserSummary } from '@/model/user';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate } from '@/utils/format';
 
 import ManagementPagination from '../widgets/ManagementPagination.vue';
@@ -19,6 +20,7 @@ import '../styles.scss';
 
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 const loading = ref(false);
 const keyword = ref('');
 const status = ref('');
@@ -217,7 +219,7 @@ onMounted(() => {
     <header class="management-list-header">
       <div>
         <p class="management-list-kicker">
-          Staff
+          {{ t('marketplace.management.staffKicker') }}
         </p>
         <h1>{{ t('marketplace.management.members') }}</h1>
         <p>{{ t('marketplace.management.membersDescription') }}</p>
@@ -325,7 +327,7 @@ onMounted(() => {
               <td>
                 {{ member.primary_community?.name_zh || member.primary_community?.name_en || '-' }}
               </td>
-              <td class="management-table-nowrap">{{ formatDate(member.updated_at) }}</td>
+              <td class="management-table-nowrap">{{ formatDate(member.updated_at, preferenceStore.locale) }}</td>
               <td class="management-table-nowrap management-table-actions">
                 <button
                   type="button"
@@ -430,10 +432,10 @@ onMounted(() => {
                 <span>{{ t('marketplace.management.createMemberTypeField') }}</span>
                 <select v-model="createForm.memberType">
                   <option value="user">
-                    user
+                    {{ t('marketplace.management.memberTypeUser') }}
                   </option>
                   <option value="pro_user">
-                    pro_user
+                    {{ t('marketplace.management.memberTypeProUser') }}
                   </option>
                 </select>
               </label>

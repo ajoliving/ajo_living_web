@@ -7,9 +7,11 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import { fetchMarketRentTrend } from '@/httpapis/market-trends';
 import type { MarketRentTrendRegion, MarketRentTrendResponse } from '@/model/market-trend';
+import { usePreferenceStore } from '@/stores/preferences';
 
 // 1. 區域 Tab 型別
 interface TrendTab {
@@ -35,6 +37,8 @@ interface ChartSeries {
 }
 
 const activeTab = ref('all');
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const loading = ref(false);
 const errorMessage = ref('');
 const rentTrend = ref<MarketRentTrendResponse | null>(null);
@@ -53,10 +57,10 @@ const seriesColors: Record<string, string> = {
 
 // 4. 區域 Tab 列表
 const tabs = computed<TrendTab[]>(() => [
-  { key: 'all', label: '全港' },
+  { key: 'all', label: t('trend.allHongKong') },
   ...trendRegions.value.map((region) => ({
     key: region.key,
-    label: region.label,
+    label: resolveRegionLabel(region),
   })),
 ]);
 
@@ -101,7 +105,7 @@ const chartGridLines = computed(() => {
     const value = chartRange.value.max - step * index;
     return {
       y: chartTop + ((chartRange.value.max - value) / (chartRange.value.max - chartRange.value.min)) * (chartBottom - chartTop),
-      text: `$${Math.round(value)}`,
+      text: formatRentValue(value, 0),
     };
   });
 });
@@ -110,14 +114,14 @@ const chartXLabels = computed(() => {
   const points = visibleRegions.value[0]?.points ?? [];
   return points.map((point, index) => ({
     x: pointX(index, points.length),
-    text: point.label.replace('年', '/').replace('月', ''),
+    text: formatTrendMonth(point.month, 'short'),
   }));
 });
 
 const chartSeries = computed<ChartSeries[]>(() =>
   visibleRegions.value.map((region, index) => ({
     key: region.key,
-    label: region.label,
+    label: resolveRegionLabel(region),
     color: seriesColors[region.key] ?? '#111827',
     strokeWidth: index === 0 ? 2.6 : 2.2,
     dashed: region.key === 'nt',
@@ -125,7 +129,7 @@ const chartSeries = computed<ChartSeries[]>(() =>
       x: pointX(pointIndex, region.points.length),
       y: pointY(point.value_hkd_per_sqft),
     })),
-    values: region.points.map((point) => `$${point.value_hkd_per_sqft.toFixed(1)}`),
+    values: region.points.map((point) => formatRentValue(point.value_hkd_per_sqft)),
   })),
 );
 
@@ -134,10 +138,43 @@ const updatedMonthLabel = computed(() => {
     return '';
   }
 
-  return rentTrend.value.updated_month.replace('-', '年') + '月';
+  return formatTrendMonth(rentTrend.value.updated_month, 'long');
 });
 
-// 5. 讀取租金走勢
+// 5. 取得區域顯示名稱
+const resolveRegionLabel = (region: MarketRentTrendRegion): string => {
+  const key = `trend.regions.${region.key}`;
+  const translated = t(key);
+  return translated === key ? region.label : translated;
+};
+
+// 6. 格式化趨勢月份
+const formatTrendMonth = (value: string, month: 'short' | 'long'): string => {
+  const date = new Date(`${value}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(preferenceStore.locale, {
+    year: month === 'long' ? 'numeric' : undefined,
+    month,
+  }).format(date);
+};
+
+// 7. 格式化每平方呎租金
+const formatRentValue = (value: number, maximumFractionDigits = 1): string =>
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: maximumFractionDigits,
+    maximumFractionDigits,
+  }).format(value);
+
+// 8. 格式化區域最新租金
+const formatRegionRent = (region: MarketRentTrendRegion): string =>
+  t('trend.pricePerSqft', { value: formatRentValue(region.latest_hkd_per_sqft) });
+
+// 9. 讀取租金走勢
 const loadTrend = async (): Promise<void> => {
   loading.value = true;
   errorMessage.value = '';
@@ -155,16 +192,16 @@ const loadTrend = async (): Promise<void> => {
   }
 };
 
-// 6. 切換區域 Tab
+// 10. 切換區域 Tab
 const selectTab = (key: string): void => {
   activeTab.value = key;
 };
 
-// 7. 將折線圖系列點轉為 polyline points 字串
+// 11. 將折線圖系列點轉為 polyline points 字串
 const toPolylinePoints = (points: ChartPoint[]): string =>
   points.map((point) => `${point.x},${point.y}`).join(' ');
 
-// 8. 計算 X 軸位置
+// 12. 計算 X 軸位置
 const pointX = (index: number, total: number): number => {
   if (total <= 1) {
     return chartLeft;
@@ -173,7 +210,7 @@ const pointX = (index: number, total: number): number => {
   return chartLeft + ((chartRight - chartLeft) / (total - 1)) * index;
 };
 
-// 9. 計算 Y 軸位置
+// 13. 計算 Y 軸位置
 const pointY = (value: number): number => {
   const range = chartRange.value.max - chartRange.value.min;
   if (range <= 0) {
@@ -183,20 +220,20 @@ const pointY = (value: number): number => {
   return chartBottom - ((value - chartRange.value.min) / range) * (chartBottom - chartTop);
 };
 
-// 10. 格式化月變化
-const formatChange = (value: number): string => {
-  if (value > 0) {
-    return `+${value.toFixed(1)}%`;
-  }
+// 14. 格式化月變化
+const formatChange = (value: number): string =>
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'percent',
+    signDisplay: 'exceptZero',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value / 100);
 
-  return `${value.toFixed(1)}%`;
-};
-
-// 11. 解析錯誤訊息
+// 15. 解析錯誤訊息
 const resolveTrendError = (error: unknown): string =>
   axios.isAxiosError<{ message?: string }>(error)
-    ? error.response?.data?.message ?? '無法載入公開租金走勢。'
-    : '無法載入公開租金走勢。';
+    ? error.response?.data?.message ?? t('trend.loadError')
+    : t('trend.loadError');
 
 onMounted(() => {
   void loadTrend();
@@ -211,10 +248,10 @@ onMounted(() => {
     <div class="trend-page-wrap">
       <!-- 1. 頁首 -->
       <div class="trend-header">
-        <div class="section-eyebrow">市場數據</div>
-        <div class="trend-title">香港住宅租金走勢</div>
+        <div class="section-eyebrow">{{ t('trend.eyebrow') }}</div>
+        <div class="trend-title">{{ t('trend.title') }}</div>
         <div class="trend-sub">
-          差餉物業估價署公開數據，近 6 個月 A 至 C 類私人住宅平均月租。
+          {{ t('trend.subtitle') }}
         </div>
       </div>
 
@@ -237,7 +274,7 @@ onMounted(() => {
         v-if="loading"
         class="trend-state"
       >
-        正在載入公開租金走勢
+        {{ t('trend.loading') }}
       </div>
       <div
         v-else-if="errorMessage"
@@ -248,7 +285,7 @@ onMounted(() => {
           type="button"
           @click="loadTrend"
         >
-          重新載入
+          {{ t('trend.retry') }}
         </button>
       </div>
 
@@ -257,8 +294,8 @@ onMounted(() => {
         <div class="chart-wrap">
           <div class="chart-head">
             <div>
-              <div class="chart-title">平均呎租趨勢（HK$/呎/月）</div>
-              <div class="chart-meta">更新至 {{ updatedMonthLabel }}</div>
+              <div class="chart-title">{{ t('trend.chartTitle') }}</div>
+              <div class="chart-meta">{{ t('trend.updatedThrough', { month: updatedMonthLabel }) }}</div>
             </div>
             <a
               class="chart-source"
@@ -274,7 +311,7 @@ onMounted(() => {
             class="svg-chart"
             :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
             role="img"
-            aria-label="香港住宅租金走勢折線圖"
+            :aria-label="t('trend.chartAria')"
           >
             <line
               v-for="line in chartGridLines"
@@ -356,7 +393,7 @@ onMounted(() => {
           class="label-text"
           style="margin-bottom: 12px;"
         >
-          各區最新呎租
+          {{ t('trend.latestByRegion') }}
         </div>
         <div class="district-grid">
           <button
@@ -367,8 +404,8 @@ onMounted(() => {
             :class="{ on: activeTab === region.key }"
             @click="selectTab(region.key)"
           >
-            <div class="dc-name">{{ region.label }}</div>
-            <div class="dc-price">HK${{ region.latest_hkd_per_sqft.toFixed(1) }}/呎</div>
+            <div class="dc-name">{{ resolveRegionLabel(region) }}</div>
+            <div class="dc-price">{{ formatRegionRent(region) }}</div>
             <div
               class="dc-change"
               :class="{
@@ -376,7 +413,7 @@ onMounted(() => {
                 'dc-dn': region.direction === 'down',
               }"
             >
-              {{ formatChange(region.monthly_change_percent) }} 按月
+              {{ formatChange(region.monthly_change_percent) }} {{ t('trend.monthly') }}
             </div>
           </button>
         </div>
@@ -384,7 +421,7 @@ onMounted(() => {
         <!-- 6. 資料說明 -->
         <div class="source-note">
           <span>{{ rentTrend.dataset }}</span>
-          <span>{{ rentTrend.method }}</span>
+          <span>{{ t('trend.method') }}</span>
         </div>
       </template>
     </div>

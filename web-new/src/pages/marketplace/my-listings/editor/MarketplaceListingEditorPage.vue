@@ -20,6 +20,7 @@ const {
   checklist,
   conditionOptions,
   coverImage,
+  clearPublishValidationError,
   editorSteps,
   formState,
   goNextEditorStep,
@@ -48,6 +49,8 @@ const {
   selectEditorStep,
   selectCoverImage,
   submitListing,
+  validationErrors,
+  validationItems,
   visibilityOptions,
 } = useMarketplaceListingEditorPage();
 </script>
@@ -73,7 +76,7 @@ const {
     <section class="listing-editor-workspace">
       <div
         class="listing-editor-progress"
-        aria-label="發布步驟"
+        :aria-label="$t('marketplace.editor.publishSteps')"
       >
         <button
           v-for="(step, stepIndex) in editorSteps"
@@ -100,13 +103,17 @@ const {
         :form-state="formState"
         :image-slots="imageSlots"
         :price-mode-options="priceModeOptions"
+        :validation-errors="validationErrors"
+        :validation-items="validationItems"
         :visibility-options="visibilityOptions"
+        @clear-validation-error="clearPublishValidationError"
         @images-change="handleImageFilesChange"
         @images-drop="handleDroppedImageFiles"
         @image-change="handleImageFileChange"
         @move-image="moveImageSlot"
         @remove-image="removeImageSlot"
         @select-cover="selectCoverImage"
+        @select-validation-step="selectEditorStep"
       />
 
       <EditorPreviewPanel

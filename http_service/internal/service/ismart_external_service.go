@@ -9,9 +9,9 @@ package service
 import (
 	"context"
 	"errors"
-	"net/url"
 	"strings"
 
+	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
 	"ajoliving_web/http_service/internal/errcode"
@@ -20,7 +20,8 @@ import (
 
 // 1. IsmartExternalService handles iSmart external API proxy calls.
 type IsmartExternalService struct {
-	runtime *Runtime
+	runtime           *Runtime
+	buildingInfoGroup singleflight.Group
 }
 
 // 2. IsmartBuildingParams defines one selected building request.
@@ -74,19 +75,12 @@ func (s *IsmartExternalService) GetBuildingInfo(ctx context.Context, userID int6
 		return nil, err
 	}
 
-	query := url.Values{}
-	query.Set("building_id", buildingID)
-	result, err := s.getIntegration(ctx, "/buildings/info/", query)
-	if err != nil && ismartFallbackAllowed(err, false) {
-		result, err = s.postExternal(ctx, "/building-info/", map[string]any{
-			"building_id": buildingID,
-		})
-	}
+	result, err := s.loadBuildingInfo(ctx, buildingID)
 	if err != nil {
 		return nil, err
 	}
 
-	return decorateIsmartPayload(normalizeBuildingInfoPayload(result.Payload), buildingID, buildingOptions, result.Message, account.IsStaff), nil
+	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
 }
 
 // 9. SubmitBuildingComment proxies building comment submission.
@@ -284,22 +278,27 @@ func (s *IsmartExternalService) profileBuildingID(ctx context.Context, userID in
 		return "", false
 	}
 
-	hasProfileBuilding := false
-	if profile.PrimaryCommunity != nil {
-		value := strings.TrimSpace(profile.PrimaryCommunity.PublicID)
-		hasProfileBuilding = value != ""
-		if value != "" && containsString(buildingOptions, value) {
-			return value, true
-		}
-	}
-	for _, value := range normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)) {
-		hasProfileBuilding = true
+	boundBuildingIDs := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs))
+	for _, value := range boundBuildingIDs {
 		if containsString(buildingOptions, value) {
 			return value, true
 		}
 	}
+	if len(boundBuildingIDs) > 0 {
+		return "", true
+	}
+	if profile.ResidenceBindingStatus == residenceBindingStatusPending {
+		return "", false
+	}
+	if profile.PrimaryCommunity != nil {
+		value := strings.TrimSpace(profile.PrimaryCommunity.PublicID)
+		if value != "" && containsString(buildingOptions, value) {
+			return value, true
+		}
+		return "", value != ""
+	}
 
-	return "", hasProfileBuilding
+	return "", false
 }
 
 // 18. visibleBuildingIDs resolves the iSmart building permission list.

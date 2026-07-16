@@ -13,6 +13,6 @@ export const systemRoutes: RouteRecordRaw[] = [
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: NotFoundPage,
-    meta: { titleKey: 'common.action.retry' },
+    meta: { titleKey: 'common.notFound.title' },
   },
 ];

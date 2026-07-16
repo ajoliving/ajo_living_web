@@ -167,22 +167,24 @@ func (s *SecurityICCTVService) profileBuildingID(ctx context.Context, userID int
 		return "", false
 	}
 
-	hasProfileBuilding := false
-	if profile.PrimaryCommunity != nil {
-		value := strings.TrimSpace(profile.PrimaryCommunity.PublicID)
-		hasProfileBuilding = value != ""
-		if value != "" && containsString(buildingOptions, value) {
-			return value, true
-		}
-	}
-	for _, value := range normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)) {
-		hasProfileBuilding = true
+	boundBuildingIDs := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs))
+	for _, value := range boundBuildingIDs {
 		if containsString(buildingOptions, value) {
 			return value, true
 		}
 	}
+	if len(boundBuildingIDs) > 0 {
+		return "", true
+	}
+	if profile.PrimaryCommunity != nil {
+		value := strings.TrimSpace(profile.PrimaryCommunity.PublicID)
+		if value != "" && containsString(buildingOptions, value) {
+			return value, true
+		}
+		return "", value != ""
+	}
 
-	return "", hasProfileBuilding
+	return "", false
 }
 
 // 12. visibleBuildingIDs resolves the iSmart building permission list.

@@ -13,6 +13,7 @@ import { fetchPosBuildings, fetchPosBuildingUnits } from '@/httpapis/building';
 import { fetchLoginHero } from '@/httpapis/home-content';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import type { LoginHeroImageSetting } from '@/model/home-content';
+import type { RegisterEmailAccountPayload } from '@/model/auth';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
 
@@ -24,14 +25,19 @@ export interface LoginFormState {
   email: string;
   password: string;
   engName: string;
+  chiName: string;
   phone: string;
   phoneCountryCode: string;
-  publisherIdentityType: string;
+  publisherIdentityType: 'personal' | 'individual_agent' | 'agency_company';
   otp: string;
   ismartAccount: string;
   primaryCommunityID: string;
   residenceFloor: string;
   residenceUnit: string;
+  idCard: string;
+  remark: string;
+  gender: '' | 'M' | 'F';
+  isReceiveEmail: boolean;
 }
 
 export interface LoginHeroImage {
@@ -50,10 +56,22 @@ interface ParsedPhoneInput {
   phoneNumber: string;
 }
 
+export type RegistrationValidationErrorKey =
+  | 'auth.invalidEmail'
+  | 'auth.registerEnglishNameInvalid'
+  | 'auth.invalidPhone'
+  | 'auth.registerPasswordTooShort';
+
+export type LoginFormField = 'email' | 'engName' | 'ismartAccount' | 'password' | 'phone';
+
+export type LoginValidationErrorKey = RegistrationValidationErrorKey | 'auth.accountRequired' | 'auth.passwordRequired';
+
+export type LoginValidationErrors = Partial<Record<LoginFormField, LoginValidationErrorKey>>;
+
 const LOGIN_HERO_MAX_IMAGES = 3;
 const EMAIL_PLACEHOLDER = 'name@example.com';
 const DEFAULT_PHONE_COUNTRY_CODE = '+852';
-const DEFAULT_PUBLISHER_IDENTITY_TYPE = 'owner';
+const DEFAULT_ACCOUNT_TYPE = 'personal';
 const SUPPORTED_PHONE_COUNTRY_CODES = ['+852', '+86'] as const;
 
 const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
@@ -74,14 +92,19 @@ const createInitialFormState = (): LoginFormState => ({
   email: '',
   password: '',
   engName: '',
+  chiName: '',
   phone: '',
   phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
-  publisherIdentityType: DEFAULT_PUBLISHER_IDENTITY_TYPE,
+  publisherIdentityType: DEFAULT_ACCOUNT_TYPE,
   otp: '',
   ismartAccount: '',
   primaryCommunityID: '',
   residenceFloor: '',
   residenceUnit: '',
+  idCard: '',
+  remark: '',
+  gender: '',
+  isReceiveEmail: true,
 });
 
 // 2. 解析手提電話輸入
@@ -97,25 +120,35 @@ const parsePhoneInput = (rawValue: string): ParsedPhoneInput => {
     };
   }
 
-  if (parts.length >= 2 && /^\+?\d{1,4}$/.test(parts[0])) {
+  const supportedCountryCode = SUPPORTED_PHONE_COUNTRY_CODES.find((countryCode) =>
+    normalizedValue.startsWith(countryCode) && normalizedValue.length > countryCode.length,
+  );
+  if (supportedCountryCode) {
     return {
-      phoneCountryCode: parts[0].startsWith('+') ? parts[0] : `+${parts[0]}`,
+      phoneCountryCode: supportedCountryCode,
+      phoneNumber: normalizedValue.slice(supportedCountryCode.length).replace(/\D/g, ''),
+    };
+  }
+
+  if (parts.length >= 2 && /^\+?\d{1,4}$/.test(parts[0])) {
+    const phoneCountryCode = parts[0].startsWith('+') ? parts[0] : `+${parts[0]}`;
+    if (!SUPPORTED_PHONE_COUNTRY_CODES.includes(phoneCountryCode as (typeof SUPPORTED_PHONE_COUNTRY_CODES)[number])) {
+      return {
+        phoneCountryCode: '',
+        phoneNumber: '',
+      };
+    }
+
+    return {
+      phoneCountryCode,
       phoneNumber: parts.slice(1).join('').replace(/\D/g, ''),
     };
   }
 
-  if (normalizedValue.startsWith('+852') && normalizedValue.length > 4) {
-    return {
-      phoneCountryCode: '+852',
-      phoneNumber: normalizedValue.slice(4).replace(/\D/g, ''),
-    };
-  }
-
   if (normalizedValue.startsWith('+')) {
-    const matched = normalizedValue.match(/^(\+\d{1,4})(\d{4,32})$/);
     return {
-      phoneCountryCode: matched?.[1] ?? '',
-      phoneNumber: matched?.[2] ?? '',
+      phoneCountryCode: '',
+      phoneNumber: '',
     };
   }
 
@@ -147,7 +180,7 @@ const normalizePhoneCountryCode = (value: string): string =>
     : DEFAULT_PHONE_COUNTRY_CODE;
 
 // 2.2 解析手提電話表單輸入
-const parsePhoneFormInput = (phoneCountryCode: string, rawValue: string): ParsedPhoneInput => {
+export const parsePhoneFormInput = (phoneCountryCode: string, rawValue: string): ParsedPhoneInput => {
   const trimmedValue = rawValue.trim();
   if (trimmedValue.startsWith('+')) {
     return parsePhoneInput(trimmedValue);
@@ -189,14 +222,15 @@ const readErrorMessage = (error: unknown): string =>
     ? error.response?.data?.message ?? error.message
     : 'Request failed.';
 
-// 5. 判斷是否可回退本地帳戶登入
-const canFallbackToLocalLogin = (error: unknown): boolean => {
+// 5. 判斷本地帳戶不存在或憑證不符時是否可回退 iSmart
+export const canFallbackToIsmartLogin = (error: unknown): boolean => {
   const message = readErrorMessage(error).toLowerCase();
   return (
-    message.includes('ismart') ||
-    message.includes('pos login') ||
-    message.includes('pos relay') ||
-    message.includes('account and password')
+    message.includes('incorrect') ||
+    message.includes('not found') ||
+    message.includes('valid email and password') ||
+    message.includes('valid username and password') ||
+    message.includes('valid phone number and password')
   );
 };
 
@@ -210,6 +244,91 @@ const isValidUsernameInput = (value: string): boolean => {
 const isValidEngNameInput = (value: string): boolean => {
   const engName = value.trim();
   return engName.length >= 2 && engName.length <= 120;
+};
+
+// 7.1 逐項判斷註冊資料錯誤，避免使用無法定位問題的合併提示
+export const resolveRegistrationValidationError = (
+  email: string,
+  engName: string,
+  phoneCountryCode: string,
+  phone: string,
+  password: string,
+): RegistrationValidationErrorKey | null => {
+  if (!isValidEmailInput(email)) {
+    return 'auth.invalidEmail';
+  }
+
+  if (!isValidEngNameInput(engName)) {
+    return 'auth.registerEnglishNameInvalid';
+  }
+
+  if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
+    return 'auth.invalidPhone';
+  }
+
+  if (password.trim().length < 8) {
+    return 'auth.registerPasswordTooShort';
+  }
+
+  return null;
+};
+
+// 7.2 取得註冊欄位的完整校驗結果
+export const resolveRegistrationValidationErrors = (
+  email: string,
+  engName: string,
+  phoneCountryCode: string,
+  phone: string,
+  password: string,
+): LoginValidationErrors => {
+  const errors: LoginValidationErrors = {};
+
+  if (!isValidEmailInput(email)) {
+    errors.email = 'auth.invalidEmail';
+  }
+  if (!isValidEngNameInput(engName)) {
+    errors.engName = 'auth.registerEnglishNameInvalid';
+  }
+  if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
+    errors.phone = 'auth.invalidPhone';
+  }
+  if (password.trim().length < 8) {
+    errors.password = 'auth.registerPasswordTooShort';
+  }
+
+  return errors;
+};
+
+// 7.3 取得登入欄位的完整校驗結果
+export const resolveLoginValidationErrors = (
+  authMode: LoginAuthMode,
+  accountInput: string,
+  phoneCountryCode: string,
+  phone: string,
+  password: string,
+): LoginValidationErrors => {
+  const errors: LoginValidationErrors = {};
+
+  if (authMode === 'phone') {
+    if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
+      errors.phone = 'auth.invalidPhone';
+    }
+  } else {
+    const trimmedAccount = accountInput.trim();
+    if (trimmedAccount === '') {
+      errors.ismartAccount = 'auth.accountRequired';
+    } else if (trimmedAccount.includes('@') && !isValidEmailInput(trimmedAccount)) {
+      errors.ismartAccount = 'auth.invalidEmail';
+    } else if (!trimmedAccount.includes('@') && !isValidUsernameInput(trimmedAccount)) {
+      errors.ismartAccount = 'auth.accountRequired';
+    }
+  }
+
+  if (password.trim() === '') {
+    errors.password = 'auth.passwordRequired';
+  }
+
+  return errors;
 };
 
 // 8. 取得隨機登入頁主視覺
@@ -313,7 +432,7 @@ export const useLoginPage = () => {
   const feedbackStore = useFeedbackStore();
   const sessionStore = useSessionStore();
   const formState = reactive(createInitialFormState());
-  const authMode = ref<LoginAuthMode>('phone');
+  const authMode = ref<LoginAuthMode>('username');
   const emailAction = ref<LoginEmailAction>('login');
   const buildings = ref<PosBuilding[]>([]);
   const buildingUnits = ref<PosBuildingUnit[]>([]);
@@ -321,11 +440,20 @@ export const useLoginPage = () => {
   const unitsLoading = ref(false);
   const submitting = ref(false);
   const rememberMe = ref(true);
+  const validationErrors = ref<LoginValidationErrors>({});
   const selectedHero = ref(getRandomHeroImage());
   let latestUnitRequestID = 0;
   let buildingsRequested = false;
 
   const isAuthenticated = computed(() => sessionStore.isAuthenticated);
+
+  // 20. 清除已修正表單的校驗提示
+  watch(
+    () => [formState.email, formState.engName, formState.ismartAccount, formState.password, formState.phone, formState.phoneCountryCode],
+    () => {
+      validationErrors.value = {};
+    },
+  );
 
   const emailSubmitLabel = computed(() => {
     if (submitting.value) {
@@ -358,10 +486,9 @@ export const useLoginPage = () => {
     buildingOptions.value.find((option) => option.value === formState.primaryCommunityID)?.label ?? '',
   );
   const publisherIdentityOptions = computed<LoginSelectOption[]>(() => [
-    { label: t('auth.identityOwner'), value: 'owner' },
-    { label: t('auth.identityTenant'), value: 'tenant' },
-    { label: t('auth.identityResidentRepresentative'), value: 'resident_representative' },
-    { label: t('auth.identityCompanyAuthorizedPerson'), value: 'company_authorized_person' },
+    { label: t('auth.accountTypePersonal'), value: 'personal' },
+    { label: t('auth.accountTypeIndividualAgent'), value: 'individual_agent' },
+    { label: t('auth.accountTypeAgencyCompany'), value: 'agency_company' },
   ]);
 
   const buildingOptions = computed<LoginSelectOption[]>(() => {
@@ -443,7 +570,20 @@ export const useLoginPage = () => {
     },
   );
 
-  // 21. 重置單位選擇
+  // 21. 代理帳戶不綁定住戶大廈及單位
+  watch(
+    () => formState.publisherIdentityType,
+    (accountType) => {
+      if (accountType !== 'personal') {
+        formState.primaryCommunityID = '';
+        formState.residenceFloor = '';
+        formState.residenceUnit = '';
+        buildingUnits.value = [];
+      }
+    },
+  );
+
+  // 22. 重置單位選擇
   watch(
     () => formState.residenceFloor,
     (nextValue, previousValue) => {
@@ -468,12 +608,15 @@ export const useLoginPage = () => {
   };
 
   // 23. 載入住戶註冊大廈選項
-  const loadBuildings = async (): Promise<void> => {
+  const loadBuildings = async (): Promise<boolean> => {
     buildingsLoading.value = true;
     try {
       buildings.value = await fetchPosBuildings();
-    } catch {
+      return true;
+    } catch (error) {
       buildings.value = [];
+      feedbackStore.pushToast(readErrorMessage(error), 'error');
+      return false;
     } finally {
       buildingsLoading.value = false;
     }
@@ -486,7 +629,10 @@ export const useLoginPage = () => {
     }
 
     buildingsRequested = true;
-    await loadBuildings();
+    const loaded = await loadBuildings();
+    if (!loaded) {
+      buildingsRequested = false;
+    }
   };
 
   // 25. 載入指定大廈單位清單
@@ -516,22 +662,25 @@ export const useLoginPage = () => {
 
   // 25. 完成登入後跳轉
   const redirectAfterSignIn = async (): Promise<void> => {
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
+    const restrictedStatuses = ['pending_profile', 'pending_review', 'rejected'];
+    const redirect = restrictedStatuses.includes(sessionStore.me?.member_status ?? '')
+      ? '/account/profile/agency-profile'
+      : typeof route.query.redirect === 'string' ? route.query.redirect : '/';
     await router.push(redirect);
   };
 
   // 26. 執行電郵登入或註冊
   const handleEmailSubmit = async (): Promise<void> => {
     if (emailAction.value === 'register') {
-      const optionalEmail = formState.email.trim();
-      if (optionalEmail && !isValidEmailInput(optionalEmail)) {
-        feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-        return;
-      }
-
-      const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-      if (!isValidEngNameInput(formState.engName) || !isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length < 8) {
-        feedbackStore.pushToast(t('auth.registerRequiredFields'), 'error');
+      validationErrors.value = resolveRegistrationValidationErrors(
+        formState.email,
+        formState.engName,
+        formState.phoneCountryCode,
+        formState.phone,
+        formState.password,
+      );
+      if (Object.keys(validationErrors.value).length > 0) {
+        feedbackStore.pushToast(t('auth.formInvalid'), 'error');
         return;
       }
     } else if (!isValidEmailInput(formState.email)) {
@@ -547,32 +696,49 @@ export const useLoginPage = () => {
     try {
       if (emailAction.value === 'register') {
         const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-        await sessionStore.registerEmailAccount(
-          formState.email.trim(),
-          formState.password,
-          formState.engName.trim(),
-          phoneCountryCode,
-          phoneNumber,
-          formState.publisherIdentityType.trim(),
-          formState.primaryCommunityID.trim(),
-          selectedBuildingName.value.trim(),
-          formState.residenceFloor.trim(),
-          formState.residenceUnit.trim(),
-        );
+        const registrationPayload: RegisterEmailAccountPayload = {
+          email: formState.email.trim(),
+          password: formState.password,
+          eng_name: formState.engName.trim(),
+          phone_country_code: phoneCountryCode,
+          phone_number: phoneNumber,
+          account_type: formState.publisherIdentityType,
+          is_receive_email: formState.isReceiveEmail,
+          primary_community_id: formState.primaryCommunityID.trim(),
+          primary_community_name: selectedBuildingName.value.trim(),
+          residence_floor: formState.residenceFloor.trim(),
+          residence_unit: formState.residenceUnit.trim(),
+        };
+        const chiName = formState.chiName.trim();
+        const idCard = formState.idCard.trim();
+        const remark = formState.remark.trim();
+        if (chiName) {
+          registrationPayload.chi_name = chiName;
+        }
+        if (idCard) {
+          registrationPayload.id_card = idCard;
+        }
+        if (remark) {
+          registrationPayload.remark = remark;
+        }
+        if (formState.gender) {
+          registrationPayload.gender = formState.gender;
+        }
+        await sessionStore.registerEmailAccount(registrationPayload);
         feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
       } else {
         try {
+          await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
+        } catch (error) {
+          if (!canFallbackToIsmartLogin(error)) {
+            throw error;
+          }
           await sessionStore.signInWithIsmart(
             formState.email.trim(),
             formState.password,
             undefined,
             formState.email.trim(),
           );
-        } catch (error) {
-          if (!canFallbackToLocalLogin(error)) {
-            throw error;
-          }
-          await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
         }
         feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       }
@@ -588,8 +754,15 @@ export const useLoginPage = () => {
   // 27. 執行手提電話密碼登入
   const handlePhoneSubmit = async (): Promise<void> => {
     const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-    if (!isValidParsedPhone({ phoneCountryCode, phoneNumber }) || formState.password.trim().length === 0) {
-      feedbackStore.pushToast(t('auth.phonePasswordRequired'), 'error');
+    validationErrors.value = resolveLoginValidationErrors(
+      'phone',
+      '',
+      formState.phoneCountryCode,
+      formState.phone,
+      formState.password,
+    );
+    if (Object.keys(validationErrors.value).length > 0) {
+      feedbackStore.pushToast(t('auth.formInvalid'), 'error');
       return;
     }
 
@@ -597,12 +770,12 @@ export const useLoginPage = () => {
 
     try {
       try {
-        await sessionStore.signInWithIsmart(phoneNumber, formState.password, `${phoneCountryCode}${phoneNumber}`);
+        await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
       } catch (error) {
-        if (!canFallbackToLocalLogin(error)) {
+        if (!canFallbackToIsmartLogin(error)) {
           throw error;
         }
-        await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
+        await sessionStore.signInWithIsmart(phoneNumber, formState.password, `${phoneCountryCode}${phoneNumber}`);
       }
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
@@ -617,16 +790,15 @@ export const useLoginPage = () => {
   const handleAccountSubmit = async (): Promise<void> => {
     const accountInput = selectedAccountInput.value;
     const isEmailAccount = accountInput.includes('@');
-    if (formState.password.trim().length === 0) {
-      feedbackStore.pushToast(t('auth.usernamePasswordRequired'), 'error');
-      return;
-    }
-    if (isEmailAccount && !isValidEmailInput(accountInput)) {
-      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-      return;
-    }
-    if (!isEmailAccount && !isValidUsernameInput(accountInput)) {
-      feedbackStore.pushToast(t('auth.usernamePasswordRequired'), 'error');
+    validationErrors.value = resolveLoginValidationErrors(
+      'username',
+      accountInput,
+      formState.phoneCountryCode,
+      formState.phone,
+      formState.password,
+    );
+    if (Object.keys(validationErrors.value).length > 0) {
+      feedbackStore.pushToast(t('auth.formInvalid'), 'error');
       return;
     }
 
@@ -634,21 +806,21 @@ export const useLoginPage = () => {
 
     try {
       try {
+        if (isEmailAccount) {
+          await sessionStore.signInWithEmail(accountInput, formState.password);
+        } else {
+          await sessionStore.signInWithUsername(accountInput, formState.password);
+        }
+      } catch (error) {
+        if (!canFallbackToIsmartLogin(error)) {
+          throw error;
+        }
         await sessionStore.signInWithIsmart(
           accountInput,
           formState.password,
           undefined,
           isEmailAccount ? accountInput : undefined,
         );
-      } catch (error) {
-        if (!canFallbackToLocalLogin(error)) {
-          throw error;
-        }
-        if (isEmailAccount) {
-          await sessionStore.signInWithEmail(accountInput, formState.password);
-        } else {
-          await sessionStore.signInWithUsername(accountInput, formState.password);
-        }
       }
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
@@ -690,13 +862,15 @@ export const useLoginPage = () => {
     authMode.value = mode;
     emailAction.value = 'login';
     formState.otp = '';
+    validationErrors.value = {};
   };
 
   // 34. 切換電郵登入與註冊模式
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
-    authMode.value = emailAction.value === 'register' ? 'email' : 'phone';
+    authMode.value = emailAction.value === 'register' ? 'email' : 'username';
     formState.otp = '';
+    validationErrors.value = {};
   };
 
   watch(emailAction, (action) => {
@@ -730,7 +904,9 @@ export const useLoginPage = () => {
     setAuthMode,
     submitting,
     submitLabel,
+    ensureBuildingsLoaded,
     toggleEmailAction,
     unitsLoading,
+    validationErrors,
   };
 };

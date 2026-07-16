@@ -734,14 +734,14 @@ const viewMode = ref<ResultViewMode>('grid');
   color: rgb(var(--color-primary));
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .marketplace-filter-page {
     height: auto;
     min-height: calc(100svh - var(--app-header-offset, 0rem));
     flex-direction: column;
     gap: 18px;
     overflow: visible;
-    padding: 18px var(--layout-page-padding-inline) 96px;
+    padding: 18px var(--layout-page-padding-inline) calc(var(--app-mobile-content-bottom) + 16px);
   }
 
   .marketplace-filter-sidebar {

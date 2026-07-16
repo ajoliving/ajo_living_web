@@ -5,7 +5,7 @@
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
-import type { EmailOtpPayload, EmailPasswordPayload, EmailPasswordResetPayload, EmailPasswordResetResult, IsmartLoginPayload, PhonePasswordPayload, RequestOtpResult, UsernamePasswordPayload, VerifyOtpResult } from '@/model/auth';
+import type { EmailOtpPayload, EmailPasswordPayload, EmailPasswordResetPayload, EmailPasswordResetResult, IsmartLoginPayload, PhonePasswordPayload, RegisterEmailAccountPayload, RequestOtpResult, UsernamePasswordPayload, VerifyOtpResult } from '@/model/auth';
 
 interface RequestOtpPayload {
   phone_country_code: string;
@@ -37,7 +37,7 @@ export const verifyEmailOtp = (payload: EmailOtpPayload) =>
   httpClient.post<ApiResponse<VerifyOtpResult>>('/auth/email/otp/verify', payload);
 
 // 5. 註冊郵箱密碼帳戶
-export const registerWithEmail = (payload: EmailPasswordPayload) =>
+export const registerWithEmail = (payload: RegisterEmailAccountPayload) =>
   httpClient.post<ApiResponse<VerifyOtpResult>>('/auth/email/register', payload);
 
 // 6. 請求電郵重設密碼驗證碼

@@ -49,5 +49,12 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 2026-07-10: 補充樓盤與家具手機端篩選彈窗需貼齊視口底部，並覆蓋短視口與橫屏操作列可見性審計。
 2026-07-10: 補充樓盤發布契約測試需覆蓋前端三段請求、具體缺失欄位提示、相片要求與土地類型後端校驗。
 2026-07-12: 補充樓盤草稿可保存未完成資料，而完整欄位校驗只在正式發布時執行。
+2026-07-16: 記錄個人註冊後 iSmart OwnerReg 待審綁定與未綁定「我的大廈」導向會員中心申請頁的資料流。
+2026-07-16: 記錄會員中心住戶單位以 POS 單位詳情為顯示真值、權限碼只作授權與失敗回退的資料流。
+2026-07-16: 記錄會員中心不分 Staff 身份只顯示住戶所屬屋苑及本人單位，員工管理屋苑不進入個人綁定 UI。
+2026-07-16: 記錄 AJO Staff 只保護管理中心、iSmart Staff 不提升本地管理權限及一般功能按資源可見範圍授權的契約。
+2026-07-16: 記錄「我的大廈」刷新最新會員綁定、已保存大廈優先及正式名稱取代 ID 佔位值的資料流。
+2026-07-16: 記錄 AJO Redis 與 PostgreSQL 同機 Docker 部署，以及 iSmart 大廈資料 5 分鐘快取的安全邊界。
+2026-07-16: 記錄生產 Redis 已通過真實 iSmart 大廈資料請求的快取建立、命中、TTL 與會員資料隔離驗證。
 
 [PROTOCOL]: When changing prompt-bearing docs in this directory, update `PROMPT_INDEX.md`, add a dated change-log line, and check parent `../AGENTS.md` for project-level memory changes.

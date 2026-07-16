@@ -20,5 +20,19 @@ services:
       retries: 20
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    container_name: ajoliving_http_service_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6382}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
 volumes:
   ajoliving_http_service_postgres_data:

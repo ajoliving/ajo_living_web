@@ -15,6 +15,11 @@ export default {
     empty: 'No furniture listings are available yet.',
     loadError: 'Unable to load furniture listings.',
     browseAll: 'View all secondhand listings',
+    priceUnder: 'Under {price}',
+    priceBetween: '{min}-{max}',
+    priceOver: '{price} and above',
+    paginationAria: 'Furniture market pagination',
+    advertisingAria: 'Furniture market display advertising',
   },
   offers: {
     eyebrow: 'AJO Living',

@@ -6,13 +6,29 @@
 package router
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"ajoliving_web/http_service/internal/handler"
+	"ajoliving_web/http_service/internal/middleware"
 )
 
 // 1. registerPropertyRoutes registers authenticated property listing routes.
-func registerPropertyRoutes(api *gin.RouterGroup, propertyHandler *handler.PropertyHandler, requireAuth gin.HandlerFunc) {
+func registerPropertyRoutes(
+	api *gin.RouterGroup,
+	propertyHandler *handler.PropertyHandler,
+	requireAuth gin.HandlerFunc,
+	limiter *middleware.InMemoryLimiter,
+) {
+	api.POST("/property-sales/translation", requireAuth, limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
+		user := middleware.GetCurrentUser(c)
+		if user == nil {
+			return "property_translation:" + c.ClientIP()
+		}
+		return "property_translation:" + strconv.FormatInt(user.UserID, 10)
+	}), propertyHandler.TranslatePropertyContent)
 	api.POST("/property-sales", requireAuth, propertyHandler.CreatePropertySale)
 	api.PATCH("/property-sales/:listingId", requireAuth, propertyHandler.UpdatePropertySale)
 	api.POST("/property-sales/:listingId/publish", requireAuth, propertyHandler.PublishPropertySale)

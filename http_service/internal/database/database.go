@@ -58,6 +58,9 @@ func Migrate(db *gorm.DB) error {
 		&model.Listing{},
 		&model.ListingContact{},
 		&model.MediaAsset{},
+		&model.AgencyProfileBinding{},
+		&model.AgencyProfile{},
+		&model.AgencyCompanySubaccount{},
 		&model.ListingImage{},
 		&model.ContactAccessLog{},
 		&model.ListingFavorite{},
@@ -200,6 +203,12 @@ func reassignMediaAssetReferences(tx *gorm.DB, duplicateIDs []int64, keepID int6
 		{model: &model.ListingImage{}, table: "listing_images", column: "media_asset_id"},
 		{model: &model.HomeContentPlacement{}, table: "home_content_placements", column: "media_asset_id"},
 		{model: &model.UserProfile{}, table: "user_profiles", column: "avatar_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "logo_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "avatar_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "wechat_qr_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "eaa_license_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "business_registration_asset_id"},
+		{model: &model.AgencyProfile{}, table: "agency_profiles", column: "company_card_asset_id"},
 	}
 
 	for _, reference := range references {

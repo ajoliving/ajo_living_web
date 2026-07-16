@@ -45,19 +45,21 @@ type UserCredential struct {
 
 // 3. UserProfile stores profile details and community linkage.
 type UserProfile struct {
-	UserID                int64          `gorm:"primaryKey" json:"user_id"`
-	DisplayName           string         `gorm:"type:varchar(120)" json:"display_name"`
-	PublisherIdentityType string         `gorm:"type:varchar(32)" json:"publisher_identity_type"`
-	PrimaryCommunityID    *int64         `gorm:"index" json:"primary_community_id"`
-	BoundBuildingIDs      datatypes.JSON `gorm:"type:jsonb" json:"bound_building_ids"`
-	BoundFlatUnitIDs      datatypes.JSON `gorm:"type:jsonb" json:"bound_flat_unit_ids"`
-	ResidenceFloor        string         `gorm:"type:varchar(32)" json:"residence_floor"`
-	ResidenceUnit         string         `gorm:"type:varchar(32)" json:"residence_unit"`
-	DistrictCode          string         `gorm:"type:varchar(64)" json:"district_code"`
-	AvatarAssetID         *int64         `json:"avatar_asset_id"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
-	PrimaryCommunity      *Community     `gorm:"foreignKey:PrimaryCommunityID" json:"primary_community,omitempty"`
+	UserID                 int64          `gorm:"primaryKey" json:"user_id"`
+	DisplayName            string         `gorm:"type:varchar(120)" json:"display_name"`
+	AccountType            string         `gorm:"type:varchar(40);not null;default:personal;index" json:"account_type"`
+	PublisherIdentityType  string         `gorm:"type:varchar(32);default:owner" json:"publisher_identity_type"`
+	PrimaryCommunityID     *int64         `gorm:"index" json:"primary_community_id"`
+	BoundBuildingIDs       datatypes.JSON `gorm:"type:jsonb" json:"bound_building_ids"`
+	BoundFlatUnitIDs       datatypes.JSON `gorm:"type:jsonb" json:"bound_flat_unit_ids"`
+	ResidenceFloor         string         `gorm:"type:varchar(32)" json:"residence_floor"`
+	ResidenceUnit          string         `gorm:"type:varchar(32)" json:"residence_unit"`
+	ResidenceBindingStatus string         `gorm:"type:varchar(32);index" json:"residence_binding_status"`
+	DistrictCode           string         `gorm:"type:varchar(64)" json:"district_code"`
+	AvatarAssetID          *int64         `json:"avatar_asset_id"`
+	CreatedAt              time.Time      `json:"created_at"`
+	UpdatedAt              time.Time      `json:"updated_at"`
+	PrimaryCommunity       *Community     `gorm:"foreignKey:PrimaryCommunityID" json:"primary_community,omitempty"`
 }
 
 // 4. Community stores estate and building records.

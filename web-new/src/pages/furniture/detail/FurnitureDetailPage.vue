@@ -78,9 +78,9 @@ const stats = computed(() => [
   <main class="furniture-detail-page">
     <!-- 1. 麵包屑 -->
     <nav class="breadcrumb">
-      <button type="button" class="bc-link" @click="goHome">首頁</button>
+      <button type="button" class="bc-link" @click="goHome">{{ t('nav.home') }}</button>
       <span class="bc-sep">›</span>
-      <button type="button" class="bc-link" @click="goMarket">家具市集</button>
+      <button type="button" class="bc-link" @click="goMarket">{{ t('channels.furniture.title') }}</button>
       <span class="bc-sep">›</span>
       <span class="bc-current">{{ listing?.title || t('marketplace.detail.title') }}</span>
     </nav>
@@ -688,8 +688,8 @@ const stats = computed(() => [
   }
 }
 
-/* 17. 響應式：窄屏堆疊雙欄 */
-@media (max-width: 760px) {
+/* 17. 響應式：手機導航斷點內堆疊雙欄 */
+@media (max-width: 1023px) {
   .detail-wrap {
     grid-template-columns: 1fr;
   }

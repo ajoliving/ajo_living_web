@@ -76,7 +76,8 @@ const dailyProgress = computed(() => {
   }
   return Math.min(100, Math.round((account.value.today_ad_reward_points / account.value.daily_ad_reward_limit) * 100));
 });
-const pointFormatter = new Intl.NumberFormat('zh-HK', { maximumFractionDigits: 0 });
+const pointFormatter = computed(() =>
+  new Intl.NumberFormat(preferenceStore.locale, { maximumFractionDigits: 0 }));
 const selectedAdRemainingSeconds = computed(() => {
   const session = runningSession.value;
   if (!session || session.taskId !== selectedAdTask.value?.task_id) {
@@ -173,7 +174,7 @@ const activeRechargeHasPaymentEntry = computed(() =>
   Boolean(activeRechargeQrImage.value || activeRechargeQrLink.value || activeRechargeCanRedirect.value));
 
 // 1. 格式化錢包主數字
-const formatPointNumber = (value: number): string => pointFormatter.format(value);
+const formatPointNumber = (value: number): string => pointFormatter.value.format(value);
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 const formatHKD = (value: number | string): string =>
@@ -810,7 +811,7 @@ watch(
                 <td>{{ transaction.direction === 'credit' ? t('account.wallet.credit') : t('account.wallet.debit') }}</td>
                 <td>{{ transaction.biz_module }} · {{ transaction.action_type }}</td>
                 <td>{{ formatPoints(transaction.amount) }}</td>
-                <td>{{ formatDate(transaction.created_at) }}</td>
+                <td>{{ formatDate(transaction.created_at, preferenceStore.locale) }}</td>
               </tr>
             </tbody>
           </table>
@@ -1514,7 +1515,7 @@ watch(
 .wallet-recharge-dialog__panel {
   display: grid;
   width: min(100%, 54rem);
-  max-height: min(90vh, 44rem);
+  max-height: min(90svh, 44rem);
   overflow: hidden;
   border: 1px solid rgb(var(--color-border) / 0.74);
   border-radius: 8px;
@@ -1823,7 +1824,7 @@ watch(
 .wallet-ad-dialog__panel {
   display: grid;
   width: min(100%, 58rem);
-  max-height: min(90vh, 54rem);
+  max-height: min(90svh, 54rem);
   overflow: hidden;
   border: 1px solid rgb(var(--color-border) / 0.74);
   border-radius: 3px;
@@ -1900,8 +1901,8 @@ watch(
 .wallet-ad-dialog__media {
   display: grid;
   place-items: center;
-  min-height: min(62vh, 28rem);
-  max-height: min(68vh, 38rem);
+  min-height: min(62svh, 28rem);
+  max-height: min(68svh, 38rem);
   overflow: hidden;
   background: rgb(3 7 18 / 0.92);
 }
@@ -1912,7 +1913,7 @@ watch(
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: min(68vh, 38rem);
+  max-height: min(68svh, 38rem);
   object-fit: contain;
 }
 
@@ -1969,7 +1970,7 @@ watch(
   opacity: 0;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .wallet-heading {
     align-items: start;
     flex-direction: column;
@@ -2376,7 +2377,7 @@ watch(
   color: rgb(var(--color-text));
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .wallet-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

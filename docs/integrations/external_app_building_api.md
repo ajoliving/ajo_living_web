@@ -246,7 +246,7 @@ Common HTTP status codes currently used:
 | `remark` | string | no | Free-text note saved to `ClientTbl.cli_remark` |
 | `gender` | string | no | `M`, `F`, or empty |
 | `is_receive_email` | boolean | no | Whether to enable `UserSettings.blg_notice_email`. Default: `true` |
-| `password` | string | no | If omitted, the backend generates a random password |
+| `password` | string | yes | AJO always provides the member's required registration password |
 
 #### Legacy-Compatible Aliases Also Accepted
 

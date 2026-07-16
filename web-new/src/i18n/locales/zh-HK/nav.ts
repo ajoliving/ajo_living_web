@@ -1,10 +1,17 @@
+/*
+ * 全站導覽繁體中文文案。
+ * 1. 提供桌面、手機、會員與業務模組導覽標籤。
+ * 2. 與 English 導覽資源保持 key 對齊。
+ */
 export default {
   home: '首頁',
   properties: '樓盤放售',
+  propertiesShort: '樓盤',
   servicedResidences: '服務式住宅',
   furniture: '家具',
   supermarketOffers: '超市優惠',
   combinedOffers: '綜合優惠',
+  offersShort: '優惠',
   payments: 'AJO Pay',
   paymentUnits: '支付單元',
   paymentBills: '賬單',
@@ -24,6 +31,7 @@ export default {
   settings: '設定',
   publish: '發布帖子',
   my: '我的',
+  myShort: '我的',
   myListings: '我的帖子',
   chat: '訊息管理',
   account: '帳戶',
@@ -48,6 +56,7 @@ export default {
   orders: '訂單中心',
   notifications: '通知中心',
   login: '登入',
+  menu: '選單',
   building: '我的大廈',
   trend: '走勢',
   ajoPay: 'AJO Pay',

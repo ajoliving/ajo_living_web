@@ -5,7 +5,9 @@
  * 3. 驗證確認區不再顯示優惠券折扣行，第四步顯示訂單。
  */
 import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import {
   fetchPOSPaymentBankAccounts,
@@ -13,6 +15,8 @@ import {
   fetchPOSPaymentFees,
   fetchPOSPaymentOrders,
 } from '@/httpapis/payments';
+import i18n, { applyLocale } from '@/i18n';
+import { usePreferenceStore } from '@/stores/preferences';
 
 import Page from './Page.vue';
 
@@ -92,6 +96,9 @@ const createListResponse = (items: Record<string, unknown>[] = []) => ({
 
 describe('AjoPayCheckoutPage', () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
+    window.localStorage.clear();
+    applyLocale('zh-HK');
     mockedFetchBills.mockReset();
     mockedFetchFees.mockReset();
     mockedFetchBankAccounts.mockReset();
@@ -104,9 +111,14 @@ describe('AjoPayCheckoutPage', () => {
     mockedFetchOrders.mockResolvedValue(createListResponse([]));
   });
 
+  afterEach(() => {
+    applyLocale('zh-HK');
+  });
+
   it('aligns checkout breadcrumb, bill toggle, and order step copy', async () => {
     const wrapper = mount(Page, {
       global: {
+        plugins: [i18n],
         stubs: {
           AppBreadcrumb: {
             props: ['items'],
@@ -133,5 +145,29 @@ describe('AjoPayCheckoutPage', () => {
     expect(cancelAllButton).toBeTruthy();
     await cancelAllButton?.trigger('click');
     expect(wrapper.find('.ajo-pay-checkout__total').text()).toContain('HK$0.00');
+  });
+
+  it('updates checkout copy and currency formatting after switching to English', async () => {
+    const wrapper = mount(Page, {
+      global: {
+        plugins: [i18n],
+        stubs: {
+          AppBreadcrumb: true,
+          QrCodeImage: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    const preferenceStore = usePreferenceStore();
+    preferenceStore.setLocale('en');
+    applyLocale('en');
+    await nextTick();
+
+    expect(wrapper.text()).toContain('Select payment items');
+    expect(wrapper.text()).toContain('Select payment method');
+    expect(wrapper.text()).toContain('Payment order');
+    expect(wrapper.text()).toContain('HK$1,200.00');
+    expect(wrapper.text()).not.toContain('付款頁面');
   });
 });

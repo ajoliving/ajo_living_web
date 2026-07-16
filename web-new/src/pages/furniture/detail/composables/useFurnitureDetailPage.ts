@@ -100,7 +100,7 @@ export const useFurnitureDetailPage = () => {
     listing.value ? getMarketplaceDistrictLabel(listing.value.district_code, preferenceStore.locale) : '',
   );
   const communityName = computed(() =>
-    listing.value ? resolveListingCommunityName(listing.value) : '',
+    listing.value ? resolveListingCommunityName(listing.value, preferenceStore.locale) : '',
   );
   const ownerName = computed(() => listing.value ? resolveListingOwnerName(listing.value) : '');
   const publishedAt = computed(() =>

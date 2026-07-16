@@ -17,6 +17,8 @@ import type {
   ListingEditorFormState,
   ListingEditorStepKey,
   ListingEditorVisibility,
+  ListingPublishValidationField,
+  ListingPublishValidationItem,
 } from '../editor';
 
 interface EditorFormPanelProps {
@@ -28,6 +30,8 @@ interface EditorFormPanelProps {
   formState: ListingEditorFormState;
   imageSlots: EditorImageSlot[];
   priceModeOptions: EditorOption[];
+  validationErrors: Record<ListingPublishValidationField, string>;
+  validationItems: ListingPublishValidationItem[];
   visibilityOptions: EditorOption<ListingEditorVisibility>[];
 }
 
@@ -35,11 +39,13 @@ const props = defineProps<EditorFormPanelProps>();
 
 const emit = defineEmits<{
   imageChange: [event: Event, slotId: string];
+  clearValidationError: [field: ListingPublishValidationField];
   imagesChange: [event: Event];
   imagesDrop: [files: File[]];
   moveImage: [slotId: string, offset: -1 | 1];
   removeImage: [slotId: string];
   selectCover: [slotId: string];
+  selectValidationStep: [step: ListingEditorStepKey];
 }>();
 
 const { t } = useI18n();
@@ -98,6 +104,7 @@ const handleImagesDrop = (event: DragEvent): void => {
 const updateBuildingOnly = (event: Event): void => {
   const input = event.target as HTMLInputElement;
   props.formState.visibility = input.checked ? 'building_only' : 'public';
+  emit('clearValidationError', 'contact');
 };
 
 // 5. 切換交收標籤
@@ -108,7 +115,12 @@ const toggleDeliveryTag = (value: string): void => {
     : [...props.formState.deliveryTags, value];
 };
 
-// 6. 點擊外部時關閉下拉選單
+// 6. 切換發布校驗摘要指定步驟
+const selectValidationStep = (step: ListingEditorStepKey): void => {
+  emit('selectValidationStep', step);
+};
+
+// 7. 點擊外部時關閉下拉選單
 const closeDeliveryMenuOnOutsideClick = (event: PointerEvent): void => {
   const target = event.target as HTMLElement;
 
@@ -117,12 +129,12 @@ const closeDeliveryMenuOnOutsideClick = (event: PointerEvent): void => {
   }
 };
 
-// 7. 掛載全域點擊監聽
+// 8. 掛載全域點擊監聽
 onMounted(() => {
   document.addEventListener('pointerdown', closeDeliveryMenuOnOutsideClick);
 });
 
-// 8. 移除全域點擊監聽
+// 9. 移除全域點擊監聽
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closeDeliveryMenuOnOutsideClick);
 });
@@ -134,6 +146,26 @@ onBeforeUnmount(() => {
     @submit.prevent
   >
     <section
+      v-if="props.validationItems.length > 0"
+      class="editor-validation-summary"
+      role="alert"
+    >
+      <strong>{{ t('marketplace.editor.validationSummaryTitle', { count: props.validationItems.length }) }}</strong>
+      <ul>
+        <li
+          v-for="item in props.validationItems"
+          :key="item.field"
+        >
+          <button
+            type="button"
+            @click="selectValidationStep(item.step)"
+          >
+            {{ item.message }}
+          </button>
+        </li>
+      </ul>
+    </section>
+    <section
       v-if="props.activeStep === 'category'"
       class="editor-section"
     >
@@ -141,19 +173,24 @@ onBeforeUnmount(() => {
         <span class="editor-step-number">1</span>
         <div>
           <p class="editor-kicker">
-            放盤類別
+            {{ t('marketplace.editor.categoryStepKicker') }}
           </p>
-          <h2>選擇家具分類</h2>
+          <h2>{{ t('marketplace.editor.categoryStepTitle') }}</h2>
         </div>
       </header>
 
       <div class="editor-field-grid">
-        <div class="editor-field">
-          <span>{{ t('marketplace.editor.categoryField') }}</span>
+        <div :class="['editor-field', { 'editor-field--error': props.validationErrors.category }]">
+          <span>
+            {{ t('marketplace.editor.categoryField') }}
+            <b class="editor-required-mark" aria-hidden="true">*</b>
+          </span>
           <AppGlassSelect
             v-model="props.formState.categoryCode"
             :options="props.categoryOptions"
+            @update:model-value="emit('clearValidationError', 'category')"
           />
+          <small v-if="props.validationErrors.category" class="editor-field-error">{{ props.validationErrors.category }}</small>
         </div>
 
         <div class="editor-field">
@@ -174,14 +211,14 @@ onBeforeUnmount(() => {
         <span class="editor-step-number">2</span>
         <div>
           <p class="editor-kicker">
-            廣告等級
+            {{ t('marketplace.editor.adStepKicker') }}
           </p>
-          <h2>選擇刊登等級</h2>
+          <h2>{{ t('marketplace.editor.adStepTitle') }}</h2>
         </div>
       </header>
 
       <div class="editor-ad-package">
-        <strong>普通</strong>
+        <strong>{{ t('marketplace.editor.standardAdTier') }}</strong>
         <span>{{ t('marketplace.editor.publishChargeHint') }}</span>
       </div>
     </section>
@@ -194,20 +231,27 @@ onBeforeUnmount(() => {
         <span class="editor-step-number">3</span>
         <div>
           <p class="editor-kicker">
-            基本資料及相片
+            {{ t('marketplace.editor.detailsStepKicker') }}
           </p>
-          <h2>填寫商品資料</h2>
+          <h2>{{ t('marketplace.editor.detailsStepTitle') }}</h2>
         </div>
       </header>
 
       <div class="editor-field-grid">
-        <label class="editor-field editor-field--wide">
-          <span>{{ t('marketplace.editor.titleField') }}</span>
+        <label :class="['editor-field', 'editor-field--wide', { 'editor-field--error': props.validationErrors.title }]">
+          <span>
+            {{ t('marketplace.editor.titleField') }}
+            <b class="editor-required-mark" aria-hidden="true">*</b>
+          </span>
           <input
             v-model="props.formState.title"
+            :aria-describedby="props.validationErrors.title ? 'editor-title-error' : undefined"
+            :aria-invalid="Boolean(props.validationErrors.title)"
             type="text"
             :placeholder="t('marketplace.editor.titlePlaceholder')"
+            @input="emit('clearValidationError', 'title')"
           />
+          <small v-if="props.validationErrors.title" id="editor-title-error" class="editor-field-error">{{ props.validationErrors.title }}</small>
         </label>
 
         <div class="editor-field">
@@ -218,14 +262,21 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <label class="editor-field">
-          <span>{{ t('marketplace.editor.priceField') }}</span>
+        <label :class="['editor-field', { 'editor-field--error': props.validationErrors.price }]">
+          <span>
+            {{ t('marketplace.editor.priceField') }}
+            <b class="editor-required-mark" aria-hidden="true">*</b>
+          </span>
           <input
             v-model.number="props.formState.price"
+            :aria-describedby="props.validationErrors.price ? 'editor-price-error' : undefined"
+            :aria-invalid="Boolean(props.validationErrors.price)"
             type="number"
             min="0"
             placeholder="0.00"
+            @input="emit('clearValidationError', 'price')"
           />
+          <small v-if="props.validationErrors.price" id="editor-price-error" class="editor-field-error">{{ props.validationErrors.price }}</small>
         </label>
 
         <div class="editor-field">
@@ -248,6 +299,7 @@ onBeforeUnmount(() => {
           <input
             v-model="props.formState.isDonation"
             type="checkbox"
+            @change="emit('clearValidationError', 'price')"
           />
           <span>{{ t('marketplace.editor.donationAvailable') }}</span>
         </label>
@@ -331,8 +383,13 @@ onBeforeUnmount(() => {
       />
       <label
         for="editor-media-upload"
-        class="editor-dropzone"
-        :class="isDropActive ? 'editor-dropzone--active' : ''"
+        :class="[
+          'editor-dropzone',
+          {
+            'editor-dropzone--active': isDropActive,
+            'editor-dropzone--error': props.validationErrors.image,
+          },
+        ]"
         @dragenter.prevent="isDropActive = true"
         @dragover.prevent="isDropActive = true"
         @dragleave.prevent="isDropActive = false"
@@ -345,6 +402,7 @@ onBeforeUnmount(() => {
         />
         <strong>{{ t('marketplace.editor.dragUploadTitle') }}</strong>
         <span>{{ t('marketplace.editor.dragUploadHint') }}</span>
+        <small v-if="props.validationErrors.image" class="editor-field-error">{{ props.validationErrors.image }}</small>
       </label>
 
       <div
@@ -412,9 +470,9 @@ onBeforeUnmount(() => {
         <span class="editor-step-number">4</span>
         <div>
           <p class="editor-kicker">
-            聯絡人資料
+            {{ t('marketplace.editor.contactStepKicker') }}
           </p>
-          <h2>設定聯絡方式</h2>
+          <h2>{{ t('marketplace.editor.contactStepTitle') }}</h2>
         </div>
       </header>
 
@@ -449,7 +507,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="editor-field-grid">
-        <label class="editor-field">
+        <label :class="['editor-field', { 'editor-field--error': props.validationErrors.contact }]">
           <span class="editor-field-label-row">
             <span>{{ t('marketplace.editor.phoneField') }}</span>
             <span class="editor-phone-prefix">{{ t('marketplace.editor.phoneCountryCode') }}</span>
@@ -458,10 +516,11 @@ onBeforeUnmount(() => {
             v-model="props.formState.phone"
             type="tel"
             :placeholder="t('marketplace.editor.phonePlaceholder')"
+            @input="emit('clearValidationError', 'contact')"
           />
         </label>
 
-        <label class="editor-field">
+        <label :class="['editor-field', { 'editor-field--error': props.validationErrors.contact }]">
           <span class="editor-field-label-row">
             <span>{{ t('marketplace.editor.whatsAppField') }}</span>
             <span class="editor-phone-prefix">{{ t('marketplace.editor.phoneCountryCode') }}</span>
@@ -470,6 +529,7 @@ onBeforeUnmount(() => {
             v-model="props.formState.whatsapp"
             type="tel"
             :placeholder="t('marketplace.editor.whatsAppPlaceholder')"
+            @input="emit('clearValidationError', 'contact')"
           />
           <small class="editor-field-hint">{{ t('marketplace.editor.contactRetainHint') }}</small>
         </label>
@@ -521,8 +581,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="editor-field">
-          <span>{{ t('marketplace.editor.contactPermission') }}</span>
+        <div :class="['editor-field', { 'editor-field--error': props.validationErrors.contact }]">
+          <span>
+            {{ t('marketplace.editor.contactPermission') }}
+            <b class="editor-required-mark" aria-hidden="true">*</b>
+          </span>
           <label class="editor-chat-toggle">
             <span>{{ t('marketplace.editor.allowChat') }}</span>
             <span class="editor-toggle">
@@ -530,11 +593,13 @@ onBeforeUnmount(() => {
                 v-model="props.formState.allowChat"
                 type="checkbox"
                 class="peer sr-only"
+                @change="emit('clearValidationError', 'contact')"
               />
               <span class="editor-toggle__rail" />
               <span class="editor-toggle__thumb" />
             </span>
           </label>
+          <small v-if="props.validationErrors.contact" class="editor-field-error">{{ props.validationErrors.contact }}</small>
         </div>
       </div>
     </section>
@@ -546,6 +611,35 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 1rem;
   min-width: 0;
+}
+
+.editor-validation-summary {
+  border-left: 3px solid rgb(var(--color-primary));
+  background: rgb(var(--color-surface-raised));
+  padding: 0.8rem 0.9rem;
+}
+
+.editor-validation-summary strong,
+.editor-validation-summary button,
+.editor-field-error {
+  color: rgb(var(--color-danger));
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.editor-validation-summary ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+}
+
+.editor-validation-summary button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .editor-section {
@@ -606,6 +700,18 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 0.45rem;
   min-width: 0;
+}
+
+.editor-required-mark {
+  color: rgb(var(--color-primary));
+  font-size: 0.875rem;
+}
+
+.editor-field--error input,
+.editor-field--error textarea,
+.editor-field--error :deep(.app-glass-select__trigger),
+.editor-dropzone--error {
+  border-color: rgb(var(--color-danger));
 }
 
 .editor-field-label-row {

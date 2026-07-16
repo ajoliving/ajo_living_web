@@ -176,6 +176,7 @@ export interface PresignUploadPayload {
   file_name: string;
   mime_type: string;
   file_size: number;
+  purpose?: string;
   object_prefix?: string;
 }
 

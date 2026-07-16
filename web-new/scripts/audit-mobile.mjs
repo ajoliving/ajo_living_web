@@ -811,10 +811,33 @@ const interactionFlows = [
     liveSafe: true,
     action: async (page) => {
       const initialLocale = await page.locator('html').getAttribute('lang');
+      if (!['zh-HK', 'en'].includes(initialLocale ?? '')) {
+        throw new Error(`Unsupported initial document locale: ${initialLocale ?? 'missing'}`);
+      }
+
+      const initialNavigationText = ((await page.locator('.nav-links').textContent()) ?? '').replace(/\s+/g, ' ').trim();
       await clickFirstVisible(page, '.locale-toggle', 'mobile header locale toggle');
       await page.waitForFunction((locale) => document.documentElement.lang !== locale, initialLocale, { timeout: 5000 });
+
+      const switchedLocale = await page.locator('html').getAttribute('lang');
+      const switchedNavigationText = ((await page.locator('.nav-links').textContent()) ?? '').replace(/\s+/g, ' ').trim();
+      const storedSwitchedLocale = await page.evaluate(() => localStorage.getItem('ajoliving.locale'));
+      if (!switchedLocale || switchedLocale === initialLocale) {
+        throw new Error('Locale toggle did not produce a supported language change');
+      }
+      if (!switchedNavigationText || switchedNavigationText === initialNavigationText) {
+        throw new Error('Locale toggle changed document.lang without translating navigation labels');
+      }
+      if (storedSwitchedLocale !== switchedLocale) {
+        throw new Error(`Locale preference was not persisted: expected ${switchedLocale}, got ${storedSwitchedLocale ?? 'missing'}`);
+      }
+
       await clickFirstVisible(page, '.locale-toggle', 'mobile header locale reset');
       await page.waitForFunction((locale) => document.documentElement.lang === locale, initialLocale, { timeout: 5000 });
+      const storedResetLocale = await page.evaluate(() => localStorage.getItem('ajoliving.locale'));
+      if (storedResetLocale !== initialLocale) {
+        throw new Error(`Locale reset was not persisted: expected ${initialLocale}, got ${storedResetLocale ?? 'missing'}`);
+      }
     },
   },
   {

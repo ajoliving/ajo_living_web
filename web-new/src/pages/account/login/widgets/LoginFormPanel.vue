@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { LoginAuthMode, LoginEmailAction, LoginSelectOption } from '../login';
+import type { LoginAuthMode, LoginEmailAction, LoginSelectOption, LoginValidationErrors } from '../login';
 
 interface LoginFormPanelProps {
   authMode: LoginAuthMode;
@@ -18,6 +18,7 @@ interface LoginFormPanelProps {
   buildingOptions: LoginSelectOption[];
   buildingsLoading: boolean;
   engName: string;
+  chiName: string;
   email: string;
   password: string;
   phone: string;
@@ -27,6 +28,10 @@ interface LoginFormPanelProps {
   primaryCommunityId: string;
   residenceFloor: string;
   residenceUnit: string;
+  idCard: string;
+  remark: string;
+  gender: '' | 'M' | 'F';
+  isReceiveEmail: boolean;
   rememberMe: boolean;
   residenceFloorOptions: LoginSelectOption[];
   residenceUnitOptions: LoginSelectOption[];
@@ -37,12 +42,14 @@ interface LoginFormPanelProps {
   isAuthenticated: boolean;
   publisherIdentityOptions: LoginSelectOption[];
   submitLabel: string;
+  validationErrors: LoginValidationErrors;
 }
 
 const props = defineProps<LoginFormPanelProps>();
 
 const emit = defineEmits<{
   'update:engName': [value: string];
+  'update:chiName': [value: string];
   'update:email': [value: string];
   'update:password': [value: string];
   'update:phone': [value: string];
@@ -52,11 +59,16 @@ const emit = defineEmits<{
   'update:primaryCommunityId': [value: string];
   'update:residenceFloor': [value: string];
   'update:residenceUnit': [value: string];
+  'update:idCard': [value: string];
+  'update:remark': [value: string];
+  'update:gender': [value: '' | 'M' | 'F'];
+  'update:isReceiveEmail': [value: boolean];
   'update:rememberMe': [value: boolean];
   'set-auth-mode': [value: LoginAuthMode];
   'sign-out': [];
   'submit-login': [];
   'forgot-password': [];
+  'load-buildings': [];
   'toggle-email-action': [];
 }>();
 
@@ -103,7 +115,7 @@ const togglePasswordVisibility = (): void => {
           v-show="props.emailAction === 'login'"
           class="login-choice-tabs"
           role="tablist"
-          aria-label="登入方式"
+          :aria-label="t('auth.loginModeLabel')"
         >
           <button
             type="button"
@@ -128,7 +140,7 @@ const togglePasswordVisibility = (): void => {
         </div>
 
         <template v-if="props.emailAction === 'register'">
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.engName') }}</span>
             <div class="group relative">
               <input
@@ -136,6 +148,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.engNamePlaceholder')"
                 autocomplete="name"
+                :aria-invalid="Boolean(props.validationErrors.engName)"
                 spellcheck="false"
                 type="text"
                 @input="emit('update:engName', readInputValue($event))"
@@ -146,9 +159,32 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
+            <small v-if="props.validationErrors.engName" class="form-field-error-message">{{ t(props.validationErrors.engName) }}</small>
           </label>
 
           <label class="block">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
+              {{ t('auth.chiName') }}
+              <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
+            </span>
+            <div class="group relative">
+              <input
+                :value="props.chiName"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.chiNamePlaceholder')"
+                autocomplete="name"
+                type="text"
+                @input="emit('update:chiName', readInputValue($event))"
+              >
+              <AppIcon
+                name="user"
+                :size="20"
+                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
               <input
@@ -156,6 +192,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.passwordPlaceholder')"
                 autocomplete="new-password"
+                :aria-invalid="Boolean(props.validationErrors.password)"
                 :type="showPassword ? 'text' : 'password'"
                 @input="emit('update:password', readInputValue($event))"
               >
@@ -171,9 +208,10 @@ const togglePasswordVisibility = (): void => {
                 />
               </button>
             </div>
+            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
           </label>
 
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
               {{ t('auth.phone') }}
               <small class="login-field-hint">{{ t('auth.phoneSmsHint') }}</small>
@@ -193,6 +231,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input min-w-0 flex-1 rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.phonePlaceholder')"
                 autocomplete="tel"
+                :aria-invalid="Boolean(props.validationErrors.phone)"
                 inputmode="tel"
                 type="tel"
                 @input="emit('update:phone', readInputValue($event))"
@@ -203,9 +242,10 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
+            <small v-if="props.validationErrors.phone" class="form-field-error-message">{{ t(props.validationErrors.phone) }}</small>
           </label>
 
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.email }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.email') }}</span>
             <div class="group relative">
               <input
@@ -214,6 +254,7 @@ const togglePasswordVisibility = (): void => {
                 :placeholder="props.emailPlaceholder"
                 autocapitalize="none"
                 autocomplete="email"
+                :aria-invalid="Boolean(props.validationErrors.email)"
                 inputmode="email"
                 spellcheck="false"
                 type="email"
@@ -225,9 +266,10 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
+            <small v-if="props.validationErrors.email" class="form-field-error-message">{{ t(props.validationErrors.email) }}</small>
           </label>
 
-          <label class="block">
+          <label class="block form-field--required">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.publisherIdentityType') }}</span>
             <div class="group relative">
               <select
@@ -251,6 +293,67 @@ const togglePasswordVisibility = (): void => {
             </div>
           </label>
 
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
+                {{ t('auth.gender') }}
+                <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
+              </span>
+              <div class="group relative">
+                <select
+                  :value="props.gender"
+                  class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
+                  @change="emit('update:gender', readInputValue($event) as '' | 'M' | 'F')"
+                >
+                  <option value="">{{ t('auth.genderPlaceholder') }}</option>
+                  <option value="M">{{ t('auth.genderMale') }}</option>
+                  <option value="F">{{ t('auth.genderFemale') }}</option>
+                </select>
+                <AppIcon name="chevron-down" :size="20" class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
+              </div>
+            </label>
+
+            <label class="block">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
+                {{ t('auth.idCard') }}
+                <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
+              </span>
+              <input
+                :value="props.idCard"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.idCardPlaceholder')"
+                autocomplete="off"
+                type="text"
+                @input="emit('update:idCard', readInputValue($event))"
+              >
+            </label>
+          </div>
+
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
+              {{ t('auth.remark') }}
+              <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
+            </span>
+            <textarea
+              :value="props.remark"
+              class="login-form-input login-form-textarea w-full rounded-lg border-none bg-surface-raised px-4 py-3 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+              :placeholder="t('auth.remarkPlaceholder')"
+              rows="2"
+              @input="emit('update:remark', readInputValue($event))"
+            />
+          </label>
+
+          <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-muted">
+            <input
+              :checked="props.isReceiveEmail"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+              type="checkbox"
+              @change="emit('update:isReceiveEmail', readCheckboxValue($event))"
+            >
+            <span>{{ t('auth.receiveEmail') }}</span>
+          </label>
+
+          <template v-if="props.publisherIdentityType === 'personal'">
           <label class="block">
             <span class="login-building-label mb-1.5 text-sm font-bold uppercase tracking-[0.16em] text-text">
               {{ t('auth.residenceBuilding') }}
@@ -264,6 +367,7 @@ const togglePasswordVisibility = (): void => {
                 :value="props.primaryCommunityId"
                 class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
                 @change="emit('update:primaryCommunityId', readInputValue($event))"
+                @focus="emit('load-buildings')"
               >
                 <option
                   v-for="option in props.buildingOptions"
@@ -335,10 +439,11 @@ const togglePasswordVisibility = (): void => {
               </div>
             </label>
           </div>
+          </template>
         </template>
 
         <template v-else-if="props.authMode === 'phone'">
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.phone') }}</span>
             <div class="phone-input-row group">
               <select
@@ -355,6 +460,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input min-w-0 flex-1 rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.phonePlaceholder')"
                 autocomplete="tel"
+                :aria-invalid="Boolean(props.validationErrors.phone)"
                 inputmode="tel"
                 type="tel"
                 @input="emit('update:phone', readInputValue($event))"
@@ -365,9 +471,10 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
+            <small v-if="props.validationErrors.phone" class="form-field-error-message">{{ t(props.validationErrors.phone) }}</small>
           </label>
 
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
               <input
@@ -375,6 +482,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.passwordPlaceholder')"
                 autocomplete="current-password"
+                :aria-invalid="Boolean(props.validationErrors.password)"
                 :type="showPassword ? 'text' : 'password'"
                 @input="emit('update:password', readInputValue($event))"
               >
@@ -390,11 +498,12 @@ const togglePasswordVisibility = (): void => {
                 />
               </button>
             </div>
+            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
           </label>
         </template>
 
         <template v-else>
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.ismartAccount }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.loginGroupAccount') }}</span>
             <div class="group relative">
               <input
@@ -403,6 +512,7 @@ const togglePasswordVisibility = (): void => {
                 :placeholder="t('auth.accountIdentifierPlaceholder')"
                 autocapitalize="none"
                 autocomplete="username"
+                :aria-invalid="Boolean(props.validationErrors.ismartAccount)"
                 spellcheck="false"
                 type="text"
                 @input="emit('update:ismartAccount', readInputValue($event))"
@@ -413,9 +523,10 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
+            <small v-if="props.validationErrors.ismartAccount" class="form-field-error-message">{{ t(props.validationErrors.ismartAccount) }}</small>
           </label>
 
-          <label class="block">
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
               <input
@@ -423,6 +534,7 @@ const togglePasswordVisibility = (): void => {
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
                 :placeholder="t('auth.passwordPlaceholder')"
                 autocomplete="current-password"
+                :aria-invalid="Boolean(props.validationErrors.password)"
                 :type="showPassword ? 'text' : 'password'"
                 @input="emit('update:password', readInputValue($event))"
               >
@@ -438,6 +550,7 @@ const togglePasswordVisibility = (): void => {
                 />
               </button>
             </div>
+            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
           </label>
         </template>
 

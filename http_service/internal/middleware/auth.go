@@ -26,6 +26,7 @@ type CurrentUser struct {
 	IsStaff            bool
 	Role               string
 	PrimaryCommunityID *int64
+	AccountType        string
 }
 
 // 2. OptionalAuth loads the user identity when a token is present.
@@ -71,7 +72,32 @@ func RequireAuth(authService *service.AuthService) gin.HandlerFunc {
 	}
 }
 
-// 4. RequireStaff blocks requests without a valid staff identity.
+// 4. RequireActiveMember blocks restricted, rejected, and disabled member sessions.
+func RequireActiveMember(authService *service.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := extractBearerToken(c.GetHeader("Authorization"))
+		if token == "" {
+			errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+			c.Abort()
+			return
+		}
+		identity, err := authService.AuthenticateToken(c.Request.Context(), token)
+		if err != nil {
+			errcode.WriteError(c, err)
+			c.Abort()
+			return
+		}
+		if identity.MemberStatus != "active" {
+			errcode.WriteError(c, errcode.New(errcode.CodeAuthForbidden, "agency profile approval is required"))
+			c.Abort()
+			return
+		}
+		setCurrentUser(c, identity)
+		c.Next()
+	}
+}
+
+// 5. RequireStaff blocks requests without a valid staff identity.
 func RequireStaff(authService *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractBearerToken(c.GetHeader("Authorization"))
@@ -99,7 +125,7 @@ func RequireStaff(authService *service.AuthService) gin.HandlerFunc {
 	}
 }
 
-// 5. GetCurrentUser returns the current user from gin context.
+// 6. GetCurrentUser returns the current user from gin context.
 func GetCurrentUser(c *gin.Context) *CurrentUser {
 	value, exists := c.Get(currentUserKey)
 	if !exists {
@@ -110,7 +136,7 @@ func GetCurrentUser(c *gin.Context) *CurrentUser {
 	return currentUser
 }
 
-// 6. setCurrentUser stores the authenticated identity on gin context.
+// 7. setCurrentUser stores the authenticated identity on gin context.
 func setCurrentUser(c *gin.Context, identity *service.AuthIdentity) {
 	c.Set(currentUserKey, &CurrentUser{
 		UserID:             identity.UserID,
@@ -120,10 +146,11 @@ func setCurrentUser(c *gin.Context, identity *service.AuthIdentity) {
 		IsStaff:            identity.IsStaff,
 		Role:               identity.Role,
 		PrimaryCommunityID: identity.PrimaryCommunityID,
+		AccountType:        identity.AccountType,
 	})
 }
 
-// 7. extractBearerToken extracts the raw token from the Authorization header.
+// 8. extractBearerToken extracts the raw token from the Authorization header.
 func extractBearerToken(header string) string {
 	parts := strings.SplitN(strings.TrimSpace(header), " ", 2)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {

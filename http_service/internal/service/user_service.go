@@ -7,7 +7,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 
@@ -25,32 +24,35 @@ type UserService struct {
 
 // 2. MeResponse defines the current user response shape.
 type MeResponse struct {
-	PublicID          string                        `json:"public_id"`
-	Email             string                        `json:"email"`
-	PhoneCountryCode  string                        `json:"phone_country_code"`
-	PhoneNumber       string                        `json:"phone_number"`
-	MemberStatus      string                        `json:"member_status"`
-	MemberType        string                        `json:"member_type"`
-	IsStaff           bool                          `json:"is_staff"`
-	Role              string                        `json:"role"`
-	Roles             []string                      `json:"roles"`
-	Permissions       []string                      `json:"permissions"`
-	DisplayName       string                        `json:"display_name"`
-	AvatarURL         string                        `json:"avatar_url"`
-	PublisherIdentity string                        `json:"publisher_identity_type"`
-	DistrictCode      string                        `json:"district_code"`
-	ResidenceFloor    string                        `json:"residence_floor"`
-	ResidenceUnit     string                        `json:"residence_unit"`
-	BoundBuildingIDs  []string                      `json:"bound_building_ids"`
-	BoundFlatUnitIDs  []string                      `json:"bound_flat_unit_ids"`
-	PrimaryCommunity  *CommunityResponse            `json:"primary_community,omitempty"`
-	ProfileCompleted  bool                          `json:"profile_completed"`
-	AJOBalance        int64                         `json:"ajo_balance"`
-	IsmartLinked      bool                          `json:"ismart_linked"`
-	IsmartUsername    string                        `json:"ismart_username"`
-	IsmartBoundPhone  string                        `json:"ismart_bound_phone"`
-	IsmartMsg         *IsmartMessage                `json:"ismart_msg,omitempty"`
-	IsmartAccount     *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
+	PublicID               string                        `json:"public_id"`
+	Email                  string                        `json:"email"`
+	PhoneCountryCode       string                        `json:"phone_country_code"`
+	PhoneNumber            string                        `json:"phone_number"`
+	MemberStatus           string                        `json:"member_status"`
+	MemberType             string                        `json:"member_type"`
+	IsStaff                bool                          `json:"is_staff"`
+	Role                   string                        `json:"role"`
+	Roles                  []string                      `json:"roles"`
+	Permissions            []string                      `json:"permissions"`
+	DisplayName            string                        `json:"display_name"`
+	AvatarURL              string                        `json:"avatar_url"`
+	PublisherIdentity      string                        `json:"publisher_identity_type"`
+	AccountType            string                        `json:"account_type"`
+	DistrictCode           string                        `json:"district_code"`
+	ResidenceFloor         string                        `json:"residence_floor"`
+	ResidenceUnit          string                        `json:"residence_unit"`
+	ResidenceBindingStatus string                        `json:"residence_binding_status"`
+	BoundBuildingIDs       []string                      `json:"bound_building_ids"`
+	BoundFlatUnitIDs       []string                      `json:"bound_flat_unit_ids"`
+	PrimaryCommunity       *CommunityResponse            `json:"primary_community,omitempty"`
+	ProfileCompleted       bool                          `json:"profile_completed"`
+	AJOBalance             int64                         `json:"ajo_balance"`
+	IsmartLinked           bool                          `json:"ismart_linked"`
+	IsmartUsername         string                        `json:"ismart_username"`
+	IsmartBoundPhone       string                        `json:"ismart_bound_phone"`
+	IsmartMsg              *IsmartMessage                `json:"ismart_msg,omitempty"`
+	IsmartRaw              map[string]any                `json:"ismart_raw,omitempty"`
+	IsmartAccount          *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
 }
 
 // 3. CommunityResponse defines a lightweight community payload.
@@ -136,29 +138,41 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 	}
 
 	ismartMsg := NewAuthService(s.runtime).loadIsmartMessage(ctx, user.ID)
+	accountType := normalizeAccountType(profile.AccountType)
+	publisherIdentity := derivedPublisherIdentity(accountType)
+	permissions := access.Permissions
+	if accountType == AccountTypeAgencyCompanySubaccount {
+		permissions, err = NewAgencyCompanyService(s.runtime).LoadSubaccountPermissions(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	response := &MeResponse{
-		PublicID:          user.PublicID,
-		Email:             s.userEmail(ctx, user.ID),
-		PhoneCountryCode:  user.PhoneCountryCode,
-		PhoneNumber:       user.PhoneNumber,
-		MemberStatus:      user.MemberStatus,
-		MemberType:        normalizeMemberType(user.MemberType),
-		IsStaff:           access.IsStaff,
-		Role:              resolveUserRole(user.MemberType, access.IsStaff),
-		Roles:             access.RoleCodes,
-		Permissions:       access.Permissions,
-		DisplayName:       profile.DisplayName,
-		AvatarURL:         s.avatarURL(ctx, profile.AvatarAssetID),
-		PublisherIdentity: profile.PublisherIdentityType,
-		DistrictCode:      profile.DistrictCode,
-		ResidenceFloor:    profile.ResidenceFloor,
-		ResidenceUnit:     profile.ResidenceUnit,
-		BoundBuildingIDs:  s.profileBoundBuildings(&profile, ismartMsg),
-		BoundFlatUnitIDs:  s.profileBoundFlatUnits(&profile, ismartMsg),
-		ProfileCompleted:  isProfileCompleted(&profile),
-		IsmartLinked:      ismartMsg != nil,
-		IsmartMsg:         ismartMsg,
-		IsmartAccount:     s.loadIsmartAccountProfile(ctx, user.ID),
+		PublicID:               user.PublicID,
+		Email:                  s.userEmail(ctx, user.ID),
+		PhoneCountryCode:       user.PhoneCountryCode,
+		PhoneNumber:            user.PhoneNumber,
+		MemberStatus:           user.MemberStatus,
+		MemberType:             normalizeMemberType(user.MemberType),
+		IsStaff:                access.IsStaff,
+		Role:                   resolveUserRole(user.MemberType, access.IsStaff),
+		Roles:                  access.RoleCodes,
+		Permissions:            permissions,
+		DisplayName:            profile.DisplayName,
+		AvatarURL:              s.avatarURL(ctx, profile.AvatarAssetID),
+		PublisherIdentity:      publisherIdentity,
+		AccountType:            accountType,
+		DistrictCode:           profile.DistrictCode,
+		ResidenceFloor:         profile.ResidenceFloor,
+		ResidenceUnit:          profile.ResidenceUnit,
+		ResidenceBindingStatus: profile.ResidenceBindingStatus,
+		BoundBuildingIDs:       s.profileBoundBuildings(&profile, ismartMsg),
+		BoundFlatUnitIDs:       s.profileBoundFlatUnits(&profile, ismartMsg),
+		ProfileCompleted:       isProfileCompleted(&profile),
+		IsmartLinked:           ismartMsg != nil,
+		IsmartMsg:              ismartMsg,
+		IsmartRaw:              NewAuthService(s.runtime).loadIsmartRaw(ctx, user.ID),
+		IsmartAccount:          s.loadIsmartAccountProfile(ctx, user.ID),
 	}
 	if ismartMsg != nil {
 		response.IsmartUsername = ismartMsg.Username
@@ -185,13 +199,15 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 	if err := s.runtime.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
 		return nil, errcode.New(errcode.CodeNotFound, "user not found")
 	}
+	if identity := strings.TrimSpace(params.PublisherIdentityType); identity != "" && identity != "owner" && identity != "agent" {
+		return nil, errcode.New(errcode.CodeValidationError, "publisher identity is derived from account type")
+	}
 
 	updates := map[string]any{
-		"display_name":            params.DisplayName,
-		"publisher_identity_type": params.PublisherIdentityType,
-		"residence_floor":         params.ResidenceFloor,
-		"residence_unit":          params.ResidenceUnit,
-		"district_code":           params.DistrictCode,
+		"display_name":    params.DisplayName,
+		"residence_floor": params.ResidenceFloor,
+		"residence_unit":  params.ResidenceUnit,
+		"district_code":   params.DistrictCode,
 	}
 	userUpdates := map[string]any{}
 	credentialUpdates := map[string]any{}
@@ -374,6 +390,27 @@ func (s *UserService) GetChannelHomeOverview(ctx context.Context) (*ChannelHomeO
 func (s *UserService) resolveProfileCommunity(ctx context.Context, publicID string, name string) (*model.Community, error) {
 	community, err := s.findCommunityByPublicID(ctx, publicID)
 	if err == nil {
+		displayName := strings.TrimSpace(name)
+		if displayName != "" && displayName != publicID {
+			updates := map[string]any{}
+			if strings.TrimSpace(community.NameZH) == "" || strings.TrimSpace(community.NameZH) == publicID {
+				updates["name_zh"] = displayName
+				community.NameZH = displayName
+			}
+			if strings.TrimSpace(community.NameEN) == "" || strings.TrimSpace(community.NameEN) == publicID {
+				updates["name_en"] = displayName
+				community.NameEN = displayName
+			}
+			if strings.TrimSpace(community.AddressText) == "" || strings.TrimSpace(community.AddressText) == publicID {
+				updates["address_text"] = displayName
+				community.AddressText = displayName
+			}
+			if len(updates) > 0 {
+				if err := s.runtime.DB.WithContext(ctx).Model(community).Updates(updates).Error; err != nil {
+					return nil, errcode.New(errcode.CodeInternalError, "failed to update community name")
+				}
+			}
+		}
 		return community, nil
 	}
 
@@ -593,6 +630,9 @@ func (s *UserService) profileBoundBuildings(profile *model.UserProfile, ismartMs
 		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs)); len(values) > 0 {
 			return values
 		}
+		if profile.ResidenceBindingStatus == residenceBindingStatusPending {
+			return []string{}
+		}
 		if profile.PrimaryCommunity != nil && strings.TrimSpace(profile.PrimaryCommunity.PublicID) != "" {
 			return []string{strings.TrimSpace(profile.PrimaryCommunity.PublicID)}
 		}
@@ -609,6 +649,9 @@ func (s *UserService) profileBoundFlatUnits(profile *model.UserProfile, ismartMs
 	if profile != nil {
 		if values := normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs)); len(values) > 0 {
 			return values
+		}
+		if profile.ResidenceBindingStatus == residenceBindingStatusPending {
+			return []string{}
 		}
 		if hasLocalProfileBinding(profile) {
 			return []string{}
@@ -639,13 +682,9 @@ func (s *UserService) loadIsmartAccountProfile(ctx context.Context, userID int64
 		return nil
 	}
 
-	raw := map[string]any{}
-	_ = json.Unmarshal(account.RawMessage, &raw)
+	raw := ismartProfileSnapshot(account)
 	properties := make([]IsmartRelatedPropertyResponse, 0)
-	for _, propertyName := range normalizeStringSlice(append(
-		unmarshalStringSlice(account.ClientBuildingPermissions),
-		unmarshalStringSlice(account.StaffBuildingPermissions)...,
-	)) {
+	for _, propertyName := range normalizeStringSlice(unmarshalStringSlice(account.ClientBuildingPermissions)) {
 		properties = append(properties, IsmartRelatedPropertyResponse{
 			PropertyName: propertyName,
 			Status:       "",

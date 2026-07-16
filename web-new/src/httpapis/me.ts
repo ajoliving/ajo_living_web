@@ -16,7 +16,6 @@ export const updateMe = (payload: {
   display_name?: string;
   phone_country_code?: string;
   phone_number?: string;
-  publisher_identity_type?: string;
   primary_community_id?: string;
   primary_community_name?: string;
   bound_building_ids?: string[];

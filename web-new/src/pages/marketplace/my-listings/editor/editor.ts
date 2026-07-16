@@ -98,6 +98,14 @@ export interface EditorChecklistItem {
   complete: boolean;
 }
 
+export type ListingPublishValidationField = 'title' | 'category' | 'price' | 'contact' | 'image';
+
+export interface ListingPublishValidationItem {
+  field: ListingPublishValidationField;
+  step: ListingEditorStepKey;
+  message: string;
+}
+
 export interface ListingEditorFormState {
   title: string;
   categoryCode: MarketplaceCategoryCode;
@@ -346,6 +354,13 @@ export const useMarketplaceListingEditorPage = () => {
   const retainedContactSummary = ref<SecondhandListingDetailResponse['contact_summary'] | null>(null);
   const isProgrammaticNavigation = ref(false);
   const activeEditorStep = ref<ListingEditorStepKey>('category');
+  const validationErrors = reactive<Record<ListingPublishValidationField, string>>({
+    title: '',
+    category: '',
+    price: '',
+    contact: '',
+    image: '',
+  });
   let resolveLeavePrompt: ((decision: EditorLeaveDecision) => void) | null = null;
 
   const isEditing = computed(() => listingId.value.trim().length > 0);
@@ -459,6 +474,13 @@ export const useMarketplaceListingEditorPage = () => {
   );
 
   const readyToPublish = computed(() => checklist.value.every((item) => item.complete));
+  const validationItems = computed<ListingPublishValidationItem[]>(() => [
+    { field: 'title' as const, step: 'details' as const, message: validationErrors.title },
+    { field: 'category' as const, step: 'category' as const, message: validationErrors.category },
+    { field: 'price' as const, step: 'details' as const, message: validationErrors.price },
+    { field: 'contact' as const, step: 'contact' as const, message: validationErrors.contact },
+    { field: 'image' as const, step: 'details' as const, message: validationErrors.image },
+  ].filter((item) => item.message.length > 0));
   const chargeCost = computed(() => resolveWalletChargeCost('secondhand'));
   const draftChargeCost = computed(() => resolveWalletDraftChargeCost('secondhand'));
   const walletBalance = computed(() => sessionStore.me?.ajo_balance ?? 0);
@@ -544,6 +566,32 @@ export const useMarketplaceListingEditorPage = () => {
     if (nextStep) {
       activeEditorStep.value = nextStep.key;
     }
+  };
+
+  // 14.4 清除指定發布欄位的校驗提示
+  const clearPublishValidationError = (field: ListingPublishValidationField): void => {
+    validationErrors[field] = '';
+  };
+
+  // 14.5 檢查正式發布所需資料並回傳首個缺漏步驟
+  const validateForPublishing = (): ListingEditorStepKey | null => {
+    validationErrors.title = formState.title.trim()
+      ? ''
+      : t('marketplace.editor.titleRequired');
+    validationErrors.category = formState.categoryCode
+      ? ''
+      : t('marketplace.editor.categoryRequired');
+    validationErrors.price = hasValidPrice.value
+      ? ''
+      : t('marketplace.editor.priceRequired');
+    validationErrors.contact = hasValidContact.value
+      ? hasValidVisibility.value ? '' : t('marketplace.editor.buildingVisibilityRequired')
+      : t('marketplace.editor.contactRequired');
+    validationErrors.image = selectedImageCount.value > 0
+      ? ''
+      : t('marketplace.editor.imageRequired');
+
+    return validationItems.value[0]?.step ?? null;
   };
 
   // 14.4 更新離開提示基準
@@ -656,14 +704,14 @@ export const useMarketplaceListingEditorPage = () => {
   };
 
   // 14.7 將圖片暫存在頁面並建立本地預覽
-  const stageImageFile = (file: File, slotId: string): void => {
+  const stageImageFile = (file: File, slotId: string): boolean => {
     if (!validateImageFile(file)) {
-      return;
+      return false;
     }
 
     const targetSlot = imageSlots.value.find((slot) => slot.id === slotId);
     if (!targetSlot) {
-      return;
+      return false;
     }
 
     const objectUrl = URL.createObjectURL(file);
@@ -684,6 +732,8 @@ export const useMarketplaceListingEditorPage = () => {
           }
         : slot,
     );
+    clearPublishValidationError('image');
+    return true;
   };
 
   // 14.8 上傳單個暫存圖片到 OSS
@@ -972,8 +1022,13 @@ export const useMarketplaceListingEditorPage = () => {
 
   // 14.19 儲存並立即發布
   const submitListing = async (): Promise<void> => {
-    if (!readyToPublish.value) {
-      feedbackStore.pushToast(t('marketplace.editor.publishBlocked'), 'error');
+    const firstInvalidStep = validateForPublishing();
+    if (firstInvalidStep) {
+      activeEditorStep.value = firstInvalidStep;
+      feedbackStore.pushToast(
+        t('marketplace.editor.validationSummaryTitle', { count: validationItems.value.length }),
+        'error',
+      );
       return;
     }
 
@@ -1033,6 +1088,42 @@ export const useMarketplaceListingEditorPage = () => {
     { immediate: true },
   );
 
+  watch(
+    () => formState.title,
+    (value) => {
+      if (value.trim()) {
+        clearPublishValidationError('title');
+      }
+    },
+  );
+
+  watch(
+    () => formState.categoryCode,
+    (value) => {
+      if (value) {
+        clearPublishValidationError('category');
+      }
+    },
+  );
+
+  watch(
+    () => formState.isDonation || formState.price,
+    () => {
+      if (hasValidPrice.value) {
+        clearPublishValidationError('price');
+      }
+    },
+  );
+
+  watch(
+    () => [formState.phone, formState.whatsapp, formState.allowChat, formState.visibility],
+    () => {
+      if (hasValidContact.value && hasValidVisibility.value) {
+        clearPublishValidationError('contact');
+      }
+    },
+  );
+
   onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
     imageSlots.value.forEach(revokeImageSlotPreview);
@@ -1048,6 +1139,7 @@ export const useMarketplaceListingEditorPage = () => {
     chargeHint,
     conditionOptions,
     coverImage,
+    clearPublishValidationError,
     formState,
     editorSteps,
     goNextEditorStep,
@@ -1081,6 +1173,8 @@ export const useMarketplaceListingEditorPage = () => {
     selectedCategoryLabel,
     selectedConditionLabel,
     submitListing,
+    validationErrors,
+    validationItems,
     visibilityOptions,
     workflowSteps,
   };

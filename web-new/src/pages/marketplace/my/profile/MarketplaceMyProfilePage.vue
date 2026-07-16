@@ -22,7 +22,10 @@ interface ProfileInfoRow {
   value: string;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const displayLocale = computed(() => (locale.value === 'en' ? 'en-HK' : 'zh-HK'));
+const formatLocaleNumber = (value: number): string =>
+  new Intl.NumberFormat(displayLocale.value).format(value);
 const feedbackStore = useFeedbackStore();
 const sessionStore = useSessionStore();
 const isLoading = ref(false);
@@ -31,7 +34,6 @@ const isEditModalOpen = ref(false);
 
 const formState = reactive({
   display_name: '',
-  publisher_identity_type: '',
   district_code: '',
 });
 
@@ -75,11 +77,6 @@ const profileRows = computed<ProfileInfoRow[]>(() => [
     key: 'phone',
     label: t('account.profile.phone'),
     value: phoneDisplay.value,
-  },
-  {
-    key: 'publisher_identity_type',
-    label: t('account.profile.publisherIdentity'),
-    value: sessionStore.me?.publisher_identity_type?.trim() || fallbackValue.value,
   },
   {
     key: 'district_code',
@@ -136,7 +133,6 @@ const permissionChips = computed(() =>
 // 7. 同步編輯表單
 const syncFormState = (): void => {
   formState.display_name = sessionStore.me?.display_name ?? sessionStore.currentUser.display_name;
-  formState.publisher_identity_type = sessionStore.me?.publisher_identity_type ?? '';
   formState.district_code = sessionStore.me?.district_code ?? '';
 };
 
@@ -180,7 +176,6 @@ const handleSaveProfile = async (): Promise<void> => {
   try {
     const { data } = await updateMe({
       display_name: formState.display_name.trim(),
-      publisher_identity_type: formState.publisher_identity_type.trim(),
       district_code: formState.district_code.trim(),
     });
 
@@ -249,15 +244,17 @@ onMounted(() => {
 
       <section class="marketplace-profile-metrics">
         <article class="marketplace-profile-metric">
-          <strong>{{ roleChips.length }}</strong>
+          <strong>{{ formatLocaleNumber(roleChips.length) }}</strong>
           <span>{{ t('marketplace.myProfile.permissions') }}</span>
         </article>
         <article class="marketplace-profile-metric">
-          <strong>{{ permissionChips.length }}</strong>
-          <span>Access</span>
+          <strong>{{ formatLocaleNumber(permissionChips.length) }}</strong>
+          <span>{{ t('marketplace.myProfile.access') }}</span>
         </article>
         <article class="marketplace-profile-metric">
-          <strong>{{ sessionStore.me?.profile_completed ? '100%' : '60%' }}</strong>
+          <strong>{{ sessionStore.me?.profile_completed
+            ? t('marketplace.myProfile.completionComplete')
+            : t('marketplace.myProfile.completionPartial') }}</strong>
           <span>{{ t('marketplace.myProfile.profileCompleted') }}</span>
         </article>
       </section>
@@ -362,14 +359,6 @@ onMounted(() => {
               :model-value="formState.display_name"
               autocomplete="name"
               @update:model-value="formState.display_name = $event"
-            />
-          </label>
-
-          <label class="marketplace-profile-field">
-            <span>{{ t('account.profile.publisherIdentity') }}</span>
-            <BaseInput
-              :model-value="formState.publisher_identity_type"
-              @update:model-value="formState.publisher_identity_type = $event"
             />
           </label>
 
@@ -680,6 +669,8 @@ onMounted(() => {
 
 .marketplace-profile-dialog {
   width: min(100%, 34rem);
+  max-height: calc(100svh - 2.5rem);
+  overflow-y: auto;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   background: rgb(var(--color-surface));
@@ -770,6 +761,20 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 10px;
   padding: 16px;
+}
+
+@media (max-width: 1023px) {
+  .marketplace-profile-modal {
+    place-items: end center;
+    padding:
+      var(--app-safe-top)
+      var(--layout-page-padding-inline)
+      calc(var(--app-safe-bottom) + 10px);
+  }
+
+  .marketplace-profile-dialog {
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+  }
 }
 
 @media (max-width: 767px) {

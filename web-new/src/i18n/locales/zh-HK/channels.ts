@@ -15,6 +15,11 @@ export default {
     empty: '暫時未有家具帖子。',
     loadError: '無法載入家具帖子。',
     browseAll: '查看全部二手帖子',
+    priceUnder: '{price}以下',
+    priceBetween: '{min}-{max}',
+    priceOver: '{price}以上',
+    paginationAria: '家具市集分頁',
+    advertisingAria: '家具市集展示廣告',
   },
   offers: {
     eyebrow: 'AJO Living',

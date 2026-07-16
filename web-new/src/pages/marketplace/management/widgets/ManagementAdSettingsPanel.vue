@@ -216,7 +216,7 @@ onMounted(() => {
   <div class="ad-settings-panel">
     <section class="work-hero">
       <div>
-        <div class="work-kicker">Display Ads</div>
+        <div class="work-kicker">{{ t('marketplace.settings.displayAdKicker') }}</div>
         <h2 class="work-title">{{ t('marketplace.management.adSettings') }}</h2>
         <p class="work-desc">{{ t('marketplace.settings.displayAdDescription') }}</p>
       </div>
@@ -355,7 +355,7 @@ onMounted(() => {
               <input
                 v-model="slot.targetURL"
                 type="url"
-                placeholder="https://"
+                :placeholder="t('marketplace.settings.displayAdTargetPlaceholder')"
               />
             </label>
           </article>
@@ -410,7 +410,7 @@ onMounted(() => {
   border: 0;
   border-radius: 6px;
   background: var(--accent);
-  color: #fff;
+  color: rgb(var(--color-primary-contrast));
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -435,7 +435,7 @@ onMounted(() => {
   min-height: 34px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-2);
   cursor: pointer;
   font-family: inherit;
@@ -460,7 +460,7 @@ onMounted(() => {
 .work-card {
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 16px;
 }
 
@@ -593,7 +593,7 @@ onMounted(() => {
   width: 100%;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   font: inherit;
   font-size: 12px;
@@ -606,7 +606,7 @@ onMounted(() => {
 }
 
 /* 7. 響應式 */
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .admin-ad-settings {
     grid-template-columns: 1fr;
   }

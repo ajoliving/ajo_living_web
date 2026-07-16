@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, reactive, ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink, useRouter } from 'vue-router';
 
@@ -20,6 +20,8 @@ interface ForgotPasswordFormState {
   password: string;
   confirmPassword: string;
 }
+
+type ForgotPasswordField = keyof ForgotPasswordFormState;
 
 const router = useRouter();
 const { t } = useI18n();
@@ -38,33 +40,70 @@ const resettingPassword = ref(false);
 const codeSent = ref(false);
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
-
-const canSubmit = computed(() =>
-  formState.email.trim().length > 0 &&
-  formState.code.trim().length > 0 &&
-  formState.password.trim().length >= 8 &&
-  formState.confirmPassword.trim().length >= 8,
-);
+const fieldErrors = reactive<Record<ForgotPasswordField, string>>({
+  email: '',
+  code: '',
+  password: '',
+  confirmPassword: '',
+});
 
 // 1. 讀取輸入值
 const readInputValue = (event: Event): string => (event.target as HTMLInputElement).value;
 
-// 2. 驗證電郵格式
+// 2. 更新輸入內容並清除對應欄位錯誤
+const updateField = (field: ForgotPasswordField, event: Event): void => {
+  formState[field] = readInputValue(event);
+  fieldErrors[field] = '';
+
+  if (field === 'password') {
+    fieldErrors.confirmPassword = '';
+  }
+};
+
+// 3. 驗證電郵格式
 const isValidEmailInput = (email: string): boolean => {
   const value = email.trim();
   return value.includes('@') && value.includes('.') && value.length <= 255;
 };
 
-// 3. 解析接口錯誤訊息
+// 4. 解析接口錯誤訊息
 const readErrorMessage = (error: unknown): string =>
   axios.isAxiosError(error)
     ? error.response?.data?.message ?? error.message
     : error instanceof Error ? error.message : t('auth.passwordResetFailed');
 
-// 4. 請求電郵驗證碼
+// 5. 顯示第一個欄位校驗原因
+const showFirstFieldError = (): void => {
+  const message = Object.values(fieldErrors).find((value) => value !== '');
+  if (message) {
+    feedbackStore.pushToast(message, 'error');
+  }
+};
+
+// 6. 校驗電郵欄位
+const validateEmail = (): boolean => {
+  fieldErrors.email = isValidEmailInput(formState.email) ? '' : t('auth.invalidEmail');
+  return fieldErrors.email === '';
+};
+
+// 7. 校驗重設密碼表單
+const validateResetForm = (): boolean => {
+  const isEmailValid = validateEmail();
+  fieldErrors.code = formState.code.trim().length > 0 ? '' : t('auth.passwordResetCodeRequired');
+  fieldErrors.password = formState.password.trim().length >= 8 ? '' : t('auth.passwordResetPasswordRequired');
+  fieldErrors.confirmPassword = formState.confirmPassword.trim().length === 0
+    ? t('auth.passwordResetConfirmRequired')
+    : formState.password === formState.confirmPassword
+      ? ''
+      : t('auth.passwordResetConfirmMismatch');
+
+  return isEmailValid && Object.values(fieldErrors).every((value) => value === '');
+};
+
+// 8. 請求電郵驗證碼
 const handleRequestCode = async (): Promise<void> => {
-  if (!isValidEmailInput(formState.email)) {
-    feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
+  if (!validateEmail()) {
+    showFirstFieldError();
     return;
   }
 
@@ -80,22 +119,10 @@ const handleRequestCode = async (): Promise<void> => {
   }
 };
 
-// 5. 提交新密碼
+// 9. 提交新密碼
 const handleResetPassword = async (): Promise<void> => {
-  if (!isValidEmailInput(formState.email)) {
-    feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-    return;
-  }
-  if (formState.code.trim().length === 0) {
-    feedbackStore.pushToast(t('auth.passwordResetCodeRequired'), 'error');
-    return;
-  }
-  if (formState.password.trim().length < 8) {
-    feedbackStore.pushToast(t('auth.passwordResetPasswordRequired'), 'error');
-    return;
-  }
-  if (formState.password !== formState.confirmPassword) {
-    feedbackStore.pushToast(t('auth.passwordResetConfirmMismatch'), 'error');
+  if (!validateResetForm()) {
+    showFirstFieldError();
     return;
   }
 
@@ -126,6 +153,7 @@ const handleResetPassword = async (): Promise<void> => {
 
       <form
         class="forgot-password-panel"
+        novalidate
         @submit.prevent="handleResetPassword"
       >
         <div class="forgot-password-heading">
@@ -134,18 +162,22 @@ const handleResetPassword = async (): Promise<void> => {
           <span>{{ t('auth.passwordResetDescription') }}</span>
         </div>
 
-        <label class="forgot-password-field">
+        <label class="forgot-password-field" :class="{ 'forgot-password-field--error': fieldErrors.email }">
           <span>{{ t('auth.email') }}</span>
           <div class="forgot-password-control">
             <input
+              id="forgot-password-email"
               :value="formState.email"
               autocapitalize="none"
               autocomplete="email"
+              :aria-describedby="fieldErrors.email ? 'forgot-password-email-error' : undefined"
+              :aria-invalid="fieldErrors.email ? 'true' : undefined"
               inputmode="email"
+              required
               spellcheck="false"
               type="email"
               :placeholder="EMAIL_PLACEHOLDER"
-              @input="formState.email = readInputValue($event)"
+              @input="updateField('email', $event)"
             >
             <AppIcon
               name="user"
@@ -153,6 +185,7 @@ const handleResetPassword = async (): Promise<void> => {
               class="forgot-password-icon"
             />
           </div>
+          <small v-if="fieldErrors.email" id="forgot-password-email-error" class="forgot-password-field-error" role="alert">{{ fieldErrors.email }}</small>
         </label>
 
         <button
@@ -164,16 +197,20 @@ const handleResetPassword = async (): Promise<void> => {
           {{ requestingCode ? t('auth.sending') : codeSent ? t('auth.passwordResetResendCode') : t('auth.passwordResetSendCode') }}
         </button>
 
-        <label class="forgot-password-field">
+        <label class="forgot-password-field" :class="{ 'forgot-password-field--error': fieldErrors.code }">
           <span>{{ t('auth.emailOtp') }}</span>
           <div class="forgot-password-control">
             <input
+              id="forgot-password-code"
               :value="formState.code"
               autocomplete="one-time-code"
+              :aria-describedby="fieldErrors.code ? 'forgot-password-code-error' : undefined"
+              :aria-invalid="fieldErrors.code ? 'true' : undefined"
               inputmode="numeric"
+              required
               type="text"
               :placeholder="t('auth.emailOtpPlaceholder')"
-              @input="formState.code = readInputValue($event)"
+              @input="updateField('code', $event)"
             >
             <AppIcon
               name="shield"
@@ -181,17 +218,23 @@ const handleResetPassword = async (): Promise<void> => {
               class="forgot-password-icon"
             />
           </div>
+          <small v-if="fieldErrors.code" id="forgot-password-code-error" class="forgot-password-field-error" role="alert">{{ fieldErrors.code }}</small>
         </label>
 
-        <label class="forgot-password-field">
+        <label class="forgot-password-field" :class="{ 'forgot-password-field--error': fieldErrors.password }">
           <span>{{ t('auth.passwordResetNewPassword') }}</span>
           <div class="forgot-password-control">
             <input
+              id="forgot-password-new-password"
               :value="formState.password"
               autocomplete="new-password"
+              :aria-describedby="fieldErrors.password ? 'forgot-password-new-password-error' : undefined"
+              :aria-invalid="fieldErrors.password ? 'true' : undefined"
+              minlength="8"
+              required
               :type="showPassword ? 'text' : 'password'"
               :placeholder="t('auth.passwordPlaceholder')"
-              @input="formState.password = readInputValue($event)"
+              @input="updateField('password', $event)"
             >
             <button
               type="button"
@@ -205,17 +248,23 @@ const handleResetPassword = async (): Promise<void> => {
               />
             </button>
           </div>
+          <small v-if="fieldErrors.password" id="forgot-password-new-password-error" class="forgot-password-field-error" role="alert">{{ fieldErrors.password }}</small>
         </label>
 
-        <label class="forgot-password-field">
+        <label class="forgot-password-field" :class="{ 'forgot-password-field--error': fieldErrors.confirmPassword }">
           <span>{{ t('auth.passwordResetConfirmPassword') }}</span>
           <div class="forgot-password-control">
             <input
+              id="forgot-password-confirm-password"
               :value="formState.confirmPassword"
               autocomplete="new-password"
+              :aria-describedby="fieldErrors.confirmPassword ? 'forgot-password-confirm-password-error' : undefined"
+              :aria-invalid="fieldErrors.confirmPassword ? 'true' : undefined"
+              minlength="8"
+              required
               :type="showConfirmPassword ? 'text' : 'password'"
               :placeholder="t('auth.passwordResetConfirmPlaceholder')"
-              @input="formState.confirmPassword = readInputValue($event)"
+              @input="updateField('confirmPassword', $event)"
             >
             <button
               type="button"
@@ -229,12 +278,13 @@ const handleResetPassword = async (): Promise<void> => {
               />
             </button>
           </div>
+          <small v-if="fieldErrors.confirmPassword" id="forgot-password-confirm-password-error" class="forgot-password-field-error" role="alert">{{ fieldErrors.confirmPassword }}</small>
         </label>
 
         <button
           class="forgot-password-submit"
           type="submit"
-          :disabled="resettingPassword || !canSubmit"
+          :disabled="resettingPassword"
         >
           {{ resettingPassword ? t('auth.loading') : t('auth.passwordResetSubmit') }}
         </button>
@@ -337,6 +387,13 @@ const handleResetPassword = async (): Promise<void> => {
   text-transform: uppercase;
 }
 
+.forgot-password-field > span::after {
+  margin-left: 4px;
+  color: rgb(var(--color-primary));
+  content: '*';
+  font-weight: 700;
+}
+
 .forgot-password-control {
   position: relative;
   min-width: 0;
@@ -358,6 +415,17 @@ const handleResetPassword = async (): Promise<void> => {
 .forgot-password-control input:focus {
   border-color: rgb(var(--color-primary));
   box-shadow: 0 0 0 1px rgb(var(--color-primary) / 0.16);
+}
+
+.forgot-password-field--error .forgot-password-control input {
+  border-color: rgb(var(--color-danger));
+  box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.14);
+}
+
+.forgot-password-field-error {
+  color: rgb(var(--color-danger));
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .forgot-password-icon,

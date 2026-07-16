@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router';
 import { fetchStaffRewardAds, renewStaffRewardAd, updateStaffRewardAd } from '@/httpapis/wallet';
 import type { StaffRewardAdResponse, StaffRewardAdType } from '@/model/wallet';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate } from '@/utils/format';
 import { formatAjoPoints } from '@/utils/wallet';
 
@@ -22,6 +23,7 @@ import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
 
 const router = useRouter();
+const preferenceStore = usePreferenceStore();
 const adTypeFilter = ref<StaffRewardAdType | ''>('');
 
 // 1. 查詢廣告列表
@@ -98,7 +100,7 @@ const formatAdType = (ad: StaffRewardAdResponse): string => {
 
 // 5. 格式化積分
 const formatPoints = (value: number): string =>
-  formatAjoPoints(value, t('common.brand.pointsName'), 'zh-HK');
+  formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 
 // 6. 跳轉廣告編輯頁
 const editRewardAd = async (ad: StaffRewardAdResponse): Promise<void> => {
@@ -165,7 +167,7 @@ const submitRenewal = async (): Promise<void> => {
           name="plus-square"
           :size="16"
         />
-        新增廣告
+        {{ t('marketplace.management.walletAdNewAction') }}
       </button>
     </header>
 
@@ -274,7 +276,7 @@ const submitRenewal = async (): Promise<void> => {
                 <span class="management-status-pill">{{ formatAdStatus(ad) }}</span>
               </td>
               <td>{{ t('marketplace.management.walletAdWatchCountValue', { count: ad.watch_count }) }}</td>
-              <td>{{ formatDate(ad.updated_at) }}</td>
+              <td>{{ formatDate(ad.updated_at, preferenceStore.locale) }}</td>
               <td class="management-table-actions">
                 <div class="management-action-group">
                   <button

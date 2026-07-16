@@ -33,6 +33,7 @@ type OTPProvider interface {
 // 2. StorageProvider creates upload targets for media assets.
 type StorageProvider interface {
 	PresignUpload(ctx context.Context, input PresignUploadInput) (*PresignUploadResult, error)
+	PresignDownload(ctx context.Context, objectKey string, expires time.Duration) (string, error)
 	PutObject(ctx context.Context, input PutObjectInput) (*StorageObjectInfo, error)
 	HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error)
 	DeleteObject(ctx context.Context, objectKey string) error
@@ -76,6 +77,14 @@ const homeEngMediaObjectPrefix = "ajo_living/eng/home-carousel/"
 const loginBagMediaObjectPrefix = "ajo_living/login_bag/"
 const advertisementImageObjectPrefix = "ajo_living/advertisements/images/"
 const advertisementVideoObjectPrefix = "ajo_living/advertisements/video/"
+const agencyIndividualAvatarObjectPrefix = "ajo_living/agency_individual/avatar/"
+const agencyIndividualEAAObjectPrefix = "ajo_living/agency_individual/eaa/"
+const agencyIndividualCompanyCardObjectPrefix = "ajo_living/agency_individual/company-card/"
+const agencyIndividualWechatQRObjectPrefix = "ajo_living/agency_individual/wechat-qr/"
+const agencyCompanyLogoObjectPrefix = "ajo_living/agency_company/logo/"
+const agencyCompanyEAAObjectPrefix = "ajo_living/agency_company/eaa/"
+const agencyCompanyBusinessRegistrationObjectPrefix = "ajo_living/agency_company/business-registration/"
+const agencyCompanyCardObjectPrefix = "ajo_living/agency_company/company-card/"
 
 var errStorageObjectNotFound = errors.New("storage object not found")
 
@@ -109,13 +118,15 @@ type OSSStorageProvider struct {
 }
 
 // 12. NewOTPProvider returns the configured OTP provider.
-func NewOTPProvider(cfg *config.Config) OTPProvider {
+func NewOTPProvider(cfg *config.Config) (OTPProvider, error) {
 	provider := strings.ToLower(strings.TrimSpace(cfg.OTPProvider))
 	switch provider {
 	case "", "mock":
-		return &MockOTPProvider{}
+		return &MockOTPProvider{}, nil
+	case "aliyun_sms":
+		return newAliyunSMSOTPProvider(cfg)
 	default:
-		return &DisabledOTPProvider{name: provider}
+		return nil, fmt.Errorf("OTP provider %q is not available", provider)
 	}
 }
 
@@ -140,15 +151,25 @@ func (p *MockStorageProvider) PresignUpload(_ context.Context, input PresignUplo
 	extension := path.Ext(input.FileName)
 	objectKey := fmt.Sprintf("%s%s%s", normalizeMediaObjectPrefix(input.ObjectPrefix), strings.ToLower(utils.NewPublicID()), extension)
 	uploadURL := strings.TrimRight(p.config.StorageEndpoint, "/") + "/upload/" + url.PathEscape(objectKey)
+	headers := map[string]string{"Content-Type": input.MimeType, "X-Mock-Until": time.Now().Add(15 * time.Minute).UTC().Format(time.RFC3339)}
+	if acl := privateAgencyObjectACL(input.ObjectPrefix); acl != "" {
+		headers["x-oss-object-acl"] = acl
+	}
 
 	return &PresignUploadResult{
 		UploadURL: uploadURL,
 		ObjectKey: objectKey,
-		Headers: map[string]string{
-			"Content-Type": input.MimeType,
-			"X-Mock-Until": time.Now().Add(15 * time.Minute).UTC().Format(time.RFC3339),
-		},
+		Headers:   headers,
 	}, nil
+}
+
+// 12.1 PresignDownload returns a short-lived mock download URL.
+func (p *MockStorageProvider) PresignDownload(_ context.Context, objectKey string, expires time.Duration) (string, error) {
+	if strings.TrimSpace(objectKey) == "" || expires <= 0 {
+		return "", fmt.Errorf("invalid download presign payload")
+	}
+	baseURL := strings.TrimRight(p.config.StorageEndpoint, "/")
+	return baseURL + "/download/" + url.PathEscape(objectKey) + "?expires=" + fmt.Sprintf("%d", expires/time.Second), nil
 }
 
 // 13. PutObject accepts a mock server-side object upload.
@@ -207,6 +228,9 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 		Key:         oss.Ptr(objectKey),
 		ContentType: oss.Ptr(input.MimeType),
 	}
+	if isPrivateAgencyEvidenceObjectKey(objectKey) {
+		request.Acl = oss.ObjectACLPrivate
+	}
 	if callback := buildOSSUploadCallback(p.config, input, objectKey); callback != "" {
 		request.Callback = oss.Ptr(callback)
 	}
@@ -229,6 +253,18 @@ func (p *OSSStorageProvider) PresignUpload(ctx context.Context, input PresignUpl
 		ObjectKey: objectKey,
 		Headers:   headers,
 	}, nil
+}
+
+// 17.1 PresignDownload returns a short-lived signed GET URL for private objects.
+func (p *OSSStorageProvider) PresignDownload(ctx context.Context, objectKey string, expires time.Duration) (string, error) {
+	if strings.TrimSpace(objectKey) == "" || expires <= 0 {
+		return "", fmt.Errorf("invalid download presign payload")
+	}
+	result, err := p.client.Presign(ctx, &oss.GetObjectRequest{Bucket: oss.Ptr(p.config.StorageBucket), Key: oss.Ptr(strings.TrimSpace(objectKey))}, oss.PresignExpires(expires))
+	if err != nil {
+		return "", fmt.Errorf("presign oss download: %w", err)
+	}
+	return result.URL, nil
 }
 
 // 18. buildOSSUploadCallback returns the optional OSS upload callback payload.
@@ -315,12 +351,97 @@ func normalizeMediaObjectPrefix(prefix string) string {
 		return advertisementImageObjectPrefix
 	case "ajo_living/advertisements/video", "advertisements/video":
 		return advertisementVideoObjectPrefix
+	case "ajo_living/agency_individual/avatar", "agency_individual/avatar":
+		return agencyIndividualAvatarObjectPrefix
+	case "ajo_living/agency_individual/eaa", "agency_individual/eaa":
+		return agencyIndividualEAAObjectPrefix
+	case "ajo_living/agency_individual/company-card", "agency_individual/company-card":
+		return agencyIndividualCompanyCardObjectPrefix
+	case "ajo_living/agency_individual/wechat-qr", "agency_individual/wechat-qr":
+		return agencyIndividualWechatQRObjectPrefix
+	case "ajo_living/agency_company/logo", "agency_company/logo":
+		return agencyCompanyLogoObjectPrefix
+	case "ajo_living/agency_company/eaa", "agency_company/eaa":
+		return agencyCompanyEAAObjectPrefix
+	case "ajo_living/agency_company/business-registration", "agency_company/business-registration":
+		return agencyCompanyBusinessRegistrationObjectPrefix
+	case "ajo_living/agency_company/company-card", "agency_company/company-card":
+		return agencyCompanyCardObjectPrefix
 	default:
 		if listingPrefix, ok := normalizeListingMediaObjectPrefix(normalizedPrefix); ok {
 			return listingPrefix
 		}
 		return mediaObjectPrefix
 	}
+}
+
+// 21.1 ResolveAgencyProfileUploadPrefix resolves fixed OSS roots for agency evidence.
+func ResolveAgencyProfileUploadPrefix(purpose string) (string, bool) {
+	switch strings.TrimSpace(purpose) {
+	case "agency_individual_avatar":
+		return agencyIndividualAvatarObjectPrefix, true
+	case "agency_individual_eaa":
+		return agencyIndividualEAAObjectPrefix, true
+	case "agency_individual_company_card":
+		return agencyIndividualCompanyCardObjectPrefix, true
+	case "agency_individual_wechat_qr":
+		return agencyIndividualWechatQRObjectPrefix, true
+	case "agency_company_logo":
+		return agencyCompanyLogoObjectPrefix, true
+	case "agency_company_eaa":
+		return agencyCompanyEAAObjectPrefix, true
+	case "agency_company_business_registration":
+		return agencyCompanyBusinessRegistrationObjectPrefix, true
+	case "agency_company_company_card":
+		return agencyCompanyCardObjectPrefix, true
+	default:
+		return "", false
+	}
+}
+
+// 21.2 AgencyProfilePurposeMatchesAccount prevents restricted sessions from crossing profile roots.
+func AgencyProfilePurposeMatchesAccount(purpose string, accountType string) bool {
+	purpose = strings.TrimSpace(purpose)
+	if accountType == AccountTypeIndividualAgent {
+		return strings.HasPrefix(purpose, "agency_individual_")
+	}
+	if accountType == AccountTypeAgencyCompany {
+		return strings.HasPrefix(purpose, "agency_company_")
+	}
+	return false
+}
+
+// 21.3 IsAgencyProfileObjectKey reports whether a key belongs to an agency evidence root.
+func IsAgencyProfileObjectKey(objectKey string) bool {
+	for _, purpose := range []string{"agency_individual_avatar", "agency_individual_eaa", "agency_individual_company_card", "agency_individual_wechat_qr", "agency_company_logo", "agency_company_eaa", "agency_company_business_registration", "agency_company_company_card"} {
+		prefix, _ := ResolveAgencyProfileUploadPrefix(purpose)
+		if strings.HasPrefix(strings.TrimSpace(objectKey), prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// 21.4 isPrivateAgencyEvidenceObjectKey identifies documents that must never be public-read.
+func isPrivateAgencyEvidenceObjectKey(objectKey string) bool {
+	cleaned := strings.TrimSpace(objectKey)
+	return strings.HasPrefix(cleaned, agencyIndividualEAAObjectPrefix) || strings.HasPrefix(cleaned, agencyCompanyEAAObjectPrefix) || strings.HasPrefix(cleaned, agencyCompanyBusinessRegistrationObjectPrefix)
+}
+
+// 21.5 privateAgencyObjectACL returns the mock header value for evidence roots.
+func privateAgencyObjectACL(objectPrefix string) string {
+	if isPrivateAgencyEvidenceObjectKey(normalizeMediaObjectPrefix(objectPrefix)) {
+		return "private"
+	}
+	return ""
+}
+
+// 21.6 agencyProfileAssetPrefixes returns semantic roots for one profile type.
+func agencyProfileAssetPrefixes(profileType string) map[string]string {
+	if profileType == AgencyProfileTypeIndividual {
+		return map[string]string{"avatar": agencyIndividualAvatarObjectPrefix, "eaa": agencyIndividualEAAObjectPrefix, "company_card": agencyIndividualCompanyCardObjectPrefix, "wechat_qr": agencyIndividualWechatQRObjectPrefix}
+	}
+	return map[string]string{"logo": agencyCompanyLogoObjectPrefix, "eaa": agencyCompanyEAAObjectPrefix, "business_registration": agencyCompanyBusinessRegistrationObjectPrefix, "company_card": agencyCompanyCardObjectPrefix}
 }
 
 // 22. normalizeListingMediaObjectPrefix keeps listing uploads under one listing.

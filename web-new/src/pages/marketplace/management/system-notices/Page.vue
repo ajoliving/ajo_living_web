@@ -66,7 +66,7 @@ const resolveErrorMessage = (error: unknown): string =>
     <header class="management-list-header">
       <div>
         <p class="management-list-kicker">
-          Staff
+          {{ t('marketplace.management.staffKicker') }}
         </p>
         <h1>{{ t('marketplace.management.systemNotices') }}</h1>
         <p>{{ t('marketplace.management.systemNoticesDescription') }}</p>

@@ -7,6 +7,7 @@
 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import { useSessionStore } from '@/stores/session';
@@ -17,6 +18,8 @@ import {
   fetchMemberIsmartManagementFees,
   fetchMemberIsmartBuildingNotices,
   fetchMemberIsmartOtherFees,
+  fetchMemberPosBuildings,
+  fetchPosBuildings,
   generateMemberIsmartDoorQRCode,
   openMemberIsmartDoor,
   type ICCTVCameraSummary,
@@ -31,6 +34,7 @@ import {
   type IsmartOtherFeeRow,
   type IsmartRecentAccessGroup,
 } from '@/httpapis/building';
+import type { PosBuilding } from '@/model/community';
 import {
   fetchPOSIntegrationTransactionsByDate,
   fetchPOSIntegrationTransactionsByUnit,
@@ -41,6 +45,15 @@ import type {
   POSIntegrationPaymentTransaction,
   POSIntegrationUnpaidInvoice,
 } from '@/model/payments';
+import {
+  buildBuildingNameMap,
+  indexedBuildingName,
+  memberCommunityName,
+  posBuildingID,
+  posBuildingName,
+  preferredMemberBuildingID,
+  usableBuildingName,
+} from './composables/building-display';
 
 // 1. 型別定義
 type AffairsTab =
@@ -61,6 +74,11 @@ interface NavItem {
   target: AffairsTab;
   label: string;
   needsApi?: boolean;
+}
+
+interface SelectOption {
+  value: string;
+  label: string;
 }
 
 interface NoticeRow {
@@ -147,6 +165,7 @@ interface OwnerPaymentRecordRow {
 
 // 2. 會員狀態
 const sessionStore = useSessionStore();
+const { t, locale } = useI18n();
 
 // 2.1 建立日期查詢預設值
 const formatDateInputValue = (date: Date): string => {
@@ -163,11 +182,56 @@ const currentMonthStart = (): string => {
 
 const currentDateValue = (): string => formatDateInputValue(new Date());
 
+// 2.2 按目前語系格式化日期、數字及金額
+const displayLocale = computed(() => (locale.value === 'en' ? 'en-HK' : 'zh-HK'));
+const translateMessage = (key: string): string => (key ? t(key) : '');
+
+const formatLocaleNumber = (value: number): string =>
+  new Intl.NumberFormat(displayLocale.value).format(value);
+
+const parseDisplayDate = (value: unknown): { date: Date; hasTime: boolean } | null => {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === '-') return null;
+  const match = raw.match(
+    /^(\d{4})[-/.年](\d{1,2})(?:[-/.月](\d{1,2}))?日?(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3] ?? 1);
+  const hour = Number(match[4] ?? 0);
+  const minute = Number(match[5] ?? 0);
+  const second = Number(match[6] ?? 0);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(date.getTime())) return null;
+  return { date, hasTime: Boolean(match[4]) };
+};
+
+const formatLocaleDateValue = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+  const parsed = parseDisplayDate(raw);
+  if (!parsed) return raw;
+  return new Intl.DateTimeFormat(displayLocale.value, parsed.hasTime
+    ? { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { year: 'numeric', month: 'short', day: 'numeric' }).format(parsed.date);
+};
+
+const formatLocaleMonthValue = (value: unknown): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+  const parsed = parseDisplayDate(raw);
+  if (!parsed) return raw;
+  return new Intl.DateTimeFormat(displayLocale.value, { year: 'numeric', month: 'short' }).format(parsed.date);
+};
+
 // 3. 主面板與子面板狀態
 const activeTab = ref<AffairsTab>('affairs-notices');
 const buildingInfoLoading = ref(false);
 const buildingInfoError = ref('');
 const selectedBuildingID = ref('');
+const buildingDirectory = ref<PosBuilding[]>([]);
 const ismartBuildingProfile = ref<IsmartBuildingInfoResponse | null>(null);
 const financeSubTab = ref<FinanceSubTab>('management-overview');
 const financeReceivableLoading = ref(false);
@@ -209,7 +273,7 @@ const expandedICCTVCameraIDs = ref<string[]>([]);
 const affairsMode = ref<AffairsMode>('repair');
 const affairsStep = ref(1);
 const expandedRecord = ref<number | null>(null);
-const selectedFeedbackBuilding = ref('協和大廈');
+const selectedFeedbackBuilding = ref('harmony');
 const repairCategory = ref('');
 const repairSubcategory = ref('');
 const feedbackCategory = ref('');
@@ -219,19 +283,27 @@ const feedbackContent = ref('');
 const mediaFileName = ref('');
 
 // 5. 左側導航項目
-const navItems: NavItem[] = [
-  { target: 'affairs-notices', label: '最新通告' },
-  { target: 'affairs-building', label: '大廈資料' },
-  { target: 'affairs-finance', label: '大廈財務' },
-  { target: 'affairs-owner-account', label: '業戶帳目' },
-  { target: 'affairs-forms', label: '申請表格' },
-  { target: 'affairs-feedback', label: '意見提供/維修報修', needsApi: true },
-  { target: 'affairs-access', label: '智能門禁' },
-  { target: 'affairs-icctv', label: '視像監控' },
-];
+const navItems = computed<NavItem[]>(() => [
+  { target: 'affairs-notices', label: t('building.nav.notices') },
+  { target: 'affairs-building', label: t('building.nav.building') },
+  { target: 'affairs-finance', label: t('building.nav.finance') },
+  { target: 'affairs-owner-account', label: t('building.nav.ownerAccount') },
+  { target: 'affairs-forms', label: t('building.nav.forms') },
+  { target: 'affairs-feedback', label: t('building.nav.feedback'), needsApi: true },
+  { target: 'affairs-access', label: t('building.nav.access') },
+  { target: 'affairs-icctv', label: t('building.nav.icctv') },
+]);
 
 // 6. 最新通告資料
 const rawNotices = computed<IsmartBuildingNotice[]>(() => ismartNoticeProfile.value?.result ?? []);
+const memberBoundCommunityName = computed(() => memberCommunityName(sessionStore.me?.primary_community, locale.value));
+const buildingNameMap = computed(() => buildBuildingNameMap(
+  buildingDirectory.value,
+  sessionStore.me?.primary_community,
+  locale.value,
+));
+const resolveIndexedBuildingName = (buildingID: string): string =>
+  indexedBuildingName(buildingNameMap.value, String(buildingID ?? '').trim());
 const noticeBuildingOptions = computed<string[]>(() => {
   const options = [
     ...(ismartNoticeProfile.value?.building_options ?? []),
@@ -246,16 +318,18 @@ const noticeBuildingOptions = computed<string[]>(() => {
 
 const noticeBuildingLabel = (buildingID: string): string => {
   const id = String(buildingID ?? '').trim();
-  if (!id) return '未選擇大廈';
-  if (id === selectedBuildingID.value && buildingName.value !== '-') {
-    return `${buildingName.value}（${id}）`;
+  if (!id) return t('building.notices.noBuildingSelected');
+  const name = resolveIndexedBuildingName(id)
+    || (id === selectedBuildingID.value && buildingName.value !== '-' ? buildingName.value : '');
+  if (name) {
+    return t('building.notices.buildingWithId', { building: name, id });
   }
-  return id;
+  return t('building.common.buildingCodeLabel', { id });
 };
 
 const currentNoticeBuildingText = computed(() => {
   const buildingID = selectedNoticeBuildingID.value || ismartNoticeProfile.value?.selected_building_id || selectedBuildingID.value;
-  return buildingID ? noticeBuildingLabel(buildingID) : '未選擇大廈';
+  return buildingID ? noticeBuildingLabel(buildingID) : t('building.notices.noBuildingSelected');
 });
 
 const notices = computed<NoticeRow[]>(() =>
@@ -267,18 +341,20 @@ const notices = computed<NoticeRow[]>(() =>
       code,
       title: textValue(item.mess_title),
       type: textValue(item.mess_type),
-      publishDate: textValue(item.mess_date),
-      expireDate: textValue(item.mess_down),
+      publishDate: formatLocaleDateValue(item.mess_date),
+      expireDate: formatLocaleDateValue(item.mess_down),
       fileUrl: String(item.mess_file ?? '').trim(),
     };
   }),
 );
 
 const noticeEmptyText = computed(() => {
-  if (noticeLoading.value) return '通告載入中。';
-  if (noticeError.value) return noticeError.value;
-  if (!selectedNoticeBuildingID.value && noticeBuildingOptions.value.length === 0) return '目前未有可選大廈。';
-  return '目前未有有效通告。';
+  if (noticeLoading.value) return t('building.notices.loadingEmpty');
+  if (noticeError.value) return translateMessage(noticeError.value);
+  if (!selectedNoticeBuildingID.value && noticeBuildingOptions.value.length === 0) {
+    return t('building.notices.noAvailableBuilding');
+  }
+  return t('building.notices.empty');
 });
 
 // 7. 大廈資料
@@ -292,8 +368,8 @@ const fileRows = (rows: IsmartBuildingDocument[] | undefined): BuildingFileRow[]
   (rows ?? []).map((item, index) => ({
     key: String(item.id ?? `${item.title ?? 'file'}-${index}`),
     title: textValue(item.title),
-    date: textValue(item.file_date),
-    month: textValue(item.file_month),
+    date: formatLocaleDateValue(item.file_date),
+    month: formatLocaleMonthValue(item.file_month),
     url: String(item.file_url ?? '').trim(),
   }));
 
@@ -348,7 +424,40 @@ const normalizeMapEmbedURL = (value: string | null | undefined): string => {
 
 const currentBuilding = computed(() => ismartBuildingProfile.value?.building ?? {});
 const currentBuildingInfo = computed(() => ismartBuildingProfile.value?.building_info ?? {});
-const buildingName = computed(() => textValue(currentBuilding.value.buildname_chi || currentBuilding.value.buildname || selectedBuildingID.value));
+const hasPendingResidenceBinding = computed(() => sessionStore.me?.residence_binding_status === 'pending');
+const hasLinkedBuilding = computed(() => {
+  const ismartMessage = sessionStore.me?.ismart_msg;
+  const permissionBuildingIDs = [
+    ...(ismartMessage?.building ?? []),
+    ...(ismartMessage?.staff_building_permissions ?? []),
+    ...(ismartMessage?.client_building_permissions ?? []),
+  ];
+  const profileBuildingIDs = [
+    selectedBuildingID.value,
+    selectedNoticeBuildingID.value,
+    ismartBuildingProfile.value?.selected_building_id,
+    ismartBuildingProfile.value?.building?.building_id,
+    ismartNoticeProfile.value?.selected_building_id,
+    ismartAccessProfile.value?.selected_building_id,
+    icctvProfile.value?.selected_building_id,
+  ];
+
+  return sessionStore.me?.residence_binding_status === 'approved'
+    || [...permissionBuildingIDs, ...profileBuildingIDs].some((buildingID) => String(buildingID ?? '').trim().length > 0);
+});
+const buildingName = computed(() => {
+  const buildingID = String(currentBuilding.value.building_id || selectedBuildingID.value || '').trim();
+  const upstreamName = usableBuildingName(
+    locale.value === 'en'
+      ? currentBuilding.value.buildname || currentBuilding.value.buildname_chi
+      : currentBuilding.value.buildname_chi || currentBuilding.value.buildname,
+    buildingID,
+  );
+  const profileName = preferredMemberBuildingID(sessionStore.me) === buildingID
+    ? memberBoundCommunityName.value
+    : '';
+  return textValue(upstreamName || resolveIndexedBuildingName(buildingID) || profileName);
+});
 const organizationName = computed(() => textValue(currentBuildingInfo.value.owners_corporation_name));
 const buildingForms = computed(() => fileRows(ismartBuildingProfile.value?.documents?.forms));
 const buildingInfoFiles = computed(() => fileRows(ismartBuildingProfile.value?.documents?.building_info_files));
@@ -373,56 +482,68 @@ const buildingMapEmbedURL = computed(() => normalizeMapEmbedURL(currentBuildingI
 const buildingFileCount = computed(() => buildingForms.value.length + buildingInfoFiles.value.length + floorPlans.value.length);
 const financeDocumentCount = computed(() => financialReports.value.length + auditReports.value.length);
 const buildingStatusText = computed(() => {
-  if (buildingInfoLoading.value) return '載入中';
-  if (buildingInfoError.value) return '未能載入';
-  return ismartBuildingProfile.value ? '已有資料記錄' : '未有資料記錄';
+  if (buildingInfoLoading.value) return t('building.profile.status.loading');
+  if (buildingInfoError.value) return t('building.profile.status.loadFailed');
+  return ismartBuildingProfile.value
+    ? t('building.profile.status.hasData')
+    : t('building.profile.status.noData');
 });
 const buildingStatusDetail = computed(() => {
-  if (buildingInfoLoading.value) return '正在讀取已綁定大廈資料';
-  if (buildingInfoError.value) return buildingInfoError.value;
-  return ismartBuildingProfile.value ? '資料由 iSmart 同步顯示' : '目前未有可顯示的大廈資料';
+  if (buildingInfoLoading.value) return t('building.profile.status.loadingDetail');
+  if (buildingInfoError.value) return translateMessage(buildingInfoError.value);
+  return ismartBuildingProfile.value
+    ? t('building.profile.status.syncedDetail')
+    : t('building.profile.status.noDataDetail');
 });
 const buildingStatusClass = computed(() => (buildingInfoError.value ? 'warn' : 'good'));
 
 const buildingFields = computed<BuildingField[]>(() => [
-  { label: '落成年份', value: textValue(currentBuildingInfo.value.year_built) },
-  { label: '樓層總數', value: textValue(currentBuildingInfo.value.total_floor) },
-  { label: '單位總數', value: textValue(currentBuildingInfo.value.total_unit) },
-  { label: '車位總數', value: textValue(currentBuildingInfo.value.total_carpark) },
-  { label: '法團名稱', value: textValue(currentBuildingInfo.value.owners_corporation_name) },
-  { label: '管理處電話', value: textValue(currentBuildingInfo.value.management_office_phone) },
-  { label: '管理公司名稱', value: textValue(currentBuildingInfo.value.management_company_name) },
-  { label: '管理公司電話', value: textValue(currentBuildingInfo.value.management_company_phone) },
-  { label: '管理公司電郵', value: textValue(currentBuildingInfo.value.management_company_email) },
-  { label: '管理公司傳真', value: textValue(currentBuildingInfo.value.management_company_fax) },
-  { label: '民政事務處電話', value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
-  { label: '資料來源', value: ismartBuildingProfile.value ? 'iSmart 基本資料' : '-' },
+  { label: t('building.profile.fields.yearBuilt'), value: textValue(currentBuildingInfo.value.year_built) },
+  { label: t('building.profile.fields.totalFloors'), value: textValue(currentBuildingInfo.value.total_floor) },
+  { label: t('building.profile.fields.totalUnits'), value: textValue(currentBuildingInfo.value.total_unit) },
+  { label: t('building.profile.fields.totalCarparks'), value: textValue(currentBuildingInfo.value.total_carpark) },
+  { label: t('building.profile.fields.ownersCorporation'), value: textValue(currentBuildingInfo.value.owners_corporation_name) },
+  { label: t('building.profile.fields.managementOfficePhone'), value: textValue(currentBuildingInfo.value.management_office_phone) },
+  { label: t('building.profile.fields.managementCompany'), value: textValue(currentBuildingInfo.value.management_company_name) },
+  { label: t('building.profile.fields.managementCompanyPhone'), value: textValue(currentBuildingInfo.value.management_company_phone) },
+  { label: t('building.profile.fields.managementCompanyEmail'), value: textValue(currentBuildingInfo.value.management_company_email) },
+  { label: t('building.profile.fields.managementCompanyFax'), value: textValue(currentBuildingInfo.value.management_company_fax) },
+  { label: t('building.profile.fields.homeAffairsPhone'), value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
+  {
+    label: t('building.profile.fields.dataSource'),
+    value: ismartBuildingProfile.value ? t('building.profile.fields.dataSourceValue') : '-',
+  },
 ]);
 
 const managementOverviewFields = computed<BuildingField[]>(() => [
-  { label: '大廈名稱', value: buildingName.value },
-  { label: '大廈編號', value: textValue(currentBuilding.value.building_id || selectedBuildingID.value) },
-  { label: '大廈類型', value: textValue(currentBuilding.value.building_type) },
-  { label: '區域', value: textValue(currentBuilding.value.area) },
-  { label: '地區', value: textValue(currentBuilding.value.district) },
-  { label: '街道', value: textValue(currentBuilding.value.street) },
-  { label: '街號', value: textValue(currentBuilding.value.street_no) },
-  { label: '座數', value: textValue(currentBuilding.value.block || currentBuilding.value.court) },
-  { label: '法團名稱', value: textValue(currentBuildingInfo.value.owners_corporation_name) },
-  { label: '管理處電話', value: textValue(currentBuildingInfo.value.management_office_phone) },
-  { label: '管理公司名稱', value: textValue(currentBuildingInfo.value.management_company_name) },
-  { label: '管理公司電話', value: textValue(currentBuildingInfo.value.management_company_phone) },
-  { label: '管理公司電郵', value: textValue(currentBuildingInfo.value.management_company_email) },
-  { label: '管理公司傳真', value: textValue(currentBuildingInfo.value.management_company_fax) },
-  { label: '民政事務處電話', value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
-  { label: '文件總數', value: `${financeDocumentCount.value} 份` },
+  { label: t('building.profile.fields.buildingName'), value: buildingName.value },
+  { label: t('building.profile.fields.buildingId'), value: textValue(currentBuilding.value.building_id || selectedBuildingID.value) },
+  { label: t('building.profile.fields.buildingType'), value: textValue(currentBuilding.value.building_type) },
+  { label: t('building.profile.fields.area'), value: textValue(currentBuilding.value.area) },
+  { label: t('building.profile.fields.district'), value: textValue(currentBuilding.value.district) },
+  { label: t('building.profile.fields.street'), value: textValue(currentBuilding.value.street) },
+  { label: t('building.profile.fields.streetNumber'), value: textValue(currentBuilding.value.street_no) },
+  { label: t('building.profile.fields.block'), value: textValue(currentBuilding.value.block || currentBuilding.value.court) },
+  { label: t('building.profile.fields.ownersCorporation'), value: textValue(currentBuildingInfo.value.owners_corporation_name) },
+  { label: t('building.profile.fields.managementOfficePhone'), value: textValue(currentBuildingInfo.value.management_office_phone) },
+  { label: t('building.profile.fields.managementCompany'), value: textValue(currentBuildingInfo.value.management_company_name) },
+  { label: t('building.profile.fields.managementCompanyPhone'), value: textValue(currentBuildingInfo.value.management_company_phone) },
+  { label: t('building.profile.fields.managementCompanyEmail'), value: textValue(currentBuildingInfo.value.management_company_email) },
+  { label: t('building.profile.fields.managementCompanyFax'), value: textValue(currentBuildingInfo.value.management_company_fax) },
+  { label: t('building.profile.fields.homeAffairsPhone'), value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
+  {
+    label: t('building.profile.fields.documentTotal'),
+    value: t('building.common.fileCount', { count: formatLocaleNumber(financeDocumentCount.value) }),
+  },
 ]);
 
 const financeLoading = computed(() => buildingInfoLoading.value || financeReceivableLoading.value);
 const financeReceivableStatusText = computed(() => {
-  if (financeReceivableLoading.value) return '載入中';
-  if (financeReceivableError.value) return '部分資料未能載入';
-  return financeReceivableLoaded.value ? '已同步' : '未載入';
+  if (financeReceivableLoading.value) return t('building.finance.status.loading');
+  if (financeReceivableError.value) return t('building.finance.status.partialFailure');
+  return financeReceivableLoaded.value
+    ? t('building.finance.status.synced')
+    : t('building.finance.status.notLoaded');
 });
 const managementFeePreviewRows = computed(() => managementFeeRows.value.slice(0, 10));
 const otherFeePreviewRows = computed(() => otherFeeRows.value.slice(0, 10));
@@ -441,28 +562,52 @@ const managementFeeColumns = computed(() => {
   return [...unitColumns, ...otherColumns];
 });
 const managementFeeColumnSpan = computed(() => Math.max(managementFeeColumns.value.length, 1));
+const financeColumnTranslationKeys: Record<string, string> = {
+  '單位': 'building.finance.columns.unit',
+  flat_code: 'building.finance.columns.unit',
+  unit_id: 'building.finance.columns.unit',
+  invoice_no: 'building.finance.columns.invoiceNumber',
+  item_id: 'building.finance.columns.item',
+  trs_to: 'building.finance.columns.term',
+  trs_val: 'building.finance.columns.amount',
+  remark: 'building.finance.columns.remark',
+};
+const financeColumnLabel = (column: string): string => {
+  const translationKey = financeColumnTranslationKeys[column];
+  return translationKey ? t(translationKey) : column;
+};
 const otherFeeTotal = computed(() =>
   otherFeeRows.value.reduce((sum, item) => sum + ownerAmountValue(item.trs_val), 0),
 );
 const financeReceivableFields = computed<BuildingField[]>(() => [
-  { label: '管理費應收列數', value: `${managementFeeRows.value.length} 項` },
-  { label: '其他費用項目', value: `${otherFeeRows.value.length} 項` },
-  { label: '其他費用合計', value: formatOwnerHKD(otherFeeTotal.value) },
-  { label: '應收資料狀態', value: financeReceivableStatusText.value },
+  {
+    label: t('building.finance.fields.managementRows'),
+    value: t('building.common.itemCount', { count: formatLocaleNumber(managementFeeRows.value.length) }),
+  },
+  {
+    label: t('building.finance.fields.otherItems'),
+    value: t('building.common.itemCount', { count: formatLocaleNumber(otherFeeRows.value.length) }),
+  },
+  { label: t('building.finance.fields.otherTotal'), value: formatOwnerHKD(otherFeeTotal.value) },
+  { label: t('building.finance.fields.receivableStatus'), value: financeReceivableStatusText.value },
 ]);
 const managementFeeEmptyText = computed(() => {
-  if (financeReceivableLoading.value) return '正在讀取管理費應收資料。';
-  if (financeReceivableError.value && managementFeeRows.value.length === 0) return financeReceivableError.value;
-  return '目前未有管理費應收資料。';
+  if (financeReceivableLoading.value) return t('building.finance.managementLoading');
+  if (financeReceivableError.value && managementFeeRows.value.length === 0) {
+    return translateMessage(financeReceivableError.value);
+  }
+  return t('building.finance.managementEmpty');
 });
 const otherFeeEmptyText = computed(() => {
-  if (financeReceivableLoading.value) return '正在讀取其他費用資料。';
-  if (financeReceivableError.value && otherFeeRows.value.length === 0) return financeReceivableError.value;
-  return '目前未有其他費用資料。';
+  if (financeReceivableLoading.value) return t('building.finance.otherLoading');
+  if (financeReceivableError.value && otherFeeRows.value.length === 0) {
+    return translateMessage(financeReceivableError.value);
+  }
+  return t('building.finance.otherEmpty');
 });
 const financeCellText = (value: unknown): string => {
   if (value === null || value === undefined) return '-';
-  if (typeof value === 'boolean') return value ? '是' : '否';
+  if (typeof value === 'boolean') return value ? t('building.common.yes') : t('building.common.no');
   const text = String(value).trim();
   return text || '-';
 };
@@ -477,22 +622,28 @@ const otherFeeRowKey = (row: IsmartOtherFeeRow): string =>
 
 const buildingDocCards = computed<BuildingDocCard[]>(() => [
   {
-    title: '表格',
-    desc: '住戶常用或職員常用的基本表格文件。',
-    count: `${buildingForms.value.length} 份`,
-    empty: buildingForms.value.length > 0 ? '已有可下載表格。' : '目前未有表格。',
+    title: t('building.profile.documents.forms.title'),
+    desc: t('building.profile.documents.forms.description'),
+    count: t('building.common.fileCount', { count: formatLocaleNumber(buildingForms.value.length) }),
+    empty: buildingForms.value.length > 0
+      ? t('building.profile.documents.forms.available')
+      : t('building.profile.documents.forms.empty'),
   },
   {
-    title: '大廈資訊',
-    desc: '對外發佈或內部參考的大廈介紹與基本資訊附件。',
-    count: `${buildingInfoFiles.value.length} 份`,
-    empty: buildingInfoFiles.value.length > 0 ? '已有大廈資訊文件。' : '目前未有大廈資訊。',
+    title: t('building.profile.documents.information.title'),
+    desc: t('building.profile.documents.information.description'),
+    count: t('building.common.fileCount', { count: formatLocaleNumber(buildingInfoFiles.value.length) }),
+    empty: buildingInfoFiles.value.length > 0
+      ? t('building.profile.documents.information.available')
+      : t('building.profile.documents.information.empty'),
   },
   {
-    title: '平面圖',
-    desc: '平面圖、設施位置圖及相關圖則文件。',
-    count: `${floorPlans.value.length} 份`,
-    empty: floorPlans.value.length > 0 ? '已有平面圖資料。' : '目前未有平面圖。',
+    title: t('building.profile.documents.floorPlans.title'),
+    desc: t('building.profile.documents.floorPlans.description'),
+    count: t('building.common.fileCount', { count: formatLocaleNumber(floorPlans.value.length) }),
+    empty: floorPlans.value.length > 0
+      ? t('building.profile.documents.floorPlans.available')
+      : t('building.profile.documents.floorPlans.empty'),
   },
 ]);
 
@@ -507,9 +658,11 @@ const accessRecordGroups = computed<IsmartRecentAccessGroup[]>(() => ismartAcces
 const accessAllowedDoorCount = computed(() => accessDoors.value.filter((door) => door.has_permission).length);
 const accessQRCodeDoorCount = computed(() => accessDoors.value.filter((door) => door.is_qrcode_enabled && door.qrcode?.record_id).length);
 const accessStatusText = computed(() => {
-  if (accessLoading.value) return '載入中';
-  if (accessError.value) return '未能載入';
-  return ismartAccessProfile.value ? '已連接' : '未載入';
+  if (accessLoading.value) return t('building.access.status.loading');
+  if (accessError.value) return t('building.access.status.loadFailed');
+  return ismartAccessProfile.value
+    ? t('building.access.status.connected')
+    : t('building.access.status.notLoaded');
 });
 const accessStatusClass = computed(() => (accessError.value ? 'warn' : 'good'));
 
@@ -519,7 +672,9 @@ const accessDoorNumber = (door: IsmartAccessDoor): number => Number(door.door_id
 const accessQRCodeRecordNumber = (door: IsmartAccessDoor): number => Number(door.qrcode?.record_id ?? 0);
 const accessDoorTitle = (door: IsmartAccessDoor): string => {
   const doorID = accessDoorID(door);
-  return textValue(door.title || (doorID ? `門禁 ${doorID}` : '未命名門禁'));
+  return textValue(door.title || (doorID
+    ? t('building.access.defaultDoorName', { id: doorID })
+    : t('building.access.unnamedDoor')));
 };
 const accessDoorPasswordVisible = (door: IsmartAccessDoor): boolean => visiblePasswordDoorIDs.value.includes(accessDoorID(door));
 const accessDoorPasswordText = (door: IsmartAccessDoor): string => {
@@ -527,15 +682,20 @@ const accessDoorPasswordText = (door: IsmartAccessDoor): string => {
   return accessDoorPasswordVisible(door) ? door.password.value : '******';
 };
 const accessTimeRange = (start: string | undefined, end: string | undefined): string => {
-  const startText = textValue(start);
-  const endText = textValue(end);
+  const startText = formatLocaleDateValue(start);
+  const endText = formatLocaleDateValue(end);
   if (startText === '-' && endText === '-') return '-';
-  return `${startText} 至 ${endText}`;
+  return t('building.access.timeRange', { start: startText, end: endText });
 };
 const accessOpenTypeText = (value: string | undefined): string => {
   const text = String(value ?? '').trim();
-  if (text === 'remote') return '遠端開門';
-  if (text === 'qrcode') return '二維碼';
+  if (text === 'remote') return t('building.access.remoteOpen');
+  if (text === 'qrcode') return t('building.access.qrCode');
+  return text || '-';
+};
+const accessTermText = (value: string | undefined): string => {
+  const text = String(value ?? '').trim();
+  if (text === 'dynamic') return t('building.access.dynamicQr');
   return text || '-';
 };
 const accessRecordSuccess = (record: IsmartAccessRecord): boolean => {
@@ -549,10 +709,10 @@ const accessRecentRows = computed<AccessRecordRow[]>(() =>
       return {
         key: `${group.door?.id ?? groupIndex}-${record.open_time ?? recordIndex}-${recordIndex}`,
         doorTitle: textValue(group.door?.title),
-        openTime: textValue(record.open_time),
+        openTime: formatLocaleDateValue(record.open_time),
         openType: accessOpenTypeText(record.open_type),
         status: success ? 'good' : 'warn',
-        statusText: success ? '成功' : '未成功',
+        statusText: success ? t('building.access.success') : t('building.access.unsuccessful'),
       };
     }),
   ),
@@ -561,12 +721,6 @@ const accessRecentRows = computed<AccessRecordRow[]>(() =>
 // 7.3 視像監控資料
 const icctvCameras = computed<ICCTVCameraSummary[]>(() => icctvProfile.value?.cameras ?? []);
 const icctvOrangePis = computed(() => icctvProfile.value?.orangepis ?? []);
-const memberBoundCommunityName = computed(() => String(
-  sessionStore.me?.primary_community?.name_zh
-  || sessionStore.me?.primary_community?.name_en
-  || sessionStore.me?.primary_community?.address_text
-  || '',
-).trim());
 const icctvBuildingTitle = computed(() => {
   const parts = [
     memberBoundCommunityName.value,
@@ -579,16 +733,21 @@ const icctvBuildingTitle = computed(() => {
 });
 const icctvEnabled = computed(() => icctvOrangePis.value.some((item) => item.is_active));
 const icctvStatusText = computed(() => {
-  if (icctvLoading.value) return '載入中';
-  if (icctvError.value) return '未能載入';
-  return icctvEnabled.value ? '已啟用' : '未啟用';
+  if (icctvLoading.value) return t('building.icctv.statusText.loading');
+  if (icctvError.value) return t('building.icctv.statusText.loadFailed');
+  return icctvEnabled.value
+    ? t('building.icctv.statusText.enabled')
+    : t('building.icctv.statusText.disabled');
 });
 const icctvCameraName = (camera: ICCTVCameraSummary, index: number): string => {
   const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
-  return `鏡頭 ${match?.[1] ?? index + 1}`;
+  return t('building.icctv.cameraName', { number: match?.[1] ?? formatLocaleNumber(index + 1) });
 };
-const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is_active && camera.url ? '可查看' : '不可查看');
-const icctvCameraFrameTitle = (camera: ICCTVCameraSummary, index: number): string => `${icctvCameraName(camera, index)} 即時監控`;
+const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is_active && camera.url
+  ? t('building.icctv.available')
+  : t('building.icctv.unavailable'));
+const icctvCameraFrameTitle = (camera: ICCTVCameraSummary, index: number): string =>
+  t('building.icctv.cameraFrameTitle', { camera: icctvCameraName(camera, index) });
 const isICCTVCameraExpanded = (cameraID: string): boolean => expandedICCTVCameraIDs.value.includes(cameraID);
 
 // 8. 大廈財務子面板
@@ -637,7 +796,12 @@ const ownerAmountValue = (value: unknown): number => {
 };
 
 const formatOwnerHKD = (value: number): string =>
-  `HK$${value.toLocaleString('en-HK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  new Intl.NumberFormat(displayLocale.value, {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 
 const readOwnerPaymentText = (row: Partial<Record<string, unknown>>, keys: string[]): string => {
   for (const key of keys) {
@@ -676,7 +840,7 @@ const ownerUnitContext = computed<OwnerUnitContext>(() => {
 const ownerHasBoundUnit = computed(() => ownerBoundUnitIDs.value.length > 0 && ownerUnitContext.value.unitID !== '');
 const ownerBoundUnitLabel = computed(() => {
   if (!ownerHasBoundUnit.value) {
-    return '尚未綁定單位';
+    return t('building.ownerAccount.unboundUnit');
   }
 
   const context = ownerUnitContext.value;
@@ -691,10 +855,10 @@ const ownerUnpaidTotal = computed(() =>
   ownerUnpaidInvoices.value.reduce((sum, item) => sum + ownerAmountValue(item.net_amount), 0),
 );
 const ownerUnpaidEmptyText = computed(() => {
-  if (ownerUnpaidLoading.value) return '正在讀取未繳賬單。';
-  if (ownerUnpaidError.value) return ownerUnpaidError.value;
-  if (!ownerHasBoundUnit.value) return '請先於會員中心儲存綁定單位。';
-  return '目前未有未繳賬單。';
+  if (ownerUnpaidLoading.value) return t('building.ownerAccount.unpaidLoading');
+  if (ownerUnpaidError.value) return translateMessage(ownerUnpaidError.value);
+  if (!ownerHasBoundUnit.value) return t('building.ownerAccount.saveBoundUnitFirst');
+  return t('building.ownerAccount.unpaidEmpty');
 });
 
 const ownerUnpaidInvoiceKey = (invoice: POSIntegrationUnpaidInvoice, index: number): string =>
@@ -710,10 +874,12 @@ const ownerUnpaidInvoiceKey = (invoice: POSIntegrationUnpaidInvoice, index: numb
 const ownerPaymentStatusText = (value: string): string => {
   const status = value.trim();
   if (!status) return '-';
-  if (status === 'confirmed' || status === 'validated_by_ismart' || status === 'payment_captured') return '已確認';
-  if (status === 'in_cashier') return '收銀台中';
-  if (status === 'pending_validation') return '待核對';
-  if (status === 'init') return '待處理';
+  if (status === 'confirmed' || status === 'validated_by_ismart' || status === 'payment_captured') {
+    return t('building.ownerAccount.statuses.confirmed');
+  }
+  if (status === 'in_cashier') return t('building.ownerAccount.statuses.inCashier');
+  if (status === 'pending_validation') return t('building.ownerAccount.statuses.pendingValidation');
+  if (status === 'init') return t('building.ownerAccount.statuses.init');
   return status;
 };
 
@@ -770,8 +936,8 @@ const ownerPaymentRecordRows = computed<OwnerPaymentRecordRow[]>(() =>
         key: `${paymentID}-${receiptID}-${recordIndex}-${detailIndex}`,
         receiptID,
         paymentID,
-        inputTime: ownerTextValue(record.input_time),
-        tranTime: ownerTextValue(record.tran_time),
+        inputTime: formatLocaleDateValue(record.input_time),
+        tranTime: formatLocaleDateValue(record.tran_time),
         unit: [floor, unit].filter(Boolean).join(' / ') || ownerBoundUnitLabel.value,
         item: ownerTextValue(readOwnerPaymentText(detailRow, ['item_id', 'item_name', 'name'])),
         term: ownerTextValue(readOwnerPaymentText(detailRow, ['term', 'trs_to', 'period'])),
@@ -788,11 +954,11 @@ const ownerPaymentRecordTotal = computed(() =>
   ownerPaymentRecordRows.value.reduce((sum, row) => sum + row.amount, 0),
 );
 const ownerRecordsEmptyText = computed(() => {
-  if (ownerRecordsLoading.value) return '正在讀取繳費記錄。';
-  if (ownerRecordsError.value) return ownerRecordsError.value;
-  if (!ownerHasBoundUnit.value) return '請先於會員中心儲存綁定單位。';
-  if (ownerRecordsDateSearched.value) return '日期範圍內未有繳費記錄。';
-  return '目前未有繳費記錄。';
+  if (ownerRecordsLoading.value) return t('building.ownerAccount.recordsLoading');
+  if (ownerRecordsError.value) return translateMessage(ownerRecordsError.value);
+  if (!ownerHasBoundUnit.value) return t('building.ownerAccount.saveBoundUnitFirst');
+  if (ownerRecordsDateSearched.value) return t('building.ownerAccount.recordsDateEmpty');
+  return t('building.ownerAccount.recordsEmpty');
 });
 
 // 9. 申請表格 mock 資料
@@ -800,88 +966,114 @@ const selectedFormOrg = computed(() => organizationName.value);
 const selectedFormBuilding = computed(() => buildingName.value);
 const forms = computed(() => buildingForms.value);
 
-// 10. 意見提供 mock 資料
-const feedbackBuildings = [
-  '仁英大廈', '協和大廈', '華興大廈(269號)', '華興大廈(271號)',
-  '豐富大廈', '得運大廈', '天富大廈', '新萬利大廈', '萬高大廈B座',
-  '時安大廈', '東昇樓', '華園', '榮森工業第二大廈', '康睦庭園第二座',
-  '南昌苑', '東南大樓(77號)', '東南大樓(75號)', '測試1大廈',
-  '利來大廈', '仁文大廈', '榮昇閣', '仁利大廈', '麗麗大廈',
-  '玉桂園(1座)', '玉桂園(2座)', '玉桂園(3座)', '玉桂園(4座)',
-  '玉桂園(5座)', '玉桂園(6座)', '玉桂園(7座)', '玉桂園(8座)',
-  '玉桂園(9座)', '玉桂園(10座)', '玉桂園(11座)',
+// 10. 意見提供示例資料
+const feedbackBuildingKeys = [
+  'yanYing', 'harmony', 'wahHing269', 'wahHing271', 'rich', 'luck', 'tinFu',
+  'newManLee', 'manKoB', 'siOn', 'tungSing', 'wahYuen', 'wingSumIndustrial2',
+  'hongMukGarden2', 'namCheongCourt', 'tungNam77', 'tungNam75', 'test1', 'leeLoi',
+  'yanMan', 'wingSingCourt', 'yanLee', 'laiLai', 'jadeCinnamon1', 'jadeCinnamon2',
+  'jadeCinnamon3', 'jadeCinnamon4', 'jadeCinnamon5', 'jadeCinnamon6', 'jadeCinnamon7',
+  'jadeCinnamon8', 'jadeCinnamon9', 'jadeCinnamon10', 'jadeCinnamon11',
 ];
+const feedbackBuildings = computed<SelectOption[]>(() => feedbackBuildingKeys.map((value) => ({
+  value,
+  label: t(`building.feedback.buildings.${value}`),
+})));
+const selectedFeedbackBuildingLabel = computed(() =>
+  feedbackBuildings.value.find((item) => item.value === selectedFeedbackBuilding.value)?.label
+  || t('building.common.emptySelection'));
 
 const repairCategoryMap: Record<string, string[]> = {
-  '電力與燈光': ['走廊照明', '大堂照明', '電制故障', '其他燈光'],
-  '結構與門窗': ['門鎖', '窗戶', '牆身', '天花板', '其他結構'],
-  '環境與衛生': ['清潔', '積水', '蟲鼠', '其他衛生'],
-  '升降機': ['升降機故障', '升降機清潔', '其他升降機'],
-  '水務': ['食水', '沖廁水', '漏水', '其他水務'],
-  '其他維修': ['其他'],
+  electrical: ['corridorLighting', 'lobbyLighting', 'switchFault', 'otherLighting'],
+  structure: ['doorLock', 'window', 'wall', 'ceiling', 'otherStructure'],
+  environment: ['cleaning', 'standingWater', 'pests', 'otherHygiene'],
+  lift: ['fault', 'cleaning', 'other'],
+  water: ['freshWater', 'flushingWater', 'leakage', 'other'],
+  other: ['other'],
 };
 
 const feedbackCategoryMap: Record<string, string[]> = {
-  '環境與衛生': ['清潔建議', '環境改善', '其他衛生'],
-  '公共設施': ['設施建議', '設施損壞', '其他設施'],
-  '管理服務': ['管理服務建議', '職員表現', '其他管理'],
-  '系統與平台功能': ['平台功能', '系統問題', '其他系統'],
-  '其他意見': ['其他'],
+  environment: ['cleaningSuggestion', 'environmentImprovement', 'otherHygiene'],
+  facilities: ['suggestion', 'damage', 'other'],
+  management: ['serviceSuggestion', 'staffPerformance', 'other'],
+  platform: ['feature', 'issue', 'other'],
+  other: ['other'],
 };
 
-const repairCategories = Object.keys(repairCategoryMap);
-const feedbackCategories = Object.keys(feedbackCategoryMap);
-const repairSubcategories = computed(() => {
+const repairCategoryLabel = (category: string): string =>
+  category ? t(`building.feedback.categories.repair.${category}.label`) : '';
+const repairSubcategoryLabel = (category: string, subcategory: string): string =>
+  category && subcategory ? t(`building.feedback.categories.repair.${category}.${subcategory}`) : '';
+const feedbackCategoryLabel = (category: string): string =>
+  category ? t(`building.feedback.categories.feedback.${category}.label`) : '';
+const feedbackSubcategoryLabel = (category: string, subcategory: string): string =>
+  category && subcategory ? t(`building.feedback.categories.feedback.${category}.${subcategory}`) : '';
+
+const repairCategories = computed<SelectOption[]>(() => Object.keys(repairCategoryMap).map((value) => ({
+  value,
+  label: repairCategoryLabel(value),
+})));
+const feedbackCategories = computed<SelectOption[]>(() => Object.keys(feedbackCategoryMap).map((value) => ({
+  value,
+  label: feedbackCategoryLabel(value),
+})));
+const repairSubcategories = computed<SelectOption[]>(() => {
   if (!repairCategory.value) return [];
-  return repairCategoryMap[repairCategory.value] || [];
+  return (repairCategoryMap[repairCategory.value] ?? []).map((value) => ({
+    value,
+    label: repairSubcategoryLabel(repairCategory.value, value),
+  }));
 });
-const feedbackSubcategories = computed(() => {
+const feedbackSubcategories = computed<SelectOption[]>(() => {
   if (!feedbackCategory.value) return [];
-  return feedbackCategoryMap[feedbackCategory.value] || [];
+  return (feedbackCategoryMap[feedbackCategory.value] ?? []).map((value) => ({
+    value,
+    label: feedbackSubcategoryLabel(feedbackCategory.value, value),
+  }));
 });
 
-const feedbackRecords: FeedbackRecord[] = [
+const feedbackRecords = computed<FeedbackRecord[]>(() => [
   {
-    type: '維修報修',
-    building: '協和大廈',
-    subject: '公共走廊照明檢查',
-    category: '電力與燈光',
+    type: t('building.feedback.mode.repair'),
+    building: t('building.feedback.buildings.harmony'),
+    subject: t('building.feedback.records.corridorLighting.subject'),
+    category: repairCategoryLabel('electrical'),
     status: 'warn',
-    statusText: '處理中',
-    updatedAt: '今天 10:20',
-    content: '12樓公共走廊近升降機位置照明不穩，晚間出現閃爍，請安排檢查燈泡及電制。',
+    statusText: t('building.feedback.records.processing'),
+    updatedAt: t('building.feedback.records.todayAt', { time: '10:20' }),
+    content: t('building.feedback.records.corridorLighting.content'),
   },
   {
-    type: '維修報修',
-    building: '協和大廈',
-    subject: '地下門鎖檢查',
-    category: '結構與門窗',
+    type: t('building.feedback.mode.repair'),
+    building: t('building.feedback.buildings.harmony'),
+    subject: t('building.feedback.records.entranceLock.subject'),
+    category: repairCategoryLabel('structure'),
     status: '',
-    statusText: '待跟進',
-    updatedAt: '昨天 09:30',
-    content: '地下大門門鎖開合不順，住戶進出時需要多次嘗試，請安排師傅檢查。',
+    statusText: t('building.feedback.records.pending'),
+    updatedAt: t('building.feedback.records.yesterdayAt', { time: '09:30' }),
+    content: t('building.feedback.records.entranceLock.content'),
   },
   {
-    type: '意見反映',
-    building: '協和大廈',
-    subject: '大堂清潔建議',
-    category: '環境與衛生',
+    type: t('building.feedback.mode.feedback'),
+    building: t('building.feedback.buildings.harmony'),
+    subject: t('building.feedback.records.lobbyCleaning.subject'),
+    category: feedbackCategoryLabel('environment'),
     status: 'good',
-    statusText: '已完成',
-    updatedAt: '昨天 16:45',
-    content: '大堂入口雨天較易積水，建議加密清潔及放置防滑提示牌，管理處已完成跟進。',
+    statusText: t('building.feedback.records.completed'),
+    updatedAt: t('building.feedback.records.yesterdayAt', { time: '16:45' }),
+    content: t('building.feedback.records.lobbyCleaning.content'),
   },
   {
-    type: '意見反映',
-    building: '時安大廈',
-    subject: '平台功能建議',
-    category: '系統與平台功能',
+    type: t('building.feedback.mode.feedback'),
+    building: t('building.feedback.buildings.siOn'),
+    subject: t('building.feedback.records.platformFeature.subject'),
+    category: feedbackCategoryLabel('platform'),
     status: 'warn',
-    statusText: '處理中',
-    updatedAt: '2026年6月4日',
-    content: '希望日後可在平台查看管理處回覆進度及補充相片，方便住戶追蹤事項。',
+    statusText: t('building.feedback.records.processing'),
+    updatedAt: formatLocaleDateValue('2026-06-04'),
+    content: t('building.feedback.records.platformFeature.content'),
   },
-];
+]);
 
 // 12. 讀取目前會員綁定大廈資料
 const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
@@ -896,9 +1088,38 @@ const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
     }
   } catch (error) {
     console.error(error);
-    buildingInfoError.value = '大廈資料載入失敗';
+    buildingInfoError.value = 'building.profile.loadError';
+    ismartBuildingProfile.value = null;
   } finally {
     buildingInfoLoading.value = false;
+  }
+};
+
+// 12.0 讀取大廈名稱目錄
+const loadBuildingDirectory = async (): Promise<void> => {
+  try {
+    const memberBuildings = await fetchMemberPosBuildings();
+    if (!memberBuildings.some((item) => !posBuildingName(item, locale.value))) {
+      buildingDirectory.value = memberBuildings;
+      return;
+    }
+    try {
+      const publicBuildings = await fetchPosBuildings();
+      const publicBuildingMap = new Map(publicBuildings.map((item) => [posBuildingID(item), item]));
+      buildingDirectory.value = memberBuildings.map((item) =>
+        posBuildingName(item, locale.value) ? item : publicBuildingMap.get(posBuildingID(item)) ?? item,
+      );
+    } catch (publicError) {
+      console.error(publicError);
+      buildingDirectory.value = memberBuildings;
+    }
+  } catch {
+    try {
+      buildingDirectory.value = await fetchPosBuildings();
+    } catch (publicError) {
+      console.error(publicError);
+      buildingDirectory.value = [];
+    }
   }
 };
 
@@ -912,7 +1133,7 @@ const loadBuildingFinanceReceivables = async (buildingID = selectedBuildingID.va
       managementFeeRows.value = [];
       otherFeeRows.value = [];
       financeReceivableLoaded.value = true;
-      financeReceivableError.value = '未能取得大廈 ID。';
+      financeReceivableError.value = 'building.finance.missingBuildingId';
       return;
     }
 
@@ -936,9 +1157,9 @@ const loadBuildingFinanceReceivables = async (buildingID = selectedBuildingID.va
 
     financeReceivableLoaded.value = true;
     if (managementResult.status === 'rejected' && otherResult.status === 'rejected') {
-      financeReceivableError.value = '應收資料載入失敗';
+      financeReceivableError.value = 'building.finance.receivableLoadError';
     } else if (managementResult.status === 'rejected' || otherResult.status === 'rejected') {
-      financeReceivableError.value = '部分應收資料載入失敗';
+      financeReceivableError.value = 'building.finance.partialReceivableLoadError';
     }
   } finally {
     financeReceivableLoading.value = false;
@@ -964,7 +1185,7 @@ const loadBuildingNotices = async (buildingID = selectedNoticeBuildingID.value |
     }
   } catch (error) {
     console.error(error);
-    noticeError.value = '通告載入失敗';
+    noticeError.value = 'building.notices.loadError';
     ismartNoticeProfile.value = null;
   } finally {
     noticeLoading.value = false;
@@ -991,7 +1212,7 @@ const loadOwnerUnpaidInvoices = async () => {
     console.error(error);
     ownerUnpaidInvoices.value = [];
     ownerUnpaidLoaded.value = true;
-    ownerUnpaidError.value = '未繳賬單載入失敗';
+    ownerUnpaidError.value = 'building.ownerAccount.unpaidLoadError';
   } finally {
     ownerUnpaidLoading.value = false;
   }
@@ -1016,7 +1237,7 @@ const loadOwnerPaymentRecords = async () => {
     console.error(error);
     ownerPaymentRecords.value = [];
     ownerRecordsLoaded.value = true;
-    ownerRecordsError.value = '繳費記錄載入失敗';
+    ownerRecordsError.value = 'building.ownerAccount.recordsLoadError';
   } finally {
     ownerRecordsLoading.value = false;
   }
@@ -1028,19 +1249,19 @@ const searchOwnerPaymentRecordsByDate = async () => {
   if (!ownerHasBoundUnit.value) {
     ownerPaymentRecords.value = [];
     ownerRecordsLoaded.value = true;
-    ownerRecordsError.value = '請先於會員中心儲存綁定單位。';
+    ownerRecordsError.value = 'building.ownerAccount.saveBoundUnitFirst';
     return;
   }
   if (!ownerRecordFromDate.value || !ownerRecordToDate.value) {
-    ownerRecordsError.value = '請選擇起始及結束日期。';
+    ownerRecordsError.value = 'building.ownerAccount.selectDateRange';
     return;
   }
   if (ownerRecordFromDate.value > ownerRecordToDate.value) {
-    ownerRecordsError.value = '起始日期不可晚於結束日期。';
+    ownerRecordsError.value = 'building.ownerAccount.invalidDateRange';
     return;
   }
   if (!ownerUnitContext.value.buildingID) {
-    ownerRecordsError.value = '未能取得綁定單位的大廈 ID。';
+    ownerRecordsError.value = 'building.ownerAccount.missingBuildingId';
     return;
   }
 
@@ -1060,7 +1281,7 @@ const searchOwnerPaymentRecordsByDate = async () => {
     console.error(error);
     ownerPaymentRecords.value = [];
     ownerRecordsLoaded.value = true;
-    ownerRecordsError.value = '日期繳費記錄查詢失敗';
+    ownerRecordsError.value = 'building.ownerAccount.dateSearchError';
   } finally {
     ownerRecordsLoading.value = false;
   }
@@ -1122,7 +1343,7 @@ const loadBuildingAccess = async (clearMessage = true) => {
       || '';
   } catch (error) {
     console.error(error);
-    accessError.value = '門禁資料載入失敗';
+    accessError.value = 'building.access.loadError';
   } finally {
     accessLoading.value = false;
   }
@@ -1139,7 +1360,7 @@ const loadICCTV = async () => {
     expandedICCTVCameraIDs.value = [];
   } catch (error) {
     console.error(error);
-    icctvError.value = '視像監控資料載入失敗';
+    icctvError.value = 'building.icctv.loadError';
     icctvProfile.value = null;
     expandedICCTVCameraIDs.value = [];
   } finally {
@@ -1194,7 +1415,7 @@ const openAccessDoor = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const doorNumber = accessDoorNumber(door);
   if (!door.has_permission || doorNumber <= 0) return;
-  if (!window.confirm(`確認開啟「${accessDoorTitle(door)}」？`)) return;
+  if (!window.confirm(t('building.access.confirmOpen', { door: accessDoorTitle(door) }))) return;
 
   openingDoorID.value = doorID;
   accessMessage.value = '';
@@ -1204,12 +1425,14 @@ const openAccessDoor = async (door: IsmartAccessDoor) => {
       building_id: accessPayloadBuildingID(door),
       door_id: doorNumber,
     });
-    const resultMessage = result.is_success === false ? '開門指令未成功' : '已發送開門指令';
+    const resultMessage = result.is_success === false
+      ? 'building.access.openFailed'
+      : 'building.access.openSent';
     await loadBuildingAccess(false);
     accessMessage.value = resultMessage;
   } catch (error) {
     console.error(error);
-    accessError.value = '開門指令發送失敗';
+    accessError.value = 'building.access.openRequestError';
   } finally {
     openingDoorID.value = '';
   }
@@ -1231,7 +1454,7 @@ const generateAccessQRCode = async (door: IsmartAccessDoor) => {
       term: 'dynamic',
     });
     if (!result.qrcode_value) {
-      accessError.value = '二維碼內容為空';
+      accessError.value = 'building.access.qrEmptyError';
       accessQRPanel.value = null;
       return;
     }
@@ -1244,7 +1467,7 @@ const generateAccessQRCode = async (door: IsmartAccessDoor) => {
     };
   } catch (error) {
     console.error(error);
-    accessError.value = '二維碼生成失敗';
+    accessError.value = 'building.access.qrGenerateError';
   } finally {
     qrLoadingDoorID.value = '';
   }
@@ -1301,23 +1524,27 @@ const submitAffairsFeedback = () => {
 };
 
 // 27. 確認提交摘要
-const reviewMode = computed(() => (affairsMode.value === 'repair' ? '維修報修' : '意見反映'));
+const reviewMode = computed(() => (affairsMode.value === 'repair'
+  ? t('building.feedback.mode.repair')
+  : t('building.feedback.mode.feedback')));
 const reviewCategory = computed(() =>
   affairsMode.value === 'repair'
-    ? repairCategory.value || '請選擇大類'
-    : feedbackCategory.value || '請選擇大類',
+    ? repairCategoryLabel(repairCategory.value) || t('building.feedback.review.selectCategory')
+    : feedbackCategoryLabel(feedbackCategory.value) || t('building.feedback.review.selectCategory'),
 );
 const reviewSubcategory = computed(() =>
   affairsMode.value === 'repair'
-    ? repairSubcategory.value || '請選擇次分類'
-    : feedbackSubcategory.value || '請選擇次分類',
+    ? repairSubcategoryLabel(repairCategory.value, repairSubcategory.value)
+      || t('building.feedback.review.selectSubcategory')
+    : feedbackSubcategoryLabel(feedbackCategory.value, feedbackSubcategory.value)
+      || t('building.feedback.review.selectSubcategory'),
 );
 const reviewContent = computed(() =>
   affairsMode.value === 'repair'
-    ? repairContent.value || '請填寫內容'
-    : feedbackContent.value || '請填寫內容',
+    ? repairContent.value || t('building.feedback.review.enterContent')
+    : feedbackContent.value || t('building.feedback.review.enterContent'),
 );
-const reviewMedia = computed(() => mediaFileName.value || '未選擇檔案');
+const reviewMedia = computed(() => mediaFileName.value || t('building.feedback.review.noFile'));
 
 // 28. 重新整理通告
 const refreshNotices = () => {
@@ -1348,9 +1575,26 @@ const goNoticeDetail = (notice: NoticeRow) => {
   window.open(notice.fileUrl, '_blank', 'noopener');
 };
 
+// 31. 以最新會員綁定初始化我的大廈
+const initializeBuildingPage = async (): Promise<void> => {
+  try {
+    await sessionStore.loadCurrentUser();
+  } catch (error) {
+    console.error(error);
+  }
+
+  const buildingID = preferredMemberBuildingID(sessionStore.me);
+  selectedBuildingID.value = buildingID;
+  selectedNoticeBuildingID.value = buildingID;
+  await loadBuildingDirectory();
+  await Promise.all([
+    loadBuildingInfo(buildingID),
+    loadBuildingNotices(buildingID),
+  ]);
+};
+
 onMounted(() => {
-  void loadBuildingInfo();
-  void loadBuildingNotices();
+  void initializeBuildingPage();
 });
 </script>
 
@@ -1362,7 +1606,7 @@ onMounted(() => {
     <div class="work-shell">
       <!-- 左側大廈導航 -->
       <aside class="work-sidebar">
-        <h1>我的大廈</h1>
+        <h1>{{ t('building.pageTitle') }}</h1>
         <nav class="work-nav">
           <button
             v-for="item in navItems"
@@ -1373,13 +1617,44 @@ onMounted(() => {
             @click="switchTab(item.target)"
           >
             <span class="work-nav-label">{{ item.label }}</span>
-            <span v-if="item.needsApi" class="work-nav-note">（需要接口）</span>
+            <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
           </button>
         </nav>
       </aside>
 
       <!-- 右側主內容 -->
       <main class="work-main">
+        <section
+          v-if="hasPendingResidenceBinding"
+          class="work-card building-binding-empty"
+        >
+          <div>
+            <div class="work-card-title">{{ t('building.binding.pendingTitle') }}</div>
+            <p class="work-card-sub">{{ t('building.binding.pendingDescription') }}</p>
+          </div>
+          <RouterLink
+            class="work-action"
+            to="/account/profile?panel=property-binding"
+          >
+            {{ t('building.binding.pendingAction') }}
+          </RouterLink>
+        </section>
+        <section
+          v-else-if="!hasLinkedBuilding && !buildingInfoLoading && !noticeLoading"
+          class="work-card building-binding-empty"
+        >
+          <div>
+            <div class="work-card-title">{{ t('building.binding.title') }}</div>
+            <p class="work-card-sub">{{ t('building.binding.description') }}</p>
+          </div>
+          <RouterLink
+            class="work-action"
+            to="/account/profile?panel=property-binding"
+          >
+            {{ t('building.binding.action') }}
+          </RouterLink>
+        </section>
+
         <!-- 最新通告 -->
         <div
           v-show="activeTab === 'affairs-notices'"
@@ -1389,14 +1664,14 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Building Notices</div>
-              <h2 class="work-title">最新通告</h2>
+              <div class="work-kicker">{{ t('building.notices.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.notices.title') }}</h2>
             </div>
           </section>
           <section class="notice-admin-grid">
             <div class="notice-admin-card">
-              <h3>大廈選擇</h3>
-              <label class="notice-admin-label">選擇大廈:</label>
+              <h3>{{ t('building.notices.buildingSelection') }}</h3>
+              <label class="notice-admin-label">{{ t('building.notices.selectBuilding') }}</label>
               <select
                 v-model="selectedNoticeBuildingID"
                 class="notice-select"
@@ -1407,7 +1682,7 @@ onMounted(() => {
                   v-if="noticeBuildingOptions.length === 0"
                   value=""
                 >
-                  未有可選大廈
+                  {{ t('building.notices.noBuildingOption') }}
                 </option>
                 <option
                   v-for="b in noticeBuildingOptions"
@@ -1421,25 +1696,25 @@ onMounted(() => {
           </section>
           <section class="work-card">
             <div class="notice-current">
-              <span>目前顯示: {{ currentNoticeBuildingText }}</span>
+              <span>{{ t('building.notices.currentDisplay', { building: currentNoticeBuildingText }) }}</span>
               <button
                 type="button"
                 class="notice-action-btn"
                 :disabled="noticeLoading"
                 @click="refreshNotices"
               >
-                {{ noticeLoading ? '載入中' : '重新整理' }}
+                {{ noticeLoading ? t('building.common.loading') : t('building.common.refresh') }}
               </button>
             </div>
             <table class="work-table notice-table">
               <thead>
                 <tr>
-                  <th>編號</th>
-                  <th>標題</th>
-                  <th>類型</th>
-                  <th>發佈日期</th>
-                  <th>下架日期</th>
-                  <th>操作</th>
+                  <th>{{ t('building.notices.code') }}</th>
+                  <th>{{ t('building.common.title') }}</th>
+                  <th>{{ t('building.common.type') }}</th>
+                  <th>{{ t('building.notices.publishDate') }}</th>
+                  <th>{{ t('building.notices.expireDate') }}</th>
+                  <th>{{ t('building.common.action') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1469,7 +1744,7 @@ onMounted(() => {
                           :disabled="!n.fileUrl"
                           @click="goNoticeDetail(n)"
                         >
-                          查閱
+                          {{ t('building.common.view') }}
                         </button>
                       </div>
                     </td>
@@ -1489,9 +1764,9 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Building Profile</div>
-              <h2 class="work-title">大廈基本資料</h2>
-              <p class="work-desc">查看已綁定大廈的基本資料、常用表格、大廈資訊及平面圖。</p>
+              <div class="work-kicker">{{ t('building.profile.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.profile.title') }}</h2>
+              <p class="work-desc">{{ t('building.profile.description') }}</p>
             </div>
             <button
               type="button"
@@ -1499,22 +1774,22 @@ onMounted(() => {
               :disabled="buildingInfoLoading"
               @click="loadBuildingInfo()"
             >
-              重新整理
+              {{ t('building.common.refresh') }}
             </button>
           </section>
           <section class="building-summary-grid">
             <div class="work-card">
-              <div class="work-card-title">機構</div>
+              <div class="work-card-title">{{ t('building.profile.organization') }}</div>
               <div class="work-card-sub">{{ organizationName }}</div>
             </div>
             <div class="work-card">
-              <div class="work-card-title">目前大廈</div>
+              <div class="work-card-title">{{ t('building.profile.currentBuilding') }}</div>
               <div class="work-stat-label">{{ buildingName }}</div>
-              <div class="work-stat">{{ buildingFileCount }}</div>
-              <div class="work-stat-label">基本資料文件</div>
+              <div class="work-stat">{{ formatLocaleNumber(buildingFileCount) }}</div>
+              <div class="work-stat-label">{{ t('building.profile.basicDocumentCount') }}</div>
             </div>
             <div class="work-card">
-              <div class="work-card-title">資料狀態</div>
+              <div class="work-card-title">{{ t('building.profile.dataStatus') }}</div>
               <div class="work-row">
                 <div>
                   <strong>{{ buildingStatusText }}</strong>
@@ -1524,17 +1799,21 @@ onMounted(() => {
                   class="work-chip"
                   :class="buildingStatusClass"
                 >
-                  {{ buildingInfoLoading ? '載入中' : buildingInfoError ? '異常' : '正常' }}
+                  {{ buildingInfoLoading
+                    ? t('building.common.loading')
+                    : buildingInfoError
+                      ? t('building.common.abnormal')
+                      : t('building.common.normal') }}
                 </span>
               </div>
             </div>
             <div class="work-card">
-              <div class="work-card-title">大廈</div>
+              <div class="work-card-title">{{ t('building.profile.building') }}</div>
               <div class="work-card-sub">{{ buildingName }}</div>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">基本欄位</div>
+            <div class="work-card-title">{{ t('building.profile.basicFields') }}</div>
             <div class="building-field-grid">
               <div
                 v-for="f in buildingFields"
@@ -1547,11 +1826,12 @@ onMounted(() => {
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">地圖網址</div>
+            <div class="work-card-title">{{ t('building.profile.mapUrl') }}</div>
             <iframe
               v-if="buildingMapEmbedURL"
               class="building-map-frame"
               :src="buildingMapEmbedURL"
+              :title="t('building.profile.mapFrameTitle', { building: buildingName })"
               allowfullscreen
               loading="lazy"
               referrerpolicy="no-referrer-when-downgrade"
@@ -1566,18 +1846,18 @@ onMounted(() => {
                 target="_blank"
                 rel="noopener"
               >
-                查看地圖
+                {{ t('building.profile.viewMap') }}
               </a>
             </div>
             <div
               v-else
               class="building-empty-row"
             >
-              未提供地圖網址。
+              {{ t('building.profile.noMap') }}
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">基本文件區</div>
+            <div class="work-card-title">{{ t('building.profile.basicDocuments') }}</div>
             <div class="building-doc-grid">
               <div
                 v-for="d in buildingDocCards"
@@ -1593,7 +1873,7 @@ onMounted(() => {
           </section>
           <section class="work-card">
             <div class="building-section-head">
-              <div class="work-card-title">表格</div>
+              <div class="work-card-title">{{ t('building.profile.documents.forms.title') }}</div>
             </div>
             <table class="work-table building-file-table">
               <colgroup>
@@ -1604,10 +1884,10 @@ onMounted(() => {
               </colgroup>
               <thead>
                 <tr>
-                  <th>標題</th>
-                  <th>日期</th>
-                  <th>月份</th>
-                  <th>下載</th>
+                  <th>{{ t('building.common.title') }}</th>
+                  <th>{{ t('building.common.date') }}</th>
+                  <th>{{ t('building.common.month') }}</th>
+                  <th>{{ t('building.common.download') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1625,7 +1905,7 @@ onMounted(() => {
                       :href="file.url"
                       target="_blank"
                       rel="noopener"
-                    >查看</a>
+                    >{{ t('building.common.view') }}</a>
                     <span v-else>-</span>
                   </td>
                 </tr>
@@ -1634,7 +1914,7 @@ onMounted(() => {
                     class="building-empty-row"
                     colspan="4"
                   >
-                    目前未有表格。
+                    {{ t('building.profile.documents.forms.empty') }}
                   </td>
                 </tr>
               </tbody>
@@ -1642,7 +1922,7 @@ onMounted(() => {
           </section>
           <section class="work-card">
             <div class="building-section-head">
-              <div class="work-card-title">大廈資訊</div>
+              <div class="work-card-title">{{ t('building.profile.documents.information.title') }}</div>
             </div>
             <table class="work-table building-file-table">
               <colgroup>
@@ -1653,10 +1933,10 @@ onMounted(() => {
               </colgroup>
               <thead>
                 <tr>
-                  <th>標題</th>
-                  <th>日期</th>
-                  <th>月份</th>
-                  <th>下載</th>
+                  <th>{{ t('building.common.title') }}</th>
+                  <th>{{ t('building.common.date') }}</th>
+                  <th>{{ t('building.common.month') }}</th>
+                  <th>{{ t('building.common.download') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1674,7 +1954,7 @@ onMounted(() => {
                       :href="file.url"
                       target="_blank"
                       rel="noopener"
-                    >查看</a>
+                    >{{ t('building.common.view') }}</a>
                     <span v-else>-</span>
                   </td>
                 </tr>
@@ -1683,7 +1963,7 @@ onMounted(() => {
                     class="building-empty-row"
                     colspan="4"
                   >
-                    目前未有大廈資訊。
+                    {{ t('building.profile.documents.information.empty') }}
                   </td>
                 </tr>
               </tbody>
@@ -1691,7 +1971,7 @@ onMounted(() => {
           </section>
           <section class="work-card">
             <div class="building-section-head">
-              <div class="work-card-title">平面圖</div>
+              <div class="work-card-title">{{ t('building.profile.documents.floorPlans.title') }}</div>
             </div>
             <table class="work-table building-file-table">
               <colgroup>
@@ -1702,10 +1982,10 @@ onMounted(() => {
               </colgroup>
               <thead>
                 <tr>
-                  <th>標題</th>
-                  <th>日期</th>
-                  <th>月份</th>
-                  <th>下載</th>
+                  <th>{{ t('building.common.title') }}</th>
+                  <th>{{ t('building.common.date') }}</th>
+                  <th>{{ t('building.common.month') }}</th>
+                  <th>{{ t('building.common.download') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1723,7 +2003,7 @@ onMounted(() => {
                       :href="p.url"
                       target="_blank"
                       rel="noopener"
-                    >查看</a>
+                    >{{ t('building.common.view') }}</a>
                     <span v-else>-</span>
                   </td>
                 </tr>
@@ -1732,7 +2012,7 @@ onMounted(() => {
                     class="building-empty-row"
                     colspan="4"
                   >
-                    目前未有平面圖。
+                    {{ t('building.profile.documents.floorPlans.empty') }}
                   </td>
                 </tr>
               </tbody>
@@ -1749,9 +2029,9 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Building Finance</div>
-              <h2 class="work-title">大廈財務</h2>
-              <p class="work-desc">按大廈查看管理處資料、財務報表及核數報表。</p>
+              <div class="work-kicker">{{ t('building.finance.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.finance.title') }}</h2>
+              <p class="work-desc">{{ t('building.finance.description') }}</p>
             </div>
             <button
               type="button"
@@ -1759,7 +2039,7 @@ onMounted(() => {
               :disabled="financeLoading"
               @click="loadBuildingFinance"
             >
-              {{ financeLoading ? '載入中' : '重新整理' }}
+              {{ financeLoading ? t('building.common.loading') : t('building.common.refresh') }}
             </button>
           </section>
           <section class="work-card acct-card-wrap">
@@ -1770,7 +2050,7 @@ onMounted(() => {
                 :class="{ on: financeSubTab === 'management-overview' }"
                 @click="switchFinanceSub('management-overview')"
               >
-                管理處總覽
+                {{ t('building.finance.tabs.overview') }}
               </button>
               <button
                 type="button"
@@ -1778,7 +2058,7 @@ onMounted(() => {
                 :class="{ on: financeSubTab === 'financial-reports' }"
                 @click="switchFinanceSub('financial-reports')"
               >
-                財務報表（{{ financialReports.length }}）
+                {{ t('building.finance.tabs.financialReports', { count: formatLocaleNumber(financialReports.length) }) }}
               </button>
               <button
                 type="button"
@@ -1786,7 +2066,7 @@ onMounted(() => {
                 :class="{ on: financeSubTab === 'audit-reports' }"
                 @click="switchFinanceSub('audit-reports')"
               >
-                核數報表（{{ auditReports.length }}）
+                {{ t('building.finance.tabs.auditReports', { count: formatLocaleNumber(auditReports.length) }) }}
               </button>
             </div>
             <div class="acct-body">
@@ -1796,15 +2076,15 @@ onMounted(() => {
                 class="acct-subpanel"
                 :class="{ on: financeSubTab === 'management-overview' }"
               >
-                <div class="acct-note">資料由 iSmart 大廈資料、文件及應收接口同步。</div>
+                <div class="acct-note">{{ t('building.finance.syncNote') }}</div>
                 <div
                   v-if="buildingInfoError"
                   class="acct-banner warn"
                 >
-                  {{ buildingInfoError }}
+                  {{ translateMessage(buildingInfoError) }}
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">管理處總覽</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.tabs.overview') }}</div>
                   <div class="acct-total">{{ buildingName }}</div>
                 </div>
                 <div class="building-field-grid">
@@ -1821,7 +2101,7 @@ onMounted(() => {
                   v-if="financeReceivableError"
                   class="acct-banner warn"
                 >
-                  {{ financeReceivableError }}
+                  {{ translateMessage(financeReceivableError) }}
                 </div>
                 <div class="finance-summary-grid">
                   <div
@@ -1834,8 +2114,10 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">管理費應收摘要</div>
-                  <div class="acct-total">{{ managementFeeRows.length }} 項</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.managementReceivable') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.itemCount', { count: formatLocaleNumber(managementFeeRows.length) }) }}
+                  </div>
                 </div>
                 <div class="acct-table-wrap">
                   <table class="acct-table finance-management-table">
@@ -1845,9 +2127,9 @@ onMounted(() => {
                           v-for="column in managementFeeColumns"
                           :key="column"
                         >
-                          {{ column }}
+                          {{ financeColumnLabel(column) }}
                         </th>
-                        <th v-if="managementFeeColumns.length === 0">資料</th>
+                        <th v-if="managementFeeColumns.length === 0">{{ t('building.finance.data') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1874,19 +2156,21 @@ onMounted(() => {
                   </table>
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">其他費用應收</div>
-                  <div class="acct-total">合計 {{ formatOwnerHKD(otherFeeTotal) }}</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.otherReceivable') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.total', { amount: formatOwnerHKD(otherFeeTotal) }) }}
+                  </div>
                 </div>
                 <div class="acct-table-wrap">
                   <table class="acct-table finance-other-fee-table">
                     <thead>
                       <tr>
-                        <th>賬單號</th>
-                        <th>單位</th>
-                        <th>項目</th>
-                        <th>賬期</th>
-                        <th>金額</th>
-                        <th>備註</th>
+                        <th>{{ t('building.finance.columns.invoiceNumber') }}</th>
+                        <th>{{ t('building.finance.columns.unit') }}</th>
+                        <th>{{ t('building.finance.columns.item') }}</th>
+                        <th>{{ t('building.finance.columns.term') }}</th>
+                        <th>{{ t('building.finance.columns.amount') }}</th>
+                        <th>{{ t('building.finance.columns.remark') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1924,11 +2208,13 @@ onMounted(() => {
                   v-if="buildingInfoError"
                   class="acct-banner warn"
                 >
-                  {{ buildingInfoError }}
+                  {{ translateMessage(buildingInfoError) }}
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">財務報表</div>
-                  <div class="acct-total">{{ financialReports.length }} 份</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.financialReports') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.fileCount', { count: formatLocaleNumber(financialReports.length) }) }}
+                  </div>
                 </div>
                 <table class="work-table building-file-table">
                   <colgroup>
@@ -1939,10 +2225,10 @@ onMounted(() => {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>標題</th>
-                      <th>日期</th>
-                      <th>月份</th>
-                      <th>下載</th>
+                      <th>{{ t('building.common.title') }}</th>
+                      <th>{{ t('building.common.date') }}</th>
+                      <th>{{ t('building.common.month') }}</th>
+                      <th>{{ t('building.common.download') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1960,7 +2246,7 @@ onMounted(() => {
                           :href="report.url"
                           target="_blank"
                           rel="noopener"
-                        >查看</a>
+                        >{{ t('building.common.view') }}</a>
                         <span v-else>-</span>
                       </td>
                     </tr>
@@ -1969,8 +2255,8 @@ onMounted(() => {
                         class="building-empty-row"
                         colspan="4"
                       >
-                        <span v-if="buildingInfoLoading">正在讀取財務報表。</span>
-                        <span v-else>目前未有財務報表。</span>
+                        <span v-if="buildingInfoLoading">{{ t('building.finance.financialReportsLoading') }}</span>
+                        <span v-else>{{ t('building.finance.financialReportsEmpty') }}</span>
                       </td>
                     </tr>
                   </tbody>
@@ -1987,11 +2273,13 @@ onMounted(() => {
                   v-if="buildingInfoError"
                   class="acct-banner warn"
                 >
-                  {{ buildingInfoError }}
+                  {{ translateMessage(buildingInfoError) }}
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">核數報表</div>
-                  <div class="acct-total">{{ auditReports.length }} 份</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.auditReports') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.fileCount', { count: formatLocaleNumber(auditReports.length) }) }}
+                  </div>
                 </div>
                 <table class="work-table building-file-table">
                   <colgroup>
@@ -2002,10 +2290,10 @@ onMounted(() => {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>標題</th>
-                      <th>日期</th>
-                      <th>月份</th>
-                      <th>下載</th>
+                      <th>{{ t('building.common.title') }}</th>
+                      <th>{{ t('building.common.date') }}</th>
+                      <th>{{ t('building.common.month') }}</th>
+                      <th>{{ t('building.common.download') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2023,7 +2311,7 @@ onMounted(() => {
                           :href="report.url"
                           target="_blank"
                           rel="noopener"
-                        >查看</a>
+                        >{{ t('building.common.view') }}</a>
                         <span v-else>-</span>
                       </td>
                     </tr>
@@ -2032,8 +2320,8 @@ onMounted(() => {
                         class="building-empty-row"
                         colspan="4"
                       >
-                        <span v-if="buildingInfoLoading">正在讀取核數報表。</span>
-                        <span v-else>目前未有核數報表。</span>
+                        <span v-if="buildingInfoLoading">{{ t('building.finance.auditReportsLoading') }}</span>
+                        <span v-else>{{ t('building.finance.auditReportsEmpty') }}</span>
                       </td>
                     </tr>
                   </tbody>
@@ -2052,9 +2340,9 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Owner Account</div>
-              <h2 class="work-title">業戶帳目</h2>
-              <p class="work-desc">按已綁定單位查看未繳賬單及繳費記錄。</p>
+              <div class="work-kicker">{{ t('building.ownerAccount.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.ownerAccount.title') }}</h2>
+              <p class="work-desc">{{ t('building.ownerAccount.description') }}</p>
             </div>
             <button
               type="button"
@@ -2062,7 +2350,7 @@ onMounted(() => {
               :disabled="ownerAccountLoading"
               @click="refreshOwnerAccount"
             >
-              {{ ownerAccountLoading ? '載入中' : '重新整理' }}
+              {{ ownerAccountLoading ? t('building.common.loading') : t('building.common.refresh') }}
             </button>
           </section>
           <section class="work-card acct-card-wrap">
@@ -2073,7 +2361,7 @@ onMounted(() => {
                 :class="{ on: ownerAccountTab === 'owner-unpaid' }"
                 @click="switchOwnerAccountTab('owner-unpaid')"
               >
-                未繳費賬單列表
+                {{ t('building.ownerAccount.unpaidTab') }}
               </button>
               <button
                 type="button"
@@ -2081,7 +2369,7 @@ onMounted(() => {
                 :class="{ on: ownerAccountTab === 'owner-records' }"
                 @click="switchOwnerAccountTab('owner-records')"
               >
-                繳費記錄
+                {{ t('building.ownerAccount.recordsTab') }}
               </button>
             </div>
             <div class="acct-body">
@@ -2091,29 +2379,31 @@ onMounted(() => {
                 :class="{ on: ownerAccountTab === 'owner-unpaid' }"
               >
                 <div class="acct-note">
-                  目前綁定單位：{{ ownerBoundUnitLabel }}
+                  {{ t('building.ownerAccount.boundUnit', { unit: ownerBoundUnitLabel }) }}
                 </div>
                 <div
                   v-if="ownerUnpaidError"
                   class="acct-banner warn"
                 >
-                  {{ ownerUnpaidError }}
+                  {{ translateMessage(ownerUnpaidError) }}
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">未繳費賬單列表</div>
-                  <div class="acct-total">合計 {{ formatOwnerHKD(ownerUnpaidTotal) }}</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.ownerAccount.unpaidTab') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.total', { amount: formatOwnerHKD(ownerUnpaidTotal) }) }}
+                  </div>
                 </div>
                 <div class="acct-table-wrap">
                   <table class="acct-table owner-account-table">
                     <thead>
                       <tr>
-                        <th>賬單號</th>
-                        <th>單位</th>
-                        <th>項目</th>
-                        <th>賬期</th>
-                        <th>賬單日期</th>
-                        <th>金額</th>
-                        <th>備註</th>
+                        <th>{{ t('building.ownerAccount.invoiceNumber') }}</th>
+                        <th>{{ t('building.common.unit') }}</th>
+                        <th>{{ t('building.common.item') }}</th>
+                        <th>{{ t('building.common.term') }}</th>
+                        <th>{{ t('building.ownerAccount.invoiceDate') }}</th>
+                        <th>{{ t('building.common.amount') }}</th>
+                        <th>{{ t('building.common.remark') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2125,7 +2415,7 @@ onMounted(() => {
                         <td>{{ ownerTextValue(invoice.flat_code) }}</td>
                         <td>{{ ownerTextValue(invoice.item_id) }}</td>
                         <td>{{ ownerTextValue(invoice.trs_to) }}</td>
-                        <td>{{ ownerTextValue(invoice.bill_dt) }}</td>
+                        <td>{{ formatLocaleDateValue(invoice.bill_dt) }}</td>
                         <td class="acct-due">{{ formatOwnerHKD(ownerAmountValue(invoice.net_amount)) }}</td>
                         <td>{{ ownerTextValue(invoice.remark) }}</td>
                       </tr>
@@ -2148,31 +2438,31 @@ onMounted(() => {
                 :class="{ on: ownerAccountTab === 'owner-records' }"
               >
                 <div class="acct-note">
-                  目前綁定單位：{{ ownerBoundUnitLabel }}
+                  {{ t('building.ownerAccount.boundUnit', { unit: ownerBoundUnitLabel }) }}
                 </div>
                 <form
                   class="acct-filter-row"
                   @submit.prevent="searchOwnerPaymentRecordsByDate"
                 >
                   <label class="acct-filter-field">
-                    <span>起始日期</span>
+                    <span>{{ t('building.ownerAccount.fromDate') }}</span>
                     <input
                       v-model="ownerRecordFromDate"
                       type="date"
                     >
                   </label>
                   <label class="acct-filter-field">
-                    <span>結束日期</span>
+                    <span>{{ t('building.ownerAccount.toDate') }}</span>
                     <input
                       v-model="ownerRecordToDate"
                       type="date"
                     >
                   </label>
                   <label class="acct-filter-field">
-                    <span>日期類型</span>
+                    <span>{{ t('building.ownerAccount.dateType') }}</span>
                     <select v-model="ownerRecordDateType">
-                      <option value="input_date">輸入日期</option>
-                      <option value="tran_date">交易日期</option>
+                      <option value="input_date">{{ t('building.ownerAccount.inputDate') }}</option>
+                      <option value="tran_date">{{ t('building.ownerAccount.transactionDate') }}</option>
                     </select>
                   </label>
                   <button
@@ -2180,7 +2470,7 @@ onMounted(() => {
                     class="notice-action-btn"
                     :disabled="ownerRecordsLoading"
                   >
-                    {{ ownerRecordsLoading ? '查詢中' : '查詢' }}
+                    {{ ownerRecordsLoading ? t('building.ownerAccount.searching') : t('building.ownerAccount.search') }}
                   </button>
                   <button
                     type="button"
@@ -2188,34 +2478,36 @@ onMounted(() => {
                     :disabled="ownerRecordsLoading"
                     @click="resetOwnerPaymentRecordSearch"
                   >
-                    顯示全部
+                    {{ t('building.ownerAccount.showAll') }}
                   </button>
                 </form>
                 <div
                   v-if="ownerRecordsError"
                   class="acct-banner warn"
                 >
-                  {{ ownerRecordsError }}
+                  {{ translateMessage(ownerRecordsError) }}
                 </div>
                 <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">繳費記錄</div>
-                  <div class="acct-total">合計 {{ formatOwnerHKD(ownerPaymentRecordTotal) }}</div>
+                  <div class="work-card-title acct-toolbar-title">{{ t('building.ownerAccount.recordsTab') }}</div>
+                  <div class="acct-total">
+                    {{ t('building.common.total', { amount: formatOwnerHKD(ownerPaymentRecordTotal) }) }}
+                  </div>
                 </div>
                 <div class="acct-table-wrap">
                   <table class="acct-table owner-record-table">
                     <thead>
                       <tr>
-                        <th>收據號</th>
-                        <th>付款編號</th>
-                        <th>輸入時間</th>
-                        <th>交易時間</th>
-                        <th>單位</th>
-                        <th>項目</th>
-                        <th>賬期</th>
-                        <th>金額</th>
-                        <th>付款方式</th>
-                        <th>狀態</th>
-                        <th>備註</th>
+                        <th>{{ t('building.ownerAccount.receiptNumber') }}</th>
+                        <th>{{ t('building.ownerAccount.paymentNumber') }}</th>
+                        <th>{{ t('building.ownerAccount.inputTime') }}</th>
+                        <th>{{ t('building.ownerAccount.transactionTime') }}</th>
+                        <th>{{ t('building.common.unit') }}</th>
+                        <th>{{ t('building.common.item') }}</th>
+                        <th>{{ t('building.common.term') }}</th>
+                        <th>{{ t('building.common.amount') }}</th>
+                        <th>{{ t('building.ownerAccount.paymentMethod') }}</th>
+                        <th>{{ t('building.common.status') }}</th>
+                        <th>{{ t('building.common.remark') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2260,20 +2552,20 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Forms</div>
-              <h2 class="work-title">申請表格</h2>
-              <p class="work-desc">選擇大廈後查看可下載的住戶及工程申請表格。</p>
+              <div class="work-kicker">{{ t('building.forms.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.forms.title') }}</h2>
+              <p class="work-desc">{{ t('building.forms.description') }}</p>
             </div>
           </section>
           <section class="notice-admin-grid">
             <div class="notice-admin-card">
-              <h3>機構</h3>
-              <div class="notice-admin-label">目前機構</div>
+              <h3>{{ t('building.forms.organization') }}</h3>
+              <div class="notice-admin-label">{{ t('building.forms.currentOrganization') }}</div>
               <div class="notice-select building-readonly-select">{{ selectedFormOrg }}</div>
             </div>
             <div class="notice-admin-card">
-              <h3>大廈</h3>
-              <div class="notice-admin-label">目前大廈</div>
+              <h3>{{ t('building.forms.building') }}</h3>
+              <div class="notice-admin-label">{{ t('building.forms.currentBuilding') }}</div>
               <div class="notice-select building-readonly-select">{{ selectedFormBuilding }}</div>
             </div>
           </section>
@@ -2281,8 +2573,8 @@ onMounted(() => {
             <table class="work-table">
               <thead>
                 <tr>
-                  <th>標題</th>
-                  <th>查閱</th>
+                  <th>{{ t('building.common.title') }}</th>
+                  <th>{{ t('building.forms.view') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2298,7 +2590,7 @@ onMounted(() => {
                       :href="f.url"
                       target="_blank"
                       rel="noopener"
-                    >填寫表格</a>
+                    >{{ t('building.forms.fill') }}</a>
                     <span v-else>-</span>
                   </td>
                 </tr>
@@ -2307,7 +2599,7 @@ onMounted(() => {
                     class="building-empty-row"
                     colspan="2"
                   >
-                    目前未有申請表格。
+                    {{ t('building.forms.empty') }}
                   </td>
                 </tr>
               </tbody>
@@ -2324,29 +2616,29 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Feedback & Maintenance</div>
-              <h2 class="work-title">意見提供/維修報修</h2>
-              <p class="work-desc">選擇大廈及事項分類，提交後由管理處跟進。</p>
+              <div class="work-kicker">{{ t('building.feedback.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.feedback.title') }}</h2>
+              <p class="work-desc">{{ t('building.feedback.description') }}</p>
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">最近記錄</div>
+            <div class="work-card-title">{{ t('building.feedback.recentRecords') }}</div>
             <table class="work-table">
               <thead>
                 <tr>
-                  <th>類型</th>
-                  <th>大廈</th>
-                  <th>事項</th>
-                  <th>分類</th>
-                  <th>狀態</th>
-                  <th>更新時間</th>
-                  <th>操作</th>
+                  <th>{{ t('building.common.type') }}</th>
+                  <th>{{ t('building.common.building') }}</th>
+                  <th>{{ t('building.feedback.subject') }}</th>
+                  <th>{{ t('building.feedback.category') }}</th>
+                  <th>{{ t('building.common.status') }}</th>
+                  <th>{{ t('building.feedback.updatedAt') }}</th>
+                  <th>{{ t('building.common.action') }}</th>
                 </tr>
               </thead>
               <tbody>
               <template
                 v-for="(r, i) in feedbackRecords"
-                :key="i"
+                :key="`${r.type}-${r.subject}`"
               >
                 <tr>
                   <td>{{ r.type }}</td>
@@ -2366,7 +2658,7 @@ onMounted(() => {
                       class="work-mini-btn"
                       @click="toggleRecord(i)"
                     >
-                      查看內容
+                      {{ t('building.feedback.viewContent') }}
                     </button>
                   </td>
                 </tr>
@@ -2376,7 +2668,7 @@ onMounted(() => {
                 >
                   <td colspan="7">
                     <div class="affairs-record-card">
-                      <strong>內容</strong>
+                      <strong>{{ t('building.common.content') }}</strong>
                       {{ r.content }}
                     </div>
                   </td>
@@ -2387,7 +2679,7 @@ onMounted(() => {
           </section>
           <section
             class="affairs-entry-grid"
-            aria-label="意見提供與維修報修入口"
+            :aria-label="t('building.feedback.entryAria')"
           >
             <button
               type="button"
@@ -2417,8 +2709,8 @@ onMounted(() => {
                 </svg>
               </span>
               <span>
-                <strong>提交維修報修</strong>
-                <span>提交水務、電力、門窗、升降機及設施維修事項。</span>
+                <strong>{{ t('building.feedback.repairEntryTitle') }}</strong>
+                <span>{{ t('building.feedback.repairEntryDescription') }}</span>
               </span>
             </button>
             <button
@@ -2449,27 +2741,27 @@ onMounted(() => {
                 </svg>
               </span>
               <span>
-                <strong>意見反映</strong>
-                <span>提交環境、管理服務、公共設施及平台功能意見。</span>
+                <strong>{{ t('building.feedback.feedbackEntryTitle') }}</strong>
+                <span>{{ t('building.feedback.feedbackEntryDescription') }}</span>
               </span>
             </button>
           </section>
           <section class="work-card affairs-feedback-form">
-            <div class="work-card-title">選擇大廈</div>
+            <div class="work-card-title">{{ t('building.feedback.selectBuilding') }}</div>
             <div class="affairs-field">
-              <label for="affairs-building">大廈</label>
+              <label for="affairs-building">{{ t('building.common.building') }}</label>
               <select
                 id="affairs-building"
                 v-model="selectedFeedbackBuilding"
                 class="affairs-select"
               >
-                <option value="">---------</option>
+                <option value="">{{ t('building.common.emptySelection') }}</option>
                 <option
                   v-for="b in feedbackBuildings"
-                  :key="b"
-                  :value="b"
+                  :key="b.value"
+                  :value="b.value"
                 >
-                  {{ b }}
+                  {{ b.label }}
                 </option>
               </select>
             </div>
@@ -2477,31 +2769,31 @@ onMounted(() => {
           <section class="work-card affairs-guided-shell">
             <div
               class="affairs-stepper"
-              aria-label="意見及維修提交流程"
+              :aria-label="t('building.feedback.flowAria')"
             >
               <span
                 class="affairs-step-indicator"
                 :class="{ on: affairsStep === 1 }"
               >
-                <b>1</b>選擇分類
+                <b>1</b>{{ t('building.feedback.steps.category') }}
               </span>
               <span
                 class="affairs-step-indicator"
                 :class="{ on: affairsStep === 2 }"
               >
-                <b>2</b>填寫內容
+                <b>2</b>{{ t('building.feedback.steps.content') }}
               </span>
               <span
                 class="affairs-step-indicator"
                 :class="{ on: affairsStep === 3 }"
               >
-                <b>3</b>上載圖片/影片
+                <b>3</b>{{ t('building.feedback.steps.upload') }}
               </span>
               <span
                 class="affairs-step-indicator"
                 :class="{ on: affairsStep === 4 }"
               >
-                <b>4</b>確認提交
+                <b>4</b>{{ t('building.feedback.steps.confirm') }}
               </span>
             </div>
 
@@ -2510,54 +2802,54 @@ onMounted(() => {
               v-show="affairsStep === 1"
               class="affairs-guided-step"
             >
-              <div class="work-card-title">選擇分類</div>
+              <div class="work-card-title">{{ t('building.feedback.steps.category') }}</div>
               <div
                 v-if="affairsMode === 'repair'"
                 class="affairs-step-hint"
               >
-                請選擇維修大類及次分類，方便管理處安排合適人員跟進。
+                {{ t('building.feedback.repairCategoryHint') }}
               </div>
               <div
                 v-else
                 class="affairs-step-hint"
               >
-                請選擇意見大類及次分類，方便管理處按事項性質處理。
+                {{ t('building.feedback.feedbackCategoryHint') }}
               </div>
               <div
                 v-if="affairsMode === 'repair'"
                 class="affairs-field-grid"
               >
                 <div class="affairs-field">
-                  <label for="affairs-repair-category">維修大類</label>
+                  <label for="affairs-repair-category">{{ t('building.feedback.repairCategory') }}</label>
                   <select
                     id="affairs-repair-category"
                     v-model="repairCategory"
                     class="affairs-select"
                   >
-                    <option value="">---------</option>
+                    <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
                       v-for="c in repairCategories"
-                      :key="c"
-                      :value="c"
+                      :key="c.value"
+                      :value="c.value"
                     >
-                      {{ c }}
+                      {{ c.label }}
                     </option>
                   </select>
                 </div>
                 <div class="affairs-field">
-                  <label for="affairs-repair-subcategory">維修次分類</label>
+                  <label for="affairs-repair-subcategory">{{ t('building.feedback.repairSubcategory') }}</label>
                   <select
                     id="affairs-repair-subcategory"
                     v-model="repairSubcategory"
                     class="affairs-select"
                   >
-                    <option value="">---------</option>
+                    <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
                       v-for="s in repairSubcategories"
-                      :key="s"
-                      :value="s"
+                      :key="s.value"
+                      :value="s.value"
                     >
-                      {{ s }}
+                      {{ s.label }}
                     </option>
                   </select>
                 </div>
@@ -2567,36 +2859,36 @@ onMounted(() => {
                 class="affairs-field-grid"
               >
                 <div class="affairs-field">
-                  <label for="affairs-feedback-category">意見大類</label>
+                  <label for="affairs-feedback-category">{{ t('building.feedback.feedbackCategory') }}</label>
                   <select
                     id="affairs-feedback-category"
                     v-model="feedbackCategory"
                     class="affairs-select"
                   >
-                    <option value="">---------</option>
+                    <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
                       v-for="c in feedbackCategories"
-                      :key="c"
-                      :value="c"
+                      :key="c.value"
+                      :value="c.value"
                     >
-                      {{ c }}
+                      {{ c.label }}
                     </option>
                   </select>
                 </div>
                 <div class="affairs-field">
-                  <label for="affairs-feedback-subcategory">意見次分類</label>
+                  <label for="affairs-feedback-subcategory">{{ t('building.feedback.feedbackSubcategory') }}</label>
                   <select
                     id="affairs-feedback-subcategory"
                     v-model="feedbackSubcategory"
                     class="affairs-select"
                   >
-                    <option value="">---------</option>
+                    <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
                       v-for="s in feedbackSubcategories"
-                      :key="s"
-                      :value="s"
+                      :key="s.value"
+                      :value="s.value"
                     >
-                      {{ s }}
+                      {{ s.label }}
                     </option>
                   </select>
                 </div>
@@ -2608,29 +2900,29 @@ onMounted(() => {
               v-show="affairsStep === 2"
               class="affairs-guided-step"
             >
-              <div class="work-card-title">填寫內容</div>
+              <div class="work-card-title">{{ t('building.feedback.steps.content') }}</div>
               <div
                 v-if="affairsMode === 'repair'"
                 class="affairs-field"
               >
-                <label for="affairs-repair-content">內容</label>
+                <label for="affairs-repair-content">{{ t('building.common.content') }}</label>
                 <textarea
                   id="affairs-repair-content"
                   v-model="repairContent"
                   class="affairs-textarea"
-                  placeholder="請描述維修位置、故障情況及需要跟進的內容"
+                  :placeholder="t('building.feedback.repairPlaceholder')"
                 />
               </div>
               <div
                 v-else
                 class="affairs-field"
               >
-                <label for="affairs-feedback-content">內容</label>
+                <label for="affairs-feedback-content">{{ t('building.common.content') }}</label>
                 <textarea
                   id="affairs-feedback-content"
                   v-model="feedbackContent"
                   class="affairs-textarea"
-                  placeholder="請描述事項位置、情況及需要跟進的內容"
+                  :placeholder="t('building.feedback.feedbackPlaceholder')"
                 />
               </div>
             </div>
@@ -2640,17 +2932,18 @@ onMounted(() => {
               v-show="affairsStep === 3"
               class="affairs-guided-step"
             >
-              <div class="work-card-title">上載圖片/影片</div>
+              <div class="work-card-title">{{ t('building.feedback.steps.upload') }}</div>
               <div class="affairs-step-hint">
-                如有相關相片或影片，可一併提交予管理處參考。
+                {{ t('building.feedback.uploadHint') }}
               </div>
               <div class="affairs-upload-box">
-                <strong>提交圖片/影片</strong>
-                <span>支援選擇多個圖片或影片檔案，實際上載限制可按後台設定調整。</span>
+                <strong>{{ t('building.feedback.uploadTitle') }}</strong>
+                <span>{{ t('building.feedback.uploadDescription') }}</span>
                 <input
                   type="file"
                   accept="image/*,video/*"
                   multiple
+                  :aria-label="t('building.feedback.uploadTitle')"
                   @change="onMediaChange"
                 >
               </div>
@@ -2661,42 +2954,42 @@ onMounted(() => {
               v-show="affairsStep === 4"
               class="affairs-guided-step"
             >
-              <div class="work-card-title">確認提交</div>
+              <div class="work-card-title">{{ t('building.feedback.steps.confirm') }}</div>
               <div
                 v-if="affairsMode === 'repair'"
                 class="affairs-step-hint"
               >
-                請確認資料無誤。提交後由管理處安排跟進。
+                {{ t('building.feedback.repairConfirmHint') }}
               </div>
               <div
                 v-else
                 class="affairs-step-hint"
               >
-                閣下提供之意見將絕對保密。
+                {{ t('building.feedback.privacyHint') }}
               </div>
               <div class="affairs-review-list">
                 <div class="affairs-review-row">
-                  <span>類型</span>
+                  <span>{{ t('building.common.type') }}</span>
                   <strong>{{ reviewMode }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>大廈</span>
-                  <strong>{{ selectedFeedbackBuilding || '---------' }}</strong>
+                  <span>{{ t('building.common.building') }}</span>
+                  <strong>{{ selectedFeedbackBuildingLabel }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>大類</span>
+                  <span>{{ t('building.feedback.majorCategory') }}</span>
                   <strong>{{ reviewCategory }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>次分類</span>
+                  <span>{{ t('building.feedback.subcategory') }}</span>
                   <strong>{{ reviewSubcategory }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>內容</span>
+                  <span>{{ t('building.common.content') }}</span>
                   <strong>{{ reviewContent }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>附件</span>
+                  <span>{{ t('building.feedback.attachment') }}</span>
                   <strong>{{ reviewMedia }}</strong>
                 </div>
               </div>
@@ -2709,7 +3002,7 @@ onMounted(() => {
                 :disabled="affairsStep === 1"
                 @click="setAffairsStep(affairsStep - 1)"
               >
-                上一步
+                {{ t('building.feedback.previous') }}
               </button>
               <button
                 v-if="affairsStep < 4"
@@ -2717,7 +3010,7 @@ onMounted(() => {
                 class="work-action"
                 @click="nextAffairsStep"
               >
-                下一步
+                {{ t('building.feedback.next') }}
               </button>
               <button
                 v-else
@@ -2725,7 +3018,7 @@ onMounted(() => {
                 class="work-action"
                 @click="submitAffairsFeedback"
               >
-                提交
+                {{ t('building.feedback.submit') }}
               </button>
             </div>
           </section>
@@ -2740,9 +3033,9 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">Access</div>
-              <h2 class="work-title">智能門禁</h2>
-              <p class="work-desc">查看已綁定大廈的門禁權限、通行密碼、二維碼及最近開門記錄。</p>
+              <div class="work-kicker">{{ t('building.access.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.access.title') }}</h2>
+              <p class="work-desc">{{ t('building.access.description') }}</p>
             </div>
             <button
               type="button"
@@ -2750,33 +3043,35 @@ onMounted(() => {
               :disabled="accessLoading"
               @click="loadBuildingAccess()"
             >
-              {{ accessLoading ? '載入中' : '重新整理' }}
+              {{ accessLoading ? t('building.common.loading') : t('building.common.refresh') }}
             </button>
           </section>
 
           <section class="access-summary-grid">
             <div class="access-summary-card">
-              <div class="work-card-title">目前大廈</div>
+              <div class="work-card-title">{{ t('building.access.currentBuilding') }}</div>
               <div class="access-stat-value">{{ accessBuildingName }}</div>
-              <div class="work-stat-label">依登入會員綁定資料顯示</div>
+              <div class="work-stat-label">{{ t('building.access.boundDataHint') }}</div>
             </div>
             <div class="access-summary-card">
-              <div class="work-card-title">門禁數量</div>
-              <div class="work-stat">{{ accessDoors.length }}</div>
-              <div class="work-stat-label">目前可見門禁</div>
+              <div class="work-card-title">{{ t('building.access.doorCount') }}</div>
+              <div class="work-stat">{{ formatLocaleNumber(accessDoors.length) }}</div>
+              <div class="work-stat-label">{{ t('building.access.visibleDoors') }}</div>
             </div>
             <div class="access-summary-card">
-              <div class="work-card-title">可開門</div>
-              <div class="work-stat">{{ accessAllowedDoorCount }}</div>
-              <div class="work-stat-label">已授權門禁</div>
+              <div class="work-card-title">{{ t('building.access.allowedDoors') }}</div>
+              <div class="work-stat">{{ formatLocaleNumber(accessAllowedDoorCount) }}</div>
+              <div class="work-stat-label">{{ t('building.access.authorizedDoors') }}</div>
             </div>
             <div class="access-summary-card">
-              <div class="work-card-title">資料狀態</div>
+              <div class="work-card-title">{{ t('building.access.dataStatus') }}</div>
               <span
                 class="work-chip"
                 :class="accessStatusClass"
               >{{ accessStatusText }}</span>
-              <div class="work-stat-label">{{ accessQRCodeDoorCount }} 個門禁支援二維碼</div>
+              <div class="work-stat-label">
+                {{ t('building.access.qrDoorCount', { count: formatLocaleNumber(accessQRCodeDoorCount) }) }}
+              </div>
             </div>
           </section>
 
@@ -2785,26 +3080,30 @@ onMounted(() => {
             class="access-banner"
             :class="{ warn: accessError, good: accessMessage && !accessError }"
           >
-            {{ accessError || accessMessage }}
+            {{ translateMessage(accessError || accessMessage) }}
           </div>
 
           <section class="access-door-section">
             <div class="building-section-head">
-              <div class="work-card-title">門禁列表</div>
-              <span class="work-chip">{{ accessLoading ? '載入中' : `${accessDoors.length} 個門禁` }}</span>
+              <div class="work-card-title">{{ t('building.access.doorList') }}</div>
+              <span class="work-chip">
+                {{ accessLoading
+                  ? t('building.common.loading')
+                  : t('building.common.doorCount', { count: formatLocaleNumber(accessDoors.length) }) }}
+              </span>
             </div>
 
             <div
               v-if="accessLoading && accessDoors.length === 0"
               class="access-empty"
             >
-              正在讀取門禁資料。
+              {{ t('building.access.loadingDoors') }}
             </div>
             <div
               v-else-if="accessDoors.length === 0"
               class="access-empty"
             >
-              目前未有可顯示的門禁資料。
+              {{ t('building.access.emptyDoors') }}
             </div>
             <div
               v-else
@@ -2813,14 +3112,14 @@ onMounted(() => {
               <table class="work-table access-door-table">
                 <thead>
                   <tr>
-                    <th>門禁</th>
-                    <th>門號</th>
-                    <th>所屬大廈</th>
-                    <th>鏡頭</th>
-                    <th>權限</th>
-                    <th>通行密碼</th>
-                    <th>有效期</th>
-                    <th>操作</th>
+                    <th>{{ t('building.access.door') }}</th>
+                    <th>{{ t('building.access.doorNumber') }}</th>
+                    <th>{{ t('building.access.building') }}</th>
+                    <th>{{ t('building.access.camera') }}</th>
+                    <th>{{ t('building.access.permission') }}</th>
+                    <th>{{ t('building.access.password') }}</th>
+                    <th>{{ t('building.access.validPeriod') }}</th>
+                    <th>{{ t('building.common.action') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2840,25 +3139,25 @@ onMounted(() => {
                         <span
                           class="work-chip"
                           :class="door.has_permission ? 'good' : 'warn'"
-                        >{{ door.has_permission ? '可開門' : '未授權' }}</span>
+                        >{{ door.has_permission ? t('building.access.canOpen') : t('building.access.unauthorized') }}</span>
                         <span
                           v-if="door.is_public"
                           class="work-chip brand"
-                        >公共門</span>
+                        >{{ t('building.access.publicDoor') }}</span>
                         <span
                           v-if="door.is_qrcode_enabled"
                           class="work-chip"
-                        >二維碼</span>
+                        >{{ t('building.access.qrCode') }}</span>
                       </div>
                     </td>
                     <td>{{ accessDoorPasswordText(door) }}</td>
                     <td class="access-door-period-cell">
                       <div>
-                        <span>密碼</span>
+                        <span>{{ t('building.access.passwordShort') }}</span>
                         <strong>{{ accessTimeRange(door.password?.start_time, door.password?.end_time) }}</strong>
                       </div>
                       <div>
-                        <span>二維碼</span>
+                        <span>{{ t('building.access.qrCode') }}</span>
                         <strong>{{ accessTimeRange(door.qrcode?.start_time, door.qrcode?.end_time) }}</strong>
                       </div>
                     </td>
@@ -2870,7 +3169,9 @@ onMounted(() => {
                           :disabled="!door.has_permission || openingDoorID === accessDoorID(door)"
                           @click="openAccessDoor(door)"
                         >
-                          {{ openingDoorID === accessDoorID(door) ? '處理中' : '開門' }}
+                          {{ openingDoorID === accessDoorID(door)
+                            ? t('building.access.processing')
+                            : t('building.access.openDoor') }}
                         </button>
                         <button
                           v-if="door.password?.value"
@@ -2878,7 +3179,9 @@ onMounted(() => {
                           class="work-mini-btn"
                           @click="toggleAccessPassword(door)"
                         >
-                          {{ accessDoorPasswordVisible(door) ? '隱藏密碼' : '查看密碼' }}
+                          {{ accessDoorPasswordVisible(door)
+                            ? t('building.access.hidePassword')
+                            : t('building.access.viewPassword') }}
                         </button>
                         <button
                           v-if="door.is_qrcode_enabled && door.qrcode?.record_id"
@@ -2887,7 +3190,9 @@ onMounted(() => {
                           :disabled="qrLoadingDoorID === accessDoorID(door)"
                           @click="generateAccessQRCode(door)"
                         >
-                          {{ qrLoadingDoorID === accessDoorID(door) ? '生成中' : '二維碼' }}
+                          {{ qrLoadingDoorID === accessDoorID(door)
+                            ? t('building.access.generating')
+                            : t('building.access.qrCode') }}
                         </button>
                       </div>
                     </td>
@@ -2906,20 +3211,20 @@ onMounted(() => {
                 <QrCodeImage
                   :text="accessQRPanel.value"
                   :size="220"
-                  alt="Door access QR code"
+                  :alt="t('building.access.qrAlt')"
                 />
               </div>
               <div>
                 <div class="work-card-title">{{ accessQRPanel.doorTitle }}</div>
-                <div class="work-card-sub">請於有效時間內使用此二維碼通行。</div>
+                <div class="work-card-sub">{{ t('building.access.qrHint') }}</div>
                 <div class="access-qr-meta">
                   <div>
-                    <span>類型</span>
-                    <strong>{{ accessQRPanel.term }}</strong>
+                    <span>{{ t('building.common.type') }}</span>
+                    <strong>{{ accessTermText(accessQRPanel.term) }}</strong>
                   </div>
                   <div>
-                    <span>有效期至</span>
-                    <strong>{{ accessQRPanel.expiresAt }}</strong>
+                    <span>{{ t('building.access.expiresAt') }}</span>
+                    <strong>{{ formatLocaleDateValue(accessQRPanel.expiresAt) }}</strong>
                   </div>
                 </div>
               </div>
@@ -2928,15 +3233,15 @@ onMounted(() => {
 
           <section class="work-card">
             <div class="building-section-head">
-              <div class="work-card-title">最近開門記錄</div>
+              <div class="work-card-title">{{ t('building.access.recentRecords') }}</div>
             </div>
             <table class="work-table access-record-table">
               <thead>
                 <tr>
-                  <th>門禁</th>
-                  <th>時間</th>
-                  <th>方式</th>
-                  <th>狀態</th>
+                  <th>{{ t('building.access.door') }}</th>
+                  <th>{{ t('building.common.time') }}</th>
+                  <th>{{ t('building.access.method') }}</th>
+                  <th>{{ t('building.common.status') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2959,7 +3264,7 @@ onMounted(() => {
                     class="building-empty-row"
                     colspan="4"
                   >
-                    目前未有最近開門記錄。
+                    {{ t('building.access.emptyRecords') }}
                   </td>
                 </tr>
               </tbody>
@@ -2976,9 +3281,9 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">ICCTV</div>
-              <h2 class="work-title">視像監控</h2>
-              <p class="work-desc">即時查看已授權的大廈鏡頭。</p>
+              <div class="work-kicker">{{ t('building.icctv.kicker') }}</div>
+              <h2 class="work-title">{{ t('building.icctv.title') }}</h2>
+              <p class="work-desc">{{ t('building.icctv.description') }}</p>
             </div>
             <button
               type="button"
@@ -2986,14 +3291,14 @@ onMounted(() => {
               :disabled="icctvLoading"
               @click="loadICCTV()"
             >
-              {{ icctvLoading ? '載入中' : '重新整理' }}
+              {{ icctvLoading ? t('building.common.loading') : t('building.common.refresh') }}
             </button>
           </section>
           <section class="work-card icctv-panel-wide icctv-table-card">
             <div class="icctv-profile-head">
               <div>
                 <h3>{{ icctvBuildingTitle }}</h3>
-                <p>目前會員已綁定單位</p>
+                <p>{{ t('building.icctv.boundUnitHint') }}</p>
               </div>
               <span
                 class="icctv-enabled-badge"
@@ -3007,9 +3312,9 @@ onMounted(() => {
               <table class="work-table icctv-table">
                 <thead>
                   <tr>
-                    <th>鏡頭</th>
-                    <th>狀態</th>
-                    <th>操作</th>
+                    <th>{{ t('building.icctv.camera') }}</th>
+                    <th>{{ t('building.icctv.status') }}</th>
+                    <th>{{ t('building.icctv.action') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3038,7 +3343,9 @@ onMounted(() => {
                             :disabled="!camera.is_active || !camera.url"
                             @click="toggleICCTVCamera(camera.id)"
                           >
-                            {{ isICCTVCameraExpanded(camera.id) ? '收起' : '查看' }}
+                            {{ isICCTVCameraExpanded(camera.id)
+                              ? t('building.icctv.collapse')
+                              : t('building.icctv.view') }}
                           </button>
                           <button
                             type="button"
@@ -3046,7 +3353,7 @@ onMounted(() => {
                             :disabled="!camera.is_active || !camera.url"
                             @click="openIcctvWindow(camera)"
                           >
-                            新窗口
+                            {{ t('building.icctv.newWindow') }}
                           </button>
                         </div>
                       </td>
@@ -3072,7 +3379,9 @@ onMounted(() => {
                       class="building-empty-row"
                       colspan="3"
                     >
-                      {{ icctvLoading ? '正在載入鏡頭資料。' : icctvError || '目前大廈未有鏡頭資料。' }}
+                      {{ icctvLoading
+                        ? t('building.icctv.loadingCameras')
+                        : translateMessage(icctvError) || t('building.icctv.emptyCameras') }}
                     </td>
                   </tr>
                 </tbody>
@@ -3295,6 +3604,18 @@ onMounted(() => {
   color: var(--ink-3);
   font-size: 12px;
   line-height: 1.7;
+}
+
+.building-binding-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.building-binding-empty .work-card-title {
+  margin-bottom: 4px;
 }
 
 .work-stat {
@@ -3748,7 +4069,7 @@ onMounted(() => {
   overflow-x: auto;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .access-door-table {
@@ -3851,7 +4172,7 @@ onMounted(() => {
   place-items: center;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .access-qr-image img {
@@ -3889,13 +4210,13 @@ onMounted(() => {
   align-items: center;
   gap: 0;
   border-bottom: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .acct-tab {
   border: 0;
   border-right: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--brand);
   cursor: pointer;
   font-family: inherit;
@@ -3928,7 +4249,7 @@ onMounted(() => {
   border: 1px solid var(--bdr);
   border-left: 3px solid var(--brand);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-2);
   font-size: 12px;
   font-weight: 600;
@@ -3975,7 +4296,7 @@ onMounted(() => {
   max-width: 320px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
@@ -4011,7 +4332,7 @@ onMounted(() => {
   min-height: 32px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
@@ -4022,7 +4343,7 @@ onMounted(() => {
 .acct-secondary-action {
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-2);
   cursor: pointer;
   font-family: inherit;
@@ -4050,7 +4371,7 @@ onMounted(() => {
   overflow: auto;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .acct-table {
@@ -4111,7 +4432,7 @@ onMounted(() => {
   gap: 6px;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 12px;
 }
 
@@ -4166,7 +4487,7 @@ onMounted(() => {
   justify-content: center;
   border: 1px dashed var(--bdr-2);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-3);
   font-size: 16px;
   font-weight: 800;
@@ -4255,7 +4576,7 @@ onMounted(() => {
   width: 100%;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
@@ -4430,7 +4751,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 18px;
 }
 
@@ -4549,7 +4870,7 @@ onMounted(() => {
 }
 
 .icctv-expanded-row td {
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 0;
 }
 
@@ -4627,6 +4948,15 @@ onMounted(() => {
   .work-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .building-binding-empty {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .building-binding-empty .work-action {
+    align-self: flex-start;
   }
 
   .access-summary-grid {

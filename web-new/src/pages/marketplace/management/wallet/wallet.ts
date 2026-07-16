@@ -27,6 +27,7 @@ import type {
 } from '@/model/wallet';
 import type { StaffUserSummary } from '@/model/user';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
 import { formatAjoPoints } from '@/utils/wallet';
@@ -350,11 +351,12 @@ export const useRewardAdListPage = () => {
   const router = useRouter();
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
+  const preferenceStore = usePreferenceStore();
   const loadingAds = ref(false);
   const adKeyword = ref('');
   const rewardAds = ref<StaffRewardAdResponse[]>([]);
   const formatPoints = (value: number): string =>
-    formatAjoPoints(value, t('common.brand.pointsName'), 'zh-HK');
+    formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 
   const loadRewardAds = async (): Promise<void> => {
     loadingAds.value = true;
@@ -407,12 +409,15 @@ export const useRewardAdListPage = () => {
 export const useWalletTransactionPage = () => {
   const { t } = useI18n();
   const feedbackStore = useFeedbackStore();
+  const preferenceStore = usePreferenceStore();
   const loadingTransactions = ref(false);
   const transactionUserId = ref('');
   const transactionDirection = ref<WalletDirectionFilter>('');
   const transactions = ref<StaffWalletTransactionResponse[]>([]);
   const formatPoints = (value: number): string =>
-    formatAjoPoints(value, t('common.brand.pointsName'), 'zh-HK');
+    formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+  const formatTransactionDate = (value: string): string =>
+    formatDate(value, preferenceStore.locale);
 
   const loadTransactions = async (): Promise<void> => {
     loadingTransactions.value = true;
@@ -438,7 +443,7 @@ export const useWalletTransactionPage = () => {
 
   return {
     formatAjoPoints: formatPoints,
-    formatDate,
+    formatDate: formatTransactionDate,
     loadTransactions,
     loadingTransactions,
     t,

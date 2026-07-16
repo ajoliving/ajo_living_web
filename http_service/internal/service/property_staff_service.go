@@ -57,7 +57,7 @@ func (s *PropertyService) UpdatePropertySaleForStaff(ctx context.Context, params
 		return nil, err
 	}
 	params.OwnerUserID = listing.OwnerUserID
-	listingID, err := s.upsertPropertySale(ctx, params, false)
+	listingID, _, err := s.upsertPropertySale(ctx, params, false, false)
 	if err != nil {
 		return nil, err
 	}

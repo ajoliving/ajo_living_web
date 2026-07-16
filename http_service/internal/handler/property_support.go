@@ -273,6 +273,7 @@ func bindPropertySaleRequestFromContext(c *gin.Context, listingID string) (servi
 		FeatureTags:           request.FeatureTags,
 		ContactMethod:         strings.TrimSpace(request.ContactMethod),
 		BusinessStatus:        strings.TrimSpace(request.BusinessStatus),
+		ChargeDraftSave:       c.Query("charge_draft") == "true",
 		Images:                request.Images,
 		Contact:               toPropertyContactInput(request.Contact),
 	}, true

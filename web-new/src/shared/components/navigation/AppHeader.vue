@@ -61,16 +61,16 @@ const isNavigationItemVisible = (item: NavigationItem): boolean => {
 
 // 1. 建立主導航入口
 const allPrimaryNavigationItems = computed<NavigationItem[]>(() => [
-  { key: 'home', to: '/', label: '首頁', match: ['/'] },
-  { key: 'listing', to: '/properties', label: '樓盤租售', match: ['/properties'] },
-  { key: 'service', to: '/serviced-residences', label: '服務式住宅', match: ['/serviced-residence', '/serviced-residences'] },
-  { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'] },
-  { key: 'offers', to: '/supermarket-offers', label: '綜合優惠', match: ['/offers', '/supermarket-offers'] },
-  { key: 'payment', to: '/payments', label: 'AJO Pay', match: ['/payments'], requiresAuth: true },
-  { key: 'affairs', to: '/building', label: '我的大廈', match: ['/building'], requiresAuth: true },
-  { key: 'profile', to: '/profile', label: '會員中心', match: ['/profile', '/account'], requiresAuth: true },
-  { key: 'management', to: '/account/marketplace/management', label: '管理', match: ['/account/marketplace/management'], requiresAuth: true, requiresStaff: true },
-  { key: 'trend', to: '/trend', label: '走勢', match: ['/trend'] },
+  { key: 'home', to: '/', label: t('nav.home'), match: ['/'] },
+  { key: 'listing', to: '/properties', label: t('nav.properties'), match: ['/properties'] },
+  { key: 'service', to: '/serviced-residences', label: t('nav.servicedResidences'), match: ['/serviced-residence', '/serviced-residences'] },
+  { key: 'market', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'] },
+  { key: 'offers', to: '/supermarket-offers', label: t('nav.combinedOffers'), match: ['/offers', '/supermarket-offers'] },
+  { key: 'payment', to: '/payments', label: t('nav.ajoPay'), match: ['/payments'], requiresAuth: true },
+  { key: 'affairs', to: '/building', label: t('nav.building'), match: ['/building'], requiresAuth: true },
+  { key: 'profile', to: '/profile', label: t('nav.memberCenter'), match: ['/profile', '/account'], requiresAuth: true },
+  { key: 'management', to: '/account/marketplace/management', label: t('nav.marketplaceManagement'), match: ['/account/marketplace/management'], requiresAuth: true, requiresStaff: true },
+  { key: 'trend', to: '/trend', label: t('nav.trend'), match: ['/trend'] },
 ]);
 const primaryNavigationItems = computed<NavigationItem[]>(() =>
   allPrimaryNavigationItems.value.filter(isNavigationItemVisible),
@@ -81,22 +81,22 @@ const mobileNavigationItems = computed<NavigationItem[]>(() => [
   ...primaryNavigationItems.value,
   ...(
     sessionStore.isAuthenticated
-      ? [{ key: 'notification', to: '/notifications', label: '通知中心', match: ['/notifications', '/account/notifications'] }]
-      : [{ key: 'login', to: '/login', label: '登入', match: ['/login'] }]
+      ? [{ key: 'notification', to: '/notifications', label: t('nav.notifications'), match: ['/notifications', '/account/notifications'] }]
+      : [{ key: 'login', to: '/login', label: t('nav.login'), match: ['/login'] }]
   ),
 ]);
 
 // 3. 底部導航入口
 const bottomNavigationItems = computed<NavigationItem[]>(() => {
   const items: NavigationItem[] = [
-    { key: 'home', to: '/', label: '首頁', match: ['/'], icon: 'home' },
-    { key: 'listing', to: '/properties', label: '樓盤', match: ['/properties'], icon: 'building' },
-    { key: 'market', to: '/furniture', label: '家具', match: ['/furniture'], icon: 'browse' },
-    { key: 'offers', to: '/supermarket-offers', label: '優惠', match: ['/offers', '/supermarket-offers'], icon: 'star' },
+    { key: 'home', to: '/', label: t('nav.home'), match: ['/'], icon: 'home' },
+    { key: 'listing', to: '/properties', label: t('nav.propertiesShort'), match: ['/properties'], icon: 'building' },
+    { key: 'market', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'], icon: 'browse' },
+    { key: 'offers', to: '/supermarket-offers', label: t('nav.offersShort'), match: ['/offers', '/supermarket-offers'], icon: 'star' },
     {
       key: 'profile',
       to: accountPath.value,
-      label: sessionStore.isAuthenticated ? '我的' : '登入',
+      label: sessionStore.isAuthenticated ? t('nav.myShort') : t('nav.login'),
       match: ['/profile', '/account', '/login'],
       icon: 'user',
     },
@@ -171,7 +171,7 @@ watch(
     <button
       type="button"
       class="hamburger"
-      :aria-label="t('nav.account')"
+      :aria-label="t('nav.menu')"
       @click="mobileDrawerOpen = true"
     >
       <span></span>
@@ -184,7 +184,7 @@ watch(
       to="/"
       class="nav-logo"
     >
-      AJO LIVING
+      AJO<span class="nav-logo__suffix"> LIVING</span>
     </RouterLink>
 
     <!-- 主導航連結 -->
@@ -203,8 +203,8 @@ watch(
         to="/notifications"
         class="nl nav-bell"
         :class="{ on: isNotificationActive }"
-        aria-label="通知中心"
-        title="通知中心"
+        :aria-label="t('nav.notifications')"
+        :title="t('nav.notifications')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
@@ -216,13 +216,12 @@ watch(
 
     <!-- 右側區域 -->
     <div class="nav-r">
-      <span>照映</span><span>繁中</span>
       <button
         type="button"
         class="nav-login"
         :class="{ 'nav-login--icon': sessionStore.isAuthenticated }"
-        :aria-label="sessionStore.isAuthenticated ? t('nav.memberCenter') : '登入'"
-        :title="sessionStore.isAuthenticated ? t('nav.memberCenter') : '登入'"
+        :aria-label="sessionStore.isAuthenticated ? t('nav.memberCenter') : t('nav.login')"
+        :title="sessionStore.isAuthenticated ? t('nav.memberCenter') : t('nav.login')"
         @click="handleAccountAction"
       >
         <AppIcon
@@ -231,7 +230,7 @@ watch(
           :size="18"
           :stroke-width="2"
         />
-        <span v-else>登入</span>
+        <span v-else>{{ t('nav.login') }}</span>
       </button>
     </div>
     <button
@@ -260,7 +259,7 @@ watch(
       to="/login"
       class="mobile-login"
     >
-      登入
+      {{ t('nav.login') }}
     </RouterLink>
   </nav>
 
@@ -590,8 +589,28 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   display: block;
 }
 
-/* 語系切換按鈕（桌面隱藏） */
-.locale-toggle,
+/* 語系切換按鈕 */
+.locale-toggle {
+  display: inline-flex;
+  min-width: 40px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--sur);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.locale-toggle:hover {
+  color: var(--brand);
+}
+
 .mobile-login {
   display: none;
 }
@@ -769,6 +788,25 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   transform: translateX(-100%);
 }
 
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .nav-links {
+    display: none;
+  }
+
+  .hamburger {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+  }
+
+  .nav-r {
+    margin-left: auto;
+  }
+}
+
 @media (max-width: 1023px) {
   .nav-links,
   .nav-r {
@@ -804,16 +842,10 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   }
 
   .locale-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     border: none;
     background: transparent;
-    color: var(--ink);
-    cursor: pointer;
-    font: inherit;
-    font-size: 11px;
-    font-weight: 700;
+    border-radius: 999px;
+    padding: 0;
   }
 
   .mobile-login {
@@ -961,6 +993,12 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     bottom: calc(var(--app-mobile-content-bottom) + 12px);
     left: 16px;
     transform: none;
+  }
+}
+
+@media (max-width: 390px) {
+  .nav-logo__suffix {
+    display: none;
   }
 }
 </style>

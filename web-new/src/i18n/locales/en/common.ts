@@ -1,3 +1,8 @@
+/*
+ * Global shared English copy.
+ * 1. Provides brand, action, status, footer, and shared component labels.
+ * 2. Keeps keys aligned with the zh-HK shared resource.
+ */
 export default {
   brand: {
     name: 'AJO Living',
@@ -35,6 +40,10 @@ export default {
   },
   price: {
     free: 'Free',
+  },
+  ad: {
+    label: 'Advertisement',
+    slot: 'Ad slot',
   },
   unit: {
     sqft: '{value} sqft',

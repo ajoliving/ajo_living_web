@@ -26,7 +26,7 @@ import {
   writeStoredTokens,
 } from '@/httpapis/auth-session';
 import { fetchMe } from '@/httpapis/me';
-import type { RequestOtpResult, VerifyOtpResult } from '@/model/auth';
+import type { RegisterEmailAccountPayload, RequestOtpResult, VerifyOtpResult } from '@/model/auth';
 import type { CurrentMemberProfile, SessionUserView } from '@/model/user';
 
 const buildSessionUser = (member: CurrentMemberProfile | null): SessionUserView => ({
@@ -254,31 +254,8 @@ export const useSessionStore = defineStore('session', {
     },
 
     // 16. 註冊郵箱與手機密碼帳戶
-    async registerEmailAccount(
-      email: string,
-      password: string,
-      engName: string,
-      phoneCountryCode: string,
-      phoneNumber: string,
-      publisherIdentityType = '',
-      primaryCommunityID = '',
-      primaryCommunityName = '',
-      residenceFloor = '',
-      residenceUnit = '',
-    ): Promise<VerifyOtpResult> {
-      const trimmedEmail = email.trim();
-      const { data } = await registerWithEmail({
-        email: trimmedEmail,
-        password,
-        eng_name: engName,
-        phone_country_code: phoneCountryCode,
-        phone_number: phoneNumber,
-        publisher_identity_type: publisherIdentityType,
-        primary_community_id: primaryCommunityID,
-        primary_community_name: primaryCommunityName,
-        residence_floor: residenceFloor,
-        residence_unit: residenceUnit,
-      });
+    async registerEmailAccount(payload: RegisterEmailAccountPayload): Promise<VerifyOtpResult> {
+      const { data } = await registerWithEmail(payload);
       this.setTokens(data.data.access_token, data.data.refresh_token);
 
       try {

@@ -47,7 +47,7 @@ const {
     <section class="marketplace-my-results min-w-0">
       <header class="my-page-heading">
         <div>
-          <p class="my-page-kicker">Furniture</p>
+          <p class="my-page-kicker">{{ t('marketplace.mine.kicker') }}</p>
           <h1>{{ t('marketplace.mine.title') }}</h1>
           <p>{{ t('marketplace.mine.subtitle') }}</p>
         </div>
@@ -127,13 +127,13 @@ const {
           <table class="my-table">
             <thead>
               <tr>
-                <th>商品</th>
-                <th>分類</th>
-                <th>價格</th>
-                <th>狀態</th>
-                <th>屋苑</th>
-                <th>發布時間</th>
-                <th>操作</th>
+                <th>{{ t('marketplace.mine.item') }}</th>
+                <th>{{ t('marketplace.mine.category') }}</th>
+                <th>{{ t('marketplace.mine.price') }}</th>
+                <th>{{ t('common.label.status') }}</th>
+                <th>{{ t('marketplace.mine.community') }}</th>
+                <th>{{ t('marketplace.mine.published') }}</th>
+                <th>{{ t('marketplace.mine.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -174,7 +174,7 @@ const {
                     :visibility="resolveListingVisibility(listing)"
                   />
                 </td>
-                <td>{{ resolveListingCommunityName(listing) }}</td>
+                <td>{{ resolveListingCommunityName(listing, preferenceStore.locale) }}</td>
                 <td>{{ formatDate(resolveListingPublishedAt(listing), preferenceStore.locale) }}</td>
                 <td>
                   <div class="my-table-actions">

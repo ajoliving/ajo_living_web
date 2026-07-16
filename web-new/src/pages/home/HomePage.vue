@@ -8,9 +8,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import { fetchPropertySaleListings } from '@/httpapis/properties';
 import type { PropertyListingSummaryResponse } from '@/model/property';
+import { usePreferenceStore } from '@/stores/preferences';
 import {
   resolvePropertyArea,
   resolvePropertyCoverImage,
@@ -53,11 +55,13 @@ interface FeaturedCard {
 
 // 1. 路由跳轉
 const router = useRouter();
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const go = (target: HomeTarget): void => {
   const routeMap: Record<HomeTarget, string> = {
     listing: '/properties',
     service: '/serviced-residences',
-    market: '/marketplace',
+    market: '/furniture',
     offers: '/supermarket-offers',
   };
   void router.push(routeMap[target]);
@@ -66,7 +70,7 @@ const go = (target: HomeTarget): void => {
 // 2. 精選樓盤狀態
 const propertyListings = ref<PropertyListingSummaryResponse[]>([]);
 const loadingFeatured = ref(false);
-const featuredError = ref('');
+const featuredError = ref(false);
 
 // 3. 精選樓盤資料
 const featured = computed<FeaturedCard[]>(() =>
@@ -74,17 +78,37 @@ const featured = computed<FeaturedCard[]>(() =>
 );
 
 // 4. 探索服務分類靜態資料
-const categories: CategoryCard[] = [
-  { key: 'listing', name: '樓盤租售', desc: '住宅、商廈、車位一應俱全', icon: 'building' },
-  { key: 'service', name: '服務式住宅', desc: '短期靈活入住，設施齊備', icon: 'service' },
-  { key: 'market', name: '家具市集', desc: '社區二手好物交易平台', icon: 'market' },
-  { key: 'offers', name: '綜合優惠', desc: '住戶專屬折扣與生活禮遇', icon: 'offers' },
-];
+const categories = computed<CategoryCard[]>(() => [
+  {
+    key: 'listing',
+    name: t('home.newShell.services.propertySale.title'),
+    desc: t('home.newShell.services.propertySale.description'),
+    icon: 'building',
+  },
+  {
+    key: 'service',
+    name: t('home.newShell.services.servicedResidence.title'),
+    desc: t('home.newShell.services.servicedResidence.description'),
+    icon: 'service',
+  },
+  {
+    key: 'market',
+    name: t('home.newShell.services.furniture.title'),
+    desc: t('home.newShell.services.furniture.description'),
+    icon: 'market',
+  },
+  {
+    key: 'offers',
+    name: t('home.newShell.services.offers.title'),
+    desc: t('home.newShell.services.offers.description'),
+    icon: 'offers',
+  },
+]);
 
 // 5. 讀取真實公開樓盤
 const loadFeaturedProperties = async (): Promise<void> => {
   loadingFeatured.value = true;
-  featuredError.value = '';
+  featuredError.value = false;
 
   try {
     const { data } = await fetchPropertySaleListings({
@@ -94,7 +118,7 @@ const loadFeaturedProperties = async (): Promise<void> => {
     });
     propertyListings.value = data.data.items;
   } catch {
-    featuredError.value = '暫時無法讀取樓盤。';
+    featuredError.value = true;
     propertyListings.value = [];
   } finally {
     loadingFeatured.value = false;
@@ -108,21 +132,26 @@ const toFeaturedCard = (
 ): FeaturedCard => {
   const area = resolvePropertyArea(listing);
   const price = resolvePropertyPrice(listing);
-  const priceText = resolvePropertyPriceText(listing, 'zh-HK');
+  const locale = preferenceStore.locale;
+  const priceText = resolvePropertyPriceText(listing, locale);
   const isRent = resolvePropertyTransactionType(listing) === 'rent';
   const imageUrl = resolvePropertyCoverImage(listing)?.url;
 
   return {
     key: listing.listing_id,
     tags: [
-      { label: resolvePropertyPublisherRole(listing), dark: true },
-      { label: resolvePropertyDistrict(listing, 'zh-HK'), dark: false },
-      { label: resolvePropertyTypeLabel(listing, 'zh-HK'), dark: false },
+      { label: resolvePropertyPublisherRole(listing, locale), dark: true },
+      { label: resolvePropertyDistrict(listing, locale), dark: false },
+      { label: resolvePropertyTypeLabel(listing, locale), dark: false },
     ],
-    title: resolvePropertyTitle(listing),
+    title: resolvePropertyTitle(listing, locale),
     price: priceText,
-    unit: isRent && price > 0 ? '/ 月' : '',
-    area: area > 0 ? `實用面積 ${area.toLocaleString('zh-HK')}呎` : '面積待補充',
+    unit: isRent && price > 0 ? t('home.newShell.featured.priceSuffix') : '',
+    area: area > 0
+      ? `${t('property.sale.areaLabel')} ${t('common.unit.sqft', {
+        value: area.toLocaleString(locale),
+      })}`
+      : t('property.editor.areaUnverifiedField'),
     imgClass: index % 2 === 1 ? 'short' : 'tall',
     bg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
     imageUrl,
@@ -169,13 +198,19 @@ onMounted(() => {
         </svg>
         <div class="hero-content">
           <div class="hero-eyebrow">AJO LIVING</div>
-          <h1 class="hero-title">理想生活<br />由此出發</h1>
+          <h1 class="hero-title">
+            {{ t('home.newShell.titleLineOne') }}<br />{{ t('home.newShell.titleLineTwo') }}
+          </h1>
           <p class="hero-desc">
-            全港最大社區生活平台，搜尋住宅、服務式公寓、家具及生活優惠，一站式滿足您的所有需要。
+            {{ t('home.newShell.subtitle') }}
           </p>
           <div class="hero-btns">
-            <button class="hbtn-primary" type="button" @click="go('listing')">搜尋樓盤</button>
-            <button class="hbtn-ghost" type="button" @click="go('service')">了解服務</button>
+            <button class="hbtn-primary" type="button" @click="go('listing')">
+              {{ t('home.newShell.primaryAction') }}
+            </button>
+            <button class="hbtn-ghost" type="button" @click="go('service')">
+              {{ t('home.newShell.secondaryAction') }}
+            </button>
           </div>
         </div>
       </div>
@@ -183,7 +218,7 @@ onMounted(() => {
 
     <!-- 2. 探索服務 -->
     <div class="home-section">
-      <div class="home-sec-title">探索服務</div>
+      <div class="home-sec-title">{{ t('home.newShell.serviceTitle') }}</div>
       <div class="cat-grid">
         <div
           v-for="cat in categories"
@@ -349,7 +384,7 @@ onMounted(() => {
 
     <!-- 3. 精選樓盤 -->
     <div class="home-section" style="background:var(--g1);padding-top:32px;padding-bottom:32px;">
-      <div class="home-sec-title">精選樓盤</div>
+      <div class="home-sec-title">{{ t('home.newShell.featuredTitle') }}</div>
       <div class="feat-grid">
         <div
           v-for="feat in featured"
@@ -393,19 +428,19 @@ onMounted(() => {
         v-if="loadingFeatured && featured.length === 0"
         class="feat-state"
       >
-        正在讀取樓盤。
+        {{ t('home.loading') }}
       </p>
       <p
         v-else-if="featuredError"
         class="feat-state feat-state-error"
       >
-        {{ featuredError }}
+        {{ t('home.loadError') }}
       </p>
       <p
         v-else-if="featured.length === 0"
         class="feat-state"
       >
-        暫時未有公開樓盤。
+        {{ t('home.emptyTitle') }}
       </p>
     </div>
   </div>

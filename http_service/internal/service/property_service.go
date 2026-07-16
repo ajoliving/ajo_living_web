@@ -141,16 +141,39 @@ func NewPropertyService(runtime *Runtime) *PropertyService {
 
 // 4. CreatePropertySale creates a property sale draft.
 func (s *PropertyService) CreatePropertySale(ctx context.Context, params UpsertPropertySaleParams) (*PropertyListingDetail, error) {
-	listingID, err := s.upsertPropertySale(ctx, params, true)
+	publisher, err := s.resolvePropertySalePublisher(ctx, s.runtime.DB, params.OwnerUserID, params.PublisherIdentityType, "property_publish")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAgencyPublisherLocation(publisher, params.LocationScope); err != nil {
+		return nil, err
+	}
+	applyPropertySalePublisher(&params, publisher)
+
+	listingID, charge, err := s.upsertPropertySale(ctx, params, true, params.ChargeDraftSave)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.GetPropertyDetail(ctx, PropertyChannelSale, listingID, &params.OwnerUserID)
+	result, err := s.GetPropertyDetail(ctx, PropertyChannelSale, listingID, &params.OwnerUserID)
+	if err != nil {
+		return nil, err
+	}
+	attachPropertyCharge(result, charge)
+	return result, nil
 }
 
 // 5. UpdatePropertySale updates an owned property sale listing.
 func (s *PropertyService) UpdatePropertySale(ctx context.Context, params UpsertPropertySaleParams) (*PropertyListingDetail, error) {
+	publisher, err := s.resolvePropertySalePublisher(ctx, s.runtime.DB, params.OwnerUserID, params.PublisherIdentityType, "property_manage")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAgencyPublisherLocation(publisher, params.LocationScope); err != nil {
+		return nil, err
+	}
+	applyPropertySalePublisher(&params, publisher)
+
 	listingID, charge, err := s.updatePropertySaleWithCharge(ctx, params)
 	if err != nil {
 		return nil, err
@@ -166,6 +189,9 @@ func (s *PropertyService) UpdatePropertySale(ctx context.Context, params UpsertP
 
 // 6. CreateServicedApartment creates a serviced apartment draft.
 func (s *PropertyService) CreateServicedApartment(ctx context.Context, params UpsertServicedApartmentParams) (*PropertyListingDetail, error) {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, params.OwnerUserID, "property_publish"); err != nil {
+		return nil, err
+	}
 	listingID, err := s.upsertServicedApartment(ctx, params, true)
 	if err != nil {
 		return nil, err
@@ -176,6 +202,9 @@ func (s *PropertyService) CreateServicedApartment(ctx context.Context, params Up
 
 // 7. UpdateServicedApartment updates an owned serviced apartment listing.
 func (s *PropertyService) UpdateServicedApartment(ctx context.Context, params UpsertServicedApartmentParams) (*PropertyListingDetail, error) {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, params.OwnerUserID, "property_manage"); err != nil {
+		return nil, err
+	}
 	listingID, charge, err := s.updateServicedApartmentWithCharge(ctx, params)
 	if err != nil {
 		return nil, err
@@ -191,16 +220,25 @@ func (s *PropertyService) UpdateServicedApartment(ctx context.Context, params Up
 
 // 8. PublishProperty publishes a draft property listing.
 func (s *PropertyService) PublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_publish"); err != nil {
+		return nil, err
+	}
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionPublish)
 }
 
 // 9. RepublishProperty republishes an expired or hidden property listing.
 func (s *PropertyService) RepublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_publish"); err != nil {
+		return nil, err
+	}
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionRepublish)
 }
 
 // 10. MarkPropertySold marks a sale listing as sold.
 func (s *PropertyService) MarkPropertySold(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) error {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_manage"); err != nil {
+		return err
+	}
 	listing, _, err := s.loadOwnedPropertyListing(ctx, channel, ownerUserID, listingPublicID)
 	if err != nil {
 		return err
@@ -213,6 +251,9 @@ func (s *PropertyService) MarkPropertySold(ctx context.Context, channel Property
 
 // 11. DeactivateProperty hides a property listing.
 func (s *PropertyService) DeactivateProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) error {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_manage"); err != nil {
+		return err
+	}
 	listing, _, err := s.loadOwnedPropertyListing(ctx, channel, ownerUserID, listingPublicID)
 	if err != nil {
 		return err
@@ -261,8 +302,12 @@ func (s *PropertyService) ListPublicProperties(ctx context.Context, channel Prop
 // 13. ListMyProperties returns owner listings for a property channel.
 func (s *PropertyService) ListMyProperties(ctx context.Context, channel PropertyChannel, ownerUserID int64, filters PropertyListFilters) ([]PropertyListingSummary, *model.Pagination, error) {
 	page, pageSize := normalizePagination(filters.Page, filters.PageSize)
+	ownerUserIDs, err := s.companyManagedPropertyOwnerIDs(ctx, ownerUserID)
+	if err != nil {
+		return nil, nil, err
+	}
 	baseQuery := s.basePropertyListQuery(ctx, channel).
-		Where("listings.module = ? AND listings.owner_user_id = ? AND listings.is_deleted = ?", string(channel), ownerUserID, false)
+		Where("listings.module = ? AND listings.owner_user_id IN ? AND listings.is_deleted = ?", string(channel), ownerUserIDs, false)
 	baseQuery = s.applyPropertyFilters(baseQuery, channel, filters)
 	if filters.Status != "" {
 		if filters.Status == "sold" {
@@ -290,16 +335,39 @@ func (s *PropertyService) ListMyProperties(ctx context.Context, channel Property
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
+// 13.1 companyManagedPropertyOwnerIDs includes linked children for approved company owners.
+func (s *PropertyService) companyManagedPropertyOwnerIDs(ctx context.Context, userID int64) ([]int64, error) {
+	result := []int64{userID}
+	if err := NewAgencyCompanyService(s.runtime).requireApprovedCompanyOwner(ctx, s.runtime.DB, userID); err != nil {
+		return result, nil
+	}
+	var links []model.AgencyCompanySubaccount
+	if err := s.runtime.DB.WithContext(ctx).Where("company_owner_user_id = ?", userID).Find(&links).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load company listing members")
+	}
+	for _, link := range links {
+		result = append(result, link.ChildUserID)
+	}
+	return result, nil
+}
+
 // 14. GetPropertyDetail returns one property detail payload.
 func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel PropertyChannel, listingPublicID string, viewerUserID *int64) (*PropertyListingDetail, error) {
 	listing, contact, err := s.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
 	if err != nil {
 		return nil, err
 	}
-	if listing.PublicationStatus == "hidden" && (viewerUserID == nil || *viewerUserID != listing.OwnerUserID) {
+	viewerCanManage := viewerUserID != nil && *viewerUserID == listing.OwnerUserID
+	if viewerUserID != nil && !viewerCanManage {
+		viewerCanManage, err = s.canCompanyOwnerManageChildListing(ctx, s.runtime.DB, *viewerUserID, listing.OwnerUserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if listing.PublicationStatus == "hidden" && !viewerCanManage {
 		return nil, errcode.New(errcode.CodeHidden, "listing is hidden")
 	}
-	if viewerUserID == nil || *viewerUserID != listing.OwnerUserID {
+	if !viewerCanManage {
 		if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 			return nil, errcode.New(errcode.CodeNotFound, "listing not found")
 		}
@@ -320,7 +388,7 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 	if err != nil {
 		return nil, err
 	}
-	if channel == PropertyChannelSale && len(summaries) > 0 && summaries[0].PropertySale != nil && viewerUserID != nil && *viewerUserID == listing.OwnerUserID {
+	if channel == PropertyChannelSale && len(summaries) > 0 && summaries[0].PropertySale != nil && viewerCanManage {
 		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
 		summaries[0].PropertySale.FloorRaw = rows[0].SaleFloorRaw
 		summaries[0].PropertySale.PrivateNote = rows[0].SalePrivateNote
@@ -341,7 +409,7 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		ShowChat:     contact.ShowChat,
 		ShowInquiry:  contact.ShowInquiryForm,
 	}
-	if viewerUserID != nil && *viewerUserID == listing.OwnerUserID {
+	if viewerCanManage {
 		contactSummary.ContactAttributes = decodeStringMapBytes(contact.ContactAttributes)
 	}
 
@@ -369,6 +437,41 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 			return errcode.New(errcode.CodeValidationError, "only expired or hidden listings can be republished")
 		}
 		if channel == PropertyChannelSale {
+			publisher, err := s.resolvePropertySalePublisher(ctx, tx, ownerUserID, listing.PublisherIdentityType, "property_publish")
+			if err != nil {
+				return err
+			}
+			var sale model.PropertySaleListing
+			if err := tx.Where("listing_id = ?", listing.ID).First(&sale).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to load property sale publisher scope")
+			}
+			if err := validateAgencyPublisherLocation(publisher, sale.LocationScope); err != nil {
+				return err
+			}
+			if listing.PublisherIdentityType != publisher.Identity {
+				if err := tx.Model(&model.Listing{}).Where("id = ?", listing.ID).Update("publisher_identity_type", publisher.Identity).Error; err != nil {
+					return errcode.New(errcode.CodeInternalError, "failed to update property publisher identity")
+				}
+				if err := tx.Model(&model.PropertySaleListing{}).Where("listing_id = ?", listing.ID).Update("publisher_role_label", publisherRoleLabel(publisher.Identity)).Error; err != nil {
+					return errcode.New(errcode.CodeInternalError, "failed to update property publisher role")
+				}
+				listing.PublisherIdentityType = publisher.Identity
+			}
+			if err := tx.Model(&model.PropertySaleListing{}).Where("listing_id = ?", listing.ID).Update("agency_company_name", publisher.AgencyCompanyName).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update property agency company")
+			}
+			if publisher.Identity == "agent" {
+				params := UpsertPropertySaleParams{Contact: PropertyContactInput{ContactAttributes: decodeStringMapBytes(contact.ContactAttributes), ShowPhone: contact.ShowPhone, ShowWhatsApp: contact.ShowWhatsApp, ShowChat: contact.ShowChat, ShowInquiryForm: contact.ShowInquiryForm}}
+				applyPropertySalePublisher(&params, publisher)
+				nextContact, err := s.buildPropertyContact(listing.ID, params.Contact, contact.ContactMode)
+				if err != nil {
+					return err
+				}
+				if err := tx.Save(nextContact).Error; err != nil {
+					return errcode.New(errcode.CodeInternalError, "failed to update approved agency contact snapshot")
+				}
+				contact = nextContact
+			}
 			if err := s.validatePropertySalePublicationWithTx(ctx, tx, listing, contact); err != nil {
 				return err
 			}
@@ -505,6 +608,13 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 	}
 
 	payload := map[string]string{}
+	contactAttributes := decodeStringMapBytes(contact.ContactAttributes)
+	phone1WhatsAppEnabled := contactAttributes["phone_whatsapp_enabled"] == "yes"
+	phone2WhatsAppEnabled := contactAttributes["phone_2_whatsapp_enabled"] == "yes"
+	phone2CountryCode := strings.TrimSpace(contactAttributes["phone_2_country_code"])
+	if phone2CountryCode == "" {
+		phone2CountryCode = contactAttributes["phone_country_code"]
+	}
 	channels := map[string]bool{
 		"phone":        false,
 		"phone_2":      false,
@@ -520,35 +630,73 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 		payload["contact_name_en"] = strings.TrimSpace(contact.ContactNameEN)
 	}
 
-	if contact.ShowPhone && contact.PhoneEncrypted != "" {
-		phone, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.PhoneEncrypted)
+	phone := ""
+	if (contact.ShowPhone || phone1WhatsAppEnabled) && contact.PhoneEncrypted != "" {
+		phone, err = utils.DecryptString(s.runtime.Config.EncryptionKey, contact.PhoneEncrypted)
 		if err != nil {
 			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt phone")
 		}
-		payload["phone"] = phone
-		channels["phone"] = true
+		if contact.ShowPhone {
+			payload["phone"] = phone
+			channels["phone"] = true
+		}
 	}
-	if contact.ShowPhone && contact.Phone2Encrypted != "" {
-		phone2, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.Phone2Encrypted)
+	phone2 := ""
+	if (contact.ShowPhone || phone2WhatsAppEnabled) && contact.Phone2Encrypted != "" {
+		phone2, err = utils.DecryptString(s.runtime.Config.EncryptionKey, contact.Phone2Encrypted)
 		if err != nil {
 			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt secondary phone")
 		}
-		payload["phone_2"] = phone2
-		channels["phone_2"] = true
+		if contact.ShowPhone {
+			payload["phone_2"] = phone2
+			channels["phone_2"] = true
+		}
 	}
 
+	if phone1WhatsAppEnabled && phone != "" {
+		payload["phone_whatsapp_url"] = buildPropertyWhatsAppURL(
+			propertyWhatsAppPhoneNumber(phone, contactAttributes["phone_country_code"]),
+			listing.Title,
+			listing.PublicID,
+			s.runtime.Config.AppPublicBaseURL,
+			channel,
+		)
+		payload["whatsapp_url"] = payload["phone_whatsapp_url"]
+		channels["whatsapp"] = true
+	}
+	if phone2WhatsAppEnabled && phone2 != "" {
+		payload["phone_2_whatsapp_url"] = buildPropertyWhatsAppURL(
+			propertyWhatsAppPhoneNumber(phone2, phone2CountryCode),
+			listing.Title,
+			listing.PublicID,
+			s.runtime.Config.AppPublicBaseURL,
+			channel,
+		)
+		if payload["whatsapp_url"] == "" {
+			payload["whatsapp_url"] = payload["phone_2_whatsapp_url"]
+		}
+		channels["whatsapp"] = true
+	}
 	if contact.ShowWhatsApp && contact.WhatsAppEncrypted != "" {
 		whatsApp, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.WhatsAppEncrypted)
 		if err != nil {
 			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt whatsapp")
 		}
-		payload["whatsapp_url"] = buildPropertyWhatsAppURL(whatsApp, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL, channel)
+		if payload["whatsapp_url"] == "" {
+			payload["whatsapp_url"] = buildPropertyWhatsAppURL(
+				propertyWhatsAppPhoneNumber(whatsApp, contactAttributes["phone_country_code"]),
+				listing.Title,
+				listing.PublicID,
+				s.runtime.Config.AppPublicBaseURL,
+				channel,
+			)
+		}
 		channels["whatsapp"] = true
-	} else if phone := strings.TrimSpace(payload["phone"]); phone != "" {
+	} else if phone := strings.TrimSpace(payload["phone"]); payload["whatsapp_url"] == "" && phone != "" {
 		payload["whatsapp_url"] = buildPropertyWhatsAppURL(phone, listing.Title, listing.PublicID, s.runtime.Config.AppPublicBaseURL, channel)
 		channels["whatsapp"] = true
 	}
-	if contact.ShowWhatsApp && contact.WeChatEncrypted != "" {
+	if contact.WeChatEncrypted != "" {
 		wechat, err := utils.DecryptString(s.runtime.Config.EncryptionKey, contact.WeChatEncrypted)
 		if err != nil {
 			return nil, errcode.New(errcode.CodeInternalError, "failed to decrypt wechat")

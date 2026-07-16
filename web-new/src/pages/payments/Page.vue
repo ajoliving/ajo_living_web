@@ -6,14 +6,18 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { RouterLink, useRouter } from 'vue-router';
 
 import { fetchPOSPaymentBills } from '@/httpapis/payments';
 import type { POSPaymentContext, POSPaymentRow } from '@/model/payments';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 const rows = ref<POSPaymentRow[]>([]);
 const context = ref<POSPaymentContext | undefined>();
 const isLoading = ref(false);
@@ -49,11 +53,16 @@ const readPaymentAmountValue = (row: POSPaymentRow): number => {
 
 // 3. 格式化港幣金額
 const formatHKD = (value: number): string =>
-  `HK$${value.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
 
 // 4. 讀取賬單名稱
 const readBillName = (row: POSPaymentRow): string =>
-  readPaymentText(row, ['item_name', 'item_id', 'name', 'fee_name', 'item']) || '物業費';
+  readPaymentText(row, ['item_name', 'item_id', 'name', 'fee_name', 'item']) || t('payments.home.defaultBillName');
 
 // 5. 判斷是否屬於管理費
 const isManagementBill = (row: POSPaymentRow): boolean => {
@@ -80,36 +89,36 @@ const contextLabel = computed(() => {
     ].filter(Boolean).join(' · ');
   }
   if (needsProfile.value) {
-    return '請先於會員中心綁定繳費單位';
+    return t('payments.home.bindUnitRequired');
   }
   if (needsIsmart.value) {
-    return '請先於會員中心綁定或更新 iSmart 帳戶';
+    return t('payments.home.ismartRequired');
   }
-  return '目前未有待繳賬單';
+  return t('payments.home.noBills');
 });
 const primaryActionLabel = computed(() => {
   if (needsProfile.value) {
-    return '前往綁定單位';
+    return t('payments.home.bindUnitAction');
   }
   if (needsIsmart.value) {
-    return '前往會員中心';
+    return t('payments.home.accountAction');
   }
-  return '立即繳費';
+  return t('payments.home.payAction');
 });
 const featureCards = computed(() => [
   {
-    title: '繳交大廈管理費',
-    text: '以目前會員綁定單位讀取賬單，支援按項目核對後付款。',
+    title: t('payments.home.featureManagementTitle'),
+    text: t('payments.home.featureManagementDescription'),
     tone: 'blue',
   },
   {
-    title: '繳交其他費用',
-    text: '將單位相關待繳費用集中在付款頁第一步，避免分散查找。',
+    title: t('payments.home.featureOtherTitle'),
+    text: t('payments.home.featureOtherDescription'),
     tone: 'orange',
   },
   {
-    title: 'AJO Coin 回贈',
-    text: '付款完成後按已入賬金額估算 AJO Coin 回贈。',
+    title: t('payments.home.featureRewardTitle'),
+    text: t('payments.home.featureRewardDescription'),
     tone: 'highlight',
   },
 ]);
@@ -131,7 +140,7 @@ const loadBills = async (): Promise<void> => {
     needsProfile.value = response?.status === 400 || message.includes('profile') || message.includes('residence');
     needsIsmart.value = response?.status === 401 || message.includes('ismart');
     if (!needsProfile.value && !needsIsmart.value) {
-      feedbackStore.pushToast('AJO Pay 賬單載入失敗。', 'error');
+      feedbackStore.pushToast(t('payments.home.loadBillsError'), 'error');
     }
   } finally {
     isLoading.value = false;
@@ -156,38 +165,36 @@ onMounted(() => {
   <main class="ajo-pay-home">
     <section class="ajo-pay-home__hero">
       <div class="ajo-pay-home__hero-copy">
-        <div class="ajo-pay-home__badge">香港智慧物業支付平台</div>
-        <h1>繳費，從此<br>變成一種投資。</h1>
-        <p>
-          用 AJO PAY 繳交大廈管理費及其他費用，日常生活每筆開支，筆筆賺取 AJO Coin 回贈。
-        </p>
+        <div class="ajo-pay-home__badge">{{ t('payments.home.platformBadge') }}</div>
+        <h1>{{ t('payments.home.heroTitle') }}</h1>
+        <p>{{ t('payments.home.heroDescription') }}</p>
         <button
           type="button"
           class="ajo-pay-home__primary"
           :disabled="isLoading"
           @click="handlePrimaryAction"
         >
-          {{ isLoading ? '載入中' : primaryActionLabel }}
+          {{ isLoading ? t('payments.home.loading') : primaryActionLabel }}
           <span aria-hidden="true">→</span>
         </button>
       </div>
 
       <div class="ajo-pay-home__summary">
         <article class="ajo-pay-home__stat-card">
-          <span>大廈管理費</span>
+          <span>{{ t('payments.home.managementFee') }}</span>
           <strong>{{ formatHKD(managementAmount) }}</strong>
           <small>{{ contextLabel }}</small>
         </article>
         <article class="ajo-pay-home__stat-card">
-          <span>其他費用</span>
+          <span>{{ t('payments.home.otherFees') }}</span>
           <strong>{{ formatHKD(otherAmount) }}</strong>
-          <small>{{ payableRows.length }} 筆待繳項目</small>
+          <small>{{ t('payments.home.pendingItems', payableRows.length) }}</small>
         </article>
         <article class="ajo-pay-home__stat-card ajo-pay-home__stat-card--accent">
           <div>
-            <span>AJO COIN 回贈</span>
-            <strong>+{{ rewardCoins }} Coins</strong>
-            <small>本次預計賺取</small>
+            <span>{{ t('payments.home.reward') }}</span>
+            <strong>{{ t('payments.home.rewardCoins', { count: rewardCoins }) }}</strong>
+            <small>{{ t('payments.home.estimatedReward') }}</small>
           </div>
           <b>A</b>
         </article>
@@ -196,16 +203,16 @@ onMounted(() => {
 
     <section class="ajo-pay-home__metrics">
       <article>
-        <strong>{{ payableRows.length.toLocaleString('en-HK') }}</strong>
-        <span>目前待繳項目</span>
+        <strong>{{ payableRows.length.toLocaleString(preferenceStore.locale) }}</strong>
+        <span>{{ t('payments.home.pendingItemsMetric') }}</span>
       </article>
       <article>
         <strong>1%</strong>
-        <span>每次付款回贈率</span>
+        <span>{{ t('payments.home.rewardRateMetric') }}</span>
       </article>
       <article>
         <strong>{{ formatHKD(totalAmount) }}</strong>
-        <span>目前待繳總額</span>
+        <span>{{ t('payments.home.pendingTotalMetric') }}</span>
       </article>
     </section>
 
@@ -227,9 +234,9 @@ onMounted(() => {
         <span>AJO</span>
         <b>PAY</b>
       </div>
-      <nav aria-label="AJO Pay footer">
-        <RouterLink to="/account/profile">會員中心</RouterLink>
-        <RouterLink to="/payments/pay">付款頁面</RouterLink>
+      <nav :aria-label="t('payments.home.footerLabel')">
+        <RouterLink to="/account/profile">{{ t('payments.home.accountLink') }}</RouterLink>
+        <RouterLink to="/payments/pay">{{ t('payments.home.paymentLink') }}</RouterLink>
       </nav>
     </footer>
   </main>
@@ -237,17 +244,21 @@ onMounted(() => {
 
 <style scoped>
 .ajo-pay-home {
-  --pay-brand: #f26419;
-  --pay-brand-dark: #c44f0e;
-  --pay-brand-light: #fff3eb;
-  --pay-brand-mid: #fda96a;
-  --pay-ink: #12122a;
-  --pay-ink-2: #454566;
-  --pay-ink-3: #8888aa;
-  --pay-surface: #ffffff;
-  --pay-surface-2: #f6f6fb;
-  --pay-border: #e2e2ee;
-  --pay-border-2: #cacade;
+  --pay-brand: rgb(var(--color-primary));
+  --pay-brand-dark: rgb(var(--color-brand-dark));
+  --pay-brand-light: rgb(var(--color-primary-soft));
+  --pay-brand-mid: rgb(var(--color-brand-mid));
+  --pay-ink: rgb(var(--color-text));
+  --pay-ink-2: rgb(var(--color-ink-2));
+  --pay-ink-3: rgb(var(--color-ink-3));
+  --pay-surface: rgb(var(--color-surface));
+  --pay-surface-2: rgb(var(--color-surface-2));
+  --pay-border: rgb(var(--color-border));
+  --pay-border-2: rgb(var(--color-border-2));
+  --pay-hero-start: rgb(var(--color-surface-3));
+  --pay-feature-highlight-start: rgb(var(--color-surface-raised));
+  --pay-info-surface: rgb(var(--color-surface-3));
+  --pay-highlight-surface: rgb(var(--color-primary) / 0.12);
   display: grid;
   min-height: calc(100svh - var(--nav-h, 52px));
   background: var(--pay-surface-2);
@@ -259,7 +270,7 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr) 420px;
   align-items: center;
   gap: 60px;
-  background: linear-gradient(140deg, #ebf4ff, var(--pay-surface-2));
+  background: linear-gradient(140deg, var(--pay-hero-start), var(--pay-surface-2));
   padding: 48px 40px;
 }
 
@@ -440,7 +451,7 @@ onMounted(() => {
 }
 
 .ajo-pay-home__feature--blue span {
-  background: #eef3ff;
+  background: var(--pay-info-surface);
 }
 
 .ajo-pay-home__feature--orange span {
@@ -449,11 +460,11 @@ onMounted(() => {
 
 .ajo-pay-home__feature--highlight {
   border-color: var(--pay-brand-mid);
-  background: linear-gradient(135deg, #fff8f2, var(--pay-brand-light));
+  background: linear-gradient(135deg, var(--pay-feature-highlight-start), var(--pay-brand-light));
 }
 
 .ajo-pay-home__feature--highlight span {
-  background: rgba(242, 100, 25, 0.12);
+  background: var(--pay-highlight-surface);
 }
 
 .ajo-pay-home__feature strong {
@@ -520,7 +531,7 @@ onMounted(() => {
   color: var(--pay-ink);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1023px) {
   .ajo-pay-home__hero,
   .ajo-pay-home__features,
   .ajo-pay-home__metrics {

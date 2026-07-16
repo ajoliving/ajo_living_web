@@ -17,6 +17,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import ManagementMembersPage from './members/Page.vue';
+import ManagementAgencyCompaniesPage from './agency-companies/Page.vue';
 import ManagementPropertySalesPage from './property-sales/Page.vue';
 import ManagementRewardAdsPage from './reward-ads/Page.vue';
 import ManagementSecondhandListingsPage from './secondhand-listings/Page.vue';
@@ -33,6 +34,7 @@ type ManagementTab =
   | 'admin-homes'
   | 'admin-icctv'
   | 'admin-members'
+  | 'admin-agency-companies'
   | 'admin-notices'
   | 'admin-ads'
   | 'admin-ad-settings'
@@ -53,6 +55,7 @@ const validTabs: ManagementTab[] = [
   'admin-homes',
   'admin-icctv',
   'admin-members',
+  'admin-agency-companies',
   'admin-notices',
   'admin-ads',
   'admin-ad-settings',
@@ -66,6 +69,7 @@ const navItems = computed<ManagementTabNavItem[]>(() => [
   { key: 'admin-homes', label: t('marketplace.management.servicedApartments') },
   { key: 'admin-icctv', label: t('marketplace.management.icctv') },
   { key: 'admin-members', label: t('marketplace.management.members') },
+  { key: 'admin-agency-companies', label: t('marketplace.management.agencyCompany.title') },
   { key: 'admin-notices', label: t('marketplace.management.systemNotices') },
   { key: 'admin-ads', label: t('marketplace.management.walletAdListSection') },
   { key: 'admin-ad-settings', label: t('marketplace.management.adSettings') },
@@ -92,6 +96,8 @@ const activeComponent = computed(() => {
       return ManagementIcctvPanel;
     case 'admin-members':
       return ManagementMembersPage;
+    case 'admin-agency-companies':
+      return ManagementAgencyCompaniesPage;
     case 'admin-notices':
       return ManagementSystemNoticesPage;
     case 'admin-ads':
@@ -122,7 +128,7 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
 <template>
   <main class="work-shell">
     <aside class="work-sidebar">
-      <h1>管理中心</h1>
+      <h1>{{ t('marketplace.management.title') }}</h1>
       <p>{{ t('marketplace.management.description') }}</p>
 
       <nav class="work-nav">
@@ -179,7 +185,7 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
   align-self: start;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 16px;
 }
 
@@ -272,7 +278,7 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
 }
 
 /* 5. 響應式 */
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .work-shell {
     grid-template-columns: 1fr;
     padding: 14px var(--layout-page-padding-inline);

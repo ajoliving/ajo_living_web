@@ -161,7 +161,6 @@ func newSecurityICCTVTestRuntime(t *testing.T, upstreamURL string, isStaff bool,
 	}
 	if isStaff {
 		account.StaffBuildingPermissions = buildingJSON
-		account.ClientBuildingPermissions = []byte("[]")
 	}
 	if err := runtimeValue.DB.Create(&account).Error; err != nil {
 		t.Fatalf("create ismart account: %v", err)

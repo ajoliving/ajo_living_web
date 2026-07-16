@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -23,13 +24,13 @@ import type {
   SupermarketProductDetail,
   SupermarketStorePrice,
 } from '@/model/supermarket-offers';
+import { usePreferenceStore } from '@/stores/preferences';
 import {
   displaySupermarketCategory,
   displaySupermarketStore,
   formatSupermarketDate,
   formatSupermarketHKPrice,
   supermarketBestDealStorePrices,
-  supermarketCategoryText,
   supermarketCurrentStorePrices,
   supermarketDiscountStorePrices,
   supermarketOfferTexts,
@@ -71,6 +72,8 @@ interface TrendChartHoverItem extends TrendChartPoint {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const detail = ref<SupermarketProductDetail | null>(null);
 const detailLoading = ref(false);
 const detailError = ref('');
@@ -102,14 +105,19 @@ const product = computed<SupermarketProduct | null>(() => detail.value?.product 
 // 3. 取得商品分類文字
 const productCategoryText = computed(() => {
   if (!product.value) return '';
-  return supermarketCategoryText(product.value) || displaySupermarketCategory(product.value.category1 || '');
+  return [product.value.category1, product.value.category2, product.value.category3]
+    .filter(Boolean)
+    .map((value) => displaySupermarketCategory(value, preferenceStore.locale))
+    .join(' / ') || displaySupermarketCategory('', preferenceStore.locale);
 });
 
 // 4. 取得最新商店價格
 const latestStorePrices = computed<SupermarketStorePrice[]>(() => {
   const stores = detail.value?.stores ?? [];
-  const discountedStores = supermarketDiscountStorePrices(stores);
-  return (discountedStores.length > 0 ? discountedStores : supermarketCurrentStorePrices(stores)).slice(0, 8);
+  const discountedStores = supermarketDiscountStorePrices(stores, preferenceStore.locale);
+  return (discountedStores.length > 0
+    ? discountedStores
+    : supermarketCurrentStorePrices(stores, preferenceStore.locale)).slice(0, 8);
 });
 
 // 5. 取得最新商店對比卡（對齊參考三列）
@@ -117,20 +125,23 @@ const latestStoreCards = computed<SupermarketStorePrice[]>(() => latestStorePric
 
 // 6. 取得最優惠商店
 const bestDealPrices = computed<SupermarketStorePrice[]>(() =>
-  supermarketBestDealStorePrices(detail.value?.stores ?? []),
+  supermarketBestDealStorePrices(detail.value?.stores ?? [], preferenceStore.locale),
 );
 
 // 7. 建立最優惠門店摘要文字
 const bestDealSummaryText = computed(() =>
   bestDealPrices.value.length > 0
     ? bestDealPrices.value
-        .map((item) => `${displaySupermarketStore(item.store)} ${formatSupermarketHKPrice(item.effectiveUnitPrice)}`)
+        .map((item) => `${formatStore(item.store)} ${formatOfferPrice(item.effectiveUnitPrice)}`)
         .join(' / ')
-    : '未有可計算優惠',
+    : t('offers.detail.noDeal'),
 );
 
 // 8. 取得最新快照日期
-const latestSnapshotText = computed(() => formatSupermarketDate(latestStoreCards.value[0]?.snapshotDate) || '最新資料');
+const latestSnapshotText = computed(() =>
+  formatSupermarketDate(latestStoreCards.value[0]?.snapshotDate, preferenceStore.locale)
+  || t('offers.detail.latestData'),
+);
 
 // 9. 取得同品牌商品
 const sameBrandProducts = computed<SupermarketProduct[]>(() => {
@@ -158,7 +169,9 @@ const sameCategoryProducts = computed<SupermarketProduct[]>(() =>
 
 // 11. 取得商品頭圖首字
 const productInitial = computed(() => {
-  const source = product.value?.brand?.trim() || product.value?.name?.trim() || '品';
+  const source = product.value?.brand?.trim()
+    || product.value?.name?.trim()
+    || t('offers.detail.productFallbackInitial');
   return source.slice(0, 1);
 });
 
@@ -196,21 +209,25 @@ const trendHover = computed(() => {
 
 // 14. 取得關聯商品價格
 const relatedProductPriceText = (item: SupermarketProduct): string =>
-  formatSupermarketHKPrice(supermarketPrimaryPrice(item).effectiveUnitPrice);
+  formatOfferPrice(supermarketPrimaryPrice(item, preferenceStore.locale).effectiveUnitPrice);
 
 // 15. 取得關聯商品門店
 const relatedProductStoreText = (item: SupermarketProduct): string =>
-  displaySupermarketStore(supermarketPrimaryPrice(item).store);
+  formatStore(supermarketPrimaryPrice(item, preferenceStore.locale).store);
 
 // 16. 取得關聯商品優惠文字
 const relatedProductOfferText = (item: SupermarketProduct): string => {
-  const [firstOffer] = supermarketOfferTexts(item);
-  return firstOffer || supermarketPrimaryPrice(item).offer || '常規價格';
+  const [firstOffer] = supermarketOfferTexts(item, preferenceStore.locale);
+  return firstOffer
+    || supermarketPrimaryPrice(item, preferenceStore.locale).offer
+    || t('offers.detail.regularPrice');
 };
 
 // 17. 取得關聯商品品牌首字
 const relatedProductInitial = (item: SupermarketProduct): string => {
-  const source = item.brand?.trim() || item.name?.trim() || '品';
+  const source = item.brand?.trim()
+    || item.name?.trim()
+    || t('offers.detail.productFallbackInitial');
   return source.slice(0, 1);
 };
 
@@ -218,7 +235,7 @@ const relatedProductInitial = (item: SupermarketProduct): string => {
 const loadDetail = async (code: string): Promise<void> => {
   if (!code.trim()) {
     detail.value = null;
-    detailError.value = '未提供商品編號。';
+    detailError.value = t('offers.detail.noProductCode');
     return;
   }
 
@@ -234,7 +251,7 @@ const loadDetail = async (code: string): Promise<void> => {
     trendHoverDate.value = '';
     fillAlertForm(data.data.alertRule ?? null);
   } catch {
-    detailError.value = '暫時無法載入商品詳情。';
+    detailError.value = t('offers.detail.loadError');
   } finally {
     detailLoading.value = false;
   }
@@ -265,16 +282,16 @@ const toggleFavorite = async (): Promise<void> => {
       await removeSupermarketFavorite(detail.value.product.code);
       detail.value.isFavorite = false;
       detail.value.product.isFavorite = false;
-      actionMessage.value = '已取消收藏。';
+      actionMessage.value = t('offers.list.favoriteRemoved');
       return;
     }
 
     await addSupermarketFavorite(detail.value.product.code);
     detail.value.isFavorite = true;
     detail.value.product.isFavorite = true;
-    actionMessage.value = '已加入收藏。';
+    actionMessage.value = t('offers.list.favoriteAdded');
   } catch {
-    actionMessage.value = '收藏操作失敗。';
+    actionMessage.value = t('offers.list.favoriteError');
   } finally {
     savingFavorite.value = false;
   }
@@ -296,7 +313,7 @@ const submitAlert = async (): Promise<void> => {
   const trimmedPrice = alertForm.targetPrice.trim();
   const targetPrice = trimmedPrice ? Number(trimmedPrice) : undefined;
   if (targetPrice !== undefined && (!Number.isFinite(targetPrice) || targetPrice < 0)) {
-    actionMessage.value = '請輸入有效價格。';
+    actionMessage.value = t('offers.detail.priceValidation');
     return;
   }
 
@@ -323,9 +340,9 @@ const submitAlert = async (): Promise<void> => {
     detail.value.alertRule = data.data;
     fillAlertForm(data.data);
     alertFormOpen.value = false;
-    actionMessage.value = '價格提示已儲存。';
+    actionMessage.value = t('offers.detail.alertSaved');
   } catch {
-    actionMessage.value = '價格提示儲存失敗，請確認會員資料。';
+    actionMessage.value = t('offers.detail.alertSaveError');
   } finally {
     savingAlert.value = false;
   }
@@ -342,9 +359,9 @@ const removeAlert = async (): Promise<void> => {
     detail.value.alertRule = null;
     fillAlertForm(null);
     alertFormOpen.value = false;
-    actionMessage.value = '價格提示已刪除。';
+    actionMessage.value = t('offers.detail.alertDeleted');
   } catch {
-    actionMessage.value = '價格提示刪除失敗。';
+    actionMessage.value = t('offers.detail.alertDeleteError');
   } finally {
     savingAlert.value = false;
   }
@@ -374,20 +391,20 @@ const resetNearbyStores = (): void => {
 const requestBestDealLocation = (): void => {
   if (!navigator.geolocation) {
     nearbyStatus.value = 'error';
-    nearbyMessage.value = '此瀏覽器不支援定位功能。';
+    nearbyMessage.value = t('offers.detail.geolocationUnsupported');
     return;
   }
 
   const storeCodes = bestDealPrices.value.map((item) => item.store);
   if (storeCodes.length === 0) {
     nearbyStatus.value = 'ready';
-    nearbyMessage.value = '未有可計算的優惠商戶。';
+    nearbyMessage.value = t('offers.detail.noDealStore');
     return;
   }
 
   nearbyStores.value = [];
   nearbyStatus.value = 'requesting';
-  nearbyMessage.value = '正在取得目前位置。';
+  nearbyMessage.value = t('offers.detail.locatingPosition');
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
@@ -403,8 +420,8 @@ const requestBestDealLocation = (): void => {
         .sort((a, b) => a.distanceKm - b.distanceKm);
       nearbyStatus.value = 'ready';
       nearbyMessage.value = nearbyStores.value.length > 0
-        ? '已按目前位置排序。'
-        : '暫時沒有最優惠商戶的可定位門店資料。';
+        ? t('offers.detail.locationSorted')
+        : t('offers.detail.noLocationData');
     },
     (error) => {
       nearbyStores.value = [];
@@ -417,10 +434,10 @@ const requestBestDealLocation = (): void => {
 
 // 29. 取得定位錯誤文字
 const geolocationErrorMessage = (error: GeolocationPositionError): string => {
-  if (error.code === error.PERMISSION_DENIED) return '未取得定位權限。';
-  if (error.code === error.POSITION_UNAVAILABLE) return '暫時無法取得目前位置。';
-  if (error.code === error.TIMEOUT) return '定位逾時，請稍後再試。';
-  return '定位失敗。';
+  if (error.code === error.PERMISSION_DENIED) return t('offers.detail.permissionDenied');
+  if (error.code === error.POSITION_UNAVAILABLE) return t('offers.detail.positionUnavailable');
+  if (error.code === error.TIMEOUT) return t('offers.detail.locationTimeout');
+  return t('offers.detail.locationError');
 };
 
 // 30. 按滑鼠位置更新走勢圖浮層
@@ -536,6 +553,14 @@ const formatDateTick = (date: string): string => {
   return date;
 };
 
+// 36. 格式化商店名稱
+const formatStore = (value: string): string =>
+  displaySupermarketStore(value, preferenceStore.locale);
+
+// 37. 格式化商品價格
+const formatOfferPrice = (value: number | null | undefined): string =>
+  formatSupermarketHKPrice(value, preferenceStore.locale);
+
 watch(
   productCode,
   (code) => {
@@ -557,7 +582,7 @@ watch(
       v-else-if="detailLoading && !detail"
       class="gp-state"
     >
-      正在載入商品詳情。
+      {{ t('offers.detail.loading') }}
     </p>
 
     <template v-if="detail && product">
@@ -569,10 +594,10 @@ watch(
             class="bc-link"
             @click="backToList"
           >
-            返回上頁
+            {{ t('offers.detail.back') }}
           </button>
           <span class="bc-sep">›</span>
-          <strong class="bc-current">商品詳情</strong>
+          <strong class="bc-current">{{ t('offers.detail.title') }}</strong>
         </div>
 
         <!-- 2. 商品頭 -->
@@ -591,7 +616,7 @@ watch(
             </span>
           </div>
           <div>
-            <div class="gp-product-brand">{{ product.brand || '未提供品牌' }}</div>
+            <div class="gp-product-brand">{{ product.brand || t('offers.list.noBrand') }}</div>
             <div class="gp-detail-title">{{ product.name }}</div>
             <div class="gp-product-cat">{{ productCategoryText }}</div>
           </div>
@@ -603,14 +628,14 @@ watch(
               :disabled="savingFavorite"
               @click="toggleFavorite"
             >
-              {{ detail.isFavorite ? '已收藏' : '收藏' }}
+              {{ detail.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite') }}
             </button>
             <button
               type="button"
               class="gp-detail-action"
               @click="openAlertForm"
             >
-              收藏並設定提醒
+              {{ t('offers.detail.favoriteWithAlert') }}
             </button>
           </div>
         </div>
@@ -629,8 +654,8 @@ watch(
         >
           <div class="gp-alert-head">
             <div>
-              <h3>到價提醒</h3>
-              <div class="gp-detail-subtitle">提醒會綁定目前 AJO 會員。</div>
+              <h3>{{ t('offers.detail.priceAlert') }}</h3>
+              <div class="gp-detail-subtitle">{{ t('offers.detail.alertMemberHint') }}</div>
             </div>
             <div class="gp-alert-actions">
               <button
@@ -640,14 +665,14 @@ watch(
                 :disabled="savingAlert"
                 @click="removeAlert"
               >
-                刪除提示
+                {{ t('offers.detail.deleteAlert') }}
               </button>
               <button
                 type="button"
                 class="gp-link-btn"
                 @click="alertFormOpen = false"
               >
-                關閉
+                {{ t('offers.detail.close') }}
               </button>
             </div>
           </div>
@@ -660,40 +685,40 @@ watch(
               type="number"
               min="0"
               step="0.1"
-              placeholder="目標價格，可留空"
+              :placeholder="t('offers.detail.targetPricePlaceholder')"
             >
             <select v-model="alertForm.priceMode">
-              <option value="effective">優惠後等效價</option>
-              <option value="list">原價</option>
+              <option value="effective">{{ t('offers.detail.effectiveEquivalent') }}</option>
+              <option value="list">{{ t('offers.detail.originalPrice') }}</option>
             </select>
             <label>
               <input
                 v-model="alertForm.offerRequired"
                 type="checkbox"
               >
-              只在有優惠時提醒
+              {{ t('offers.detail.alertOfferOnly') }}
             </label>
             <label>
               <input
                 v-model="alertForm.enabled"
                 type="checkbox"
               >
-              啟用提示
+              {{ t('offers.detail.enableAlert') }}
             </label>
             <button
               type="submit"
               :disabled="savingAlert"
             >
-              {{ savingAlert ? '儲存中' : '儲存提示' }}
+              {{ savingAlert ? t('offers.detail.saving') : t('offers.detail.saveAlert') }}
             </button>
           </form>
         </section>
 
         <!-- 4. 超市優惠與門店地址 -->
         <div class="gp-detail-card gp-section-block">
-          <h3>超市優惠與門店地址</h3>
+          <h3>{{ t('offers.detail.offersAndStores') }}</h3>
           <div class="gp-detail-subtitle">
-            先看有優惠的最新超市，再查最優惠商戶或最近門店路線。門店列表可直接開 Google Maps。
+            {{ t('offers.detail.offersAndStoresHint') }}
           </div>
           <div class="gp-compare-grid">
             <div
@@ -701,9 +726,11 @@ watch(
               :key="`${price.store}-${price.effectiveUnitPrice}`"
               class="gp-compare-card"
             >
-              <div class="gp-compare-store">{{ displaySupermarketStore(price.store) }}</div>
-              <div class="gp-compare-price">{{ formatSupermarketHKPrice(price.effectiveUnitPrice) }}</div>
-              <div class="gp-compare-origin">原價 {{ formatSupermarketHKPrice(price.listPrice) }}</div>
+              <div class="gp-compare-store">{{ formatStore(price.store) }}</div>
+              <div class="gp-compare-price">{{ formatOfferPrice(price.effectiveUnitPrice) }}</div>
+              <div class="gp-compare-origin">{{ t('offers.detail.originalPriceValue', {
+                price: formatOfferPrice(price.listPrice),
+              }) }}</div>
               <div
                 v-if="price.offer"
                 class="gp-compare-offer"
@@ -715,7 +742,7 @@ watch(
           </div>
           <div class="gp-best-shop">
             <div>
-              <strong>最優惠門店地址</strong>
+              <strong>{{ t('offers.detail.bestStoreAddress') }}</strong>
               <span>{{ bestDealSummaryText }}</span>
             </div>
             <button
@@ -724,11 +751,15 @@ watch(
               :disabled="nearbyStatus === 'requesting'"
               @click="requestBestDealLocation"
             >
-              {{ nearbyStatus === 'requesting' ? '定位中' : '查找最優惠門店' }}
+              {{ nearbyStatus === 'requesting'
+                ? t('offers.detail.locating')
+                : t('offers.detail.findBestStore') }}
             </button>
           </div>
-          <h3 class="gp-shop-block-title">最優惠最近門店地址</h3>
-          <div class="gp-detail-subtitle">{{ nearbyMessage || `最新資料：${latestSnapshotText}` }}</div>
+          <h3 class="gp-shop-block-title">{{ t('offers.detail.nearestBestStoreAddress') }}</h3>
+          <div class="gp-detail-subtitle">{{ nearbyMessage || t('offers.detail.latestSnapshot', {
+            date: latestSnapshotText,
+          }) }}</div>
           <div
             v-if="nearbyStores.length > 0"
             class="gp-shop-table-wrap"
@@ -737,11 +768,11 @@ watch(
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>超市</th>
-                  <th>門店</th>
-                  <th>地址</th>
-                  <th>距離</th>
-                  <th>營業時間</th>
+                  <th>{{ t('offers.detail.supermarket') }}</th>
+                  <th>{{ t('offers.detail.shop') }}</th>
+                  <th>{{ t('offers.detail.address') }}</th>
+                  <th>{{ t('offers.detail.distance') }}</th>
+                  <th>{{ t('offers.detail.openingHours') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -758,7 +789,7 @@ watch(
                       {{ index + 1 }}
                     </a>
                   </td>
-                  <td>{{ displaySupermarketStore(store.storeCode) }}</td>
+                  <td>{{ formatStore(store.storeCode) }}</td>
                   <td>{{ store.name }}</td>
                   <td>{{ store.address }}</td>
                   <td><span class="gp-shop-dist">{{ formatSupermarketDistanceKm(store.distanceKm) }}</span></td>
@@ -772,29 +803,31 @@ watch(
         <!-- 5. 價格摘要 + 走勢 -->
         <div class="gp-price-layout">
           <div class="gp-detail-card">
-            <h3>90日價格摘要</h3>
+            <h3>{{ t('offers.detail.summary90Days') }}</h3>
             <div class="gp-summary-grid">
               <div class="gp-summary-item">
-                <div class="gp-summary-label">90日最低原價</div>
-                <div class="gp-summary-value">{{ formatSupermarketHKPrice(detail.summary.lowestList) }}</div>
+                <div class="gp-summary-label">{{ t('offers.detail.lowestList90Days') }}</div>
+                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.lowestList) }}</div>
               </div>
               <div class="gp-summary-item">
-                <div class="gp-summary-label">90日最高原價</div>
-                <div class="gp-summary-value">{{ formatSupermarketHKPrice(detail.summary.highestList) }}</div>
+                <div class="gp-summary-label">{{ t('offers.detail.highestList90Days') }}</div>
+                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.highestList) }}</div>
               </div>
               <div class="gp-summary-item">
-                <div class="gp-summary-label">90日最低優惠價</div>
-                <div class="gp-summary-value">{{ formatSupermarketHKPrice(detail.summary.lowestDeal) }}</div>
+                <div class="gp-summary-label">{{ t('offers.detail.lowestDeal90Days') }}</div>
+                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.lowestDeal) }}</div>
               </div>
               <div class="gp-summary-item">
-                <div class="gp-summary-label">90日最高優惠價</div>
-                <div class="gp-summary-value">{{ formatSupermarketHKPrice(detail.summary.highestDeal) }}</div>
+                <div class="gp-summary-label">{{ t('offers.detail.highestDeal90Days') }}</div>
+                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.highestDeal) }}</div>
               </div>
             </div>
           </div>
           <div class="gp-detail-card">
-            <h3>90日超市價格走勢</h3>
-            <div class="gp-detail-subtitle">{{ chartMode === 'effective' ? '優惠後等效價' : '原價' }}</div>
+            <h3>{{ t('offers.detail.trend90Days') }}</h3>
+            <div class="gp-detail-subtitle">{{ chartMode === 'effective'
+              ? t('offers.detail.effectiveEquivalent')
+              : t('offers.detail.originalPrice') }}</div>
             <div class="gp-chart-mode">
               <button
                 type="button"
@@ -802,7 +835,7 @@ watch(
                 :class="chartMode === 'effective' ? 'on' : ''"
                 @click="chartMode = 'effective'"
               >
-                優惠價
+                {{ t('offers.detail.dealPrice') }}
               </button>
               <button
                 type="button"
@@ -810,7 +843,7 @@ watch(
                 :class="chartMode === 'list' ? 'on' : ''"
                 @click="chartMode = 'list'"
               >
-                原價
+                {{ t('offers.detail.originalPrice') }}
               </button>
             </div>
 
@@ -822,7 +855,7 @@ watch(
                 :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`"
                 preserveAspectRatio="none"
                 role="img"
-                aria-label="90日超市價格走勢"
+                :aria-label="t('offers.detail.trendAria')"
                 @mousemove="handleTrendHover"
                 @mouseleave="clearTrendHover"
               >
@@ -906,7 +939,7 @@ watch(
                   v-for="item in trendHover.items"
                   :key="`${item.key}-tooltip`"
                 >
-                  {{ displaySupermarketStore(item.store) }} {{ formatSupermarketHKPrice(item.value) }}
+                  {{ formatStore(item.store) }} {{ formatOfferPrice(item.value) }}
                 </span>
               </div>
               <div class="gp-chart-legend">
@@ -918,7 +951,7 @@ watch(
                     class="gp-legend-dot"
                     :style="{ background: series.color }"
                   />
-                  {{ displaySupermarketStore(series.store) }}
+                  {{ formatStore(series.store) }}
                 </span>
               </div>
             </div>
@@ -926,7 +959,7 @@ watch(
               v-else
               class="gp-state"
             >
-              未有歷史資料。
+              {{ t('offers.detail.noHistory') }}
             </p>
           </div>
         </div>
@@ -936,7 +969,7 @@ watch(
           v-if="sameBrandProducts.length > 0"
           class="gp-detail-card gp-related-block"
         >
-          <h3>同品牌產品</h3>
+          <h3>{{ t('offers.detail.sameBrand') }}</h3>
           <div class="gp-related-scroll">
             <button
               v-for="item in sameBrandProducts"
@@ -959,10 +992,10 @@ watch(
                 </span>
               </div>
               <div class="gp-related-body">
-                <div class="gp-related-brand">{{ item.brand || '未提供品牌' }}</div>
+                <div class="gp-related-brand">{{ item.brand || t('offers.list.noBrand') }}</div>
                 <div class="gp-related-name">{{ item.name }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }} / 件</div>
+                <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
               </div>
             </button>
           </div>
@@ -973,7 +1006,7 @@ watch(
           v-if="sameCategoryProducts.length > 0"
           class="gp-detail-card gp-related-block"
         >
-          <h3>同分類產品</h3>
+          <h3>{{ t('offers.detail.sameCategory') }}</h3>
           <div class="gp-related-scroll">
             <button
               v-for="item in sameCategoryProducts"
@@ -996,10 +1029,10 @@ watch(
                 </span>
               </div>
               <div class="gp-related-body">
-                <div class="gp-related-brand">{{ item.brand || '未提供品牌' }}</div>
+                <div class="gp-related-brand">{{ item.brand || t('offers.list.noBrand') }}</div>
                 <div class="gp-related-name">{{ item.name }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }} / 件</div>
+                <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
               </div>
             </button>
           </div>
@@ -1679,7 +1712,7 @@ watch(
 }
 
 /* 15. 響應式 */
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .offers-detail-page {
     padding: 14px 14px 48px;
   }

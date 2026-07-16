@@ -246,7 +246,7 @@
 | `remark` | string | no | 寫入 `ClientTbl.cli_remark` 的自由文字備註 |
 | `gender` | string | no | `M`, `F`, or empty |
 | `is_receive_email` | boolean | no | 是否啟用 `UserSettings.blg_notice_email`. Default: `true` |
-| `password` | string | no | 若省略，後端會生成隨機密碼 |
+| `password` | string | yes | AJO 會傳送會員註冊時必填的密碼 |
 
 #### Legacy-Compatible Aliases Also Accepted
 

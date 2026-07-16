@@ -2,6 +2,7 @@
  * 物業頻道 API。
  * 1. 串接樓盤放售與服務式住宅列表、詳情與發布接口。
  * 2. 提供我的列表、狀態操作與聯絡方式授權。
+ * 3. 提供樓盤繁體中文標題與介紹的 English 翻譯。
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse, PaginatedResult } from '@/model/api';
@@ -11,6 +12,8 @@ import type {
   PropertyAddressSuggestion,
   PropertyAppointmentPayload,
   PropertyAppointmentResponse,
+  PropertyContentTranslationPayload,
+  PropertyContentTranslationResponse,
   PropertyListParams,
   PropertyListingDetailResponse,
   PropertyListingSummaryResponse,
@@ -39,14 +42,21 @@ export const fetchSimilarPropertySales = (listingId: string, params: { limit?: n
   );
 
 // 3. 建立樓盤放售草稿
-export const createPropertySale = (payload: UpsertPropertySalePayload) =>
-  httpClient.post<ApiResponse<PropertyListingDetailResponse>>('/property-sales', payload);
+export const createPropertySale = (
+  payload: UpsertPropertySalePayload,
+  params: { charge_draft?: boolean } = {},
+) => httpClient.post<ApiResponse<PropertyListingDetailResponse>>('/property-sales', payload, { params });
 
 // 4. 更新樓盤放售
-export const updatePropertySale = (listingId: string, payload: UpsertPropertySalePayload) =>
+export const updatePropertySale = (
+  listingId: string,
+  payload: UpsertPropertySalePayload,
+  params: { charge_draft?: boolean } = {},
+) =>
   httpClient.patch<ApiResponse<PropertyListingDetailResponse>>(
     `/property-sales/${listingId}`,
     payload,
+    { params },
   );
 
 // 5. 發布樓盤放售
@@ -130,6 +140,13 @@ export const searchPropertyAddresses = (params: { keyword: string; district_code
   httpClient.get<ApiResponse<PropertyAddressSuggestion[]>>(
     '/property-addresses/search',
     { params },
+  );
+
+// 11.1 將樓盤標題及單位介紹翻譯成 English
+export const translatePropertyContent = (payload: PropertyContentTranslationPayload) =>
+  httpClient.post<ApiResponse<PropertyContentTranslationResponse>>(
+    '/property-sales/translation',
+    payload,
   );
 
 // 12. 查詢公開服務式住宅列表

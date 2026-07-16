@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import {
@@ -17,6 +18,7 @@ import {
 } from '@/httpapis/supermarket-offers';
 import { readStoredAccessToken } from '@/httpapis/auth-session';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { usePreferenceStore } from '@/stores/preferences';
 import type {
   SupermarketProduct,
   SupermarketSearchParams,
@@ -61,6 +63,8 @@ interface PageButton {
 }
 
 const router = useRouter();
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const pageSize = 20;
 const summary = ref<SupermarketSummary | null>(null);
 const searchResult = ref<SupermarketSearchResult | null>(null);
@@ -81,13 +85,13 @@ const viewMode = ref<ViewMode>('grid');
 const currentPage = ref(1);
 const isMobileFilterOpen = ref(false);
 
-const sortOptions: SortOption[] = [
-  { label: '優惠力度 ↓', value: 'discount' },
-  { label: '優惠後價格', value: 'effective' },
-  { label: '價差', value: 'diff' },
-  { label: '商品名稱', value: 'name' },
-  { label: '品牌', value: 'brand' },
-];
+const sortOptions = computed<SortOption[]>(() => [
+  { label: t('offers.list.sortDiscount'), value: 'discount' },
+  { label: t('offers.list.sortEffective'), value: 'effective' },
+  { label: t('offers.list.sortDifference'), value: 'diff' },
+  { label: t('offers.list.sortName'), value: 'name' },
+  { label: t('offers.list.sortBrand'), value: 'brand' },
+]);
 
 // 1. 建立 Hero 統計資料
 const heroStats = computed<HeroStat[]>(() => {
@@ -96,27 +100,35 @@ const heroStats = computed<HeroStat[]>(() => {
     ? summary.value.bestDiscounts
     : summary.value?.offers ?? [];
   const maxDiscount = discountSource.reduce((result, product) => {
-    const rate = supermarketPriceDiscountRate(supermarketPrimaryPrice(product));
+    const rate = supermarketPriceDiscountRate(supermarketPrimaryPrice(product, preferenceStore.locale));
     return Math.max(result, rate);
   }, 0);
 
   return [
-    { value: formatInteger(stats?.offers), label: '活躍優惠' },
-    { value: formatInteger(stats?.stores), label: '連鎖商店' },
-    { value: maxDiscount > 0 ? `-${maxDiscount.toFixed(0)}%` : '-', label: '最高折扣' },
+    { value: formatInteger(stats?.offers), label: t('offers.list.activeOffers') },
+    { value: formatInteger(stats?.stores), label: t('offers.list.chainStores') },
+    { value: maxDiscount > 0 ? `-${maxDiscount.toFixed(0)}%` : '-', label: t('offers.list.highestDiscount') },
   ];
 });
 
 // 2. 建立分類篩選項
 const categoryPills = computed<FilterPill[]>(() => [
-  { label: '全部', value: '' },
-  ...valueCountPills(summary.value?.categories ?? [], displaySupermarketCategory, 9),
+  { label: t('offers.list.all'), value: '' },
+  ...valueCountPills(
+    summary.value?.categories ?? [],
+    (value) => displaySupermarketCategory(value, preferenceStore.locale),
+    9,
+  ),
 ]);
 
 // 3. 建立商店篩選項
 const storePills = computed<FilterPill[]>(() => [
-  { label: '全部商店', value: '' },
-  ...valueCountPills(summary.value?.stores ?? [], displaySupermarketStore, 9),
+  { label: t('offers.list.allStores'), value: '' },
+  ...valueCountPills(
+    summary.value?.stores ?? [],
+    (value) => displaySupermarketStore(value, preferenceStore.locale),
+    9,
+  ),
 ]);
 
 // 4. 建立品牌篩選項
@@ -154,7 +166,7 @@ const pageButtons = computed<PageButton[]>(() => {
 
   return [
     {
-      label: '上一頁',
+      label: t('offers.list.previous'),
       key: 'prev',
       page: Math.max(1, currentPage.value - 1),
       active: false,
@@ -168,7 +180,7 @@ const pageButtons = computed<PageButton[]>(() => {
       disabled: false,
     })),
     {
-      label: '下一頁',
+      label: t('offers.list.next'),
       key: 'next',
       page: Math.min(totalPages.value, currentPage.value + 1),
       active: false,
@@ -179,10 +191,15 @@ const pageButtons = computed<PageButton[]>(() => {
 
 // 10. 建立更新資訊文字
 const updatedBarText = computed(() => {
-  const updatedDate = formatSupermarketDate(summary.value?.metadata?.latestSnapshotDate);
+  const updatedDate = formatSupermarketDate(
+    summary.value?.metadata?.latestSnapshotDate,
+    preferenceStore.locale,
+  );
   const productCount = formatInteger(summary.value?.stats.products);
-  const prefix = updatedDate ? `資料更新：${updatedDate}` : '資料更新：等待資料';
-  return `${prefix} · 共監測 ${productCount} 件商品 · 價格只供參考，實際售價以商戶公布為準。`;
+  const prefix = updatedDate
+    ? t('offers.list.updatedDate', { date: updatedDate })
+    : t('offers.list.updatedPending');
+  return t('offers.list.updatedSummary', { prefix, count: productCount });
 });
 
 // 11. 載入摘要
@@ -193,7 +210,7 @@ const loadSummary = async (): Promise<void> => {
     const { data } = await fetchSupermarketSummary();
     summary.value = data.data;
   } catch {
-    summaryError.value = '暫時無法載入超市優惠摘要。';
+    summaryError.value = t('offers.list.summaryError');
   } finally {
     summaryLoading.value = false;
   }
@@ -218,7 +235,7 @@ const loadSearch = async (): Promise<void> => {
     const { data } = await searchSupermarketProducts(params);
     searchResult.value = data.data;
   } catch {
-    searchError.value = '暫時無法載入優惠商品。';
+    searchError.value = t('offers.list.searchError');
   } finally {
     searchLoading.value = false;
   }
@@ -237,7 +254,7 @@ const loadFavorites = async (): Promise<void> => {
     const { data } = await fetchSupermarketFavorites({ page: 1, pageSize: 80 });
     favorites.value = data.data.items;
   } catch {
-    searchError.value = '暫時無法載入我的收藏。';
+    searchError.value = t('offers.list.favoritesError');
   } finally {
     favoritesLoading.value = false;
   }
@@ -340,16 +357,16 @@ const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
       await removeSupermarketFavorite(product.code);
       patchFavoriteState(product.code, false);
       favorites.value = favorites.value.filter((item) => item.code !== product.code);
-      actionMessage.value = '已取消收藏。';
+      actionMessage.value = t('offers.list.favoriteRemoved');
       return;
     }
 
     const { data } = await addSupermarketFavorite(product.code);
     patchFavoriteState(product.code, true);
     favorites.value = [data.data, ...favorites.value.filter((item) => item.code !== product.code)];
-    actionMessage.value = '已加入收藏。';
+    actionMessage.value = t('offers.list.favoriteAdded');
   } catch {
-    actionMessage.value = '收藏操作失敗。';
+    actionMessage.value = t('offers.list.favoriteError');
   }
 };
 
@@ -405,7 +422,32 @@ const valueCountPills = (
     .filter((item) => item.value);
 
 // 30. 格式化整數
-const formatInteger = (value: number | undefined): string => (value ?? 0).toLocaleString('zh-HK');
+const formatInteger = (value: number | undefined): string =>
+  (value ?? 0).toLocaleString(preferenceStore.locale);
+
+// 31. 格式化商店名稱
+const formatStore = (value: string): string =>
+  displaySupermarketStore(value, preferenceStore.locale);
+
+// 32. 格式化商品分類
+const formatCategory = (value: string): string =>
+  displaySupermarketCategory(value, preferenceStore.locale);
+
+// 33. 格式化商品價格
+const formatOfferPrice = (value: number | null | undefined): string =>
+  formatSupermarketHKPrice(value, preferenceStore.locale);
+
+// 34. 取得商品商店價格
+const productStorePrices = (product: SupermarketProduct) =>
+  supermarketStorePrices(product, preferenceStore.locale);
+
+// 35. 取得商品主要價格
+const productPrimaryPrice = (product: SupermarketProduct) =>
+  supermarketPrimaryPrice(product, preferenceStore.locale);
+
+// 36. 取得商品優惠文字
+const productOfferTexts = (product: SupermarketProduct): string[] =>
+  supermarketOfferTexts(product, preferenceStore.locale);
 
 onMounted(() => {
   void loadSummary();
@@ -422,7 +464,7 @@ onMounted(() => {
       v-if="isMobileFilterOpen"
       type="button"
       class="gp-filter-backdrop"
-      aria-label="關閉篩選"
+      :aria-label="t('offers.list.closeFilters')"
       @click="closeMobileFilter"
     ></button>
 
@@ -435,11 +477,11 @@ onMounted(() => {
       aria-labelledby="offers-mobile-filter-title"
     >
       <header class="gp-filter-sheet-header">
-        <h2 id="offers-mobile-filter-title">篩選條件</h2>
+        <h2 id="offers-mobile-filter-title">{{ t('offers.list.filters') }}</h2>
         <button
           type="button"
           class="gp-filter-sheet-close filter-sheet-close"
-          aria-label="關閉篩選"
+          :aria-label="t('offers.list.closeFilters')"
           @click="closeMobileFilter"
         >
           <AppIcon
@@ -451,7 +493,7 @@ onMounted(() => {
 
       <div class="gp-filter-sheet-body">
         <section class="gp-filter-section">
-          <h3>商品分類</h3>
+          <h3>{{ t('offers.list.category') }}</h3>
           <div class="gp-filter-tags">
             <button
               v-for="category in categoryPills"
@@ -467,7 +509,7 @@ onMounted(() => {
         </section>
 
         <section class="gp-filter-section">
-          <h3>商店</h3>
+          <h3>{{ t('offers.list.store') }}</h3>
           <div class="gp-filter-tags">
             <button
               v-for="store in storePills"
@@ -483,12 +525,12 @@ onMounted(() => {
         </section>
 
         <label class="gp-filter-select-field">
-          <span>品牌</span>
+          <span>{{ t('offers.list.brand') }}</span>
           <select
             v-model="activeBrand"
             @change="selectBrand"
           >
-            <option value="">全部品牌</option>
+            <option value="">{{ t('offers.list.allBrands') }}</option>
             <option
               v-for="brand in brandOptions"
               :key="`sheet-brand-${brand}`"
@@ -500,7 +542,7 @@ onMounted(() => {
         </label>
 
         <label class="gp-filter-select-field">
-          <span>排序</span>
+          <span>{{ t('offers.list.sort') }}</span>
           <select
             v-model="activeSort"
             @change="selectSort"
@@ -516,18 +558,18 @@ onMounted(() => {
         </label>
 
         <section class="gp-filter-section gp-view-filter-section">
-          <h3>顯示方式</h3>
+          <h3>{{ t('offers.list.viewMode') }}</h3>
           <div class="gp-view-filter-actions">
             <button
               type="button"
               :class="viewMode === 'grid' ? 'on' : ''"
               @click="setView('grid')"
-            >網格</button>
+            >{{ t('offers.list.grid') }}</button>
             <button
               type="button"
               :class="viewMode === 'table' ? 'on' : ''"
               @click="setView('table')"
-            >表格</button>
+            >{{ t('offers.list.table') }}</button>
           </div>
         </section>
       </div>
@@ -537,21 +579,21 @@ onMounted(() => {
           type="button"
           class="gp-filter-sheet-reset"
           @click="resetFilters"
-        >重設</button>
+        >{{ t('offers.list.reset') }}</button>
         <button
           type="button"
           class="gp-filter-sheet-apply"
           @click="closeMobileFilter"
-        >查看 {{ totalCount.toLocaleString('zh-HK') }} 個優惠</button>
+        >{{ t('offers.list.viewOffers', { count: formatInteger(totalCount) }) }}</button>
       </footer>
     </aside>
 
     <!-- 1. 暗色 HERO -->
     <section class="gp-hero">
       <div class="gp-hero-left">
-        <div class="gp-hero-label">超市格價</div>
-        <div class="gp-hero-title">今日超市優惠</div>
-        <div class="gp-hero-sub">搜尋全港主要超市價格，按優惠後價格、折扣力度與商店快速篩選。</div>
+        <div class="gp-hero-label">{{ t('offers.list.heroEyebrow') }}</div>
+        <div class="gp-hero-title">{{ t('offers.list.heroTitle') }}</div>
+        <div class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</div>
       </div>
       <div class="gp-hero-right">
         <template
@@ -581,14 +623,14 @@ onMounted(() => {
           <input
             v-model="searchQuery"
             class="gp-sinput"
-            placeholder="搜尋商品、品牌或分類..."
+            :placeholder="t('offers.list.searchPlaceholder')"
           >
         </div>
         <button
           type="submit"
           class="gp-search-btn"
         >
-          <span class="gp-search-button-label">搜尋</span>
+          <span class="gp-search-button-label">{{ t('offers.list.search') }}</span>
           <AppIcon
             class="gp-mobile-search-icon"
             name="search"
@@ -602,17 +644,17 @@ onMounted(() => {
           :disabled="favoritesLoading"
           @click="toggleFavoritesOnly"
         >
-          {{ favoritesLoading ? '載入中' : '我的收藏' }}
+          {{ favoritesLoading ? t('offers.list.loading') : t('offers.list.myFavorites') }}
         </button>
       </form>
       <div
         class="gp-mobile-filter-rail"
-        aria-label="優惠篩選"
+        :aria-label="t('offers.list.offerFilters')"
       >
         <select
           v-model="activeSort"
           class="gp-mobile-filter-select gp-mobile-sort-select"
-          aria-label="排序方式"
+          :aria-label="t('offers.list.sortMethod')"
           @change="selectSort"
         >
           <option
@@ -624,10 +666,10 @@ onMounted(() => {
         <select
           :value="activeCategory"
           class="gp-mobile-filter-select"
-          aria-label="商品分類"
+          :aria-label="t('offers.list.category')"
           @change="handleMobileQuickFilter('category', $event)"
         >
-          <option value="">商品分類</option>
+          <option value="">{{ t('offers.list.category') }}</option>
           <option
             v-for="category in categoryPills.slice(1)"
             :key="`mobile-category-${category.value}`"
@@ -637,10 +679,10 @@ onMounted(() => {
         <select
           :value="activeStore"
           class="gp-mobile-filter-select"
-          aria-label="商店"
+          :aria-label="t('offers.list.store')"
           @change="handleMobileQuickFilter('store', $event)"
         >
-          <option value="">商店</option>
+          <option value="">{{ t('offers.list.store') }}</option>
           <option
             v-for="store in storePills.slice(1)"
             :key="`mobile-store-${store.value}`"
@@ -658,7 +700,7 @@ onMounted(() => {
             name="filter"
             :size="16"
           />
-          <span>更多</span>
+          <span>{{ t('offers.list.more') }}</span>
           <span
             v-if="activeFilterCount > 0"
             class="gp-mobile-filter-count"
@@ -676,14 +718,14 @@ onMounted(() => {
             name="star"
             :size="16"
           />
-          <span>收藏</span>
+          <span>{{ t('offers.list.favorite') }}</span>
         </button>
         <button
           v-if="activeFilterCount > 0"
           type="button"
           class="gp-mobile-filter-reset"
           @click="resetFilters"
-        >重設</button>
+        >{{ t('offers.list.reset') }}</button>
       </div>
       <div class="gp-filter-pills">
         <button
@@ -715,7 +757,9 @@ onMounted(() => {
     <section class="gp-content">
       <div class="gp-content-header">
         <span class="gp-count">
-          {{ searchLoading ? '載入中' : `${totalCount.toLocaleString('zh-HK')} 個優惠` }}
+          {{ searchLoading
+            ? t('offers.list.loading')
+            : t('offers.list.offerCount', { count: formatInteger(totalCount) }) }}
         </span>
         <div class="gp-toolbar">
           <select
@@ -723,7 +767,7 @@ onMounted(() => {
             class="gp-sort gp-brand-select"
             @change="selectBrand"
           >
-            <option value="">全部品牌</option>
+            <option value="">{{ t('offers.list.allBrands') }}</option>
             <option
               v-for="brand in brandOptions"
               :key="brand"
@@ -739,7 +783,7 @@ onMounted(() => {
               :class="viewMode === 'grid' ? 'on' : ''"
               @click="setView('grid')"
             >
-              網格
+              {{ t('offers.list.grid') }}
             </button>
             <button
               type="button"
@@ -747,7 +791,7 @@ onMounted(() => {
               :class="viewMode === 'table' ? 'on' : ''"
               @click="setView('table')"
             >
-              表格
+              {{ t('offers.list.table') }}
             </button>
           </div>
           <select
@@ -788,13 +832,13 @@ onMounted(() => {
         v-if="searchLoading && !searchResult"
         class="gp-state"
       >
-        正在載入優惠商品。
+        {{ t('offers.list.loadingProducts') }}
       </p>
       <p
         v-else-if="!searchLoading && visibleProducts.length === 0"
         class="gp-state"
       >
-        沒有找到符合條件的商品。
+        {{ t('offers.list.empty') }}
       </p>
 
       <!-- 3.1 網格視圖 -->
@@ -814,7 +858,7 @@ onMounted(() => {
             :class="product.isFavorite ? 'on' : ''"
             @click.stop="toggleFavorite(product)"
           >
-            {{ product.isFavorite ? '已收藏' : '收藏' }}
+            {{ product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite') }}
           </button>
           <div class="gp-card-img">
             <img
@@ -831,23 +875,23 @@ onMounted(() => {
             <div class="gp-card-heading">
               <div>
                 <div class="gp-card-name">{{ product.name }}</div>
-                <div class="gp-card-brand">{{ product.brand || '未提供品牌' }}</div>
+                <div class="gp-card-brand">{{ product.brand || t('offers.list.noBrand') }}</div>
               </div>
-              <div class="gp-card-badge">-{{ supermarketPriceDiscountRate(supermarketPrimaryPrice(product)).toFixed(0) }}%</div>
+              <div class="gp-card-badge">-{{ supermarketPriceDiscountRate(productPrimaryPrice(product)).toFixed(0) }}%</div>
             </div>
             <div class="gp-card-prices">
               <div
-                v-for="price in supermarketStorePrices(product).slice(0, 3)"
+                v-for="price in productStorePrices(product).slice(0, 3)"
                 :key="`${product.code}-${price.store}-${price.effectiveUnitPrice}`"
                 class="gp-price-row"
               >
                 <div>
-                  <strong>{{ displaySupermarketStore(price.store) }}</strong>
-                  <small>{{ price.offer || supermarketOfferTexts(product).join(' / ') || '-' }}</small>
+                  <strong>{{ formatStore(price.store) }}</strong>
+                  <small>{{ price.offer || productOfferTexts(product).join(' / ') || '-' }}</small>
                 </div>
                 <div>
-                  <b>{{ formatSupermarketHKPrice(price.effectiveUnitPrice) }}</b>
-                  <span>原價 {{ formatSupermarketHKPrice(price.listPrice) }}</span>
+                  <b>{{ formatOfferPrice(price.effectiveUnitPrice) }}</b>
+                  <span>{{ t('offers.list.originalPrice', { price: formatOfferPrice(price.listPrice) }) }}</span>
                 </div>
               </div>
             </div>
@@ -863,12 +907,12 @@ onMounted(() => {
         <table>
           <thead>
             <tr>
-              <th>商品</th>
-              <th>商店</th>
-              <th>優惠</th>
-              <th>優惠後</th>
-              <th>原價</th>
-              <th>收藏</th>
+              <th>{{ t('offers.list.product') }}</th>
+              <th>{{ t('offers.list.store') }}</th>
+              <th>{{ t('offers.list.offer') }}</th>
+              <th>{{ t('offers.list.effectivePrice') }}</th>
+              <th>{{ t('offers.list.originalPriceHeading') }}</th>
+              <th>{{ t('offers.list.favorite') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -879,19 +923,19 @@ onMounted(() => {
             >
               <td>
                 <strong>{{ product.name }}</strong>
-                <span>{{ product.brand || displaySupermarketCategory(product.category1 || '') }}</span>
+                <span>{{ product.brand || formatCategory(product.category1 || '') }}</span>
               </td>
-              <td>{{ displaySupermarketStore(supermarketPrimaryPrice(product).store) }}</td>
-              <td>{{ supermarketOfferTexts(product).join(' / ') || '-' }}</td>
-              <td>{{ formatSupermarketHKPrice(supermarketPrimaryPrice(product).effectiveUnitPrice) }}</td>
-              <td>{{ formatSupermarketHKPrice(supermarketPrimaryPrice(product).listPrice) }}</td>
+              <td>{{ formatStore(productPrimaryPrice(product).store) }}</td>
+              <td>{{ productOfferTexts(product).join(' / ') || '-' }}</td>
+              <td>{{ formatOfferPrice(productPrimaryPrice(product).effectiveUnitPrice) }}</td>
+              <td>{{ formatOfferPrice(productPrimaryPrice(product).listPrice) }}</td>
               <td>
                 <button
                   type="button"
                   class="gp-table-fav"
                   @click.stop="toggleFavorite(product)"
                 >
-                  {{ product.isFavorite ? '已收藏' : '收藏' }}
+                  {{ product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite') }}
                 </button>
               </td>
             </tr>
@@ -1021,7 +1065,7 @@ onMounted(() => {
   margin: 0 auto;
   padding: 18px 28px 14px;
   border-bottom: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .gp-search-row {
@@ -1040,7 +1084,7 @@ onMounted(() => {
   flex: 0 1 520px;
   border: 1px solid var(--bdr);
   border-radius: 3px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 0 13px;
 }
 
@@ -1068,7 +1112,7 @@ onMounted(() => {
 .gp-view-btn {
   border: 1px solid var(--bdr);
   border-radius: 3px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   cursor: pointer;
   font-family: inherit;
@@ -1110,7 +1154,7 @@ onMounted(() => {
 .gp-spill {
   border: 1px solid var(--bdr);
   border-radius: 999px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-3);
   cursor: pointer;
   font-family: inherit;
@@ -1165,11 +1209,11 @@ onMounted(() => {
   border: 1px solid var(--bdr);
   border-radius: 2px;
   padding: 7px 13px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .gp-view-toggle .gp-view-btn.on {
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   border-color: var(--bdr);
 }
@@ -1178,7 +1222,7 @@ onMounted(() => {
   max-width: 180px;
   border: 1px solid var(--bdr);
   border-radius: 2px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
   font-family: inherit;
   font-size: 12px;
@@ -1190,7 +1234,7 @@ onMounted(() => {
   margin: 0 0 16px;
   border: 1px solid var(--bdr);
   border-radius: 3px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-3);
   font-size: 13px;
   padding: 12px 14px;
@@ -1215,7 +1259,7 @@ onMounted(() => {
   border: 1px solid var(--bdr);
   border-radius: 3px;
   overflow: hidden;
-  background: #fff;
+  background: rgb(var(--color-surface));
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1234,7 +1278,7 @@ onMounted(() => {
   padding: 14px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
   overflow: hidden;
 }
 
@@ -1262,7 +1306,7 @@ onMounted(() => {
   z-index: 2;
   border: 1px solid var(--bdr);
   border-radius: 2px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-3);
   cursor: pointer;
   font-family: inherit;
@@ -1273,7 +1317,7 @@ onMounted(() => {
 
 .gp-card-fav.on {
   border-color: var(--accent);
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--accent);
 }
 
@@ -1390,7 +1434,7 @@ onMounted(() => {
   overflow: auto;
   border: 1px solid var(--bdr);
   border-radius: 3px;
-  background: #fff;
+  background: rgb(var(--color-surface));
 }
 
 .gp-table table {
@@ -1439,7 +1483,7 @@ onMounted(() => {
 .gp-table-fav {
   border: 1px solid var(--bdr);
   border-radius: 2px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-2);
   cursor: pointer;
   font-family: inherit;
@@ -1459,7 +1503,7 @@ onMounted(() => {
 .gp-page-btn {
   border: 1px solid var(--bdr);
   border-radius: 3px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink-3);
   cursor: pointer;
   font-family: inherit;
@@ -1470,7 +1514,7 @@ onMounted(() => {
 
 .gp-page-btn.on {
   border-color: var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
 }
 

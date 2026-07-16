@@ -2,6 +2,7 @@
  * iSmart 對外介面代理服務測試。
  * 1. 驗證會員中心綁定大廈優先於 iSmart 可見大廈預設順序。
  * 2. 驗證未指定大廈時仍保留 iSmart 可見範圍校驗。
+ * 3. 驗證大廈資料快取不重複回源且不繞過會員權限。
  */
 package service
 
@@ -10,7 +11,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"ajoliving_web/http_service/internal/config"
 	"ajoliving_web/http_service/internal/model"
@@ -52,11 +57,12 @@ func TestIsmartSelectVisibleBuildingPrefersProfileBuilding(t *testing.T) {
 		t.Fatalf("marshal profile building json: %v", err)
 	}
 	if err := runtimeValue.DB.Create(&model.UserProfile{
-		UserID:             user.ID,
-		PrimaryCommunityID: &boundBuilding.ID,
-		BoundBuildingIDs:   profileBuildingJSON,
-		ResidenceFloor:     "01",
-		ResidenceUnit:      "B",
+		UserID:                 user.ID,
+		PrimaryCommunityID:     &boundBuilding.ID,
+		BoundBuildingIDs:       profileBuildingJSON,
+		ResidenceFloor:         "01",
+		ResidenceUnit:          "B",
+		ResidenceBindingStatus: residenceBindingStatusPending,
 	}).Error; err != nil {
 		t.Fatalf("create profile: %v", err)
 	}
@@ -326,7 +332,75 @@ func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
 	}
 }
 
-// 8. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
+// 8. TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck verifies cache reuse and access isolation.
+func TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck(t *testing.T) {
+	var upstreamCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		upstreamCalls.Add(1)
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"success","data":{"building":{"building_id":"0348200","name":"測試大廈"}}}`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	cacheStore := newMemoryCacheStore()
+	runtimeValue.CacheStore = cacheStore
+	runtimeValue.Config.IsmartBuildingCacheTTL = 5 * time.Minute
+	ismartService := NewIsmartExternalService(runtimeValue)
+
+	for range 2 {
+		result, err := ismartService.GetBuildingInfo(context.Background(), user.ID, IsmartBuildingParams{BuildingID: "0348200"})
+		if err != nil {
+			t.Fatalf("get cached building info: %v", err)
+		}
+		if result["selected_building_id"] != "0348200" {
+			t.Fatalf("expected selected building metadata, got %#v", result)
+		}
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("expected one upstream request, got %d", upstreamCalls.Load())
+	}
+	cached := string(cacheStore.value(ismartBuildingInfoCacheKeyPrefix + "0348200"))
+	if strings.Contains(cached, "building_options") || strings.Contains(cached, "selected_building_id") {
+		t.Fatalf("member metadata must not be stored in shared cache: %s", cached)
+	}
+
+	unauthorizedUser := model.User{
+		PublicID:         utils.NewPublicID(),
+		PhoneCountryCode: "+852",
+		PhoneNumber:      "61234570",
+		MemberStatus:     "active",
+		MemberType:       MemberTypeUser,
+		IsVerifiedPhone:  true,
+	}
+	if err := runtimeValue.DB.Create(&unauthorizedUser).Error; err != nil {
+		t.Fatalf("create unauthorized user: %v", err)
+	}
+	otherBuildings, err := marshalJSON([]string{"0999900"})
+	if err != nil {
+		t.Fatalf("marshal unauthorized buildings: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
+		UserID:                             unauthorizedUser.ID,
+		IsmartUserID:                       99,
+		Username:                           "other-member",
+		ClientBuildingPermissions:          otherBuildings,
+		ClientBuildingFlatUnitsPermissions: []byte("[]"),
+		Building:                           []byte("[]"),
+		StaffBuildingPermissions:           []byte("[]"),
+		RawMessage:                         []byte("{}"),
+	}).Error; err != nil {
+		t.Fatalf("create unauthorized ismart account: %v", err)
+	}
+	if _, err := ismartService.GetBuildingInfo(context.Background(), unauthorizedUser.ID, IsmartBuildingParams{BuildingID: "0348200"}); err == nil {
+		t.Fatal("expected unauthorized cached building request to fail")
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("unauthorized request must fail before upstream or cache read, got %d calls", upstreamCalls.Load())
+	}
+}
+
+// 9. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
 func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, model.User) {
 	t.Helper()
 	runtimeValue := newAuthTestRuntime(
@@ -374,4 +448,43 @@ func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, mo
 	}
 
 	return runtimeValue, user
+}
+
+// 10. memoryCacheStore is an in-memory CacheStore used by service tests.
+type memoryCacheStore struct {
+	mu     sync.Mutex
+	values map[string][]byte
+}
+
+// 11. newMemoryCacheStore creates an empty test cache.
+func newMemoryCacheStore() *memoryCacheStore {
+	return &memoryCacheStore{values: make(map[string][]byte)}
+}
+
+// 12. Get returns one copied test cache value.
+func (s *memoryCacheStore) Get(_ context.Context, key string) ([]byte, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, ok := s.values[key]
+	return append([]byte(nil), value...), ok, nil
+}
+
+// 13. Set stores one copied test cache value.
+func (s *memoryCacheStore) Set(_ context.Context, key string, value []byte, _ time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values[key] = append([]byte(nil), value...)
+	return nil
+}
+
+// 14. Close completes the CacheStore contract for tests.
+func (s *memoryCacheStore) Close() error {
+	return nil
+}
+
+// 15. value returns one cache value for assertions.
+func (s *memoryCacheStore) value(key string) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]byte(nil), s.values[key]...)
 }

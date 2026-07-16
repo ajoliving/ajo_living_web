@@ -25,6 +25,7 @@ type presignRequest struct {
 	MimeType     string `json:"mime_type" binding:"required"`
 	FileSize     int64  `json:"file_size" binding:"required"`
 	ObjectPrefix string `json:"object_prefix"`
+	Purpose      string `json:"purpose"`
 }
 
 // 3. completeUploadRequest defines the upload completion payload.
@@ -67,12 +68,22 @@ func (h *UploadHandler) Presign(c *gin.Context) {
 		return
 	}
 
+	objectPrefix := strings.TrimSpace(request.ObjectPrefix)
+	prefix, agencyPurpose := service.ResolveAgencyProfileUploadPrefix(strings.TrimSpace(request.Purpose))
+	if user.MemberStatus != "active" && (!agencyPurpose || !service.AgencyProfilePurposeMatchesAccount(request.Purpose, user.AccountType)) {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthForbidden, "only agency profile uploads are available before approval"))
+		return
+	}
+	if agencyPurpose {
+		objectPrefix = prefix
+	}
+
 	result, err := h.uploadService.Presign(c.Request.Context(), service.PresignParams{
 		UserID:       user.UserID,
 		FileName:     strings.TrimSpace(request.FileName),
 		MimeType:     strings.TrimSpace(request.MimeType),
 		FileSize:     request.FileSize,
-		ObjectPrefix: strings.TrimSpace(request.ObjectPrefix),
+		ObjectPrefix: objectPrefix,
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -93,6 +104,10 @@ func (h *UploadHandler) CompleteUpload(c *gin.Context) {
 	var request completeUploadRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+	if user.MemberStatus != "active" && !service.IsAgencyProfileObjectKey(request.ObjectKey) {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthForbidden, "only agency profile uploads are available before approval"))
 		return
 	}
 

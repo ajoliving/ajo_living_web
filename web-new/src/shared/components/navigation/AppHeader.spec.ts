@@ -4,6 +4,7 @@
  * 2. 驗證登入後底部導覽切換至會員中心。
  * 3. 驗證手機抽屜按登入狀態顯示登入或通知入口。
  * 4. 驗證抽屜遮罩點擊可關閉。
+ * 5. 驗證共用導航文案全部經由 i18n 資源輸出。
  */
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -43,7 +44,22 @@ vi.mock('vue-i18n', () => ({
         'common.locale.zhHkShort': '繁中',
         'common.locale.enShort': 'EN',
         'nav.account': '帳戶',
+        'nav.ajoPay': 'AJO Pay',
+        'nav.building': '我的大廈',
+        'nav.combinedOffers': '綜合優惠',
+        'nav.furniture': '家具',
+        'nav.home': '首頁',
+        'nav.login': '登入',
+        'nav.marketplaceManagement': '管理',
+        'nav.menu': '選單',
         'nav.memberCenter': '會員中心',
+        'nav.myShort': '我的',
+        'nav.notifications': '通知中心',
+        'nav.offersShort': '優惠',
+        'nav.properties': '樓盤租售',
+        'nav.propertiesShort': '樓盤',
+        'nav.servicedResidences': '服務式住宅',
+        'nav.trend': '走勢',
       };
 
       return messages[key] ?? key;
@@ -162,6 +178,7 @@ describe('AppHeader mobile navigation', () => {
 
     expect(hamburgerIndex).toBeLessThan(logoIndex);
     expect(wrapper.find('.theme-toggle').exists()).toBe(true);
+    expect(wrapper.find('.hamburger').attributes('aria-label')).toBe('選單');
     expect(localeToggle.attributes('aria-label')).toBe('切換語系');
     expect(localeToggle.text()).toBe('EN');
 

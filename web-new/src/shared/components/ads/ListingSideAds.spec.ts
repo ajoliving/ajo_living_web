@@ -14,6 +14,15 @@ vi.mock('@/httpapis/wallet', () => ({
   fetchPublicDisplayAds: vi.fn(),
 }));
 
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string): string => ({
+      'common.ad.label': '廣告',
+      'common.ad.slot': '廣告位',
+    })[key] ?? key,
+  }),
+}));
+
 const mockedFetchPublicDisplayAds = vi.mocked(fetchPublicDisplayAds);
 
 // 1. 建立公開廣告 API 回應

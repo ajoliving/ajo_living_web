@@ -233,7 +233,7 @@ func shouldChargeListingEdit(listing *model.Listing) bool {
 func WalletChargeRules() []WalletChargeRuleResponse {
 	return []WalletChargeRuleResponse{
 		{BizModule: "secondhand", Label: "二手交易", Publish: 100, DraftSave: 50, Edit: 100, Republish: 100, Renew: 50},
-		{BizModule: "property_sale", Label: "樓盤放售", Publish: 1000, Edit: 1000, Republish: 1000},
+		{BizModule: "property_sale", Label: "樓盤放售", Publish: 1000, DraftSave: 1000, Edit: 1000, Republish: 1000},
 		{BizModule: "serviced_apartment", Label: "服務式住宅", Publish: 800, Edit: 800, Republish: 800},
 	}
 }

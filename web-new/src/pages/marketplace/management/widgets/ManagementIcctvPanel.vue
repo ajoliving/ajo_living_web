@@ -12,6 +12,7 @@
  * 3. 開啟單個鏡頭新窗口。
  */
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import {
   fetchMemberICCTVPublicCameras,
@@ -32,6 +33,11 @@ const selectedBuildingCode = ref('');
 const expandedCameraIDs = ref<string[]>([]);
 const icctvProfile = ref<ICCTVPublicCameraResponse | null>(null);
 const posBuildings = ref<PosBuilding[]>([]);
+const { t, locale } = useI18n();
+const displayLocale = computed(() => (locale.value === 'en' ? 'en-HK' : 'zh-HK'));
+const formatLocaleNumber = (value: number): string =>
+  new Intl.NumberFormat(displayLocale.value).format(value);
+const translateMessage = (key: string): string => (key ? t(key) : '');
 
 // 1. 取得大廈 ID
 const posBuildingID = (building: PosBuilding): string =>
@@ -74,16 +80,20 @@ const offlineCameraCount = computed(() => Math.max(0, totalCameraCount.value - o
 // 7. 取得鏡頭名稱
 const cameraName = (camera: ICCTVCameraSummary, index: number): string => {
   const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
-  return `鏡頭 ${match?.[1] ?? index + 1}`;
+  return t('marketplace.management.icctvCameraName', {
+    number: match?.[1] ?? formatLocaleNumber(index + 1),
+  });
 };
 
 // 8. 取得鏡頭狀態
 const cameraStatusText = (camera: ICCTVCameraSummary): string =>
-  camera.is_active && camera.url ? '可查看' : '不可查看';
+  camera.is_active && camera.url
+    ? t('marketplace.management.icctvAvailable')
+    : t('marketplace.management.icctvUnavailable');
 
 // 9. 取得鏡頭 iframe 標題
 const cameraFrameTitle = (camera: ICCTVCameraSummary, index: number): string =>
-  `${cameraName(camera, index)} 即時監控`;
+  t('marketplace.management.icctvFrameTitle', { camera: cameraName(camera, index) });
 
 // 10. 判斷鏡頭是否已展開
 const isCameraExpanded = (cameraID: string): boolean => expandedCameraIDs.value.includes(cameraID);
@@ -121,7 +131,7 @@ const loadICCTV = async (buildingID = selectedBuildingCode.value): Promise<void>
     expandedCameraIDs.value = [];
   } catch (error) {
     console.error(error);
-    errorMessage.value = '視像監控資料載入失敗';
+    errorMessage.value = 'marketplace.management.icctvLoadError';
     icctvProfile.value = null;
     expandedCameraIDs.value = [];
   } finally {
@@ -145,9 +155,9 @@ onMounted(() => {
     <!-- 1. 標題列 -->
     <section class="staff-list-head">
       <div>
-        <div class="staff-kicker">Staff</div>
-        <h2 class="staff-title">ICCTV</h2>
-        <p class="staff-desc">按大廈查看即時監控畫面。</p>
+        <div class="staff-kicker">{{ t('marketplace.management.staffKicker') }}</div>
+        <h2 class="staff-title">{{ t('marketplace.management.icctv') }}</h2>
+        <p class="staff-desc">{{ t('marketplace.management.icctvDescription') }}</p>
       </div>
       <button
         type="button"
@@ -155,7 +165,7 @@ onMounted(() => {
         :disabled="loading"
         @click="loadICCTV()"
       >
-        {{ loading ? '載入中' : '重新整理' }}
+        {{ loading ? t('common.status.loading') : t('marketplace.management.icctvRefresh') }}
       </button>
     </section>
 
@@ -163,8 +173,12 @@ onMounted(() => {
     <section class="work-card icctv-table-card">
       <div class="icctv-profile-head">
         <div>
-          <h3>{{ selectedBuilding?.name || '未選擇大廈' }}</h3>
-          <p>共 {{ totalCameraCount }} 個鏡頭，{{ onlineCameraCount }} 個在線，{{ offlineCameraCount }} 個離線。</p>
+          <h3>{{ selectedBuilding?.name || t('marketplace.management.icctvNoBuilding') }}</h3>
+          <p>{{ t('marketplace.management.icctvSummary', {
+            total: formatLocaleNumber(totalCameraCount),
+            online: formatLocaleNumber(onlineCameraCount),
+            offline: formatLocaleNumber(offlineCameraCount),
+          }) }}</p>
         </div>
         <div class="icctv-building-select">
           <select
@@ -187,7 +201,7 @@ onMounted(() => {
             :disabled="loading"
             @click="loadICCTV()"
           >
-            {{ loading ? '載入中' : '重新載入' }}
+            {{ loading ? t('common.status.loading') : t('marketplace.management.icctvReload') }}
           </button>
         </div>
       </div>
@@ -196,16 +210,16 @@ onMounted(() => {
         v-if="errorMessage"
         class="icctv-table-message icctv-table-error"
       >
-        {{ errorMessage }}
+        {{ translateMessage(errorMessage) }}
       </div>
 
       <div class="icctv-table-wrap">
         <table class="work-table icctv-table">
           <thead>
             <tr>
-              <th>鏡頭</th>
-              <th>狀態</th>
-              <th>操作</th>
+              <th>{{ t('marketplace.management.icctvCamera') }}</th>
+              <th>{{ t('marketplace.management.icctvStatus') }}</th>
+              <th>{{ t('marketplace.management.icctvAction') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -234,7 +248,9 @@ onMounted(() => {
                       :disabled="!camera.url"
                       @click="toggleCamera(camera.id)"
                     >
-                      {{ isCameraExpanded(camera.id) ? '收起' : '查看' }}
+                      {{ isCameraExpanded(camera.id)
+                        ? t('marketplace.management.icctvCollapse')
+                        : t('marketplace.management.icctvView') }}
                     </button>
                     <button
                       type="button"
@@ -242,7 +258,7 @@ onMounted(() => {
                       :disabled="!camera.url"
                       @click="openCameraWindow(camera)"
                     >
-                      新窗口
+                      {{ t('marketplace.management.icctvNewWindow') }}
                     </button>
                   </div>
                 </td>
@@ -268,7 +284,9 @@ onMounted(() => {
                 class="icctv-table-message"
                 colspan="3"
               >
-                {{ loading ? '正在載入鏡頭資料。' : errorMessage || '目前大廈未有鏡頭資料。' }}
+                {{ loading
+                  ? t('marketplace.management.icctvLoading')
+                  : translateMessage(errorMessage) || t('marketplace.management.icctvEmpty') }}
               </td>
             </tr>
           </tbody>
@@ -549,7 +567,7 @@ onMounted(() => {
 }
 
 /* 8. 響應式 */
-@media (max-width: 980px) {
+@media (max-width: 1023px) {
   .icctv-profile-head {
     align-items: stretch;
     flex-direction: column;

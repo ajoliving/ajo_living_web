@@ -42,7 +42,7 @@ withDefaults(defineProps<AdCardProps>(), {
   min-height: 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--color-text);
   cursor: pointer;
   box-shadow: var(--shadow-soft);

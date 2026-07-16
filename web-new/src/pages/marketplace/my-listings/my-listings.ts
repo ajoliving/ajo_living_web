@@ -93,8 +93,8 @@ export const useMarketplaceMyListingsPage = () => {
       return [
         resolveListingTitle(listing),
         resolveListingSummary(listing),
-        resolveListingCategoryLabel(listing),
-        resolveListingCommunityName(listing),
+        resolveListingCategoryLabel(listing, preferenceStore.locale),
+        resolveListingCommunityName(listing, preferenceStore.locale),
       ]
         .join(' ')
         .toLowerCase()

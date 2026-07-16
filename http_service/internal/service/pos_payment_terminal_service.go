@@ -1,6 +1,6 @@
 /*
  * POS 機收款代理服務。
- * 1. 代理 Staff 櫃台 POS 機銀行卡收款。
+ * 1. 代理會員於可見單位使用櫃台 POS 機銀行卡收款。
  * 2. 使用服務端配置的終端地址，不接受前端傳入設備地址。
  * 3. 收款成功後透過 POS relay 上報物業費入賬。
  */
@@ -25,7 +25,7 @@ const (
 	posTerminalAliwePayType = "POS_ALIWE"
 )
 
-// 1. POSTerminalPaymentParams defines Staff POS terminal payment input.
+// 1. POSTerminalPaymentParams defines member POS terminal payment input.
 type POSTerminalPaymentParams struct {
 	UserID       int64
 	Selection    POSPaymentSelection
@@ -38,7 +38,7 @@ type POSTerminalPaymentParams struct {
 
 // 2. PayByTerminal charges a configured POS terminal and reports payment.
 func (s *POSPaymentService) PayByTerminal(ctx context.Context, params POSTerminalPaymentParams) (map[string]any, error) {
-	contextValue, token, err := s.staffPOSAccess(ctx, params.UserID, params.Selection)
+	contextValue, token, err := s.memberPOSAccess(ctx, params.UserID, params.Selection)
 	if err != nil {
 		return nil, err
 	}

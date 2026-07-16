@@ -35,7 +35,7 @@ type POSPaymentReportParams struct {
 	Payload   map[string]any
 }
 
-// 3. POSPaymentAccountingResponse defines Staff accounting overview.
+// 3. POSPaymentAccountingResponse defines accounting overview.
 type POSPaymentAccountingResponse struct {
 	Context         *POSUnitContext  `json:"context,omitempty"`
 	BuildingOptions []string         `json:"building_options"`
@@ -46,7 +46,7 @@ type POSPaymentAccountingResponse struct {
 	Items           []map[string]any `json:"items"`
 }
 
-// 4. POSPaymentAccountingClearParams defines Staff clear-machine input.
+// 4. POSPaymentAccountingClearParams defines clear-machine input.
 type POSPaymentAccountingClearParams struct {
 	UserID        int64
 	Selection     POSPaymentSelection
@@ -154,9 +154,9 @@ func (s *POSPaymentService) GetHistoryDetail(ctx context.Context, userID int64, 
 	return nil, errcode.New(errcode.CodeNotFound, "payment history is not found")
 }
 
-// 10. ListAccountingGroups returns Staff cash and cheque pending groups.
+// 10. ListAccountingGroups returns visible cash and cheque pending groups.
 func (s *POSPaymentService) ListAccountingGroups(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentAccountingResponse, error) {
-	contextValue, token, err := s.staffBuildingAccess(ctx, userID, selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, userID, selection)
 	if err != nil {
 		return nil, err
 	}
@@ -188,9 +188,9 @@ func (s *POSPaymentService) ListAccountingGroups(ctx context.Context, userID int
 	}, nil
 }
 
-// 11. ClearAccounting submits selected Staff cash or cheque transaction ids.
+// 11. ClearAccounting submits selected visible cash or cheque transaction ids.
 func (s *POSPaymentService) ClearAccounting(ctx context.Context, params POSPaymentAccountingClearParams) (map[string]any, error) {
-	contextValue, token, err := s.staffBuildingAccess(ctx, params.UserID, params.Selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, params.UserID, params.Selection)
 	if err != nil {
 		return nil, err
 	}
@@ -210,9 +210,9 @@ func (s *POSPaymentService) ClearAccounting(ctx context.Context, params POSPayme
 	return result, nil
 }
 
-// 12. ListAccountingRecords returns Staff clear-machine history records.
+// 12. ListAccountingRecords returns visible clear-machine history records.
 func (s *POSPaymentService) ListAccountingRecords(ctx context.Context, userID int64, selection POSPaymentSelection) (*POSPaymentListResponse, error) {
-	contextValue, token, err := s.staffBuildingAccess(ctx, userID, selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, userID, selection)
 	if err != nil {
 		return nil, err
 	}
@@ -227,9 +227,9 @@ func (s *POSPaymentService) ListAccountingRecords(ctx context.Context, userID in
 	return &POSPaymentListResponse{Context: contextValue, BuildingOptions: buildingOptions, UnitOptions: unitOptions, Items: normalizeLooseRows(response, "items")}, nil
 }
 
-// 13. GetAccountingRecord returns one Staff clear-machine history detail.
+// 13. GetAccountingRecord returns one visible clear-machine history detail.
 func (s *POSPaymentService) GetAccountingRecord(ctx context.Context, userID int64, recordID string, selection POSPaymentSelection) (map[string]any, error) {
-	contextValue, token, err := s.staffBuildingAccess(ctx, userID, selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, userID, selection)
 	if err != nil {
 		return nil, err
 	}
@@ -302,17 +302,10 @@ func (s *POSPaymentService) UpdateH5OrderAction(ctx context.Context, userID int6
 	return result, nil
 }
 
-// 16. SimulateH5Order proxies test-only H5 order simulation for Staff.
+// 16. SimulateH5Order proxies test-only H5 order simulation for a visible unit.
 func (s *POSPaymentService) SimulateH5Order(ctx context.Context, userID int64, mchOrderNo string, payload map[string]any, selection POSPaymentSelection) (map[string]any, error) {
 	if !posH5SimulationAllowed(s.runtime.Config.AppEnv) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "payment simulation is disabled")
-	}
-	account, err := s.loadIsmartAccount(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !account.IsStaff {
-		return nil, errcode.New(errcode.CodeAuthForbidden, "staff access required")
 	}
 	if strings.TrimSpace(mchOrderNo) == "" {
 		return nil, errcode.New(errcode.CodeValidationError, "merchant order number is required")

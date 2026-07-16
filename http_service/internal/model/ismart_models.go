@@ -25,6 +25,7 @@ type UserIsmartAccount struct {
 	ClientBuildingPermissions          datatypes.JSON `gorm:"type:jsonb;not null" json:"client_building_permissions"`
 	ClientBuildingFlatUnitsPermissions datatypes.JSON `gorm:"type:jsonb;not null" json:"client_building_flat_units_permissions"`
 	RawMessage                         datatypes.JSON `gorm:"type:jsonb;not null" json:"raw_message"`
+	ProfileSnapshot                    datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'" json:"profile_snapshot"`
 	RelayTokenEncrypted                string         `gorm:"type:text" json:"-"`
 	RelayTokenSyncedAt                 *time.Time     `json:"relay_token_synced_at,omitempty"`
 	PasswordEncrypted                  string         `gorm:"type:text" json:"-"`

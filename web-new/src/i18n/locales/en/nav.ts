@@ -1,10 +1,17 @@
+/*
+ * Global navigation English copy.
+ * 1. Provides desktop, mobile, account, and business navigation labels.
+ * 2. Keeps keys aligned with the zh-HK navigation resource.
+ */
 export default {
   home: 'Home',
   properties: 'Properties for Sale',
+  propertiesShort: 'Property',
   servicedResidences: 'Serviced Residences',
   furniture: 'Furniture',
   supermarketOffers: 'Supermarket Offers',
   combinedOffers: 'Offers',
+  offersShort: 'Offers',
   payments: 'Payments',
   paymentUnits: 'Payment Units',
   paymentBills: 'Bills',
@@ -24,6 +31,7 @@ export default {
   settings: 'Settings',
   publish: 'Publish',
   my: 'My',
+  myShort: 'Me',
   myListings: 'My Listings',
   chat: 'Messages',
   account: 'Account',
@@ -48,6 +56,7 @@ export default {
   orders: 'Orders',
   notifications: 'Inbox',
   login: 'Login',
+  menu: 'Menu',
   building: 'My Building',
   trend: 'Trends',
   ajoPay: 'AJO Pay',

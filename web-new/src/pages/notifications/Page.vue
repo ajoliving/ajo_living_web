@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import {
@@ -18,18 +19,18 @@ import {
 } from '@/httpapis/notifications';
 import type { NotificationItem } from '@/model/notification';
 import { useFeedbackStore } from '@/stores/feedback';
+import { usePreferenceStore } from '@/stores/preferences';
 
 type PanelKey = 'notif-all' | 'notif-offers' | 'notif-property' | 'notif-payment' | 'notif-system';
 type ChipTone = 'brand' | 'warn';
-type NoticeGroupKey = '今日' | '昨日' | '更早';
+type NoticeGroupKey = 'today' | 'yesterday' | 'earlier';
 
 interface NoticeItem {
   id: string;
   panelKey: PanelKey;
-  icon: string;
   title: string;
   description: string;
-  time: string;
+  createdAt: string;
   group: NoticeGroupKey;
   unread: boolean;
   targetPath: string;
@@ -56,58 +57,63 @@ interface Panel extends PanelConfig {
 }
 
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
+const preferenceStore = usePreferenceStore();
 const activeFilter = ref<PanelKey>('notif-all');
 const loading = ref(false);
 const notifications = ref<NoticeItem[]>([]);
 
 // 1. 五個分類面板設定
-const panelConfigs: PanelConfig[] = [
+const panelConfigs = computed<PanelConfig[]>(() => [
   {
     key: 'notif-all',
-    navLabel: '全部通知',
+    navLabel: t('account.notifications.allTitle'),
     chipTone: 'brand',
-    kicker: 'Notifications',
-    title: '所有通知',
-    desc: '未讀通知會優先顯示，方便業主、租客與職員快速處理待辦。',
+    kicker: t('account.notifications.title'),
+    title: t('account.notifications.allTitle'),
+    desc: t('account.notifications.filters.allDescription'),
     showMarkAllRead: true,
   },
   {
     key: 'notif-offers',
-    navLabel: '優惠提醒',
-    kicker: 'Offers',
-    title: '優惠提醒',
-    desc: '查看收藏商品、優惠價格與到貨提醒。',
+    navLabel: t('account.notifications.offers'),
+    kicker: t('account.notifications.offers'),
+    title: t('account.notifications.offers'),
+    desc: t('account.notifications.filters.offersDescription'),
     showMarkAllRead: true,
   },
   {
     key: 'notif-property',
-    navLabel: '物業消息',
-    kicker: 'Property',
-    title: '物業消息',
-    desc: '查看睇樓、樓盤變動、社區公告與大廈消息。',
+    navLabel: t('account.notifications.property'),
+    kicker: t('account.notifications.property'),
+    title: t('account.notifications.property'),
+    desc: t('account.notifications.filters.propertyDescription'),
     showMarkAllRead: true,
   },
   {
     key: 'notif-payment',
-    navLabel: '支付提醒',
+    navLabel: t('account.notifications.payment'),
     chipTone: 'warn',
-    kicker: 'Payment',
-    title: '支付提醒',
-    desc: '查看管理費、賬單與支付狀態提醒。',
+    kicker: t('account.notifications.payment'),
+    title: t('account.notifications.payment'),
+    desc: t('account.notifications.filters.paymentDescription'),
     showMarkAllRead: true,
   },
   {
     key: 'notif-system',
-    navLabel: '系統通知',
-    kicker: 'System',
-    title: '系統通知',
-    desc: '查看平台更新、帳戶安全與系統消息。',
+    navLabel: t('account.notifications.system'),
+    kicker: t('account.notifications.system'),
+    title: t('account.notifications.system'),
+    desc: t('account.notifications.filters.systemDescription'),
     showMarkAllRead: false,
   },
-];
+]);
 
-const groupOrder: NoticeGroupKey[] = ['今日', '昨日', '更早'];
+const groupOrder: NoticeGroupKey[] = ['today', 'yesterday', 'earlier'];
+const relativeTimeFormatter = computed(() =>
+  new Intl.RelativeTimeFormat(preferenceStore.locale, { numeric: 'auto' }),
+);
 
 // 2. 根據通知內容判斷分類
 const resolvePanelKey = (item: NotificationItem): PanelKey => {
@@ -128,15 +134,15 @@ const resolvePanelKey = (item: NotificationItem): PanelKey => {
 
 // 3. 取得通知圖示
 const resolveIcon = (panelKey: PanelKey): string => {
-  const iconMap: Record<PanelKey, string> = {
-    'notif-all': '通',
-    'notif-offers': '惠',
-    'notif-property': '樓',
-    'notif-payment': '費',
-    'notif-system': '系',
+  const iconKeyMap: Record<PanelKey, string> = {
+    'notif-all': 'account.notifications.icons.all',
+    'notif-offers': 'account.notifications.icons.offers',
+    'notif-property': 'account.notifications.icons.property',
+    'notif-payment': 'account.notifications.icons.payment',
+    'notif-system': 'account.notifications.icons.system',
   };
 
-  return iconMap[panelKey];
+  return t(iconKeyMap[panelKey]);
 };
 
 // 4. 取得通知跳轉目標
@@ -163,13 +169,13 @@ const resolveGroup = (value: string): NoticeGroupKey => {
   yesterday.setDate(today.getDate() - 1);
 
   if (createdAt >= today) {
-    return '今日';
+    return 'today';
   }
   if (createdAt >= yesterday) {
-    return '昨日';
+    return 'yesterday';
   }
 
-  return '更早';
+  return 'earlier';
 };
 
 // 6. 格式化通知時間
@@ -183,13 +189,13 @@ const formatNoticeTime = (value: string): string => {
   const minuteMs = 60 * 1000;
   const hourMs = 60 * minuteMs;
   if (diffMs >= 0 && diffMs < hourMs) {
-    return `${Math.max(1, Math.floor(diffMs / minuteMs))} 分鐘前`;
+    return relativeTimeFormatter.value.format(-Math.max(1, Math.floor(diffMs / minuteMs)), 'minute');
   }
   if (diffMs >= 0 && diffMs < 24 * hourMs) {
-    return `${Math.floor(diffMs / hourMs)} 小時前`;
+    return relativeTimeFormatter.value.format(-Math.floor(diffMs / hourMs), 'hour');
   }
 
-  return createdAt.toLocaleString('zh-HK', {
+  return createdAt.toLocaleString(preferenceStore.locale, {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
@@ -204,10 +210,9 @@ const mapNotification = (item: NotificationItem): NoticeItem => {
   return {
     id: item.notification_id,
     panelKey,
-    icon: resolveIcon(panelKey),
     title: item.title,
     description: item.body,
-    time: formatNoticeTime(item.created_at),
+    createdAt: item.created_at,
     group: resolveGroup(item.created_at),
     unread: !item.is_read,
     targetPath: resolveTargetPath(item, panelKey),
@@ -216,7 +221,7 @@ const mapNotification = (item: NotificationItem): NoticeItem => {
 
 // 8. 按分類生成設計稿面板資料
 const panels = computed<Panel[]>(() =>
-  panelConfigs.map((config) => {
+  panelConfigs.value.map((config) => {
     const items = config.key === 'notif-all'
       ? notifications.value
       : notifications.value.filter((item) => item.panelKey === config.key);
@@ -246,8 +251,8 @@ const loadNotifications = async (): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '通知載入失敗'
-        : '通知載入失敗',
+        ? error.response?.data?.message ?? t('account.notifications.loadError')
+        : t('account.notifications.loadError'),
       'error',
     );
     notifications.value = [];
@@ -285,8 +290,8 @@ const markAllRead = async (panel: Panel): Promise<void> => {
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)
-        ? error.response?.data?.message ?? '更新通知失敗'
-        : '更新通知失敗',
+        ? error.response?.data?.message ?? t('account.notifications.updateError')
+        : t('account.notifications.updateError'),
       'error',
     );
   }
@@ -301,8 +306,8 @@ const handleItemClick = async (item: NoticeItem): Promise<void> => {
     } catch (error: unknown) {
       feedbackStore.pushToast(
         axios.isAxiosError<{ message?: string }>(error)
-          ? error.response?.data?.message ?? '更新通知失敗'
-          : '更新通知失敗',
+          ? error.response?.data?.message ?? t('account.notifications.updateError')
+          : t('account.notifications.updateError'),
         'error',
       );
       return;
@@ -326,8 +331,8 @@ onMounted(() => {
   >
     <div class="work-shell">
       <aside class="work-sidebar">
-        <h1>通知中心</h1>
-        <p>集中查看優惠提醒、物業消息、支付提醒與系統通知。</p>
+        <h1>{{ t('account.notifications.title') }}</h1>
+        <p>{{ t('account.notifications.description') }}</p>
         <nav class="work-nav">
           <button
             v-for="panel in panels"
@@ -370,7 +375,7 @@ onMounted(() => {
               class="work-action secondary"
               @click="markAllRead(panel)"
             >
-              全部標為已讀
+              {{ t('account.notifications.markAllRead') }}
             </button>
           </section>
 
@@ -379,7 +384,7 @@ onMounted(() => {
             class="work-card"
           >
             <div class="notice-empty">
-              通知載入中
+              {{ t('account.notifications.loading') }}
             </div>
           </section>
 
@@ -388,8 +393,8 @@ onMounted(() => {
             class="work-card"
           >
             <div class="notice-empty">
-              <strong>暫時沒有通知</strong>
-              <span>新的優惠、物業、支付及系統通知會在此顯示。</span>
+              <strong>{{ t('account.notifications.emptyTitle') }}</strong>
+              <span>{{ t('account.notifications.emptyAllDescription') }}</span>
             </div>
           </section>
 
@@ -399,7 +404,9 @@ onMounted(() => {
               :key="group.title"
               class="work-card"
             >
-              <div class="work-card-title">{{ group.title }}</div>
+              <div class="work-card-title">
+                {{ t(`account.notifications.groups.${group.title}`) }}
+              </div>
               <div class="notice-list">
                 <article
                   v-for="item in group.items"
@@ -412,12 +419,12 @@ onMounted(() => {
                     class="notice-dot"
                     :class="item.unread ? '' : 'read'"
                   />
-                  <div class="notice-icon">{{ item.icon }}</div>
+                  <div class="notice-icon">{{ resolveIcon(item.panelKey) }}</div>
                   <div>
                     <div class="notice-title">{{ item.title }}</div>
                     <div class="notice-desc">{{ item.description }}</div>
                   </div>
-                  <div class="notice-time">{{ item.time }}</div>
+                  <div class="notice-time">{{ formatNoticeTime(item.createdAt) }}</div>
                 </article>
               </div>
             </section>
@@ -458,7 +465,7 @@ onMounted(() => {
   align-self: start;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 16px;
 }
 
@@ -657,7 +664,7 @@ onMounted(() => {
 
 .work-action.secondary {
   border: 1px solid var(--bdr);
-  background: #fff;
+  background: rgb(var(--color-surface));
   color: var(--ink);
 }
 
@@ -665,7 +672,7 @@ onMounted(() => {
 .work-card {
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: rgb(var(--color-surface));
   padding: 16px;
 }
 
@@ -771,7 +778,7 @@ onMounted(() => {
 }
 
 /* 13. 響應式 - 平板 */
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .work-shell {
     grid-template-columns: 1fr;
     padding: 14px;

@@ -7,7 +7,8 @@
 -->
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
 import {
@@ -75,6 +76,7 @@ interface SavedItem {
 }
 
 const router = useRouter();
+const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const items = ref<SavedItem[]>([]);
@@ -122,7 +124,7 @@ const loadFavorites = async (): Promise<void> => {
       ...supermarketResponse.data.data.items.map((item) => mapSupermarketFavorite(item, sortIndex++)),
     ];
   } catch (error: unknown) {
-    feedbackStore.pushToast(resolveErrorMessage(error, '收藏列表載入失敗。'), 'error');
+    feedbackStore.pushToast(resolveErrorMessage(error, t('marketplace.favoritesPage.loadError')), 'error');
     items.value = [];
   } finally {
     loading.value = false;
@@ -139,9 +141,9 @@ const removeItem = async (item: SavedItem): Promise<void> => {
   try {
     await removeFavoriteByType(item);
     items.value = items.value.filter((current) => current.id !== item.id);
-    feedbackStore.pushToast('已取消收藏。', 'success');
+    feedbackStore.pushToast(t('marketplace.favoritesPage.removed'), 'success');
   } catch (error: unknown) {
-    feedbackStore.pushToast(resolveErrorMessage(error, '取消收藏失敗。'), 'error');
+    feedbackStore.pushToast(resolveErrorMessage(error, t('marketplace.favoritesPage.removeError')), 'error');
   } finally {
     removingIds.value = removingIds.value.filter((id) => id !== item.id);
   }
@@ -152,7 +154,7 @@ const clearAll = async (): Promise<void> => {
   if (items.value.length === 0 || actionLoading.value) {
     return;
   }
-  if (!window.confirm('確認取消目前顯示的所有收藏？')) {
+  if (!window.confirm(t('marketplace.favoritesPage.clearConfirm'))) {
     return;
   }
 
@@ -160,9 +162,9 @@ const clearAll = async (): Promise<void> => {
   try {
     await Promise.all(items.value.map((item) => removeFavoriteByType(item)));
     items.value = [];
-    feedbackStore.pushToast('已清除收藏。', 'success');
+    feedbackStore.pushToast(t('marketplace.favoritesPage.cleared'), 'success');
   } catch (error: unknown) {
-    feedbackStore.pushToast(resolveErrorMessage(error, '清除收藏失敗，請重新整理後再試。'), 'error');
+    feedbackStore.pushToast(resolveErrorMessage(error, t('marketplace.favoritesPage.clearError')), 'error');
     await loadFavorites();
   } finally {
     actionLoading.value = false;
@@ -201,7 +203,7 @@ const closeAlertModal = (): void => {
 // 10. 儲存超市商品目標價提醒
 const saveAlert = async (): Promise<void> => {
   if (!alertProductCode.value || alertTargetInput.value === null || alertTargetInput.value <= 0) {
-    feedbackStore.pushToast('請輸入有效目標價。', 'error');
+    feedbackStore.pushToast(t('marketplace.favoritesPage.invalidTarget'), 'error');
     return;
   }
 
@@ -214,10 +216,10 @@ const saveAlert = async (): Promise<void> => {
       offerRequired: false,
       enabled: true,
     });
-    feedbackStore.pushToast('價格提醒已設定。', 'success');
+    feedbackStore.pushToast(t('marketplace.favoritesPage.alertSaved'), 'success');
     alertModalOpen.value = false;
   } catch (error: unknown) {
-    feedbackStore.pushToast(resolveErrorMessage(error, '價格提醒設定失敗。'), 'error');
+    feedbackStore.pushToast(resolveErrorMessage(error, t('marketplace.favoritesPage.alertError')), 'error');
   } finally {
     alertSaving.value = false;
   }
@@ -241,14 +243,14 @@ const mapSecondhandFavorite = (item: SecondhandListingSummaryResponse, sortIndex
     id: `secondhand-${item.listing_id}`,
     sourceId: item.listing_id,
     type: 'secondhand',
-    typeLabel: '二手',
+    typeLabel: t('marketplace.favoritesPage.typeSecondhand'),
     name: item.title,
-    price: item.price_mode === 'free' ? '免費' : formatPrice(priceValue, preferenceStore.locale),
+    price: item.price_mode === 'free' ? t('marketplace.favoritesPage.free') : formatPrice(priceValue, preferenceStore.locale),
     priceValue,
     area: resolveListingCategoryLabel(item, preferenceStore.locale),
     areaValue: 0,
     rooms: item.condition_level,
-    district: resolveListingCommunityName(item),
+    district: resolveListingCommunityName(item, preferenceStore.locale),
     bg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
     imageUrl: cover?.url ?? '',
     targetPath: `/marketplace/listing/${item.listing_id}`,
@@ -266,13 +268,13 @@ const mapPropertyFavorite = (item: PropertyListingSummaryResponse, sortIndex: nu
     id: `property-${item.listing_id}`,
     sourceId: item.listing_id,
     type: 'property_sale',
-    typeLabel: '樓盤',
+    typeLabel: t('marketplace.favoritesPage.typeProperty'),
     name: item.title,
     price: resolvePropertyPriceText(item, preferenceStore.locale),
     priceValue: resolvePropertyPrice(item),
-    area: area > 0 ? `${area}呎` : '-',
+    area: area > 0 ? t('marketplace.favoritesPage.squareFeet', { area }) : '-',
     areaValue: area,
-    rooms: resolvePropertyRooms(item),
+    rooms: resolvePropertyRooms(item, preferenceStore.locale),
     district: resolvePropertyDistrict(item, preferenceStore.locale),
     bg: 'linear-gradient(160deg,#e4dcd8,#ccc0bc)',
     imageUrl: cover?.url ?? '',
@@ -284,20 +286,20 @@ const mapPropertyFavorite = (item: PropertyListingSummaryResponse, sortIndex: nu
 
 // 15. 映射超市收藏
 const mapSupermarketFavorite = (item: SupermarketProduct, sortIndex: number): SavedItem => {
-  const primaryPrice = supermarketPrimaryPrice(item);
+  const primaryPrice = supermarketPrimaryPrice(item, preferenceStore.locale);
 
   return {
     id: `supermarket-${item.code}`,
     sourceId: item.code,
     type: 'supermarket_offer',
-    typeLabel: '優惠',
+    typeLabel: t('marketplace.favoritesPage.typeOffer'),
     name: item.name,
-    price: formatSupermarketHKPrice(primaryPrice.effectiveUnitPrice),
+    price: formatSupermarketHKPrice(primaryPrice.effectiveUnitPrice, preferenceStore.locale),
     priceValue: primaryPrice.effectiveUnitPrice,
-    area: displaySupermarketCategory(item.category1 || item.category2 || item.category3),
+    area: displaySupermarketCategory(item.category1 || item.category2 || item.category3, preferenceStore.locale),
     areaValue: 0,
-    rooms: displaySupermarketStore(primaryPrice.store || item.bestStore),
-    district: item.brand || '綜合優惠',
+    rooms: displaySupermarketStore(primaryPrice.store || item.bestStore, preferenceStore.locale),
+    district: item.brand || t('marketplace.favoritesPage.genericOffers'),
     bg: 'linear-gradient(160deg,#e0e0e8,#c8c8d8)',
     imageUrl: item.image_url || item.imageUrl || '',
     targetPath: `/supermarket-offers/products/${encodeURIComponent(item.code)}`,
@@ -326,6 +328,13 @@ const resolveErrorMessage = (error: unknown, fallback: string): string =>
 onMounted(() => {
   void loadFavorites();
 });
+
+watch(
+  () => preferenceStore.locale,
+  () => {
+    void loadFavorites();
+  },
+);
 </script>
 
 <template>
@@ -333,9 +342,9 @@ onMounted(() => {
     <!-- 1. 工具列：標題與篩選 -->
     <div class="saved-toolbar">
       <div>
-        <div class="section-eyebrow">收藏管理</div>
+        <div class="section-eyebrow">{{ t('marketplace.favoritesPage.kicker') }}</div>
         <div class="saved-toolbar-heading">
-          <h1 class="saved-toolbar-title">我的收藏</h1>
+          <h1 class="saved-toolbar-title">{{ t('marketplace.favoritesPage.title') }}</h1>
           <span class="saved-count">{{ items.length }}</span>
         </div>
       </div>
@@ -344,10 +353,10 @@ onMounted(() => {
           v-model="sortKey"
           class="saved-sort"
         >
-          <option value="date">最近收藏</option>
-          <option value="price-asc">價格低至高</option>
-          <option value="price-desc">價格高至低</option>
-          <option value="area">面積大至小</option>
+          <option value="date">{{ t('marketplace.favoritesPage.sortRecent') }}</option>
+          <option value="price-asc">{{ t('marketplace.favoritesPage.sortPriceAsc') }}</option>
+          <option value="price-desc">{{ t('marketplace.favoritesPage.sortPriceDesc') }}</option>
+          <option value="area">{{ t('marketplace.favoritesPage.sortAreaDesc') }}</option>
         </select>
         <button
           type="button"
@@ -359,7 +368,7 @@ onMounted(() => {
             name="close"
             :size="15"
           />
-          {{ actionLoading ? '處理中' : '清除全部' }}
+          {{ actionLoading ? t('marketplace.favoritesPage.processing') : t('marketplace.favoritesPage.clearAll') }}
         </button>
       </div>
     </div>
@@ -368,7 +377,7 @@ onMounted(() => {
       v-if="loading"
       class="saved-loading"
     >
-      收藏載入中。
+      {{ t('marketplace.favoritesPage.loading') }}
     </div>
 
     <!-- 2. 收藏卡片網格 -->
@@ -390,7 +399,7 @@ onMounted(() => {
           <button
             type="button"
             class="saved-card-remove"
-            aria-label="移除收藏"
+            :aria-label="t('marketplace.favoritesPage.removeAria')"
             :disabled="isRemoving(item)"
             @click="removeItem(item)"
           >
@@ -423,7 +432,7 @@ onMounted(() => {
               name="bell"
               :size="14"
             />
-            價格提醒
+            {{ t('marketplace.favoritesPage.priceAlert') }}
           </button>
           <button
             type="button"
@@ -434,7 +443,7 @@ onMounted(() => {
               name="arrow-right"
               :size="14"
             />
-            查看詳情
+            {{ t('marketplace.favoritesPage.viewDetails') }}
           </button>
         </div>
       </div>
@@ -452,8 +461,8 @@ onMounted(() => {
           :stroke-width="1.4"
         />
       </div>
-      <div class="saved-empty-title">尚未收藏任何項目</div>
-      <div class="saved-empty-desc">瀏覽樓盤、二手商品或綜合優惠時可加入收藏。</div>
+      <div class="saved-empty-title">{{ t('marketplace.favoritesPage.emptyTitle') }}</div>
+      <div class="saved-empty-desc">{{ t('marketplace.favoritesPage.emptyDescription') }}</div>
       <button
         type="button"
         class="saved-primary-action"
@@ -463,7 +472,7 @@ onMounted(() => {
           name="search"
           :size="16"
         />
-        去搜尋樓盤
+        {{ t('marketplace.favoritesPage.browseAction') }}
       </button>
     </div>
   </div>
@@ -481,12 +490,12 @@ onMounted(() => {
             name="bell"
             :size="16"
           />
-          設定目標價提醒
+          {{ t('marketplace.favoritesPage.alertTitle') }}
         </div>
         <button
           type="button"
           class="alert-close"
-          aria-label="關閉"
+          :aria-label="t('marketplace.favoritesPage.closeAria')"
           @click="closeAlertModal"
         >
           <AppIcon
@@ -497,27 +506,27 @@ onMounted(() => {
       </div>
       <div class="alert-modal-body">
         <div class="alert-prop-name">{{ alertTargetName }}</div>
-        <div class="alert-current">目前優惠價：{{ alertCurrentPrice }}</div>
-        <label class="alert-label">目標價格 (HK$)</label>
+        <div class="alert-current">{{ t('marketplace.favoritesPage.currentPrice', { price: alertCurrentPrice }) }}</div>
+        <label class="alert-label">{{ t('marketplace.favoritesPage.targetPrice') }}</label>
         <div class="alert-input-row">
           <span class="alert-prefix">HK$</span>
           <input
             v-model.number="alertTargetInput"
             class="alert-input"
             type="number"
-            placeholder="例如 20"
+            :placeholder="t('marketplace.favoritesPage.targetPlaceholder')"
             min="0.01"
             step="0.01"
           />
         </div>
-        <div class="alert-hint">當商品優惠價低於或等於目標價，系統會在通知中心提醒。</div>
+        <div class="alert-hint">{{ t('marketplace.favoritesPage.alertHint') }}</div>
         <button
           type="button"
           class="saved-primary-action saved-primary-action--full"
           :disabled="alertSaving"
           @click="saveAlert"
         >
-          {{ alertSaving ? '儲存中' : '確認設定提醒' }}
+          {{ alertSaving ? t('marketplace.favoritesPage.saving') : t('marketplace.favoritesPage.saveAlert') }}
         </button>
       </div>
     </div>

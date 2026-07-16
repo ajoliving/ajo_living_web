@@ -122,6 +122,7 @@ type UpsertPropertySaleParams struct {
 	FeatureTags           []string
 	ContactMethod         string
 	BusinessStatus        string
+	ChargeDraftSave       bool
 	Images                []ListingImageInput
 	Contact               PropertyContactInput
 }
@@ -339,10 +340,27 @@ type PropertyListingSummary struct {
 	UpdatedAt             string                    `json:"updated_at"`
 	Community             *CommunityResponse        `json:"community,omitempty"`
 	Owner                 *UserPreviewResponse      `json:"owner,omitempty"`
+	AgentSnapshot         *PropertyAgentSnapshot    `json:"agent_snapshot,omitempty"`
 	CoverImage            *ListingImageResponse     `json:"cover_image,omitempty"`
 	PropertySale          *PropertySalePayload      `json:"property_sale,omitempty"`
 	ServicedApartment     *ServicedApartmentPayload `json:"serviced_apartment,omitempty"`
 	IsFavorite            bool                      `json:"is_favorite"`
+}
+
+// 12.1 PropertyAgentSnapshot defines approved public agent data captured by a listing.
+type PropertyAgentSnapshot struct {
+	ProfileType    string `json:"profile_type"`
+	Name           string `json:"name"`
+	NameZH         string `json:"name_zh"`
+	NameEN         string `json:"name_en"`
+	LicenseNumber  string `json:"license_number"`
+	DefaultAvatar  string `json:"default_avatar"`
+	AvatarURL      string `json:"avatar_url"`
+	SignatureZH    string `json:"signature_zh"`
+	SignatureEN    string `json:"signature_en"`
+	CompanyCardURL string `json:"company_card_url"`
+	WechatURL      string `json:"wechat_url"`
+	WechatQRURL    string `json:"wechat_qr_url"`
 }
 
 // 13. PropertyListingDetail defines detail payload for property channels.

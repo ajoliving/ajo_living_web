@@ -83,6 +83,7 @@ const routeMobileContracts = [
   { path: '/', selectors: ['.section-shell', '.home-section'] },
   { path: '/login', selectors: ['.login-shell', '.login-hero-panel'] },
   { path: '/forgot-password', selectors: ['.forgot-password-page'] },
+  { path: '/account/profile/agency-profile', selectors: ['.agency-profile-page'] },
   { path: '/properties', selectors: ['.property-list-layout'] },
   { path: '/properties/:listingId', selectors: ['.detail-layout'] },
   { path: '/furniture', selectors: ['.channel-page', '.mgrid'] },
@@ -179,7 +180,7 @@ describe('mobile baseline styles', () => {
   it('keeps supermarket search controls compact when stacked on mobile', () => {
     expect(offersPage).toMatch(/@media \(max-width: (?:900|1023)px\)[\s\S]*?\.gp-search-box \{[\s\S]*?flex: 1 1 auto;/);
     expect(offersPage).toContain('class="gp-mobile-filter-select gp-mobile-sort-select"');
-    expect(offersPage.indexOf('gp-mobile-sort-select')).toBeLessThan(offersPage.indexOf('aria-label="商品分類"'));
+    expect(offersPage.indexOf('gp-mobile-sort-select')).toBeLessThan(offersPage.indexOf(":aria-label=\"t('offers.list.category')\""));
     expect(offersPage.indexOf('gp-mobile-sort-select')).toBeLessThan(offersPage.indexOf('class="gp-mobile-filter-button mobile-filter-button"'));
     expect(offersPage).toMatch(/@media \(max-width: 1023px\)[\s\S]*?\.gp-toolbar \{[\s\S]*?display: none;/);
   });

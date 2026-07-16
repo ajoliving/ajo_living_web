@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
 import { readStoredAccessToken } from '@/httpapis/auth-session';
@@ -42,10 +43,13 @@ import {
   resolvePropertyTransactionType,
   resolvePropertyTypeLabel,
 } from '@/utils/property';
+import { usePreferenceStore } from '@/stores/preferences';
 
 // 1. 路由
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
+const preferenceStore = usePreferenceStore();
 const listingId = computed(() => String(route.params.listingId ?? ''));
 const listing = ref<PropertyListingDetailResponse | null>(null);
 const similarItems = ref<PropertyListingSummaryResponse[]>([]);
@@ -64,12 +68,12 @@ const saleUsesToiletLabel = computed(() => ['industrial', 'shop'].includes(saleF
 
 const resolveKitchenLabel = (value = ''): string => {
   const option = propertyKitchenTypeOptions.find((item) => item.value === value);
-  return option ? getPropertyOptionLabel(option, 'zh-HK') : value;
+  return option ? getPropertyOptionLabel(option, preferenceStore.locale) : value;
 };
 
 const resolveCookingModeLabel = (value = ''): string => {
   const option = propertyCookingModeOptions.find((item) => item.value === value);
-  return option ? getPropertyOptionLabel(option, 'zh-HK') : value;
+  return option ? getPropertyOptionLabel(option, preferenceStore.locale) : value;
 };
 
 // 2. 物件標籤
@@ -81,11 +85,13 @@ const tags = computed<PropertyTag[]>(() => {
   if (!listing.value) {
     return [];
   }
-  const role = listing.value.publisher_identity_type === 'agent' ? '代理盤' : '業主盤';
+  const role = listing.value.publisher_identity_type === 'agent'
+    ? t('property.publicDetail.agentListing')
+    : t('property.publicDetail.ownerListing');
   return [
     { label: role, dark: true },
-    { label: resolvePropertyDistrict(listing.value, 'zh-HK') },
-    { label: resolvePropertyTypeLabel(listing.value, 'zh-HK') },
+    { label: resolvePropertyDistrict(listing.value, preferenceStore.locale) },
+    { label: resolvePropertyTypeLabel(listing.value, preferenceStore.locale) },
   ];
 });
 
@@ -102,25 +108,37 @@ const stats = computed<DetailStat[]>(() => {
   const profile = saleFieldProfile.value;
   const result: DetailStat[] = [];
   if (profile.showUsableArea || profile.showGrossArea) {
-    const areaLabel = profile.requiredArea === 'gross' ? '建築呎數' : '實用呎數';
+    const areaLabel = profile.requiredArea === 'gross'
+      ? t('property.publicDetail.grossArea')
+      : t('property.publicDetail.usableArea');
     const areaValue = profile.requiredArea === 'gross' && sale.gross_area_sqft
       ? sale.gross_area_sqft
       : resolvePropertyArea(listing.value as PropertyListingSummaryResponse || emptyListing());
-    result.push({ value: areaValue.toLocaleString('zh-HK'), label: areaLabel });
+    result.push({ value: areaValue.toLocaleString(preferenceStore.locale), label: areaLabel });
   }
   if (profile.showRooms) {
-    result.push({ value: sale.bedroom_count < 0 ? 'N/A' : String(sale.bedroom_count ?? 0), label: '房間' });
-    result.push({ value: String(sale.bathroom_count ?? 0), label: saleUsesToiletLabel.value ? '廁所' : '浴室' });
+    result.push({
+      value: sale.bedroom_count < 0 ? 'N/A' : String(sale.bedroom_count ?? 0),
+      label: t('property.publicDetail.bedrooms'),
+    });
+    result.push({
+      value: String(sale.bathroom_count ?? 0),
+      label: saleUsesToiletLabel.value
+        ? t('property.publicDetail.toilets')
+        : t('property.publicDetail.bathrooms'),
+    });
   }
   if (profile.showFloor) {
-    result.push({ value: sale.floor_level || '-', label: '樓層' });
+    result.push({ value: sale.floor_level || '-', label: t('property.publicDetail.floor') });
   }
 
   return result;
 });
 
 // 4. 設施配套
-const facilities = computed(() => listing.value ? resolvePropertyTagLabels(listing.value, 'zh-HK', 12) : []);
+const facilities = computed(() => listing.value
+  ? resolvePropertyTagLabels(listing.value, preferenceStore.locale, 12)
+  : []);
 
 // 5. 大廈資料
 interface BuildingInfo {
@@ -135,45 +153,67 @@ const buildingInfo = computed<BuildingInfo[]>(() => {
   }
   const profile = saleFieldProfile.value;
   const result: BuildingInfo[] = [
-    { label: '參考編號', value: sale.property_no || '-' },
+    { label: t('property.publicDetail.reference'), value: sale.property_no || '-' },
   ];
   if (sale.property_attributes?.lot_number) {
-    result.push({ label: '地段編號', value: sale.property_attributes.lot_number });
+    result.push({ label: t('property.publicDetail.lotNumber'), value: sale.property_attributes.lot_number });
   }
   if (sale.property_attributes?.area_unverified === 'yes') {
-    result.push({ label: '面積資料', value: '未核實' });
+    result.push({
+      label: t('property.publicDetail.areaData'),
+      value: t('property.publicDetail.unverified'),
+    });
   }
   if (sale.property_attributes?.new_completion === 'yes') {
-    result.push({ label: '新落成樓盤', value: '是' });
+    result.push({
+      label: t('property.publicDetail.newProperty'),
+      value: t('property.publicDetail.yes'),
+    });
   }
   if (sale.property_attributes?.extra_bathroom_toilet === 'yes') {
-    result.push({ label: '另有沐浴廁所', value: '是' });
+    result.push({
+      label: t('property.publicDetail.extraBathroomToilet'),
+      value: t('property.publicDetail.yes'),
+    });
   }
   if (sale.rent_included) {
-    result.push({ label: '租金包含', value: sale.rent_included });
+    result.push({ label: t('property.publicDetail.rentIncluded'), value: sale.rent_included });
   }
   if (profile.showDirection) {
-    result.push({ label: '座向', value: sale.direction || '-' });
+    result.push({ label: t('property.publicDetail.direction'), value: sale.direction || '-' });
   }
   if (profile.showBuildingDetails) {
-    result.push({ label: '樓齡', value: sale.building_age || '-' });
+    result.push({ label: t('property.publicDetail.buildingAge'), value: sale.building_age || '-' });
   }
   if (profile.showKitchen) {
     result.push(
-      { label: '廚房類型', value: resolveKitchenLabel(sale.kitchen_type || '') || '-' },
-      { label: '廚房煮食模式', value: resolveCookingModeLabel(sale.cooking_mode || '') || '-' },
+      { label: t('property.publicDetail.kitchenType'), value: resolveKitchenLabel(sale.kitchen_type || '') || '-' },
+      { label: t('property.publicDetail.cookingMode'), value: resolveCookingModeLabel(sale.cooking_mode || '') || '-' },
     );
   }
   result.push(
-    { label: '管理費', value: sale.management_fee_hkd ? `${formatHKD(sale.management_fee_hkd)}/月` : '-' },
-    { label: '瀏覽', value: String(sale.view_count ?? 0) },
-    { label: '查詢', value: String(sale.inquiry_count ?? 0) },
+    {
+      label: t('property.publicDetail.managementFee'),
+      value: sale.management_fee_hkd
+        ? `${formatHKD(sale.management_fee_hkd)}${t('property.publicDetail.perMonth')}`
+        : '-',
+    },
+    { label: t('property.publicDetail.views'), value: String(sale.view_count ?? 0) },
+    { label: t('property.publicDetail.inquiries'), value: String(sale.inquiry_count ?? 0) },
   );
   if (sale.video_url) {
-    result.push({ label: '影片連結', value: '開啟', href: sale.video_url });
+    result.push({
+      label: t('property.publicDetail.video'),
+      value: t('property.publicDetail.open'),
+      href: sale.video_url,
+    });
   }
   if (sale.vr_url) {
-    result.push({ label: 'VR連結', value: '開啟', href: sale.vr_url });
+    result.push({
+      label: t('property.publicDetail.vr'),
+      value: t('property.publicDetail.open'),
+      href: sale.vr_url,
+    });
   }
 
   return result;
@@ -181,14 +221,14 @@ const buildingInfo = computed<BuildingInfo[]>(() => {
 const infoSectionTitle = computed(() => {
   switch (saleFieldProfile.value.value) {
     case 'land':
-      return '土地資料';
+      return t('property.publicDetail.landInfo');
     case 'car_park':
-      return '車位資料';
+      return t('property.publicDetail.carParkInfo');
     case 'shop':
     case 'industrial':
-      return '工商資料';
+      return t('property.publicDetail.commercialInfo');
     default:
-      return '大廈資料';
+      return t('property.publicDetail.buildingInfo');
   }
 });
 
@@ -223,18 +263,47 @@ interface SimilarListing {
 const similarListings = computed<SimilarListing[]>(() =>
   similarItems.value.map((item) => ({
     id: item.listing_id,
-    name: resolvePropertyTitle(item),
-    price: resolvePropertyPriceText(item, 'zh-HK'),
-    meta: `${resolvePropertyDistrict(item, 'zh-HK')} · ${resolvePropertyArea(item).toLocaleString('zh-HK')}呎`,
+    name: resolvePropertyTitle(item, preferenceStore.locale),
+    price: resolvePropertyPriceText(item, preferenceStore.locale),
+    meta: t('property.publicDetail.similarMeta', {
+      district: resolvePropertyDistrict(item, preferenceStore.locale),
+      area: resolvePropertyArea(item).toLocaleString(preferenceStore.locale),
+    }),
     background: 'linear-gradient(135deg,#e4dcd8,#ccc0bc)',
     imageUrl: resolvePropertyCoverImage(item)?.url,
   })),
 );
 
-const title = computed(() => listing.value ? resolvePropertyTitle(listing.value) : '');
-const address = computed(() => listing.value?.property_sale?.address_text || '');
-const priceText = computed(() => listing.value ? resolvePropertyPriceText(listing.value, 'zh-HK') : '-');
-const priceSuffix = computed(() => resolvePropertyTransactionType(listing.value || emptyListing()) === 'rent' ? ' / 月' : '');
+const title = computed(() => listing.value
+  ? resolvePropertyTitle(listing.value, preferenceStore.locale)
+  : '');
+const address = computed(() => {
+  const sale = listing.value?.property_sale;
+  if (!sale) {
+    return '';
+  }
+
+  return preferenceStore.locale === 'en'
+    ? sale.address_text_en || sale.address_text
+    : sale.address_text;
+});
+const descriptionText = computed(() => {
+  if (!listing.value) {
+    return t('property.publicDetail.descriptionEmpty');
+  }
+
+  return preferenceStore.locale === 'en'
+    ? listing.value.property_sale?.description_en || listing.value.description || listing.value.summary || t('property.publicDetail.descriptionEmpty')
+    : listing.value.description || listing.value.summary || t('property.publicDetail.descriptionEmpty');
+});
+const priceText = computed(() => listing.value
+  ? resolvePropertyPriceText(listing.value, preferenceStore.locale)
+  : '-');
+const priceSuffix = computed(() =>
+  resolvePropertyTransactionType(listing.value || emptyListing()) === 'rent'
+    ? t('property.publicDetail.rentUnit')
+    : '',
+);
 const unitPriceText = computed(() => {
   if (!listing.value) {
     return '-';
@@ -244,23 +313,52 @@ const unitPriceText = computed(() => {
   }
   const area = resolvePropertyArea(listing.value);
   const price = resolvePropertyPrice(listing.value);
-  return area > 0 && price > 0 ? `約 ${formatHKD(Math.round(price / area))} / 呎` : '-';
+  return area > 0 && price > 0
+    ? t('property.publicDetail.unitPrice', { price: formatHKD(Math.round(price / area)) })
+    : '-';
 });
 const mapSrc = computed(() => {
   const sale = listing.value?.property_sale;
   if (sale?.latitude && sale?.longitude) {
     return `https://www.google.com/maps?q=${sale.latitude},${sale.longitude}&output=embed`;
   }
-  return `https://www.google.com/maps?q=${encodeURIComponent(address.value || resolvePropertyCommunityName(listing.value || emptyListing()))}&output=embed`;
+  return `https://www.google.com/maps?q=${encodeURIComponent(
+    address.value || resolvePropertyCommunityName(listing.value || emptyListing(), preferenceStore.locale),
+  )}&output=embed`;
 });
 const ownerName = computed(() =>
-  listing.value?.property_sale?.agency_company_name ||
+  (preferenceStore.locale === 'en'
+    ? listing.value?.agent_snapshot?.name_en || listing.value?.agent_snapshot?.name_zh
+    : listing.value?.agent_snapshot?.name_zh || listing.value?.agent_snapshot?.name_en) ||
   listing.value?.owner?.display_name ||
-  listing.value?.property_sale?.publisher_role_label ||
-  '發布者',
+  (preferenceStore.locale === 'zh-HK' ? listing.value?.property_sale?.publisher_role_label : '') ||
+  t('property.publicDetail.publisher'),
 );
+const agentSnapshot = computed(() => listing.value?.agent_snapshot ?? null);
+const agentSignature = computed(() => preferenceStore.locale === 'en'
+  ? agentSnapshot.value?.signature_en || agentSnapshot.value?.signature_zh || ''
+  : agentSnapshot.value?.signature_zh || agentSnapshot.value?.signature_en || '');
+const safeAgentWechatURL = computed(() => {
+  try {
+    const parsed = new URL(agentSnapshot.value?.wechat_url || '');
+    return parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+});
 const contactPhone = computed(() => contactAccess.value?.contact_payload?.phone || '');
-const whatsappURL = computed(() => contactAccess.value?.contact_payload?.whatsapp_url || '');
+const whatsappContacts = computed(() => {
+  const payload = contactAccess.value?.contact_payload ?? {};
+  const contacts = [
+    { label: t('property.publicDetail.phone1WhatsApp'), url: payload.phone_whatsapp_url || '' },
+    { label: t('property.publicDetail.phone2WhatsApp'), url: payload.phone_2_whatsapp_url || '' },
+  ].filter((item) => item.url.trim() !== '');
+  if (contacts.length === 0 && payload.whatsapp_url) {
+    contacts.push({ label: 'WhatsApp', url: payload.whatsapp_url });
+  }
+
+  return contacts;
+});
 interface ContactDetailRow {
   label: string;
   value: string;
@@ -268,10 +366,10 @@ interface ContactDetailRow {
 const unlockedContactDetails = computed<ContactDetailRow[]>(() => {
   const payload = contactAccess.value?.contact_payload ?? {};
   return [
-    { label: '中文名', value: payload.contact_name_zh || '' },
-    { label: '英文名', value: payload.contact_name_en || '' },
-    { label: '電話2', value: payload.phone_2 || '' },
-    { label: 'WeChat', value: payload.wechat || '' },
+    { label: t('property.publicDetail.contactNameZh'), value: payload.contact_name_zh || '' },
+    { label: t('property.publicDetail.contactNameEn'), value: payload.contact_name_en || '' },
+    { label: t('property.publicDetail.phone2'), value: payload.phone_2 || '' },
+    { label: t('property.publicDetail.wechatId'), value: payload.wechat || '' },
   ].filter((item) => item.value.trim() !== '');
 });
 const appointmentForm = reactive({
@@ -279,6 +377,10 @@ const appointmentForm = reactive({
   contactPhone: '',
   preferredTime: '',
   message: '',
+});
+const appointmentErrors = reactive({
+  contactName: '',
+  contactPhone: '',
 });
 const reportForm = reactive({
   reason: 'incorrect_info',
@@ -311,7 +413,7 @@ const goChat = async (): Promise<void> => {
     const { data } = await createOrReusePropertyChat('sale', listing.value.listing_id);
     await router.push(`/account/chat/${data.data.chat_id}`);
   } catch {
-    actionMessage.value = '暫時無法開啟站內訊息。';
+    actionMessage.value = t('property.publicDetail.chatError');
   } finally {
     openingChat.value = false;
   }
@@ -328,7 +430,7 @@ const loadDetail = async (): Promise<void> => {
     const similar = await fetchSimilarPropertySales(listingId.value, { limit: 8 });
     similarItems.value = similar.data.data.items;
   } catch {
-    errorMessage.value = '暫時無法讀取樓盤詳情。';
+    errorMessage.value = t('property.publicDetail.loadError');
   } finally {
     loading.value = false;
   }
@@ -360,15 +462,28 @@ const revealContact = async (): Promise<void> => {
   try {
     const { data } = await fetchPropertySaleContactAccess(listing.value.listing_id);
     contactAccess.value = data.data;
-    actionMessage.value = '已顯示聯絡方式。';
+    actionMessage.value = t('property.publicDetail.contactShown');
   } catch {
-    actionMessage.value = '暫時無法讀取聯絡方式。';
+    actionMessage.value = t('property.publicDetail.contactError');
   }
 };
 
 // 14. 提交睇樓預約
 const submitAppointment = async (): Promise<void> => {
   if (!listing.value) return;
+
+  appointmentErrors.contactName = appointmentForm.contactName.trim()
+    ? ''
+    : t('property.publicDetail.contactNameRequired');
+  appointmentErrors.contactPhone = appointmentForm.contactPhone.trim()
+    ? ''
+    : t('property.publicDetail.phoneRequired');
+
+  if (appointmentErrors.contactName || appointmentErrors.contactPhone) {
+    actionMessage.value = t('property.publicDetail.appointmentRequiredError');
+    return;
+  }
+
   if (!readStoredAccessToken()) {
     await router.push({ path: '/login', query: { redirect: route.fullPath } });
     return;
@@ -382,9 +497,9 @@ const submitAppointment = async (): Promise<void> => {
       appointment_type: 'viewing',
     });
     appointmentOpen.value = false;
-    actionMessage.value = '睇樓預約已提交。';
+    actionMessage.value = t('property.publicDetail.appointmentSuccess');
   } catch {
-    actionMessage.value = '睇樓預約提交失敗。';
+    actionMessage.value = t('property.publicDetail.appointmentError');
   }
 };
 
@@ -401,15 +516,19 @@ const submitReport = async (): Promise<void> => {
       message: reportForm.message.trim() || undefined,
     });
     reportOpen.value = false;
-    actionMessage.value = '舉報已提交。';
+    actionMessage.value = t('property.publicDetail.reportSuccess');
   } catch {
-    actionMessage.value = '舉報提交失敗。';
+    actionMessage.value = t('property.publicDetail.reportError');
   }
 };
 
 // 16. 格式化港幣
 const formatHKD = (value: number): string =>
-  `HK$${value.toLocaleString('zh-HK')}`;
+  new Intl.NumberFormat(preferenceStore.locale, {
+    style: 'currency',
+    currency: 'HKD',
+    maximumFractionDigits: 0,
+  }).format(value);
 
 // 17. 空資料 fallback
 const emptyListing = (): PropertyListingSummaryResponse => ({
@@ -433,11 +552,11 @@ onMounted(() => {
   <main class="detail-page">
     <!-- 1. 麵包屑 -->
     <div class="breadcrumb">
-      <router-link class="bc-link" to="/">首頁</router-link>
+      <router-link class="bc-link" to="/">{{ t('property.publicDetail.home') }}</router-link>
       <span class="bc-sep">›</span>
-      <router-link class="bc-link" to="/properties">樓盤租售</router-link>
+      <router-link class="bc-link" to="/properties">{{ t('property.publicDetail.list') }}</router-link>
       <span class="bc-sep">›</span>
-      <span class="bc-current">{{ title || '樓盤詳情' }}</span>
+      <span class="bc-current">{{ title || t('property.publicDetail.title') }}</span>
     </div>
 
     <div class="detail-wrap">
@@ -451,7 +570,7 @@ onMounted(() => {
         v-else-if="loading && !listing"
         class="detail-state"
       >
-        正在讀取樓盤詳情。
+        {{ t('property.publicDetail.loading') }}
       </p>
       <p
         v-if="actionMessage"
@@ -500,7 +619,7 @@ onMounted(() => {
             </div>
 
             <section class="detail-section">
-              <div class="detail-section-title">設施配套</div>
+              <div class="detail-section-title">{{ t('property.publicDetail.facilities') }}</div>
               <div class="gpills">
                 <span
                   v-for="item in facilities"
@@ -513,15 +632,15 @@ onMounted(() => {
                   v-if="facilities.length === 0"
                   class="gpill"
                 >
-                  未提供
+                  {{ t('property.publicDetail.notProvided') }}
                 </span>
               </div>
             </section>
 
             <section class="detail-section">
-              <div class="detail-section-title">物業描述</div>
+              <div class="detail-section-title">{{ t('property.publicDetail.description') }}</div>
               <p class="body-text">
-                {{ listing.description || listing.summary || '未提供物業描述。' }}
+                {{ descriptionText }}
               </p>
             </section>
 
@@ -648,11 +767,11 @@ onMounted(() => {
             <!-- 2.2.2 物業位置 -->
             <div class="detail-right-card">
               <div class="label-text" style="margin-bottom: 10px;">
-                物業位置
+                {{ t('property.publicDetail.location') }}
               </div>
               <iframe
                 class="building-map-frame"
-                title="樓盤地圖位置"
+                :title="t('property.publicDetail.mapTitle')"
                 :src="mapSrc"
                 allowfullscreen
                 loading="lazy"
@@ -663,29 +782,45 @@ onMounted(() => {
             <!-- 2.2.3 代理聯絡卡 -->
             <div class="detail-agent-card">
               <div class="detail-agent-profile">
-                <div class="detail-agent-avatar">{{ ownerName.slice(0, 1) }}</div>
+                <div class="detail-agent-avatar" :class="agentSnapshot ? `detail-agent-avatar--${agentSnapshot.default_avatar}` : ''">
+                  <img v-if="agentSnapshot?.avatar_url" :src="agentSnapshot.avatar_url" :alt="ownerName">
+                  <span v-else>{{ ownerName.slice(0, 1) }}</span>
+                </div>
                 <div class="detail-agent-copy">
-                  <div class="detail-agent-kicker">{{ listing.publisher_identity_type === 'agent' ? '代理人' : '發布者' }}</div>
+                  <div class="detail-agent-kicker">{{ listing.publisher_identity_type === 'agent'
+                    ? t('property.publicDetail.agent')
+                    : t('property.publicDetail.publisher') }}</div>
                   <div class="detail-agent-name">{{ ownerName }}</div>
-                  <div class="detail-agent-sub">查看聯絡方式、預約睇樓或發送站內訊息</div>
+                  <div v-if="agentSnapshot?.license_number" class="detail-agent-sub">{{ t('property.publicDetail.agentLicense', { license: agentSnapshot.license_number }) }}</div>
+                  <div v-if="agentSignature" class="detail-agent-sub">{{ agentSignature }}</div>
+                  <div v-else class="detail-agent-sub">{{ t('property.publicDetail.contactHint') }}</div>
                 </div>
               </div>
+              <a v-if="agentSnapshot?.company_card_url" class="detail-agent-company-card" :href="agentSnapshot.company_card_url" target="_blank" rel="noreferrer">
+                <img :src="agentSnapshot.company_card_url" :alt="t('property.publicDetail.companyCard')">
+                <span>{{ t('property.publicDetail.companyCard') }}</span>
+              </a>
+              <div v-if="safeAgentWechatURL || agentSnapshot?.wechat_qr_url" class="detail-agent-time">
+                <div class="detail-agent-label">WeChat</div>
+                <a v-if="safeAgentWechatURL" :href="safeAgentWechatURL" target="_blank" rel="noreferrer">{{ t('property.publicDetail.wechatLink') }}</a>
+                <a v-if="agentSnapshot?.wechat_qr_url" :href="agentSnapshot.wechat_qr_url" target="_blank" rel="noreferrer">{{ t('property.publicDetail.wechatQr') }}</a>
+              </div>
               <div class="detail-agent-time">
-                <div class="detail-agent-label">發布資料</div>
-                <div class="detail-agent-value">{{ resolvePropertyCommunityName(listing) }}</div>
-                <div class="detail-agent-note">{{ resolvePropertyRooms(listing) }}</div>
+                <div class="detail-agent-label">{{ t('property.publicDetail.listingInfo') }}</div>
+                <div class="detail-agent-value">{{ resolvePropertyCommunityName(listing, preferenceStore.locale) }}</div>
+                <div class="detail-agent-note">{{ resolvePropertyRooms(listing, preferenceStore.locale) }}</div>
               </div>
               <div
                 v-if="unlockedContactDetails.length > 0"
                 class="detail-agent-time"
               >
-                <div class="detail-agent-label">聯絡資料</div>
+                <div class="detail-agent-label">{{ t('property.publicDetail.contactInfo') }}</div>
                 <div
                   v-for="item in unlockedContactDetails"
                   :key="item.label"
                   class="detail-agent-note"
                 >
-                  {{ item.label }}：{{ item.value }}
+                  {{ item.label }}: {{ item.value }}
                 </div>
               </div>
               <div class="detail-agent-actions">
@@ -693,7 +828,7 @@ onMounted(() => {
                   v-if="contactPhone"
                   class="detail-agent-contact"
                   :href="`tel:${contactPhone}`"
-                  aria-label="代理電話"
+                  :aria-label="t('property.publicDetail.phoneAria')"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -707,7 +842,7 @@ onMounted(() => {
                       stroke-linejoin="round"
                     />
                   </svg>
-                  致電查詢
+                  {{ t('property.publicDetail.call') }}
                 </a>
                 <button
                   v-else
@@ -715,42 +850,45 @@ onMounted(() => {
                   type="button"
                   @click="revealContact"
                 >
-                  查看電話
+                  {{ t('property.publicDetail.revealPhone') }}
                 </button>
-                <a
-                  v-if="whatsappURL"
-                  class="detail-agent-contact primary"
-                  :href="whatsappURL"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
+                <template v-if="whatsappContacts.length > 0">
+                  <a
+                    v-for="contact in whatsappContacts"
+                    :key="contact.label"
+                    class="detail-agent-contact primary"
+                    :href="contact.url"
+                    target="_blank"
+                    rel="noopener"
                   >
-                    <path
-                      d="M7.2 20.2 3 21l.9-4A9 9 0 1 1 7.2 20.2Z"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M9.2 8.7c.2-.4.4-.5.7-.5h.5c.2 0 .4.1.5.4l.6 1.4c.1.3.1.5-.1.7l-.4.5c.7 1.2 1.6 2.1 2.8 2.8l.5-.4c.2-.2.4-.2.7-.1l1.4.6c.3.1.4.3.4.5v.5c0 .3-.1.5-.5.7-.6.3-1.4.3-2.4-.1-2.4-.8-4.3-2.7-5.1-5.1-.4-1-.4-1.8-.1-2.4Z"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                  WhatsApp
-                </a>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M7.2 20.2 3 21l.9-4A9 9 0 1 1 7.2 20.2Z"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                      <path
+                        d="M9.2 8.7c.2-.4.4-.5.7-.5h.5c.2 0 .4.1.5.4l.6 1.4c.1.3.1.5-.1.7l-.4.5c.7 1.2 1.6 2.1 2.8 2.8l.5-.4c.2-.2.4-.2.7-.1l1.4.6c.3.1.4.3.4.5v.5c0 .3-.1.5-.5.7-.6.3-1.4.3-2.4-.1-2.4-.8-4.3-2.7-5.1-5.1-.4-1-.4-1.8-.1-2.4Z"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                    {{ contact.label }}
+                  </a>
+                </template>
                 <button
                   v-else
                   class="detail-agent-contact primary"
                   type="button"
                   @click="revealContact"
                 >
-                  查看 WhatsApp
+                  {{ t('property.publicDetail.revealWhatsApp') }}
                 </button>
                 <button
                   v-if="listing.contact_summary.show_chat"
@@ -777,7 +915,7 @@ onMounted(() => {
                       stroke-linejoin="round"
                     />
                   </svg>
-                  {{ openingChat ? '開啟中' : '站內訊息' }}
+                  {{ openingChat ? t('property.publicDetail.opening') : t('property.publicDetail.message') }}
                 </button>
               </div>
               <div class="detail-agent-actions">
@@ -786,33 +924,85 @@ onMounted(() => {
                   type="button"
                   @click="toggleFavorite"
                 >
-                  {{ listing.is_favorite ? '已收藏' : '收藏' }}
+                  {{ listing.is_favorite ? t('property.publicDetail.favorited') : t('property.publicDetail.favorite') }}
                 </button>
                 <button
                   class="detail-agent-contact"
                   type="button"
                   @click="appointmentOpen = !appointmentOpen"
                 >
-                  預約睇樓
+                  {{ t('property.publicDetail.appointment') }}
                 </button>
                 <button
                   class="detail-agent-contact"
                   type="button"
                   @click="reportOpen = !reportOpen"
                 >
-                  舉報
+                  {{ t('property.publicDetail.report') }}
                 </button>
               </div>
               <form
                 v-if="appointmentOpen"
                 class="detail-form"
+                novalidate
                 @submit.prevent="submitAppointment"
               >
-                <input v-model="appointmentForm.contactName" placeholder="聯絡人" required>
-                <input v-model="appointmentForm.contactPhone" placeholder="電話" required>
-                <input v-model="appointmentForm.preferredTime" placeholder="希望睇樓時間">
-                <textarea v-model="appointmentForm.message" placeholder="補充資料" rows="3" />
-                <button type="submit">提交預約</button>
+                <label class="detail-form-field">
+                  <span>
+                    {{ t('property.publicDetail.contactNameField') }}
+                    <b class="detail-required-mark" aria-hidden="true">*</b>
+                  </span>
+                  <input
+                    v-model="appointmentForm.contactName"
+                    :aria-describedby="appointmentErrors.contactName ? 'appointment-contact-name-error' : undefined"
+                    :aria-invalid="Boolean(appointmentErrors.contactName)"
+                    :class="{ 'detail-form-input--error': appointmentErrors.contactName }"
+                    autocomplete="name"
+                    :placeholder="t('property.publicDetail.contactNamePlaceholder')"
+                    type="text"
+                    @input="appointmentErrors.contactName = ''"
+                  >
+                  <small
+                    v-if="appointmentErrors.contactName"
+                    id="appointment-contact-name-error"
+                    class="detail-form-error"
+                  >
+                    {{ appointmentErrors.contactName }}
+                  </small>
+                </label>
+                <label class="detail-form-field">
+                  <span>
+                    {{ t('property.publicDetail.phoneField') }}
+                    <b class="detail-required-mark" aria-hidden="true">*</b>
+                  </span>
+                  <input
+                    v-model="appointmentForm.contactPhone"
+                    :aria-describedby="appointmentErrors.contactPhone ? 'appointment-contact-phone-error' : undefined"
+                    :aria-invalid="Boolean(appointmentErrors.contactPhone)"
+                    :class="{ 'detail-form-input--error': appointmentErrors.contactPhone }"
+                    autocomplete="tel"
+                    inputmode="tel"
+                    :placeholder="t('property.publicDetail.phonePlaceholder')"
+                    type="tel"
+                    @input="appointmentErrors.contactPhone = ''"
+                  >
+                  <small
+                    v-if="appointmentErrors.contactPhone"
+                    id="appointment-contact-phone-error"
+                    class="detail-form-error"
+                  >
+                    {{ appointmentErrors.contactPhone }}
+                  </small>
+                </label>
+                <label class="detail-form-field">
+                  <span>{{ t('property.publicDetail.preferredTimeField') }}</span>
+                  <input v-model="appointmentForm.preferredTime" :placeholder="t('property.publicDetail.preferredTimePlaceholder')">
+                </label>
+                <label class="detail-form-field">
+                  <span>{{ t('property.publicDetail.extraInfoField') }}</span>
+                  <textarea v-model="appointmentForm.message" :placeholder="t('property.publicDetail.extraInfoPlaceholder')" rows="3" />
+                </label>
+                <button type="submit">{{ t('property.publicDetail.submitAppointment') }}</button>
               </form>
               <form
                 v-if="reportOpen"
@@ -820,20 +1010,20 @@ onMounted(() => {
                 @submit.prevent="submitReport"
               >
                 <select v-model="reportForm.reason">
-                  <option value="incorrect_info">資料不準確</option>
-                  <option value="unavailable">樓盤已不可用</option>
-                  <option value="suspicious">可疑內容</option>
-                  <option value="other">其他</option>
+                  <option value="incorrect_info">{{ t('property.publicDetail.reportIncorrect') }}</option>
+                  <option value="unavailable">{{ t('property.publicDetail.reportUnavailable') }}</option>
+                  <option value="suspicious">{{ t('property.publicDetail.reportSuspicious') }}</option>
+                  <option value="other">{{ t('property.publicDetail.reportOther') }}</option>
                 </select>
-                <textarea v-model="reportForm.message" placeholder="補充說明" rows="3" />
-                <button type="submit">提交舉報</button>
+                <textarea v-model="reportForm.message" :placeholder="t('property.publicDetail.reportMessagePlaceholder')" rows="3" />
+                <button type="submit">{{ t('property.publicDetail.submitReport') }}</button>
               </form>
             </div>
 
             <!-- 2.2.4 其他樓盤推薦 -->
             <div class="similar-section">
               <div class="label-text" style="margin-bottom: 12px;">
-                其他樓盤
+                {{ t('property.publicDetail.similar') }}
               </div>
               <div class="similar-scroll">
                 <div
@@ -1256,6 +1446,39 @@ onMounted(() => {
   flex: 0 0 auto;
 }
 
+.detail-agent-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-agent-avatar--male {
+  background: #e8f1f6;
+  color: #315b70;
+}
+
+.detail-agent-avatar--female {
+  background: #f5e9ed;
+  color: #7f4758;
+}
+
+.detail-agent-company-card {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: .65rem;
+  border: 1px solid var(--bdr);
+  color: var(--ink);
+  padding: .55rem;
+  text-decoration: none;
+}
+
+.detail-agent-company-card img {
+  width: 5rem;
+  aspect-ratio: 1.5;
+  object-fit: contain;
+}
+
 .detail-agent-copy {
   min-width: 0;
 }
@@ -1371,6 +1594,20 @@ onMounted(() => {
   padding-top: 12px;
 }
 
+.detail-form-field {
+  display: grid;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-required-mark {
+  color: var(--brand);
+  font-size: 14px;
+  line-height: 1;
+}
+
 .detail-form input,
 .detail-form select,
 .detail-form textarea {
@@ -1383,6 +1620,16 @@ onMounted(() => {
   font-size: 13px;
   padding: 9px 10px;
   outline: none;
+}
+
+.detail-form .detail-form-input--error {
+  border-color: #ba1a1a;
+}
+
+.detail-form-error {
+  color: #ba1a1a;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .detail-form button {
@@ -1480,7 +1727,7 @@ onMounted(() => {
 }
 
 /* 18. 響應式 */
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .breadcrumb {
     padding-right: 24px;
     padding-left: 24px;

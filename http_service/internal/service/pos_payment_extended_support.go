@@ -21,8 +21,15 @@ func (s *POSPaymentService) resolveHistoryAccess(ctx context.Context, userID int
 	if err != nil {
 		return nil, "", nil, err
 	}
-
-	if !account.IsStaff {
+	requestedUnitIDs := normalizeStringSlice(query.UnitIDs)
+	if strings.TrimSpace(query.Selection.UnitID) != "" && len(requestedUnitIDs) == 0 {
+		contextValue, token, err := s.memberPOSAccess(ctx, userID, query.Selection)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		return contextValue, token, []string{contextValue.UnitID}, nil
+	}
+	if len(requestedUnitIDs) == 0 {
 		contextValue, token, err := s.memberPOSAccess(ctx, userID, query.Selection)
 		if err != nil {
 			return nil, "", nil, err
@@ -30,15 +37,11 @@ func (s *POSPaymentService) resolveHistoryAccess(ctx context.Context, userID int
 		return contextValue, token, []string{contextValue.UnitID}, nil
 	}
 
-	if strings.TrimSpace(query.Selection.UnitID) != "" && len(normalizeStringSlice(query.UnitIDs)) == 0 {
-		contextValue, token, err := s.memberPOSAccess(ctx, userID, query.Selection)
-		if err != nil {
-			return nil, "", nil, err
-		}
-		return contextValue, token, []string{contextValue.UnitID}, nil
+	buildingSelection := query.Selection
+	if strings.TrimSpace(buildingSelection.BuildingID) == "" {
+		buildingSelection.UnitID = requestedUnitIDs[0]
 	}
-
-	contextValue, token, err := s.staffBuildingAccess(ctx, userID, query.Selection)
+	contextValue, token, err := s.memberBuildingAccess(ctx, userID, buildingSelection)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -47,26 +50,23 @@ func (s *POSPaymentService) resolveHistoryAccess(ctx context.Context, userID int
 		return nil, "", nil, err
 	}
 
-	unitIDs := normalizeStringSlice(query.UnitIDs)
-	if len(unitIDs) == 0 && strings.TrimSpace(query.Selection.UnitID) != "" {
-		unitIDs = []string{strings.TrimSpace(query.Selection.UnitID)}
-	}
-	if len(unitIDs) > 0 && len(unitOptions) > 0 {
-		for _, unitID := range unitIDs {
-			if !containsString(unitOptions, unitID) {
+	if len(unitOptions) > 0 {
+		for _, unitID := range requestedUnitIDs {
+			if posUnitBuildingID(unitID) != contextValue.BuildingID || !containsString(unitOptions, unitID) {
 				return nil, "", nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 			}
 		}
 	}
-	if len(unitIDs) > 0 && len(unitOptions) == 0 {
-		for _, unitID := range unitIDs {
-			if err := s.ensureStaffBuildingUnit(ctx, userID, contextValue.BuildingID, unitID); err != nil {
+	if len(unitOptions) == 0 {
+		for _, unitID := range requestedUnitIDs {
+			selection := POSPaymentSelection{BuildingID: contextValue.BuildingID, UnitID: unitID}
+			if _, _, err := s.memberPOSAccess(ctx, userID, selection); err != nil {
 				return nil, "", nil, err
 			}
 		}
 	}
 
-	return contextValue, token, unitIDs, nil
+	return contextValue, token, requestedUnitIDs, nil
 }
 
 // 2. fetchHistoryRows reads history rows from POS relay.
@@ -340,24 +340,7 @@ func ensureReportPayloadContext(payload map[string]any, contextValue *POSUnitCon
 	return nil
 }
 
-// 16. ensureStaffBuildingUnit checks one unit belongs to a visible Staff building.
-func (s *POSPaymentService) ensureStaffBuildingUnit(ctx context.Context, userID int64, buildingID string, unitID string) error {
-	if strings.TrimSpace(unitID) == "" {
-		return nil
-	}
-	units, err := s.memberPOSUnits(ctx, userID, buildingID)
-	if err != nil {
-		return err
-	}
-	for _, item := range units {
-		if posUnitID(item) == strings.TrimSpace(unitID) {
-			return nil
-		}
-	}
-	return errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
-}
-
-// 17. ensureAccountingPaymentIDs verifies selected clear-machine ids are pending rows.
+// 16. ensureAccountingPaymentIDs verifies selected clear-machine ids are pending rows.
 func (s *POSPaymentService) ensureAccountingPaymentIDs(ctx context.Context, userID int64, token string, contextValue *POSUnitContext, paymentIDs []string) error {
 	var pending map[string]any
 	path := "/building/" + url.PathEscape(contextValue.BuildingID) + "/accounting"

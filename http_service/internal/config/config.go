@@ -43,6 +43,11 @@ type Config struct {
 	IsmartExternalAppAPIBaseURL string
 	IsmartIntegrationAPIBaseURL string
 	IsmartExternalAppTimeout    time.Duration
+	RedisEnabled                bool
+	RedisAddr                   string
+	RedisPassword               string
+	RedisDB                     int
+	IsmartBuildingCacheTTL      time.Duration
 	ICCTVAPIBaseURL             string
 	ICCTVAdminUsername          string
 	ICCTVAdminPassword          string
@@ -60,8 +65,20 @@ type Config struct {
 	GoodPriceDetailCacheTTL     time.Duration
 	GoodPriceAlertEnabled       bool
 	GoodPriceAlertInterval      time.Duration
+	TranslationProvider         string
+	DeepLAPIBaseURL             string
+	DeepLAuthKey                string
+	TranslationRequestTimeout   time.Duration
 	OTPProvider                 string
 	OTPMockCode                 string
+	OTPResendCooldown           time.Duration
+	AliyunSMSAccessKeyID        string
+	AliyunSMSAccessKeySecret    string
+	AliyunSMSRegionID           string
+	AliyunSMSSignName           string
+	AliyunSMSTemplateCode       string
+	AliyunSMSTemplateParamName  string
+	AliyunSMSRequestTimeout     time.Duration
 	MailEnabled                 bool
 	SMTPHost                    string
 	SMTPPort                    int
@@ -141,6 +158,11 @@ func Load() *Config {
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
 		IsmartIntegrationAPIBaseURL: getEnv("ISMART_INTEGRATION_API_BASE_URL", defaultIsmartIntegrationAPIBaseURL()),
 		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
+		RedisEnabled:                getBoolEnv("REDIS_ENABLED", true),
+		RedisAddr:                   strings.TrimSpace(getEnv("REDIS_ADDR", "127.0.0.1:6382")),
+		RedisPassword:               os.Getenv("REDIS_PASSWORD"),
+		RedisDB:                     getIntEnv("REDIS_DB", 0),
+		IsmartBuildingCacheTTL:      getDurationEnv("ISMART_BUILDING_CACHE_TTL", 5*time.Minute),
 		ICCTVAPIBaseURL:             getEnv("ICCTV_API_BASE_URL", defaultICCTVAPIBaseURL()),
 		ICCTVAdminUsername:          strings.TrimSpace(getEnv("ICCTV_ADMIN_USERNAME", "")),
 		ICCTVAdminPassword:          os.Getenv("ICCTV_ADMIN_PASSWORD"),
@@ -155,11 +177,23 @@ func Load() *Config {
 		GoodPriceDetailCacheTTL:     getDurationEnv("GOOD_PRICE_DETAIL_CACHE_TTL", 3*time.Minute),
 		GoodPriceAlertEnabled:       getBoolEnv("GOOD_PRICE_ALERT_ENABLED", true),
 		GoodPriceAlertInterval:      getDurationEnv("GOOD_PRICE_ALERT_INTERVAL", time.Hour),
+		TranslationProvider:         getEnv("TRANSLATION_PROVIDER", "disabled"),
+		DeepLAPIBaseURL:             strings.TrimRight(strings.TrimSpace(getEnv("DEEPL_API_BASE_URL", "https://api-free.deepl.com")), "/"),
+		DeepLAuthKey:                strings.TrimSpace(os.Getenv("DEEPL_AUTH_KEY")),
+		TranslationRequestTimeout:   getDurationEnv("TRANSLATION_REQUEST_TIMEOUT", 10*time.Second),
 		POSTerminalType:             getEnv("POS_TERMINAL_TYPE", "allinpay"),
 		POSTerminalURL:              getEnv("POS_TERMINAL_URL", ""),
 		POSTerminalAllowedBuildings: getEnv("POS_TERMINAL_ALLOWED_BUILDINGS", ""),
 		OTPProvider:                 getEnv("OTP_PROVIDER", "mock"),
 		OTPMockCode:                 getEnv("OTP_MOCK_CODE", "123456"),
+		OTPResendCooldown:           getDurationEnv("OTP_RESEND_COOLDOWN", time.Minute),
+		AliyunSMSAccessKeyID:        strings.TrimSpace(os.Getenv("ALIYUN_SMS_ACCESS_KEY_ID")),
+		AliyunSMSAccessKeySecret:    os.Getenv("ALIYUN_SMS_ACCESS_KEY_SECRET"),
+		AliyunSMSRegionID:           getEnv("ALIYUN_SMS_REGION_ID", "cn-hangzhou"),
+		AliyunSMSSignName:           strings.TrimSpace(getEnv("ALIYUN_SMS_SIGN_NAME", "")),
+		AliyunSMSTemplateCode:       strings.TrimSpace(getEnv("ALIYUN_SMS_TEMPLATE_CODE_CN", "")),
+		AliyunSMSTemplateParamName:  getEnv("ALIYUN_SMS_TEMPLATE_PARAM_NAME", "code"),
+		AliyunSMSRequestTimeout:     getDurationEnv("ALIYUN_SMS_REQUEST_TIMEOUT", 10*time.Second),
 		MailEnabled:                 getBoolEnv("MAIL_ENABLED", false),
 		SMTPHost:                    getEnv("SMTP_HOST", ""),
 		SMTPPort:                    getIntEnv("SMTP_PORT", 25),
@@ -268,11 +302,18 @@ func (c *Config) Validate() error {
 	if isUnsafeSecret(c.EncryptionKey, "dev-encryption-key") {
 		return fmt.Errorf("ENCRYPTION_KEY must be set to a strong production value")
 	}
-	if strings.EqualFold(strings.TrimSpace(c.OTPProvider), "mock") {
+	switch strings.ToLower(strings.TrimSpace(c.OTPProvider)) {
+	case "", "mock":
 		return fmt.Errorf("OTP_PROVIDER=mock is not allowed when APP_ENV=%s", c.AppEnv)
-	}
-	if strings.TrimSpace(c.OTPMockCode) == "" || strings.TrimSpace(c.OTPMockCode) == "123456" {
-		return fmt.Errorf("OTP_MOCK_CODE must not use the default value when APP_ENV=%s", c.AppEnv)
+	case "aliyun_sms":
+		if strings.TrimSpace(c.AliyunSMSAccessKeyID) == "" || strings.TrimSpace(c.AliyunSMSAccessKeySecret) == "" || strings.TrimSpace(c.AliyunSMSSignName) == "" || strings.TrimSpace(c.AliyunSMSTemplateCode) == "" {
+			return fmt.Errorf("Alibaba Cloud SMS credentials, sign name, and mainland template code are required when OTP_PROVIDER=aliyun_sms")
+		}
+		if c.OTPResendCooldown <= 0 || c.AliyunSMSRequestTimeout <= 0 {
+			return fmt.Errorf("OTP_RESEND_COOLDOWN and ALIYUN_SMS_REQUEST_TIMEOUT must be greater than zero")
+		}
+	default:
+		return fmt.Errorf("unsupported OTP_PROVIDER %q", c.OTPProvider)
 	}
 	if !c.MailEnabled {
 		return fmt.Errorf("MAIL_ENABLED=false is not allowed when APP_ENV=%s", c.AppEnv)
