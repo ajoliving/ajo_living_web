@@ -38,6 +38,7 @@ type Config struct {
 	POSLoginUsernameField       string
 	POSLoginPasswordField       string
 	POSLoginTimeout             time.Duration
+	POSDirectoryCacheTTL        time.Duration
 	POSPaymentServiceURL        string
 	IsmartExternalAppBaseURL    string
 	IsmartExternalAppAPIBaseURL string
@@ -153,6 +154,7 @@ func Load() *Config {
 		POSLoginUsernameField:       getEnv("POS_LOGIN_USERNAME_FIELD", "login_name"),
 		POSLoginPasswordField:       getEnv("POS_LOGIN_PASSWORD_FIELD", "password"),
 		POSLoginTimeout:             getDurationEnv("POS_LOGIN_TIMEOUT", 10*time.Second),
+		POSDirectoryCacheTTL:        getDurationEnv("POS_DIRECTORY_CACHE_TTL", 5*time.Minute),
 		POSPaymentServiceURL:        getEnv("POS_PAYMENT_SERVICE_URL", defaultPOSPaymentServiceURL()),
 		IsmartExternalAppBaseURL:    getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()),
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),

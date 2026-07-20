@@ -1,7 +1,7 @@
 /*
  * 登入頁 - 狀態與資料流程。
- * 1. 管理登入表單狀態、模式切換與顯示文字。
- * 2. 處理電郵密碼登入、手提電話密碼登入、用戶名稱 / iSmart 登入與住戶註冊。
+ * 1. 管理統一帳戶登入與住戶註冊表單狀態。
+ * 2. 登入只提交一次帳戶識別與密碼，由後端辨識電話、電郵或 username 並處理回退。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
 import axios from 'axios';
@@ -16,8 +16,6 @@ import type { LoginHeroImageSetting } from '@/model/home-content';
 import type { RegisterEmailAccountPayload } from '@/model/auth';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
-
-export type LoginAuthMode = 'email' | 'phone' | 'username';
 
 export type LoginEmailAction = 'login' | 'register';
 
@@ -222,31 +220,13 @@ const readErrorMessage = (error: unknown): string =>
     ? error.response?.data?.message ?? error.message
     : 'Request failed.';
 
-// 5. 判斷本地帳戶不存在或憑證不符時是否可回退 iSmart
-export const canFallbackToIsmartLogin = (error: unknown): boolean => {
-  const message = readErrorMessage(error).toLowerCase();
-  return (
-    message.includes('incorrect') ||
-    message.includes('not found') ||
-    message.includes('valid email and password') ||
-    message.includes('valid username and password') ||
-    message.includes('valid phone number and password')
-  );
-};
-
-// 6. 檢查本地用戶名稱格式
-const isValidUsernameInput = (value: string): boolean => {
-  const username = value.trim();
-  return username.length >= 2 && username.length <= 120 && !/\s/.test(username);
-};
-
-// 7. 檢查英文姓名格式
+// 5. 檢查英文姓名格式
 const isValidEngNameInput = (value: string): boolean => {
   const engName = value.trim();
   return engName.length >= 2 && engName.length <= 120;
 };
 
-// 7.1 逐項判斷註冊資料錯誤，避免使用無法定位問題的合併提示
+// 5.1 逐項判斷註冊資料錯誤，避免使用無法定位問題的合併提示
 export const resolveRegistrationValidationError = (
   email: string,
   engName: string,
@@ -273,7 +253,7 @@ export const resolveRegistrationValidationError = (
   return null;
 };
 
-// 7.2 取得註冊欄位的完整校驗結果
+// 5.2 取得註冊欄位的完整校驗結果
 export const resolveRegistrationValidationErrors = (
   email: string,
   engName: string,
@@ -299,29 +279,15 @@ export const resolveRegistrationValidationErrors = (
   return errors;
 };
 
-// 7.3 取得登入欄位的完整校驗結果
+// 5.3 取得統一登入欄位的完整校驗結果
 export const resolveLoginValidationErrors = (
-  authMode: LoginAuthMode,
   accountInput: string,
-  phoneCountryCode: string,
-  phone: string,
   password: string,
 ): LoginValidationErrors => {
   const errors: LoginValidationErrors = {};
 
-  if (authMode === 'phone') {
-    if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
-      errors.phone = 'auth.invalidPhone';
-    }
-  } else {
-    const trimmedAccount = accountInput.trim();
-    if (trimmedAccount === '') {
-      errors.ismartAccount = 'auth.accountRequired';
-    } else if (trimmedAccount.includes('@') && !isValidEmailInput(trimmedAccount)) {
-      errors.ismartAccount = 'auth.invalidEmail';
-    } else if (!trimmedAccount.includes('@') && !isValidUsernameInput(trimmedAccount)) {
-      errors.ismartAccount = 'auth.accountRequired';
-    }
+  if (accountInput.trim() === '') {
+    errors.ismartAccount = 'auth.accountRequired';
   }
 
   if (password.trim() === '') {
@@ -432,7 +398,6 @@ export const useLoginPage = () => {
   const feedbackStore = useFeedbackStore();
   const sessionStore = useSessionStore();
   const formState = reactive(createInitialFormState());
-  const authMode = ref<LoginAuthMode>('username');
   const emailAction = ref<LoginEmailAction>('login');
   const buildings = ref<PosBuilding[]>([]);
   const buildingUnits = ref<PosBuildingUnit[]>([]);
@@ -455,22 +420,12 @@ export const useLoginPage = () => {
     },
   );
 
-  const emailSubmitLabel = computed(() => {
+  const submitLabel = computed(() => {
     if (submitting.value) {
       return t('auth.loading');
     }
 
     return emailAction.value === 'register' ? t('auth.registerSubmit') : t('auth.submit');
-  });
-
-  const submitLabel = computed(() => {
-    if (emailAction.value === 'login' && authMode.value === 'username') {
-      return submitting.value ? t('auth.loading') : t('auth.submit');
-    }
-
-    return authMode.value === 'email' || emailAction.value === 'register'
-      ? emailSubmitLabel.value
-      : submitting.value ? t('auth.loading') : t('auth.submit');
   });
 
   const emailActionSwitchLabel = computed(() =>
@@ -669,94 +624,11 @@ export const useLoginPage = () => {
     await router.push(redirect);
   };
 
-  // 26. 執行電郵登入或註冊
-  const handleEmailSubmit = async (): Promise<void> => {
-    if (emailAction.value === 'register') {
-      validationErrors.value = resolveRegistrationValidationErrors(
-        formState.email,
-        formState.engName,
-        formState.phoneCountryCode,
-        formState.phone,
-        formState.password,
-      );
-      if (Object.keys(validationErrors.value).length > 0) {
-        feedbackStore.pushToast(t('auth.formInvalid'), 'error');
-        return;
-      }
-    } else if (!isValidEmailInput(formState.email)) {
-      feedbackStore.pushToast(t('auth.invalidEmail'), 'error');
-      return;
-    } else if (formState.password.trim().length === 0) {
-      feedbackStore.pushToast(t('auth.passwordRequired'), 'error');
-      return;
-    }
-
-    submitting.value = true;
-
-    try {
-      if (emailAction.value === 'register') {
-        const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-        const registrationPayload: RegisterEmailAccountPayload = {
-          email: formState.email.trim(),
-          password: formState.password,
-          eng_name: formState.engName.trim(),
-          phone_country_code: phoneCountryCode,
-          phone_number: phoneNumber,
-          account_type: formState.publisherIdentityType,
-          is_receive_email: formState.isReceiveEmail,
-          primary_community_id: formState.primaryCommunityID.trim(),
-          primary_community_name: selectedBuildingName.value.trim(),
-          residence_floor: formState.residenceFloor.trim(),
-          residence_unit: formState.residenceUnit.trim(),
-        };
-        const chiName = formState.chiName.trim();
-        const idCard = formState.idCard.trim();
-        const remark = formState.remark.trim();
-        if (chiName) {
-          registrationPayload.chi_name = chiName;
-        }
-        if (idCard) {
-          registrationPayload.id_card = idCard;
-        }
-        if (remark) {
-          registrationPayload.remark = remark;
-        }
-        if (formState.gender) {
-          registrationPayload.gender = formState.gender;
-        }
-        await sessionStore.registerEmailAccount(registrationPayload);
-        feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
-      } else {
-        try {
-          await sessionStore.signInWithEmail(formState.email.trim(), formState.password);
-        } catch (error) {
-          if (!canFallbackToIsmartLogin(error)) {
-            throw error;
-          }
-          await sessionStore.signInWithIsmart(
-            formState.email.trim(),
-            formState.password,
-            undefined,
-            formState.email.trim(),
-          );
-        }
-        feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
-      }
-
-      await redirectAfterSignIn();
-    } catch (error) {
-      feedbackStore.pushToast(readErrorMessage(error), 'error');
-    } finally {
-      submitting.value = false;
-    }
-  };
-
-  // 27. 執行手提電話密碼登入
-  const handlePhoneSubmit = async (): Promise<void> => {
-    const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
-    validationErrors.value = resolveLoginValidationErrors(
-      'phone',
-      '',
+  // 26. 執行住戶註冊
+  const handleRegisterSubmit = async (): Promise<void> => {
+    validationErrors.value = resolveRegistrationValidationErrors(
+      formState.email,
+      formState.engName,
       formState.phoneCountryCode,
       formState.phone,
       formState.password,
@@ -769,15 +641,37 @@ export const useLoginPage = () => {
     submitting.value = true;
 
     try {
-      try {
-        await sessionStore.signInWithPhone(phoneCountryCode, phoneNumber, formState.password);
-      } catch (error) {
-        if (!canFallbackToIsmartLogin(error)) {
-          throw error;
-        }
-        await sessionStore.signInWithIsmart(phoneNumber, formState.password, `${phoneCountryCode}${phoneNumber}`);
+      const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
+      const registrationPayload: RegisterEmailAccountPayload = {
+        email: formState.email.trim(),
+        password: formState.password,
+        eng_name: formState.engName.trim(),
+        phone_country_code: phoneCountryCode,
+        phone_number: phoneNumber,
+        account_type: formState.publisherIdentityType,
+        is_receive_email: formState.isReceiveEmail,
+        primary_community_id: formState.primaryCommunityID.trim(),
+        primary_community_name: selectedBuildingName.value.trim(),
+        residence_floor: formState.residenceFloor.trim(),
+        residence_unit: formState.residenceUnit.trim(),
+      };
+      const chiName = formState.chiName.trim();
+      const idCard = formState.idCard.trim();
+      const remark = formState.remark.trim();
+      if (chiName) {
+        registrationPayload.chi_name = chiName;
       }
-      feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
+      if (idCard) {
+        registrationPayload.id_card = idCard;
+      }
+      if (remark) {
+        registrationPayload.remark = remark;
+      }
+      if (formState.gender) {
+        registrationPayload.gender = formState.gender;
+      }
+      await sessionStore.registerEmailAccount(registrationPayload);
+      feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error), 'error');
@@ -786,17 +680,10 @@ export const useLoginPage = () => {
     }
   };
 
-  // 28. 執行用戶名稱、電郵或 iSmart 密碼登入
+  // 27. 執行統一帳戶登入
   const handleAccountSubmit = async (): Promise<void> => {
     const accountInput = selectedAccountInput.value;
-    const isEmailAccount = accountInput.includes('@');
-    validationErrors.value = resolveLoginValidationErrors(
-      'username',
-      accountInput,
-      formState.phoneCountryCode,
-      formState.phone,
-      formState.password,
-    );
+    validationErrors.value = resolveLoginValidationErrors(accountInput, formState.password);
     if (Object.keys(validationErrors.value).length > 0) {
       feedbackStore.pushToast(t('auth.formInvalid'), 'error');
       return;
@@ -805,23 +692,7 @@ export const useLoginPage = () => {
     submitting.value = true;
 
     try {
-      try {
-        if (isEmailAccount) {
-          await sessionStore.signInWithEmail(accountInput, formState.password);
-        } else {
-          await sessionStore.signInWithUsername(accountInput, formState.password);
-        }
-      } catch (error) {
-        if (!canFallbackToIsmartLogin(error)) {
-          throw error;
-        }
-        await sessionStore.signInWithIsmart(
-          accountInput,
-          formState.password,
-          undefined,
-          isEmailAccount ? accountInput : undefined,
-        );
-      }
+      await sessionStore.signInWithIdentifier(accountInput, formState.password);
       feedbackStore.pushToast(t('auth.signInSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
@@ -831,44 +702,30 @@ export const useLoginPage = () => {
     }
   };
 
-  // 30. 按目前模式提交登入表單
+  // 28. 按目前操作提交登入或註冊表單
   const handleSubmit = async (): Promise<void> => {
-    if (emailAction.value === 'login' && authMode.value === 'username') {
-      await handleAccountSubmit();
+    if (emailAction.value === 'register') {
+      await handleRegisterSubmit();
       return;
     }
 
-    if (authMode.value === 'email' || emailAction.value === 'register') {
-      await handleEmailSubmit();
-      return;
-    }
-
-    await handlePhoneSubmit();
+    await handleAccountSubmit();
   };
 
-  // 31. 執行登出
+  // 29. 執行登出
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 32. 前往忘記密碼流程
+  // 30. 前往忘記密碼流程
   const handleForgotPassword = async (): Promise<void> => {
     await router.push('/forgot-password');
   };
 
-  // 33. 設定登入模式
-  const setAuthMode = (mode: LoginAuthMode): void => {
-    authMode.value = mode;
-    emailAction.value = 'login';
-    formState.otp = '';
-    validationErrors.value = {};
-  };
-
-  // 34. 切換電郵登入與註冊模式
+  // 31. 切換登入與註冊模式
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
-    authMode.value = emailAction.value === 'register' ? 'email' : 'username';
     formState.otp = '';
     validationErrors.value = {};
   };
@@ -884,7 +741,6 @@ export const useLoginPage = () => {
   });
 
   return {
-    authMode,
     buildingOptions,
     buildingsLoading,
     emailAction,
@@ -901,7 +757,6 @@ export const useLoginPage = () => {
     residenceFloorOptions,
     residenceUnitOptions,
     selectedHero,
-    setAuthMode,
     submitting,
     submitLabel,
     ensureBuildingsLoaded,

@@ -1,7 +1,7 @@
 /*
  * iCCTV 視像監控服務。
  * 1. 依 AJO 登入使用者解析可見大廈。
- * 2. 代理 iCCTV public 授權接口取得 Orange Pi 與鏡頭 URL。
+ * 2. 代理 iCCTV public V2 授權接口取得 Orange Pi、鏡頭 URL 與頻道說明。
  * 3. 將舊系統回應轉為 AJO 視像監控穩定資料結構。
  */
 package service
@@ -74,11 +74,12 @@ type icctvPublicData struct {
 }
 
 type icctvPublicOrangePi struct {
-	OrangePiID   int64    `json:"orangepi_id"`
-	OrangePiName string   `json:"orangepi_name"`
-	IsActive     bool     `json:"is_active"`
-	Token        string   `json:"token"`
-	URLs         []string `json:"urls"`
+	OrangePiID     int64             `json:"orangepi_id"`
+	OrangePiName   string            `json:"orangepi_name"`
+	IsActive       bool              `json:"is_active"`
+	ChannelRemarks map[string]string `json:"channel_remarks"`
+	Token          string            `json:"token"`
+	URLs           []string          `json:"urls"`
 }
 
 // 6. NewSecurityICCTVService creates an iCCTV service.
@@ -241,7 +242,7 @@ func (s *SecurityICCTVService) publicAuthURL() string {
 		baseURL = "https://icctv.skylinedances.com/api"
 	}
 
-	return baseURL + "/auth/public"
+	return baseURL + "/auth/public/v2"
 }
 
 // 15. httpClient returns the iCCTV HTTP client.
@@ -299,7 +300,7 @@ func (s *SecurityICCTVService) normalizeICCTVPublicResult(result *icctvPublicEnv
 			}
 			cameras = append(cameras, ICCTVCameraSummary{
 				ID:           icctvCameraID(item.OrangePiID, channel, index),
-				Title:        icctvCameraTitle(item.OrangePiName, channel, index),
+				Title:        icctvCameraTitle(item.OrangePiName, channel, item.ChannelRemarks[channel], index),
 				Channel:      channel,
 				URL:          playbackURL,
 				OrangePiID:   item.OrangePiID,
@@ -335,7 +336,11 @@ func icctvCameraID(orangePiID int64, channel string, index int) string {
 }
 
 // 20. icctvCameraTitle returns a display title for one camera.
-func icctvCameraTitle(orangePiName string, channel string, index int) string {
+func icctvCameraTitle(orangePiName string, channel string, remark string, index int) string {
+	if remark = strings.TrimSpace(remark); remark != "" {
+		return remark
+	}
+
 	name := strings.TrimSpace(orangePiName)
 	channelText := strings.TrimSpace(channel)
 	if channelText == "" {

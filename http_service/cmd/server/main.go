@@ -94,7 +94,7 @@ func main() {
 	uploadService := service.NewUploadService(runtime)
 	homeContentService := service.NewHomeContentService(runtime)
 	posBuildingService := service.NewPOSBuildingService(runtime)
-	posPaymentService := service.NewPOSPaymentService(runtime)
+	posPaymentService := service.NewPOSPaymentService(runtime, posBuildingService)
 	ismartExternalService := service.NewIsmartExternalService(runtime)
 	securityICCTVService := service.NewSecurityICCTVService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)

@@ -310,7 +310,73 @@ func posBuildingSummariesFromIDs(buildingIDs []string) []POSBuildingSummary {
 	return rows
 }
 
-// 10.9 leftPadPOSCode pads POS numeric permission fragments.
+// 10.9 posBuildingRowsCoverIDs checks whether every visible building has a named row.
+func posBuildingRowsCoverIDs(rows []POSBuildingSummary, buildingIDs []string) bool {
+	for _, buildingID := range buildingIDs {
+		matched := false
+		for _, row := range rows {
+			if posBuildingID(row) == strings.TrimSpace(buildingID) && posBuildingDisplayName(row) != "" {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	return true
+}
+
+// 10.10 mergePOSBuildingSummaries returns one best named row for every visible building.
+func mergePOSBuildingSummaries(buildingIDs []string, sources ...[]POSBuildingSummary) []POSBuildingSummary {
+	rowsByID := make(map[string]POSBuildingSummary)
+	for _, rows := range sources {
+		for _, row := range rows {
+			buildingID := posBuildingID(row)
+			if buildingID == "" || !containsString(buildingIDs, buildingID) {
+				continue
+			}
+			current, exists := rowsByID[buildingID]
+			if !exists || (posBuildingDisplayName(current) == "" && posBuildingDisplayName(row) != "") {
+				rowsByID[buildingID] = row
+			}
+		}
+	}
+
+	result := make([]POSBuildingSummary, 0, len(buildingIDs))
+	seen := make(map[string]struct{})
+	for _, rawBuildingID := range buildingIDs {
+		buildingID := strings.TrimSpace(rawBuildingID)
+		if buildingID == "" {
+			continue
+		}
+		if _, exists := seen[buildingID]; exists {
+			continue
+		}
+		seen[buildingID] = struct{}{}
+		if row, exists := rowsByID[buildingID]; exists {
+			result = append(result, row)
+			continue
+		}
+		result = append(result, posBuildingSummariesFromIDs([]string{buildingID})[0])
+	}
+
+	return result
+}
+
+// 10.11 posBuildingDisplayName returns a real name instead of an ID placeholder.
+func posBuildingDisplayName(item POSBuildingSummary) string {
+	buildingID := posBuildingID(item)
+	name := strings.TrimSpace(paymentFirstNonEmpty(item.BuildnameCHI, item.Buildname, item.Name))
+	if name == buildingID {
+		return ""
+	}
+
+	return name
+}
+
+// 10.12 leftPadPOSCode pads POS numeric permission fragments.
 func leftPadPOSCode(value string, size int) string {
 	value = posDigitsOnly(value)
 	for len(value) < size {

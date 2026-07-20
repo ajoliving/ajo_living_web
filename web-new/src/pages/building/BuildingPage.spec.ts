@@ -16,8 +16,13 @@ const mocks = vi.hoisted(() => ({
   fetchBuildingInfo: vi.fn(),
   fetchBuildingNotices: vi.fn(),
   fetchMemberBuildings: vi.fn(),
+  fetchPublicBuildings: vi.fn(),
+  fetchMemberUnits: vi.fn(),
+  fetchICCTV: vi.fn(),
+  updateMe: vi.fn(),
   session: {
     me: {
+      display_name: 'Member',
       primary_community: {
         public_id: '0419900',
         name_zh: '舊大廈',
@@ -25,9 +30,13 @@ const mocks = vi.hoisted(() => ({
         address_text: '舊大廈',
       },
       bound_building_ids: ['0419900'],
+      bound_flat_unit_ids: ['04199000112'],
       residence_floor: '01',
-      residence_unit: 'A',
-      ismart_msg: { client_building_permissions: ['0419900', '0999900'] },
+      residence_unit: 'B',
+      ismart_msg: {
+        client_building_permissions: ['0419900', '0999900'],
+        client_building_flat_units_permissions: ['04199000112', '09999000012'],
+      },
     },
   },
 }));
@@ -36,6 +45,9 @@ vi.mock('@/stores/session', () => ({
   useSessionStore: () => ({
     get me() {
       return mocks.session.me;
+    },
+    set me(value) {
+      mocks.session.me = value;
     },
     loadCurrentUser: mocks.loadCurrentUser,
   }),
@@ -52,13 +64,18 @@ vi.mock('@/httpapis/building', () => ({
   fetchMemberIsmartBuildingInfo: mocks.fetchBuildingInfo,
   fetchMemberIsmartBuildingNotices: mocks.fetchBuildingNotices,
   fetchMemberPosBuildings: mocks.fetchMemberBuildings,
-  fetchPosBuildings: vi.fn(),
-  fetchMemberICCTVPublicCameras: vi.fn(),
+  fetchMemberPosBuildingUnits: mocks.fetchMemberUnits,
+  fetchPosBuildings: mocks.fetchPublicBuildings,
+  fetchMemberICCTVPublicCameras: mocks.fetchICCTV,
   fetchMemberIsmartBuildingAccess: vi.fn(),
   fetchMemberIsmartManagementFees: vi.fn(),
   fetchMemberIsmartOtherFees: vi.fn(),
   generateMemberIsmartDoorQRCode: vi.fn(),
   openMemberIsmartDoor: vi.fn(),
+}));
+
+vi.mock('@/httpapis/me', () => ({
+  updateMe: mocks.updateMe,
 }));
 
 vi.mock('@/httpapis/payments', () => ({
@@ -75,7 +92,12 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchBuildingInfo.mockReset();
     mocks.fetchBuildingNotices.mockReset();
     mocks.fetchMemberBuildings.mockReset();
+    mocks.fetchPublicBuildings.mockReset();
+    mocks.fetchMemberUnits.mockReset();
+    mocks.fetchICCTV.mockReset();
+    mocks.updateMe.mockReset();
     mocks.session.me = {
+      display_name: 'Member',
       primary_community: {
         public_id: '0419900',
         name_zh: '舊大廈',
@@ -83,12 +105,17 @@ describe('BuildingPage binding refresh', () => {
         address_text: '舊大廈',
       },
       bound_building_ids: ['0419900'],
+      bound_flat_unit_ids: ['04199000112'],
       residence_floor: '01',
-      residence_unit: 'A',
-      ismart_msg: { client_building_permissions: ['0419900', '0999900'] },
+      residence_unit: 'B',
+      ismart_msg: {
+        client_building_permissions: ['0419900', '0999900'],
+        client_building_flat_units_permissions: ['04199000112', '09999000012'],
+      },
     };
     mocks.loadCurrentUser.mockImplementation(async () => {
       mocks.session.me = {
+        display_name: 'Member',
         primary_community: {
           public_id: '0999900',
           name_zh: '測試1大廈',
@@ -96,15 +123,46 @@ describe('BuildingPage binding refresh', () => {
           address_text: '測試1大廈',
         },
         bound_building_ids: ['0999900'],
+        bound_flat_unit_ids: ['09999000012'],
         residence_floor: 'G',
         residence_unit: 'B',
-        ismart_msg: { client_building_permissions: ['0419900', '0999900'] },
+        ismart_msg: {
+          client_building_permissions: ['0419900', '0999900'],
+          client_building_flat_units_permissions: ['04199000112', '09999000012'],
+        },
       };
       return mocks.session.me;
     });
     mocks.fetchMemberBuildings.mockResolvedValue([
       { building_id: '0999900', buildname_chi: '測試1大廈', buildname: 'Test Building 1' },
     ]);
+    mocks.fetchPublicBuildings.mockResolvedValue([
+      { building_id: '0419900', buildname_chi: '時安大廈', buildname: 'Chee On Building' },
+      { building_id: '0999900', buildname_chi: '測試1大廈', buildname: 'Test Building 1' },
+    ]);
+    mocks.fetchMemberUnits.mockImplementation(async (buildingID: string) => (
+      buildingID === '0419900'
+        ? [{ unit_id: '04199000112', floor: '01', unit: 'B' }]
+        : [{ unit_id: '09999000012', floor: 'G', unit: 'B' }]
+    ));
+    mocks.updateMe.mockImplementation(async (payload: Record<string, unknown>) => {
+      const buildingID = String(payload.primary_community_id ?? '');
+      const isCheeOn = buildingID === '0419900';
+      mocks.session.me = {
+        ...mocks.session.me,
+        primary_community: {
+          public_id: buildingID,
+          name_zh: isCheeOn ? '時安大廈' : '測試1大廈',
+          name_en: isCheeOn ? 'Chee On Building' : 'Test Building 1',
+          address_text: isCheeOn ? '時安大廈' : '測試1大廈',
+        },
+        bound_building_ids: payload.bound_building_ids as string[],
+        bound_flat_unit_ids: payload.bound_flat_unit_ids as string[],
+        residence_floor: String(payload.residence_floor ?? ''),
+        residence_unit: String(payload.residence_unit ?? ''),
+      };
+      return { data: { data: mocks.session.me } };
+    });
     mocks.fetchBuildingInfo.mockResolvedValue({
       selected_building_id: '0999900',
       building_options: ['0419900', '0999900'],
@@ -117,11 +175,17 @@ describe('BuildingPage binding refresh', () => {
       building_options: ['0419900', '0999900'],
       result: [],
     });
+    mocks.fetchICCTV.mockResolvedValue({
+      selected_building_id: '0999900',
+      building_options: ['0999900'],
+      orangepis: [],
+      cameras: [],
+    });
   });
 
   it('loads the newly bound building instead of the stale session building', async () => {
     const wrapper = mount(BuildingPage, {
-      global: { plugins: [i18n] },
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
     });
     await flushPromises();
 
@@ -129,5 +193,90 @@ describe('BuildingPage binding refresh', () => {
     expect(mocks.fetchBuildingInfo).toHaveBeenCalledWith('0999900');
     expect(mocks.fetchBuildingNotices).toHaveBeenCalledWith('0999900');
     expect(wrapper.text()).toContain('測試1大廈');
+  });
+
+  it('fills every authorized property option with the official POS name and unit', async () => {
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
+    const selector = wrapper.get('.building-context-select');
+    const labels = selector.findAll('option').map((option) => option.text());
+    expect(selector.get('option[value=""]').text()).toBe('測試1大廈 / G / B');
+    expect(labels).toContain('時安大廈 / 01 / B');
+    expect(labels.some((label) => label === '0419900')).toBe(false);
+    expect(wrapper.find('.building-context-sidebar-current').exists()).toBe(false);
+    expect(wrapper.find('.building-context-layer').exists()).toBe(false);
+    expect(wrapper.find('.building-context-save').exists()).toBe(false);
+  });
+
+  it('switches one complete authorized unit and reloads notices and building data together', async () => {
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    await wrapper.get('.building-context-select').setValue('04199000112');
+    await flushPromises();
+
+    expect(mocks.updateMe).toHaveBeenCalledWith(expect.objectContaining({
+      primary_community_id: '0419900',
+      primary_community_name: '時安大廈',
+      bound_building_ids: ['0419900'],
+      bound_flat_unit_ids: ['04199000112'],
+      residence_floor: '01',
+      residence_unit: 'B',
+    }));
+    expect(mocks.fetchBuildingInfo).toHaveBeenLastCalledWith('0419900');
+    expect(mocks.fetchBuildingNotices).toHaveBeenLastCalledWith('0419900');
+    expect(wrapper.get('.building-context-select').get('option[value=""]').text()).toBe('時安大廈 / 01 / B');
+    expect(wrapper.text()).toContain('目前物業已更新');
+  });
+
+  it('groups cameras by Orange Pi when devices share a channel name', async () => {
+    mocks.fetchICCTV.mockResolvedValue({
+      selected_building_id: '0999900',
+      building_options: ['0999900'],
+      orangepis: [
+        { orangepi_id: 3, orangepi_name: '青島香橙派', is_active: true, camera_count: 1 },
+        { orangepi_id: 7, orangepi_name: '192.168.72.174', is_active: true, camera_count: 1 },
+      ],
+      cameras: [
+        {
+          id: '3-channel1-1',
+          title: 'channel1',
+          channel: 'channel1',
+          url: 'https://icctv.example/opi/29003/channel1',
+          orangepi_id: 3,
+          orangepi_name: '青島香橙派',
+          is_active: true,
+        },
+        {
+          id: '7-channel1-1',
+          title: '香工後門',
+          channel: 'channel1',
+          url: 'https://icctv.example/opi/29005/channel1',
+          orangepi_id: 7,
+          orangepi_name: '192.168.72.174',
+          is_active: true,
+        },
+      ],
+    });
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const cctvTab = wrapper.findAll('.work-nav-item').find((item) => item.text().includes('視像監控'));
+    expect(cctvTab).toBeDefined();
+    await cctvTab!.trigger('click');
+    await flushPromises();
+
+    expect(mocks.fetchICCTV).toHaveBeenCalledWith('0999900');
+    expect(wrapper.text()).toContain('Orange Pi 裝置 #3 · 青島香橙派');
+    expect(wrapper.text()).toContain('Orange Pi 裝置 #7 · 192.168.72.174');
+    expect(wrapper.text()).toContain('香工後門');
   });
 });

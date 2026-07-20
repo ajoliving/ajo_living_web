@@ -51,6 +51,7 @@ go run ./http_service/cmd/server
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
 | 49 | /api/v1/auth/email/register | POST | 建立電郵與手機密碼帳戶 | 無 |
+| 49.1 | /api/v1/auth/login | POST | 自動識別手提電話、電郵、本地用戶名稱或 iSmart username 並登入 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
 | 50.2 | /api/v1/auth/password/email/request | POST | 申請電郵重設密碼驗證碼 | 無 |
 | 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
@@ -655,6 +656,31 @@ $body=@{
   residence_unit="08"
 }|ConvertTo-Json
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/register" -Method POST -Headers $headers -Body $body
+```
+
+---
+
+### 49.1 /api/v1/auth/login [POST]
+- **簡介**: 單一密碼登入入口，自動識別手提電話、電郵或 username；舊有分流登入接口維持兼容。
+- **識別規則**: 電郵按小寫本地帳戶查找；8 位香港電話、`+852` 香港電話及 `+86` 中國內地電話會移除空格、連字號與括號後查找；其餘有效字串按本地 username 查找。
+- **降級規則**: 本地帳密成功時不會呼叫 iSmart；只有本地明確回傳帳密不符時才嘗試 iSmart。資料庫錯誤、本地內部錯誤或 iSmart 上游網絡錯誤會立即中止，不會被改寫成帳密錯誤或繼續重試。
+- **錯誤語義**: 本地及 iSmart 均拒絕憑證時，統一回傳 `VALIDATION_ERROR` 與 `account or password is incorrect`，不透露帳戶是否存在。
+- **請求參數**
+```json
+{
+  "identifier": "member@example.com", // 必填，手提電話、電郵、本地用戶名稱或 iSmart username
+  "password": "safe-password-123" // 必填
+}
+```
+- **回應參數**: 同 `/api/v1/auth/email/login`
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "member@example.com",
+    "password": "safe-password-123"
+  }'
 ```
 
 ---

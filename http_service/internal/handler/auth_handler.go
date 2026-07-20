@@ -1,7 +1,7 @@
 /*
  * Authentication HTTP handlers.
  * 1. Bind OTP request and verify payloads.
- * 2. Delegate auth flows to the service layer.
+ * 2. Delegate unified and legacy auth flows to the service layer.
  */
 package handler
 
@@ -84,6 +84,12 @@ type ismartLoginRequest struct {
 	Password string `json:"password" binding:"required"`
 	Phone    string `json:"phone"`
 	Email    string `json:"email"`
+}
+
+// 8.1 identifierLoginRequest defines unified password login input.
+type identifierLoginRequest struct {
+	Identifier string `json:"identifier" binding:"required"`
+	Password   string `json:"password" binding:"required"`
 }
 
 // 9. NewAuthHandler creates an auth handler instance.
@@ -326,6 +332,26 @@ func (h *AuthHandler) LoginIsmart(c *gin.Context) {
 		Password: request.Password,
 		Phone:    strings.TrimSpace(request.Phone),
 		Email:    strings.TrimSpace(request.Email),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 20.1 LoginIdentifier handles unified password sign-in.
+func (h *AuthHandler) LoginIdentifier(c *gin.Context) {
+	var request identifierLoginRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.authService.LoginWithIdentifier(c.Request.Context(), service.IdentifierLoginParams{
+		Identifier: strings.TrimSpace(request.Identifier),
+		Password:   request.Password,
 	})
 	if err != nil {
 		errcode.WriteError(c, err)

@@ -1,8 +1,8 @@
 /*
  * POS 樓宇只讀服務。
  * 1. 使用服務端 POS 憑據取得 relay token。
- * 2. 讀取 POS 大廈清單與指定大廈單位清單。
- * 3. 為公開註冊頁提供不暴露 POS 憑據的資料來源。
+ * 2. 透過共享 Redis 快取讀取 POS 大廈與單位目錄。
+ * 3. 為公開及會員頁提供不暴露 POS 憑據的資料來源。
  */
 package service
 
@@ -11,19 +11,21 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"ajoliving_web/http_service/internal/errcode"
 )
 
 // 1. POSBuildingService handles read-only POS building lookups.
 type POSBuildingService struct {
-	runtime *Runtime
-	mu      sync.Mutex
-	token   string
+	runtime        *Runtime
+	mu             sync.Mutex
+	token          string
+	directoryGroup singleflight.Group
 }
 
 // 2. POSBuildingSummary defines POS building list rows.
@@ -52,12 +54,7 @@ func NewPOSBuildingService(runtime *Runtime) *POSBuildingService {
 
 // 5. ListBuildings returns the POS building list.
 func (s *POSBuildingService) ListBuildings(ctx context.Context) ([]POSBuildingSummary, error) {
-	var buildings []POSBuildingSummary
-	if err := s.getPOS(ctx, "/building", &buildings); err != nil {
-		return nil, err
-	}
-
-	return buildings, nil
+	return s.loadPOSBuildings(ctx)
 }
 
 // 6. ListUnits returns POS units for one building.
@@ -67,12 +64,7 @@ func (s *POSBuildingService) ListUnits(ctx context.Context, buildingID string) (
 		return nil, errcode.New(errcode.CodeValidationError, "building id is required")
 	}
 
-	var units []POSUnitSummary
-	if err := s.getPOS(ctx, "/building/"+url.PathEscape(value)+"/units", &units); err != nil {
-		return nil, err
-	}
-
-	return units, nil
+	return s.loadPOSUnits(ctx, value)
 }
 
 // 7. getPOS sends an authenticated GET request to POS relay.

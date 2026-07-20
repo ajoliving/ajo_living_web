@@ -1,12 +1,13 @@
 /*
  * 會員登入狀態。
  * 1. 保存真實登入 token 與當前會員資料。
- * 2. 提供手機 OTP、郵箱 OTP、郵箱密碼、重設密碼、用戶名密碼、手機密碼、ismart、當前會員查詢與登出流程。
+ * 2. 提供手機 OTP、郵箱 OTP、統一帳戶登入、註冊、重設密碼、當前會員查詢與登出流程。
  */
 import { defineStore } from 'pinia';
 
 import {
   loginWithEmail,
+  loginWithIdentifier,
   loginWithIsmart,
   loginWithPhone,
   loginWithUsername,
@@ -201,7 +202,22 @@ export const useSessionStore = defineStore('session', {
       return data.data.password_reset;
     },
 
-    // 13. 使用郵箱密碼登入
+    // 13. 使用統一帳戶識別登入
+    async signInWithIdentifier(identifier: string, password: string): Promise<VerifyOtpResult> {
+      const { data } = await loginWithIdentifier({ identifier, password });
+      this.setTokens(data.data.access_token, data.data.refresh_token);
+
+      try {
+        await this.loadCurrentUser();
+      } catch (error) {
+        this.clearSession();
+        throw error;
+      }
+
+      return data.data;
+    },
+
+    // 14. 使用郵箱密碼登入
     async signInWithEmail(email: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithEmail({ email, password });
       this.setTokens(data.data.access_token, data.data.refresh_token);
@@ -216,7 +232,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 14. 使用手機密碼登入
+    // 15. 使用手機密碼登入
     async signInWithPhone(phoneCountryCode: string, phoneNumber: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithPhone({
         phone_country_code: phoneCountryCode,
@@ -235,7 +251,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 15. 使用用戶名密碼登入
+    // 16. 使用用戶名密碼登入
     async signInWithUsername(username: string, password: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithUsername({
         username,
@@ -253,7 +269,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 16. 註冊郵箱與手機密碼帳戶
+    // 17. 註冊郵箱與手機密碼帳戶
     async registerEmailAccount(payload: RegisterEmailAccountPayload): Promise<VerifyOtpResult> {
       const { data } = await registerWithEmail(payload);
       this.setTokens(data.data.access_token, data.data.refresh_token);
@@ -268,7 +284,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 17. 使用 ismart 帳戶登入
+    // 18. 使用 ismart 帳戶登入
     async signInWithIsmart(account: string, password: string, phone?: string, email?: string): Promise<VerifyOtpResult> {
       const { data } = await loginWithIsmart({
         account,
@@ -288,7 +304,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 18. 讀取目前會員資料
+    // 19. 讀取目前會員資料
     async loadCurrentUser() {
       if (!this.accessToken) {
         this.me = null;
@@ -299,7 +315,7 @@ export const useSessionStore = defineStore('session', {
       return data.data;
     },
 
-    // 19. 執行登出
+    // 20. 執行登出
     async signOut() {
       try {
         if (this.accessToken) {

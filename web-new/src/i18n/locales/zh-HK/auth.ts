@@ -1,12 +1,17 @@
+/*
+ * 認證模組繁體中文文案。
+ * 1. 提供統一登入、住戶註冊及密碼重設介面文字。
+ * 2. 維持與英文語系相同的欄位結構。
+ */
 export default {
   title: '登入帳戶',
-  subtitle: '使用電郵密碼、手提電話密碼或電郵驗證碼登入。',
+  subtitle: '使用手提電話、電郵或 username 配合密碼登入。',
   emailMode: '電郵',
   phoneMode: '手提電話',
   usernameMode: '用戶名稱',
   loginModeLabel: '登入方式',
   loginGroupPhone: '手提電話',
-  loginGroupAccount: '手提電話 / 電郵 / 用戶名稱 / iSmart',
+  loginGroupAccount: '手提電話 / 電郵 / iSmart username',
   otpMode: '驗證碼登入',
   emailLogin: '登入',
   emailRegister: '註冊',
@@ -20,7 +25,7 @@ export default {
   usernamePasswordLogin: '用戶名稱密碼',
   username: '用戶名稱',
   usernamePlaceholder: '請輸入用戶名稱',
-  accountIdentifierPlaceholder: '請輸入手提電話、電郵、用戶名稱或 iSmart 帳戶',
+  accountIdentifierPlaceholder: '請輸入手提電話、電郵或 iSmart username',
   registerUsernamePlaceholder: '請設定用戶名稱',
   email: '電郵',
   emailPlaceholder: 'resident' + '@' + 'example.com',
@@ -72,7 +77,7 @@ export default {
   requestOtp: '取得驗證碼',
   submit: '登入',
   registerSubmit: '建立帳戶',
-  note: '可使用手提電話、用戶名稱、電郵或 iSmart 帳戶配合密碼登入。',
+  note: '輸入手提電話、電郵或 username，系統會自動識別帳戶類型。',
   residentLogin: '歡迎回來 AJO Living！',
   residentRegister: '住戶註冊',
   activeSession: '目前帳戶',
@@ -104,7 +109,7 @@ export default {
   dontHaveAccount: '還沒有帳戶？',
   invalidEmail: '請輸入正確的電郵地址。',
   invalidPhone: '請輸入正確的手提電話號碼。',
-  accountRequired: '請輸入手提電話、電郵、用戶名稱或 iSmart 帳戶。',
+  accountRequired: '請輸入手提電話、電郵或 iSmart username。',
   formInvalid: '請檢查標示的必填欄位。',
   requiredFields: '請填寫必要資料。',
   emailOtpRequiredFields: '請填寫正確電郵與驗證碼。',

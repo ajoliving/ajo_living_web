@@ -10,6 +10,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useSessionStore } from '@/stores/session';
 import {
   fetchMemberICCTVPublicCameras,
@@ -54,6 +55,7 @@ import {
   preferredMemberBuildingID,
   usableBuildingName,
 } from './composables/building-display';
+import { useBuildingContextBinding } from './composables/useBuildingContextBinding';
 
 // 1. 型別定義
 type AffairsTab =
@@ -268,6 +270,24 @@ const icctvLoading = ref(false);
 const icctvError = ref('');
 const icctvProfile = ref<Awaited<ReturnType<typeof fetchMemberICCTVPublicCameras>> | null>(null);
 const expandedICCTVCameraIDs = ref<string[]>([]);
+const contextPickerUnitID = ref('');
+const {
+  selectedUnitID: contextUnitID,
+  propertyOptions: contextPropertyOptions,
+  loading: contextLoading,
+  saving: contextSaving,
+  status: contextStatus,
+  errorKey: contextErrorKey,
+  currentLabel: contextCurrentLabel,
+  selectedProperty: contextSelectedProperty,
+  initialize: initializeBuildingContext,
+  save: saveBuildingContext,
+} = useBuildingContextBinding(buildingDirectory);
+const contextPickerLabel = computed(() => (
+  contextStatus.value === 'success'
+    ? contextSelectedProperty.value?.label || contextCurrentLabel.value
+    : contextCurrentLabel.value
+));
 
 // 4. 意見提供引導式表單狀態
 const affairsMode = ref<AffairsMode>('repair');
@@ -304,6 +324,18 @@ const buildingNameMap = computed(() => buildBuildingNameMap(
 ));
 const resolveIndexedBuildingName = (buildingID: string): string =>
   indexedBuildingName(buildingNameMap.value, String(buildingID ?? '').trim());
+const expectedBuildingDirectoryIDs = (): string[] => {
+  const message = sessionStore.me?.ismart_msg;
+  const unitBuildingIDs = (message?.client_building_flat_units_permissions ?? [])
+    .map((unitID) => String(unitID ?? '').replace(/\D/g, '').slice(0, 7));
+  const values = [
+    preferredMemberBuildingID(sessionStore.me),
+    ...(sessionStore.me?.bound_building_ids ?? []),
+    ...(message?.client_building_permissions ?? []),
+    ...unitBuildingIDs,
+  ];
+  return Array.from(new Set(values.map((item) => String(item ?? '').trim()).filter(Boolean)));
+};
 const noticeBuildingOptions = computed<string[]>(() => {
   const options = [
     ...(ismartNoticeProfile.value?.building_options ?? []),
@@ -721,6 +753,28 @@ const accessRecentRows = computed<AccessRecordRow[]>(() =>
 // 7.3 視像監控資料
 const icctvCameras = computed<ICCTVCameraSummary[]>(() => icctvProfile.value?.cameras ?? []);
 const icctvOrangePis = computed(() => icctvProfile.value?.orangepis ?? []);
+const icctvCameraGroups = computed(() => {
+  const groupedDeviceIDs = new Set<number>();
+  const groups = icctvOrangePis.value.map((orangepi) => {
+    groupedDeviceIDs.add(orangepi.orangepi_id);
+    return {
+      id: orangepi.orangepi_id,
+      name: String(orangepi.orangepi_name ?? '').trim(),
+      isActive: orangepi.is_active,
+      cameras: icctvCameras.value.filter((camera) => camera.orangepi_id === orangepi.orangepi_id),
+    };
+  });
+  const ungroupedCameras = icctvCameras.value.filter((camera) => !groupedDeviceIDs.has(camera.orangepi_id));
+  if (ungroupedCameras.length > 0) {
+    groups.push({
+      id: ungroupedCameras[0].orangepi_id,
+      name: String(ungroupedCameras[0].orangepi_name ?? '').trim(),
+      isActive: ungroupedCameras.some((camera) => camera.is_active),
+      cameras: ungroupedCameras,
+    });
+  }
+  return groups;
+});
 const icctvBuildingTitle = computed(() => {
   const parts = [
     memberBoundCommunityName.value,
@@ -740,8 +794,17 @@ const icctvStatusText = computed(() => {
     : t('building.icctv.statusText.disabled');
 });
 const icctvCameraName = (camera: ICCTVCameraSummary, index: number): string => {
+  const title = String(camera.title ?? '').trim();
+  if (title) return title;
+
   const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
   return t('building.icctv.cameraName', { number: match?.[1] ?? formatLocaleNumber(index + 1) });
+};
+const icctvOrangePiLabel = (orangepi: { id: number; name: string }): string => {
+  const name = orangepi.name.trim();
+  return name
+    ? `${t('building.icctv.device')} #${orangepi.id} · ${name}`
+    : `${t('building.icctv.device')} #${orangepi.id}`;
 };
 const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is_active && camera.url
   ? t('building.icctv.available')
@@ -1099,16 +1162,27 @@ const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
 const loadBuildingDirectory = async (): Promise<void> => {
   try {
     const memberBuildings = await fetchMemberPosBuildings();
-    if (!memberBuildings.some((item) => !posBuildingName(item, locale.value))) {
+    const memberBuildingMap = new Map(memberBuildings.map((item) => [posBuildingID(item), item]));
+    const expectedBuildingIDs = expectedBuildingDirectoryIDs();
+    const hasMissingName = expectedBuildingIDs.some((buildingID) => {
+      const item = memberBuildingMap.get(buildingID);
+      return !item || !posBuildingName(item, locale.value);
+    });
+    if (!hasMissingName) {
       buildingDirectory.value = memberBuildings;
       return;
     }
     try {
       const publicBuildings = await fetchPosBuildings();
       const publicBuildingMap = new Map(publicBuildings.map((item) => [posBuildingID(item), item]));
-      buildingDirectory.value = memberBuildings.map((item) =>
-        posBuildingName(item, locale.value) ? item : publicBuildingMap.get(posBuildingID(item)) ?? item,
-      );
+      const mergedBuildingMap = new Map(memberBuildingMap);
+      expectedBuildingIDs.forEach((buildingID) => {
+        const current = mergedBuildingMap.get(buildingID);
+        if (!current || !posBuildingName(current, locale.value)) {
+          mergedBuildingMap.set(buildingID, publicBuildingMap.get(buildingID) ?? current ?? { building_id: buildingID });
+        }
+      });
+      buildingDirectory.value = Array.from(mergedBuildingMap.values());
     } catch (publicError) {
       console.error(publicError);
       buildingDirectory.value = memberBuildings;
@@ -1551,9 +1625,55 @@ const refreshNotices = () => {
   void loadBuildingNotices();
 };
 
-// 28.1 切換通告大廈
-const handleNoticeBuildingChange = () => {
-  void loadBuildingNotices(selectedNoticeBuildingID.value);
+// 28.1 清除舊物業的面板資料
+const resetBuildingScopedState = (): void => {
+  ismartBuildingProfile.value = null;
+  ismartNoticeProfile.value = null;
+  managementFeeRows.value = [];
+  otherFeeRows.value = [];
+  financeReceivableLoaded.value = false;
+  financeReceivableError.value = '';
+  ownerUnpaidInvoices.value = [];
+  ownerPaymentRecords.value = [];
+  ownerUnpaidLoaded.value = false;
+  ownerRecordsLoaded.value = false;
+  ownerUnpaidError.value = '';
+  ownerRecordsError.value = '';
+  ismartAccessProfile.value = null;
+  accessError.value = '';
+  accessQRPanel.value = null;
+  icctvProfile.value = null;
+  icctvError.value = '';
+  expandedICCTVCameraIDs.value = [];
+};
+
+// 28.2 保存並套用目前物業
+const handleSaveBuildingContext = async (): Promise<void> => {
+  if (!await saveBuildingContext() || !contextSelectedProperty.value) return;
+
+  const buildingID = contextSelectedProperty.value.buildingID;
+  selectedBuildingID.value = buildingID;
+  selectedNoticeBuildingID.value = buildingID;
+  resetBuildingScopedState();
+  await Promise.all([
+    loadBuildingInfo(buildingID),
+    loadBuildingNotices(buildingID),
+  ]);
+  if (activeTab.value === 'affairs-finance') await loadBuildingFinanceReceivables(buildingID);
+  if (activeTab.value === 'affairs-owner-account') await loadOwnerAccount();
+  if (activeTab.value === 'affairs-access') await loadBuildingAccess();
+  if (activeTab.value === 'affairs-icctv') await loadICCTV();
+};
+
+// 28.3 選擇後立即切換目前物業
+const handlePropertySelection = async (): Promise<void> => {
+  if (!contextPickerUnitID.value) return;
+  contextUnitID.value = contextPickerUnitID.value;
+  try {
+    await handleSaveBuildingContext();
+  } finally {
+    contextPickerUnitID.value = '';
+  }
 };
 
 // 29. 展開或收起視像監控鏡頭
@@ -1587,6 +1707,7 @@ const initializeBuildingPage = async (): Promise<void> => {
   selectedBuildingID.value = buildingID;
   selectedNoticeBuildingID.value = buildingID;
   await loadBuildingDirectory();
+  await initializeBuildingContext();
   await Promise.all([
     loadBuildingInfo(buildingID),
     loadBuildingNotices(buildingID),
@@ -1620,6 +1741,44 @@ onMounted(() => {
             <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
           </button>
         </nav>
+        <div class="building-context-switcher">
+          <div class="building-context-select-wrap">
+            <AppIcon
+              name="building"
+              :size="17"
+            />
+            <select
+              v-model="contextPickerUnitID"
+              class="building-context-select"
+              :aria-label="t('building.context.switchAction')"
+              :disabled="hasPendingResidenceBinding || contextLoading || contextSaving || contextPropertyOptions.length === 0"
+              @change="handlePropertySelection"
+            >
+              <option value="" disabled>
+                {{ contextLoading
+                  ? t('building.common.loading')
+                  : contextPickerLabel || t('building.context.notBound') }}
+              </option>
+              <option
+                v-for="item in contextPropertyOptions"
+                :key="item.value"
+                :value="item.value"
+              >
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+          <p
+            v-if="contextStatus !== 'idle' || contextErrorKey"
+            class="building-context-status"
+            :class="{ error: contextStatus === 'error' }"
+            aria-live="polite"
+          >
+            {{ contextStatus === 'success'
+              ? t('building.context.saveSuccess')
+              : t(contextErrorKey || 'building.context.saveError') }}
+          </p>
+        </div>
       </aside>
 
       <!-- 右側主內容 -->
@@ -1654,7 +1813,6 @@ onMounted(() => {
             {{ t('building.binding.action') }}
           </RouterLink>
         </section>
-
         <!-- 最新通告 -->
         <div
           v-show="activeTab === 'affairs-notices'"
@@ -1666,32 +1824,6 @@ onMounted(() => {
             <div>
               <div class="work-kicker">{{ t('building.notices.kicker') }}</div>
               <h2 class="work-title">{{ t('building.notices.title') }}</h2>
-            </div>
-          </section>
-          <section class="notice-admin-grid">
-            <div class="notice-admin-card">
-              <h3>{{ t('building.notices.buildingSelection') }}</h3>
-              <label class="notice-admin-label">{{ t('building.notices.selectBuilding') }}</label>
-              <select
-                v-model="selectedNoticeBuildingID"
-                class="notice-select"
-                :disabled="noticeLoading || noticeBuildingOptions.length === 0"
-                @change="handleNoticeBuildingChange"
-              >
-                <option
-                  v-if="noticeBuildingOptions.length === 0"
-                  value=""
-                >
-                  {{ t('building.notices.noBuildingOption') }}
-                </option>
-                <option
-                  v-for="b in noticeBuildingOptions"
-                  :key="b"
-                  :value="b"
-                >
-                  {{ noticeBuildingLabel(b) }}
-                </option>
-              </select>
             </div>
           </section>
           <section class="work-card">
@@ -3319,9 +3451,29 @@ onMounted(() => {
                 </thead>
                 <tbody>
                   <template
-                    v-for="(camera, index) in icctvCameras"
-                    :key="camera.id"
+                    v-for="orangepi in icctvCameraGroups"
+                    :key="orangepi.id"
                   >
+                    <tr class="icctv-device-row">
+                      <td colspan="3">
+                        <div class="icctv-device-head">
+                          <div>
+                            <strong>{{ icctvOrangePiLabel(orangepi) }}</strong>
+                            <span>{{ t('building.icctv.deviceCameraCount', { count: formatLocaleNumber(orangepi.cameras.length) }) }}</span>
+                          </div>
+                          <span
+                            class="icctv-table-status"
+                            :class="orangepi.isActive ? 'on' : 'off'"
+                          >
+                            {{ orangepi.isActive ? t('building.icctv.available') : t('building.icctv.unavailable') }}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    <template
+                      v-for="(camera, index) in orangepi.cameras"
+                      :key="camera.id"
+                    >
                     <tr :class="{ expanded: isICCTVCameraExpanded(camera.id) }">
                       <td>
                         <div class="icctv-camera-title">{{ icctvCameraName(camera, index) }}</div>
@@ -3373,8 +3525,9 @@ onMounted(() => {
                         </div>
                       </td>
                     </tr>
+                    </template>
                   </template>
-                  <tr v-if="icctvCameras.length === 0">
+                  <tr v-if="icctvCameraGroups.length === 0">
                     <td
                       class="building-empty-row"
                       colspan="3"
@@ -3503,6 +3656,57 @@ onMounted(() => {
 
 .work-nav-item.on::after {
   transform: scaleX(1);
+}
+
+.building-context-switcher {
+  position: relative;
+  margin-top: 14px;
+  border-top: 1px solid var(--bdr);
+  padding-top: 14px;
+}
+
+.building-context-select-wrap {
+  position: relative;
+}
+
+.building-context-select-wrap > svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.building-context-select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink);
+  padding: 0 34px 0 38px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.building-context-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.building-context-status {
+  margin: 8px 2px 0;
+  color: var(--status-success-text, #237804);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.building-context-status.error {
+  color: var(--status-error-text, #b42318);
 }
 
 /* 3. 右側主內容 */
@@ -4827,6 +5031,41 @@ onMounted(() => {
 
 .icctv-table tbody tr.expanded > td {
   background: var(--brand-light);
+}
+
+.icctv-device-row td {
+  background: var(--sur-2);
+  padding: 0;
+}
+
+.icctv-device-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.icctv-device-head > div {
+  min-width: 0;
+}
+
+.icctv-device-head strong,
+.icctv-device-head span {
+  display: block;
+}
+
+.icctv-device-head strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.icctv-device-head > div > span {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .icctv-camera-title {

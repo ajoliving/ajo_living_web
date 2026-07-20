@@ -3,6 +3,7 @@
  * 1. 驗證線下繳費 payload 必須與 AJO 單位上下文一致。
  * 2. 驗證 H5 訂單可見性缺少單位時拒絕通過。
  * 3. 驗證一般會員可按所屬屋苑使用支付功能。
+ * 4. 驗證會員大廈目錄完整保留所有可見大廈及正式名稱。
  */
 package service
 
@@ -130,7 +131,32 @@ func TestPOSTerminalHelpers(t *testing.T) {
 	}
 }
 
-// 5. TestPOSPaymentClientType verifies Staff and member POS fee or bill scopes.
+// 5. TestMergePOSBuildingSummariesCompletesMissingNames verifies partial member rows use the named directory row.
+func TestMergePOSBuildingSummariesCompletesMissingNames(t *testing.T) {
+	result := mergePOSBuildingSummaries(
+		[]string{"0419900", "0999900"},
+		[]POSBuildingSummary{{BuildingID: "0999900", BuildnameCHI: "測試1大廈"}},
+		[]POSBuildingSummary{
+			{BuildingID: "0419900", BuildnameCHI: "時安大廈", Buildname: "Chee On Building"},
+			{BuildingID: "0999900", BuildnameCHI: "測試1大廈"},
+		},
+	)
+
+	if len(result) != 2 {
+		t.Fatalf("expected two visible buildings, got %#v", result)
+	}
+	if result[0].BuildingID != "0419900" || result[0].BuildnameCHI != "時安大廈" {
+		t.Fatalf("expected named 0419900 row, got %#v", result[0])
+	}
+	if result[1].BuildingID != "0999900" || result[1].BuildnameCHI != "測試1大廈" {
+		t.Fatalf("expected named 0999900 row, got %#v", result[1])
+	}
+	if !posBuildingRowsCoverIDs(result, []string{"0419900", "0999900"}) {
+		t.Fatal("expected merged rows to cover every visible building")
+	}
+}
+
+// 6. TestPOSPaymentClientType verifies Staff and member POS fee or bill scopes.
 func TestPOSPaymentClientType(t *testing.T) {
 	if posPaymentClientType(nil) != "web_client" {
 		t.Fatal("expected nil account to use web_client")
@@ -143,7 +169,7 @@ func TestPOSPaymentClientType(t *testing.T) {
 	}
 }
 
-// 6. TestSanitizePOSGatewayRequestOverrides verifies only Alipay wallet type is accepted.
+// 7. TestSanitizePOSGatewayRequestOverrides verifies only Alipay wallet type is accepted.
 func TestSanitizePOSGatewayRequestOverrides(t *testing.T) {
 	aliOverrides := sanitizePOSGatewayRequestOverrides("ALI_H5", map[string]any{
 		"walletType": "hk",
@@ -162,7 +188,7 @@ func TestSanitizePOSGatewayRequestOverrides(t *testing.T) {
 	}
 }
 
-// 7. TestNormalizePOSPaymentScene verifies old cart and billing order scenes are preserved.
+// 8. TestNormalizePOSPaymentScene verifies old cart and billing order scenes are preserved.
 func TestNormalizePOSPaymentScene(t *testing.T) {
 	if normalizePOSPaymentScene("billing") != "billing" {
 		t.Fatal("expected billing scene")
@@ -175,7 +201,7 @@ func TestNormalizePOSPaymentScene(t *testing.T) {
 	}
 }
 
-// 8. TestBuildH5OrderPayloadKeepsOldReportFields verifies old POS post-process fields.
+// 9. TestBuildH5OrderPayloadKeepsOldReportFields verifies old POS post-process fields.
 func TestBuildH5OrderPayloadKeepsOldReportFields(t *testing.T) {
 	serviceValue := &POSPaymentService{}
 	payload := serviceValue.buildH5OrderPayload(
@@ -213,7 +239,7 @@ func TestBuildH5OrderPayloadKeepsOldReportFields(t *testing.T) {
 	}
 }
 
-// 8.1 TestPOSPaymentRewardPointsUsesOnePercent verifies AJO Coin reward ratio.
+// 9.1 TestPOSPaymentRewardPointsUsesOnePercent verifies AJO Coin reward ratio.
 func TestPOSPaymentRewardPointsUsesOnePercent(t *testing.T) {
 	if posPaymentRewardPoints(map[string]any{"amount_hkd": "20850"}) != 208 {
 		t.Fatal("expected one percent reward from HKD amount")
@@ -223,7 +249,7 @@ func TestPOSPaymentRewardPointsUsesOnePercent(t *testing.T) {
 	}
 }
 
-// 8.2 TestPOSReportPaymentRewardKeyPrefersReceipt verifies offline reward idempotency.
+// 9.2 TestPOSReportPaymentRewardKeyPrefersReceipt verifies offline reward idempotency.
 func TestPOSReportPaymentRewardKeyPrefersReceipt(t *testing.T) {
 	key := posReportPaymentRewardKey(
 		map[string]any{"TRAN_REF_NO": "REF-001", "FINAL_AMOUNT": "2085000"},
@@ -234,7 +260,7 @@ func TestPOSReportPaymentRewardKeyPrefersReceipt(t *testing.T) {
 	}
 }
 
-// 9. TestChargeAllinpayTerminalPostsExpectedForm verifies terminal request format.
+// 10. TestChargeAllinpayTerminalPostsExpectedForm verifies terminal request format.
 func TestChargeAllinpayTerminalPostsExpectedForm(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
@@ -279,7 +305,7 @@ func TestChargeAllinpayTerminalPostsExpectedForm(t *testing.T) {
 	}
 }
 
-// 10. TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness verifies token refresh readiness.
+// 11. TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness verifies token refresh readiness.
 func TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness(t *testing.T) {
 	runtimeValue := newAuthTestRuntime(
 		t,
@@ -362,7 +388,7 @@ func TestPOSPaymentOverviewUsesStoredPasswordForLoginReadiness(t *testing.T) {
 	}
 }
 
-// 11. TestPOSPaymentHistoryCanonicalizesMemberUnitID verifies POS history uses the real relay unit id.
+// 12. TestPOSPaymentHistoryCanonicalizesMemberUnitID verifies POS history uses the real relay unit id.
 func TestPOSPaymentHistoryCanonicalizesMemberUnitID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
@@ -465,7 +491,7 @@ func TestPOSPaymentHistoryCanonicalizesMemberUnitID(t *testing.T) {
 	}
 }
 
-// 12. TestPOSPaymentHistoryInfersResidentBuildingFromUnitID verifies unit history uses the resident building.
+// 13. TestPOSPaymentHistoryInfersResidentBuildingFromUnitID verifies unit history uses the resident building.
 func TestPOSPaymentHistoryInfersResidentBuildingFromUnitID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
@@ -569,7 +595,7 @@ func TestPOSPaymentHistoryInfersResidentBuildingFromUnitID(t *testing.T) {
 	}
 }
 
-// 13. TestPOSPaymentMemberBuildingAccessAllowsRegularMembers verifies payment features do not require Staff.
+// 14. TestPOSPaymentMemberBuildingAccessAllowsRegularMembers verifies payment features do not require Staff.
 func TestPOSPaymentMemberBuildingAccessAllowsRegularMembers(t *testing.T) {
 	runtimeValue := newAuthTestRuntime(
 		t,

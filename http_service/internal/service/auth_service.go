@@ -1266,7 +1266,9 @@ func buildIsmartLoginAttempts(values ...string) []string {
 // 37. isIsmartCredentialError reports whether POS rejected only the credentials.
 func isIsmartCredentialError(err error) bool {
 	var appErr *errcode.AppError
-	return errors.As(err, &appErr) && appErr.Code == errcode.CodeValidationError
+	return errors.As(err, &appErr) &&
+		appErr.Code == errcode.CodeValidationError &&
+		appErr.Message == "ismart account or password is incorrect"
 }
 
 // 38. callPOSLogin sends the credential check to the configured POS Web endpoint.
@@ -1321,8 +1323,11 @@ func (s *AuthService) callPOSLogin(ctx context.Context, account string, password
 		return nil, errcode.New(errcode.CodeInternalError, "failed to call pos login")
 	}
 	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+	if response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return nil, errcode.New(errcode.CodeValidationError, "ismart account or password is incorrect")
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to call pos login")
 	}
 
 	rawResponse, err := io.ReadAll(io.LimitReader(response.Body, 8*1024*1024))

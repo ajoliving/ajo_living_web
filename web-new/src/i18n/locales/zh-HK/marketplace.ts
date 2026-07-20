@@ -271,6 +271,8 @@ export default {
     icctvLoading: '正在載入鏡頭資料。',
     icctvEmpty: '目前大廈未有鏡頭資料。',
     icctvLoadError: '視像監控資料載入失敗',
+    icctvDevice: 'Orange Pi 裝置',
+    icctvDeviceCameraCount: '{count} 個鏡頭',
     icctvCamera: '鏡頭',
     icctvStatus: '狀態',
     icctvAction: '操作',

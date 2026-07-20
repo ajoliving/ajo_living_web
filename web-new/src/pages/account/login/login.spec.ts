@@ -1,14 +1,11 @@
 /*
  * 登入註冊欄位校驗測試。
  * 1. 確認電郵、英文姓名、電話及密碼分別返回準確提示。
- * 2. 確認中國內地手機號碼可通過格式校驗。
+ * 2. 確認統一登入只校驗必填欄位，電話格式由後端辨識。
  */
 import { describe, expect, it } from 'vitest';
 
-import axios from 'axios';
-
 import {
-  canFallbackToIsmartLogin,
   parsePhoneFormInput,
   resolveLoginValidationErrors,
   resolveRegistrationValidationError,
@@ -50,24 +47,16 @@ describe('resolveRegistrationValidationError', () => {
 
 describe('resolveLoginValidationErrors', () => {
   it('returns separate account and password errors', () => {
-    expect(resolveLoginValidationErrors('username', '', '+852', '', '')).toEqual({
+    expect(resolveLoginValidationErrors('', '')).toEqual({
       ismartAccount: 'auth.accountRequired',
       password: 'auth.passwordRequired',
     });
   });
 
-  it('returns separate phone and password errors', () => {
-    expect(resolveLoginValidationErrors('phone', '', '+852', 'abc', '')).toEqual({
-      phone: 'auth.invalidPhone',
-      password: 'auth.passwordRequired',
-    });
-  });
-});
-
-describe('canFallbackToIsmartLogin', () => {
-  it('falls back only for local credential errors', () => {
-    expect(canFallbackToIsmartLogin(new axios.AxiosError('username or password is incorrect'))).toBe(true);
-    expect(canFallbackToIsmartLogin(new axios.AxiosError('Network Error'))).toBe(false);
+  it('accepts phone, email and username formats without guessing the account type', () => {
+    expect(resolveLoginValidationErrors('+852 6123 4567', 'password123')).toEqual({});
+    expect(resolveLoginValidationErrors('member@example.com', 'password123')).toEqual({});
+    expect(resolveLoginValidationErrors('patrick', 'password123')).toEqual({});
   });
 });
 

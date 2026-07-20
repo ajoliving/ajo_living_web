@@ -1,6 +1,6 @@
 <!--
  * 登入頁表單面板。
- * 1. 展示手提電話密碼、用戶名稱 / 電郵 / iSmart 密碼與住戶註冊表單。
+ * 1. 展示統一帳戶密碼登入與住戶註冊表單。
  * 2. 將表單輸入與操作事件回傳給頁面入口。
 -->
 <script setup lang="ts">
@@ -9,10 +9,9 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { LoginAuthMode, LoginEmailAction, LoginSelectOption, LoginValidationErrors } from '../login';
+import type { LoginEmailAction, LoginSelectOption, LoginValidationErrors } from '../login';
 
 interface LoginFormPanelProps {
-  authMode: LoginAuthMode;
   emailAction: LoginEmailAction;
   emailActionSwitchLabel: string;
   buildingOptions: LoginSelectOption[];
@@ -64,7 +63,6 @@ const emit = defineEmits<{
   'update:gender': [value: '' | 'M' | 'F'];
   'update:isReceiveEmail': [value: boolean];
   'update:rememberMe': [value: boolean];
-  'set-auth-mode': [value: LoginAuthMode];
   'sign-out': [];
   'submit-login': [];
   'forgot-password': [];
@@ -81,12 +79,7 @@ const readInputValue = (event: Event): string => (event.target as HTMLInputEleme
 // 2. 讀取勾選輸入值
 const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputElement).checked;
 
-// 3. 選擇手提電話密碼登入
-const selectPhonePasswordLogin = (): void => {
-  emit('set-auth-mode', 'phone');
-};
-
-// 4. 切換密碼顯示狀態
+// 3. 切換密碼顯示狀態
 const togglePasswordVisibility = (): void => {
   showPassword.value = !showPassword.value;
 };
@@ -111,34 +104,6 @@ const togglePasswordVisibility = (): void => {
         class="login-form-fields"
         @submit.prevent="emit('submit-login')"
       >
-        <div
-          v-show="props.emailAction === 'login'"
-          class="login-choice-tabs"
-          role="tablist"
-          :aria-label="t('auth.loginModeLabel')"
-        >
-          <button
-            type="button"
-            class="login-mode-tab"
-            :class="props.authMode === 'phone' ? 'login-mode-tab--active' : ''"
-            role="tab"
-            :aria-selected="props.authMode === 'phone'"
-            @click="selectPhonePasswordLogin"
-          >
-            {{ t('auth.phoneMode') }}
-          </button>
-          <button
-            type="button"
-            class="login-mode-tab"
-            :class="props.authMode !== 'phone' ? 'login-mode-tab--active' : ''"
-            role="tab"
-            :aria-selected="props.authMode !== 'phone'"
-            @click="emit('set-auth-mode', 'username')"
-          >
-            {{ t('auth.loginGroupAccount') }}
-          </button>
-        </div>
-
         <template v-if="props.emailAction === 'register'">
           <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.engName') }}</span>
@@ -442,66 +407,6 @@ const togglePasswordVisibility = (): void => {
           </template>
         </template>
 
-        <template v-else-if="props.authMode === 'phone'">
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.phone') }}</span>
-            <div class="phone-input-row group">
-              <select
-                :value="props.phoneCountryCode"
-                class="login-form-input phone-code-select border-none bg-surface-raised text-text outline-none transition focus:ring-1 focus:ring-primary"
-                autocomplete="tel-country-code"
-                @change="emit('update:phoneCountryCode', readInputValue($event))"
-              >
-                <option value="+852">+852</option>
-                <option value="+86">+86</option>
-              </select>
-              <input
-                :value="props.phone"
-                class="login-form-input min-w-0 flex-1 rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.phonePlaceholder')"
-                autocomplete="tel"
-                :aria-invalid="Boolean(props.validationErrors.phone)"
-                inputmode="tel"
-                type="tel"
-                @input="emit('update:phone', readInputValue($event))"
-              >
-              <AppIcon
-                name="phone"
-                :size="20"
-                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
-              />
-            </div>
-            <small v-if="props.validationErrors.phone" class="form-field-error-message">{{ t(props.validationErrors.phone) }}</small>
-          </label>
-
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
-            <div class="group relative">
-              <input
-                :value="props.password"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.passwordPlaceholder')"
-                autocomplete="current-password"
-                :aria-invalid="Boolean(props.validationErrors.password)"
-                :type="showPassword ? 'text' : 'password'"
-                @input="emit('update:password', readInputValue($event))"
-              >
-              <button
-                type="button"
-                class="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition hover:bg-surface hover:text-primary"
-                :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
-                @click="togglePasswordVisibility"
-              >
-                <AppIcon
-                  :name="showPassword ? 'view-off' : 'view'"
-                  :size="18"
-                />
-              </button>
-            </div>
-            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
-          </label>
-        </template>
-
         <template v-else>
           <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.ismartAccount }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.loginGroupAccount') }}</span>
@@ -697,41 +602,6 @@ const togglePasswordVisibility = (): void => {
   font-size: 12px;
 }
 
-.login-choice-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-
-.login-mode-tab {
-  position: relative;
-  min-height: 38px;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  text-align: center;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-.login-mode-tab:hover {
-  border-color: rgb(var(--color-primary) / 0.45);
-  color: rgb(var(--color-text));
-}
-
-.login-mode-tab--active {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary-soft));
-  color: rgb(var(--color-text));
-}
-
 .phone-input-row {
   position: relative;
   display: flex;
@@ -873,11 +743,6 @@ const togglePasswordVisibility = (): void => {
     font-size: 16px;
   }
 
-  .login-choice-tabs {
-    gap: 8px;
-  }
-
-  .login-mode-tab,
   .login-submit-button {
     min-height: 44px;
   }

@@ -23,7 +23,7 @@ import (
 func TestSecurityICCTVGetPublicCameras(t *testing.T) {
 	var upstreamPayload map[string]any
 	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/api/auth/public" {
+		if request.URL.Path != "/api/auth/public/v2" {
 			response.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -31,7 +31,7 @@ func TestSecurityICCTVGetPublicCameras(t *testing.T) {
 			t.Fatalf("decode upstream payload: %v", err)
 		}
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"success":true,"data":{"orangepis":[{"orangepi_id":7,"orangepi_name":"192.168.72.174","is_active":true,"token":"hidden","urls":["http://47.83.21.100:29005/channel1?token=hidden","http://47.83.21.100:29005/channel2?token=hidden"]}]}}`))
+		_, _ = response.Write([]byte(`{"success":true,"data":{"orangepis":[{"orangepi_id":7,"orangepi_name":"192.168.72.174","is_active":true,"channel_remarks":{"channel1":"香工後門"},"token":"hidden","urls":["http://47.83.21.100:29005/channel1?token=hidden","http://47.83.21.100:29005/channel2?token=hidden"]}]}}`))
 	}))
 	defer upstream.Close()
 
@@ -48,7 +48,7 @@ func TestSecurityICCTVGetPublicCameras(t *testing.T) {
 	if result.SelectedBuildingID != "0999900" || len(result.Cameras) != 2 || len(result.OrangePis) != 1 {
 		t.Fatalf("unexpected camera result: %#v", result)
 	}
-	if result.Cameras[0].Channel != "channel1" || result.Cameras[0].URL == "" {
+	if result.Cameras[0].Title != "香工後門" || result.Cameras[0].Channel != "channel1" || result.Cameras[0].URL == "" {
 		t.Fatalf("unexpected first camera: %#v", result.Cameras[0])
 	}
 }

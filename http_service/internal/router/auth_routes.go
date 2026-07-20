@@ -1,6 +1,6 @@
 /*
  * Authentication route registration.
- * 1. Register OTP, email, phone, ismart login, password reset, and logout routes.
+ * 1. Register unified, OTP, email, phone, iSmart, password reset, and logout routes.
  * 2. Keep authentication limiter rules colocated with authentication routes.
  */
 package router
@@ -42,6 +42,9 @@ func registerAuthRoutes(
 	api.POST("/auth/email/register", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
 		return "email_register:" + c.ClientIP()
 	}), authHandler.RegisterEmail)
+	api.POST("/auth/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
+		return "identifier_login:" + c.ClientIP()
+	}), authHandler.LoginIdentifier)
 	api.POST("/auth/email/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
 		return "email_login:" + c.ClientIP()
 	}), authHandler.LoginEmail)

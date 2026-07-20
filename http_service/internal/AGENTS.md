@@ -24,6 +24,7 @@ utils/: 無業務狀態的通用工具。
 - 帳戶身份與樓盤放售跨域時，以 `user_profiles.account_type`、已批准 `agency_profiles` 及公司子帳戶歸屬為權威來源；`publisher_identity_type` 只作兼容派生，不得由會員修改。
 - 代理帳戶在首次資料批准前使用受限 session；除 `/me`、代理資料、同類型代理 OSS 上傳及登出外，會員業務統一要求 `member_status=active`。
 - `pending_profile`、`pending_review`、`rejected` 代理帳戶必須仍可使用本地電郵、手提電話或用戶名稱密碼登入，以查看進度、拒絕原因及重新提交；不得在發出 token 前按非 active 狀態拒絕登入。
+- 統一帳戶登入使用 `POST /auth/login` 接收 `identifier` 與 `password`，自動識別電郵、香港或中國內地手提電話及 username；本地帳戶優先，只有明確憑證拒絕才回退 iSmart。資料庫、網絡或上游服務錯誤不得觸發回退或偽裝成密碼錯誤，舊分類登入接口保持兼容。
 - 代理資料保留一個已批准 active profile 及一個 revision；修訂待審或被拒時沿用舊 active profile，修訂批准後在同一交易刷新該代理及公司子帳戶全部未刪除樓盤的公開聯絡快照。
 - 代理審核結果先提交資料庫交易與站內通知，再以 `MailSender` 發送電郵；郵件失敗只記錄日誌，不得回滾或改寫審核狀態，拒絕郵件必須包含審核原因。
 - 公司子帳戶建立、發布及重新發布樓盤要求 `property_publish`，更新、下架及標記售出要求 `property_manage`；公司主帳戶可統一管理所屬子帳戶樓盤。
@@ -35,6 +36,8 @@ utils/: 無業務狀態的通用工具。
 - 個人帳戶註冊若同時提交大廈、樓層及單位，必須在 iSmart 建戶與本地關聯提交後才發送 OwnerReg 審批申請；僅 HTTP `2xx` 代表申請已受理，`residence_binding_status=pending` 不得寫入 `bound_building_ids` 或 `bound_flat_unit_ids`，審批前不得視為已綁定。
 - 會員從已授權 iSmart 單位保存本地 `bound_building_ids` 後，大廈服務必須優先使用該明確選擇，即使帳戶仍保留舊 pending 記錄；只有未寫入本地綁定的 OwnerReg 待審申請繼續受 pending 限制。社區名稱若仍等於 `public_id` 佔位值，收到正式大廈名稱時必須補正。
 - iSmart 大廈資料與文件中繼資料可按 `building_id` 使用 Redis 共用快取 5 分鐘；`resolveBuildingAccess` 必須先於快取讀取執行，`building_options`、Staff 狀態及其他會員欄位只可在回應階段即時組裝，不得寫入共用快取。Redis 故障時直接回源 iSmart。
+- 會員 POS 大廈列表必須為每個可見 `building_id` 返回一條記錄；會員 relay 只返回部分大廈時，以 AJO 公共 POS 目錄補齊正式名稱，公共目錄仍缺失時才保留 ID 回退記錄。
+- POS 大廈與單位目錄可使用 Redis 共用快取 5 分鐘；會員接口必須先即時讀取本地 profile 與 iSmart 權限並完成大廈可見性校驗，再讀取共用目錄及過濾單位。快取不得保存 relay token、會員權限、綁定狀態或目前物業，Redis 或公共目錄失敗時可回退會員 relay。
 - 部署與環境操作不在 `internal/` 內新增 prompt，統一回到 `docs/deployment/`。
 
 ## 變更日誌
@@ -55,5 +58,8 @@ utils/: 無業務狀態的通用工具。
 2026-07-16: 固定 AJO 與 iSmart Staff 身份分離、管理中心專屬 Staff 守衛及一般會員接口按所屬資源可見範圍授權的契約。
 2026-07-16: 固定已授權本地大廈選擇優先於舊 pending 狀態，並在會員保存正式名稱時修正社區 ID 佔位名稱。
 2026-07-16: 固定 iSmart 大廈資料 Redis 快取的共享資料邊界、5 分鐘 TTL、權限先行及故障回源規則。
+2026-07-16: 固定會員 POS 大廈列表的完整性，部分 relay 結果須以公共 POS 目錄補齊缺失大廈及正式名稱。
+2026-07-17: 固定 POS 大廈與單位共用目錄 Redis 快取、會員權限先行、個人資料排除及 relay 回退契約。
+2026-07-17: 固定統一帳戶登入的自動分類、本地優先、受控 iSmart 回退、故障保真及舊接口兼容契約。
 
 [PROTOCOL]: When adding, moving, renaming, or changing backend internal ownership, update this map, check parent `../AGENTS.md`, and update `../../docs/PROMPT_INDEX.md` when API documentation prompts or model-facing contracts changed.

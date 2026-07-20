@@ -271,6 +271,8 @@ export default {
     icctvLoading: 'Loading camera data.',
     icctvEmpty: 'No camera data is available for this building.',
     icctvLoadError: 'Failed to load CCTV data',
+    icctvDevice: 'Orange Pi device',
+    icctvDeviceCameraCount: '{count} cameras',
     icctvCamera: 'Camera',
     icctvStatus: 'Status',
     icctvAction: 'Action',

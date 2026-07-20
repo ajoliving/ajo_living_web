@@ -104,20 +104,26 @@ export interface EmailPasswordResetResult {
   password_reset: boolean;
 }
 
-// 7. 用戶名密碼認證請求
+// 7. 統一帳戶識別登入請求
+export interface IdentifierPasswordPayload {
+  identifier: string;
+  password: string;
+}
+
+// 8. 用戶名密碼認證請求
 export interface UsernamePasswordPayload {
   username: string;
   password: string;
 }
 
-// 8. 手機密碼認證請求
+// 9. 手機密碼認證請求
 export interface PhonePasswordPayload {
   phone_country_code: string;
   phone_number: string;
   password: string;
 }
 
-// 9. ismart 帳戶登入請求
+// 10. ismart 帳戶登入請求
 export interface IsmartLoginPayload {
   account: string;
   password: string;

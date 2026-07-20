@@ -30,7 +30,8 @@ const (
 
 // 1. POSPaymentService handles POS property payment data.
 type POSPaymentService struct {
-	runtime *Runtime
+	runtime            *Runtime
+	posBuildingService *POSBuildingService
 }
 
 // 2. POSUnitContext defines the selected POS unit derived from member profile.
@@ -96,8 +97,16 @@ type POSPaymentOrderCreateParams struct {
 }
 
 // 8. NewPOSPaymentService creates a POS payment service instance.
-func NewPOSPaymentService(runtime *Runtime) *POSPaymentService {
-	return &POSPaymentService{runtime: runtime}
+func NewPOSPaymentService(runtime *Runtime, directoryServices ...*POSBuildingService) *POSPaymentService {
+	posBuildingService := NewPOSBuildingService(runtime)
+	if len(directoryServices) > 0 && directoryServices[0] != nil {
+		posBuildingService = directoryServices[0]
+	}
+
+	return &POSPaymentService{
+		runtime:            runtime,
+		posBuildingService: posBuildingService,
+	}
 }
 
 // 9. Overview returns member POS payment readiness.
@@ -703,7 +712,7 @@ func (s *POSPaymentService) loadIsmartAccount(ctx context.Context, userID int64)
 	return &account, nil
 }
 
-// 30. ListMemberBuildings returns POS buildings visible to the current member token.
+// 30. ListMemberBuildings checks current permissions before reading the shared POS directory.
 func (s *POSPaymentService) ListMemberBuildings(ctx context.Context, userID int64) ([]POSBuildingSummary, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -717,9 +726,14 @@ func (s *POSPaymentService) ListMemberBuildings(ctx context.Context, userID int6
 		return []POSBuildingSummary{}, nil
 	}
 
+	directoryRows, directoryErr := s.posBuildingService.ListBuildings(ctx)
+	if directoryErr == nil {
+		return mergePOSBuildingSummaries(buildingOptions, directoryRows), nil
+	}
+
 	token, err := s.loadRelayToken(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, directoryErr
 	}
 	var rows []POSBuildingSummary
 	if err := s.posRelayJSONWithRefresh(ctx, userID, token, http.MethodGet, "/building", nil, nil, &rows); err != nil {
@@ -732,14 +746,10 @@ func (s *POSPaymentService) ListMemberBuildings(ctx context.Context, userID int6
 			visible = append(visible, row)
 		}
 	}
-	if len(visible) > 0 {
-		return visible, nil
-	}
-
-	return posBuildingSummariesFromIDs(buildingOptions), nil
+	return mergePOSBuildingSummaries(buildingOptions, visible), nil
 }
 
-// 31. ListMemberUnits returns POS units visible to the current member token.
+// 31. ListMemberUnits checks current permissions before reading the shared POS unit directory.
 func (s *POSPaymentService) ListMemberUnits(ctx context.Context, userID int64, buildingID string) ([]POSUnitSummary, error) {
 	value := strings.TrimSpace(buildingID)
 	if value == "" {
@@ -757,9 +767,12 @@ func (s *POSPaymentService) ListMemberUnits(ctx context.Context, userID int64, b
 	if !containsString(buildingOptions, value) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "building is not visible")
 	}
-	units, err := s.memberPOSUnits(ctx, userID, value)
+	units, err := s.posBuildingService.ListUnits(ctx, value)
 	if err != nil {
-		return nil, err
+		units, err = s.memberPOSUnits(ctx, userID, value)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if len(unitOptions) == 0 {
 		return units, nil

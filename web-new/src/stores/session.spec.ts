@@ -3,6 +3,7 @@
  * 1. 鎖定啟動還原登入狀態的並發等待行為。
  * 2. 避免路由守衛在會員資料尚未完成載入時誤判 staff 權限。
  * 3. 驗證註冊請求使用三類帳戶類型而非可切換發布身份。
+ * 4. 驗證統一登入只提交一次帳戶識別與密碼。
  */
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,11 +14,13 @@ import { useSessionStore } from './session';
 
 const mocks = vi.hoisted(() => ({
   fetchMe: vi.fn(),
+  loginWithIdentifier: vi.fn(),
   registerWithEmail: vi.fn(),
 }));
 
 vi.mock('@/httpapis/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/httpapis/auth')>()),
+  loginWithIdentifier: mocks.loginWithIdentifier,
   registerWithEmail: mocks.registerWithEmail,
 }));
 
@@ -62,6 +65,7 @@ describe('session store hydration', () => {
     setActivePinia(createPinia());
     window.localStorage.clear();
     mocks.fetchMe.mockReset();
+    mocks.loginWithIdentifier.mockReset();
     mocks.registerWithEmail.mockReset();
   });
 
@@ -113,5 +117,24 @@ describe('session store hydration', () => {
       is_receive_email: true,
     }));
     expect(mocks.registerWithEmail.mock.calls[0]?.[0]).not.toHaveProperty('publisher_identity_type');
+  });
+
+  it('submits one unified identifier login request before loading the member', async () => {
+    mocks.loginWithIdentifier.mockResolvedValue({
+      data: { data: { access_token: 'access-token', refresh_token: 'refresh-token', expires_in: 3600 } },
+    });
+    mocks.fetchMe.mockResolvedValue({
+      data: { data: buildStaffMember() },
+    });
+
+    const sessionStore = useSessionStore();
+    await sessionStore.signInWithIdentifier('+852 6123 4567', 'password123');
+
+    expect(mocks.loginWithIdentifier).toHaveBeenCalledTimes(1);
+    expect(mocks.loginWithIdentifier).toHaveBeenCalledWith({
+      identifier: '+852 6123 4567',
+      password: 'password123',
+    });
+    expect(mocks.fetchMe).toHaveBeenCalledTimes(1);
   });
 });

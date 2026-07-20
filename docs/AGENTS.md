@@ -56,5 +56,6 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 2026-07-16: 記錄「我的大廈」刷新最新會員綁定、已保存大廈優先及正式名稱取代 ID 佔位值的資料流。
 2026-07-16: 記錄 AJO Redis 與 PostgreSQL 同機 Docker 部署，以及 iSmart 大廈資料 5 分鐘快取的安全邊界。
 2026-07-16: 記錄生產 Redis 已通過真實 iSmart 大廈資料請求的快取建立、命中、TTL 與會員資料隔離驗證。
+2026-07-17: 記錄統一帳戶登入的無資料庫備份生產 release、桌面與手機 UI、API 路由及服務健康驗收。
 
 [PROTOCOL]: When changing prompt-bearing docs in this directory, update `PROMPT_INDEX.md`, add a dated change-log line, and check parent `../AGENTS.md` for project-level memory changes.

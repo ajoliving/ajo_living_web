@@ -51,6 +51,10 @@
 4. **改完先验证**：`nginx -t` 或 `supervisorctl reread`，确认再 reload。
 5. **SSL 证书操作需停 frps**（frps 占用 80 端口，certbot standalone 也需要 80）。
 
+### OrangePi 项目保护规则
+
+`icctv_orangepi_auth_service` 已部署在各台 OrangePi 上，属于设备端运行项目。除非用户明确要求并确认设备端发布方案，不得修改其代码、配置、Docker 文件、镜像或运行中的服务，也不得因为服务端需求自动重新部署 OrangePi。涉及 ICCTV 功能时，优先只修改 ICCTV 服务端、管理端或公开接口；任何设备端变更必须先单独确认影响范围和发布步骤。
+
 ### 关键文件路径
 
 **网关 47.83.21.100：**
@@ -593,9 +597,12 @@ REDIS_ADDR=127.0.0.1:6382
 REDIS_PASSWORD=
 REDIS_DB=0
 ISMART_BUILDING_CACHE_TTL=5m
+POS_DIRECTORY_CACHE_TTL=5m
 ```
 
 `/api/v1/me/ismart/...` 會員態接口優先使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
+
+POS 大廈與單位目錄只快取共用唯讀資料，分別使用 `ajo:pos:buildings:v1` 與 `ajo:pos:building-units:v1:<building_id>`；會員權限、綁定狀態、目前物業及 relay token 不得寫入 Redis。會員接口必須先即時校驗本地可見範圍，再讀取共用目錄並過濾；Redis 故障時回源 POS。
 
 ### 4.2 Redis 生產快取狀態（已驗證）
 
@@ -609,6 +616,21 @@ ISMART_BUILDING_CACHE_TTL=5m
 - 兩次請求的業務 `data` 一致；共享快取不保存 `building_options`、`selected_building_id` 或其他會員個人欄位。
 - Redis 故障或快取過期時，後端會直接回源 iSmart；Redis 重新啟動後快取遺失屬正常行為，不影響 PostgreSQL 或會員主資料。
 
+2026-07-17 已隨 release `20260717094836-3321` 驗證 POS 共用目錄快取：
+
+- 生產 `.env` 已設定 `POS_DIRECTORY_CACHE_TTL=5m`。
+- 公共大廈目錄建立 `ajo:pos:buildings:v1`，大廈 `0999900` 單位目錄建立 `ajo:pos:building-units:v1:0999900`。
+- 首次回源請求約為 `1.80s` 與 `1.78s`；相同請求命中 Redis 後約為 `0.54ms` 與 `0.39ms`。
+- 第二次請求後 `keyspace_hits` 由 `41` 增至 `45`，`keyspace_misses` 保持 `59`；兩個 key 的 TTL 同步由約 `289s` 繼續倒數至 `258s`，沒有被命中請求重設。
+- 生產回應確認大廈目錄為 47 項，`0999900` 單位目錄為 36 項；快取只保存共用目錄，會員接口仍先即時校驗本地權限。
+
+2026-07-17 已部署 release `20260717115200-3302` 並驗證統一帳戶登入：
+
+- 本次使用 `BACKUP_DB=0`，未建立 `/home/admin/ajoliving/db/backups/ajoliving_20260717115200-3302.dump`。
+- `POST /api/v1/auth/login` 已在線上提供服務，缺少必要欄位時返回 `VALIDATION_ERROR`，證明新路由已生效。
+- 生產登入頁在桌面及 `393 x 852` 手機視口均只顯示一個「手提電話 / 電郵 / iSmart username」輸入框，沒有登入方式分頁或獨立電話輸入，手機頁面沒有水平溢出。
+- `ajoliving_server`、PostgreSQL、Redis、前端及 API HTTPS 健康檢查均通過；本次未重配 frpc、SSL 或 OSS CORS。
+
 生產快取驗收：
 
 ```bash
@@ -619,6 +641,7 @@ ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli ping"
 # 查詢快取統計與現有 iSmart 大廈 key
 ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli INFO stats | grep -E '^(keyspace_hits|keyspace_misses):'"
 ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli --scan --pattern 'ajo:ismart:building-info:v1:*'"
+ssh admin@47.239.117.108 "sudo docker exec ajoliving_redis redis-cli --scan --pattern 'ajo:pos:*'"
 
 # 使用有效會員 access token 請求一次後，確認 TTL 接近 300 秒
 curl -H "Authorization: Bearer <access_token>" \

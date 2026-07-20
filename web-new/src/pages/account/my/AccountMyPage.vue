@@ -240,6 +240,12 @@ interface BindOption {
   value: string;
 }
 
+interface BindPropertyOption extends BindOption {
+  buildingID: string;
+  floor: string;
+  unit: string;
+}
+
 const bindBuildings = ref<PosBuilding[]>([]);
 const bindUnits = ref<PosBuildingUnit[]>([]);
 const residentUnitDetails = ref<PosBuildingUnit[]>([]);
@@ -253,6 +259,8 @@ const integrationAuthUnavailable = ref(false);
 let latestBindUnitsRequestID = 0;
 let isSyncingBindProfile = false;
 const bindUnassignedFloor = '__unassigned__';
+const memberUnitCache = new Map<string, PosBuildingUnit[]>();
+const memberUnitRequests = new Map<string, Promise<PosBuildingUnit[]>>();
 
 // 6.1 判斷是否為系統佔位電話帳號
 const isSystemPhonePlaceholder = (countryCode?: string): boolean =>
@@ -486,7 +494,32 @@ const filterBindUnitsByPermission = (
     .filter((item) => isSelectableBindUnit(buildingID, item))
     .filter((item) => matchesBindUnitPermission(buildingID, item, flatUnitPermissions));
 
-// 6.20 載入住戶權限單位詳情
+// 6.20 在頁面生命週期內合併相同大廈的會員單位請求
+const fetchCachedMemberUnits = async (buildingID: string): Promise<PosBuildingUnit[]> => {
+  const value = buildingID.trim();
+  const cached = memberUnitCache.get(value);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = memberUnitRequests.get(value);
+  if (pending) {
+    return pending;
+  }
+
+  const request = fetchMemberPosBuildingUnits(value)
+    .then((units) => {
+      memberUnitCache.set(value, units);
+      return units;
+    })
+    .finally(() => {
+      memberUnitRequests.delete(value);
+    });
+  memberUnitRequests.set(value, request);
+  return request;
+};
+
+// 6.21 載入住戶權限單位詳情
 const loadResidentUnitDetails = async (): Promise<void> => {
   if (bindResidentBuildingIDs.value.length === 0) {
     residentUnitDetails.value = [];
@@ -496,7 +529,7 @@ const loadResidentUnitDetails = async (): Promise<void> => {
   const results = await Promise.allSettled(
     bindResidentBuildingIDs.value.map(async (buildingID) => {
       const fallbackUnits = buildBindUnitsFromFlatUnitPermissions(buildingID, bindAllowedUnitIDs.value);
-      const units = await fetchMemberPosBuildingUnits(buildingID);
+      const units = await fetchCachedMemberUnits(buildingID);
       const actualUnits = filterBindUnitsByPermission(buildingID, units, bindAllowedUnitIDs.value);
       const actualUnitMap = new Map(
         actualUnits.map((item) => [getBindDigitsOnly(getBindUnitID(item)).slice(0, 11), item]),
@@ -522,7 +555,7 @@ const loadResidentUnitDetails = async (): Promise<void> => {
   residentUnitDetails.value = Array.from(unitMap.values());
 };
 
-// 6.21 POS 顯示排序
+// 6.22 POS 顯示排序
 const compareBindCodes = (left: string, right: string): number =>
   left.localeCompare(right, 'en', {
     numeric: true,
@@ -548,56 +581,40 @@ const visibleBindUnits = computed(() => {
     matchesBindUnitPermission(bindBuildingID.value, item, bindAllowedUnitIDs.value),
   );
 });
-const bindBuildingOptions = computed<BindOption[]>(() =>
-  visibleBindBuildings.value
-    .slice()
-    .sort((left, right) => getBindBuildingLabel(left).localeCompare(getBindBuildingLabel(right), 'en', {
-      numeric: true,
-      sensitivity: 'base',
-    }))
-    .map((item) => ({ label: getBindBuildingLabel(item), value: getBindBuildingID(item) })),
-);
-const bindFloorOptions = computed<BindOption[]>(() =>
-  Array.from(new Set(visibleBindUnits.value.map((item) => getBindDisplayUnitFloor(item)).filter(Boolean)))
-    .sort(compareBindCodes)
-    .map((floor) => ({ label: formatBindFloorLabel(floor), value: floor })),
-);
-const bindUnitOptions = computed<BindOption[]>(() =>
-  visibleBindUnits.value
-    .filter((item) => getBindDisplayUnitFloor(item) === bindFloor.value)
-    .slice()
-    .sort((left, right) => compareBindCodes(getBindUnitName(left), getBindUnitName(right)))
-    .map((item) => ({ label: getBindUnitName(item), value: getBindUnitID(item) }))
-    .filter((item) => item.label.length > 0 && item.value.length > 0),
-);
-const bindSelectedBuilding = computed(() =>
-  visibleBindBuildings.value.find((item) => getBindBuildingID(item) === bindBuildingID.value),
-);
-const bindSelectedBuildingName = computed(() =>
-  bindSelectedBuilding.value ? getBindBuildingName(bindSelectedBuilding.value) : '',
-);
-const bindSelectedBuildingLabel = computed(() =>
-  bindBuildingOptions.value.find((item) => item.value === bindBuildingID.value)?.label ?? '',
-);
+const bindPropertyOptions = computed<BindPropertyOption[]>(() => {
+  const details = new Map(
+    residentUnitDetails.value.map((item) => [getBindDigitsOnly(getBindUnitID(item)).slice(0, 11), item]),
+  );
+  return bindAllowedUnitIDs.value
+    .map((value) => {
+      const unit = details.get(value);
+      if (!unit) return null;
+      const buildingID = value.slice(0, 7);
+      const buildingName = bindBuildingNameMap.value[buildingID]
+        || t('account.center.common.buildingCodeLabel', { id: buildingID });
+      const floor = getBindDisplayUnitFloor(unit);
+      const unitName = getBindUnitName(unit);
+      return {
+        value,
+        buildingID,
+        floor,
+        unit: unitName,
+        label: [buildingName, formatBindFloorLabel(floor), unitName].filter(Boolean).join(' / '),
+      };
+    })
+    .filter((item): item is BindPropertyOption => Boolean(item?.unit))
+    .sort((left, right) => compareBindCodes(left.label, right.label));
+});
 const bindSelectedUnit = computed(() =>
-  visibleBindUnits.value.find((item) => getBindUnitID(item) === bindUnitID.value),
+  residentUnitDetails.value.find((item) => getBindDigitsOnly(getBindUnitID(item)).slice(0, 11) === bindUnitID.value),
 );
-const bindSelectedUnitName = computed(() =>
-  bindSelectedUnit.value ? getBindUnitName(bindSelectedUnit.value) : '',
+const bindSelectedProperty = computed(() =>
+  bindPropertyOptions.value.find((item) => item.value === bindUnitID.value),
 );
 const bindCurrent = computed(() =>
-  [
-    bindSelectedBuildingLabel.value,
-    bindFloor.value ? formatBindFloorLabel(bindFloor.value) : '',
-    bindSelectedUnitName.value,
-  ].filter(Boolean).join(' / ') || t('account.center.common.noUnitSelected'),
+  bindSelectedProperty.value?.label || t('account.center.common.noUnitSelected'),
 );
-const canSaveBindUnit = computed(() =>
-  bindBuildingID.value.length > 0 &&
-  bindFloor.value.length > 0 &&
-  bindUnitID.value.length > 0 &&
-  Boolean(bindSelectedUnit.value),
-);
+const canSaveBindUnit = computed(() => Boolean(bindSelectedProperty.value && bindSelectedUnit.value));
 
 // 6.6 同步會員已保存單位
 const syncBindFromProfile = (): void => {
@@ -633,8 +650,13 @@ const loadBindBuildings = async (): Promise<void> => {
   try {
     const memberBuildings = await fetchMemberPosBuildings();
     integrationAuthUnavailable.value = false;
+    const memberBuildingMap = new Map(memberBuildings.map((item) => [getBindBuildingID(item), item]));
+    const hasMissingBuildingName = bindAllowedBuildingIDs.value.some((buildingID) => {
+      const item = memberBuildingMap.get(buildingID);
+      return !item || !getBindBuildingName(item);
+    });
     let publicBuildings: PosBuilding[] = [];
-    if (memberBuildings.some((item) => !getBindBuildingName(item))) {
+    if (hasMissingBuildingName) {
       try {
         publicBuildings = await fetchPosBuildings();
       } catch (error) {
@@ -642,12 +664,14 @@ const loadBindBuildings = async (): Promise<void> => {
       }
     }
     const publicBuildingMap = new Map(publicBuildings.map((item) => [getBindBuildingID(item), item]));
-    bindBuildings.value = memberBuildings.map((item) => {
-      if (getBindBuildingName(item)) {
-        return item;
+    const mergedBuildingMap = new Map(memberBuildingMap);
+    bindAllowedBuildingIDs.value.forEach((buildingID) => {
+      const current = mergedBuildingMap.get(buildingID);
+      if (!current || !getBindBuildingName(current)) {
+        mergedBuildingMap.set(buildingID, publicBuildingMap.get(buildingID) ?? current ?? { building_id: buildingID });
       }
-      return publicBuildingMap.get(getBindBuildingID(item)) ?? item;
     });
+    bindBuildings.value = Array.from(mergedBuildingMap.values());
   } catch (error) {
     integrationAuthUnavailable.value = isIntegrationBusinessAuthError(error);
     let publicBuildings: PosBuilding[] = [];
@@ -692,7 +716,7 @@ const loadBindUnits = async (buildingID: string): Promise<void> => {
 
   bindUnitsLoading.value = true;
   try {
-    const result = await fetchMemberPosBuildingUnits(value);
+    const result = await fetchCachedMemberUnits(value);
     if (requestID !== latestBindUnitsRequestID) {
       return;
     }
@@ -724,13 +748,16 @@ const loadBindUnits = async (buildingID: string): Promise<void> => {
 
 // 6.9 儲存會員繳費單位
 const handleSaveBindUnit = async (): Promise<void> => {
-  if (!canSaveBindUnit.value) {
+  if (!canSaveBindUnit.value || !bindSelectedProperty.value) {
     feedbackStore.pushToast(t('account.center.account.selectUnitRequired'), 'error');
     return;
   }
 
   bindSaving.value = true;
   try {
+    const selectedProperty = bindSelectedProperty.value;
+    const buildingName = bindBuildingNameMap.value[selectedProperty.buildingID]
+      || selectedProperty.buildingID;
     const { data } = await updateMe({
       display_name: sessionStore.me?.display_name ?? sessionStore.currentUser.display_name,
       ...(sessionStore.me?.email ? { email: sessionStore.me.email } : {}),
@@ -740,12 +767,12 @@ const handleSaveBindUnit = async (): Promise<void> => {
             phone_country_code: sessionStore.me?.phone_country_code ?? '',
             phone_number: sessionStore.me?.phone_number ?? '',
           }),
-      primary_community_id: bindBuildingID.value,
-      primary_community_name: bindSelectedBuildingName.value,
-      bound_building_ids: [bindBuildingID.value],
+      primary_community_id: selectedProperty.buildingID,
+      primary_community_name: buildingName,
+      bound_building_ids: [selectedProperty.buildingID],
       bound_flat_unit_ids: [bindUnitID.value],
-      residence_floor: bindFloor.value === bindUnassignedFloor ? '' : bindFloor.value,
-      residence_unit: bindSelectedUnitName.value,
+      residence_floor: selectedProperty.floor === bindUnassignedFloor ? '' : selectedProperty.floor,
+      residence_unit: selectedProperty.unit,
       district_code: sessionStore.me?.district_code ?? '',
     });
     sessionStore.me = data.data;
@@ -1135,6 +1162,9 @@ const bindingUnitsLoading = ref(false);
 const bindingSubmitting = ref(false);
 const bindingStatusList = ref<BindingStatusItem[]>([]);
 let latestBindingUnitsRequestID = 0;
+let ownerBindingLoaded = false;
+let ownerBindingLoadPromise: Promise<void> | null = null;
+let isInitializingOwnerBinding = false;
 
 // 8.1 取得物業綁定大廈選項
 const bindingBuildingOptions = computed<BindOption[]>(() =>
@@ -1276,13 +1306,41 @@ const loadOwnerBindingUnits = async (buildingID: string): Promise<void> => {
   }
 };
 
-// 8.9 轉換物業綁定可選欄位
+// 8.9 首次進入物業綁定面板時才載入公共大廈與單位
+const ensureOwnerBindingLoaded = async (): Promise<void> => {
+  if (ownerBindingLoaded) {
+    return;
+  }
+  if (ownerBindingLoadPromise) {
+    await ownerBindingLoadPromise;
+    return;
+  }
+
+  ownerBindingLoadPromise = (async () => {
+    isInitializingOwnerBinding = true;
+    try {
+      syncOwnerBindingContactFromProfile();
+      await loadOwnerBindingBuildings();
+      syncOwnerBindingBuildingFromOptions();
+      if (bindingBuildingID.value) {
+        await loadOwnerBindingUnits(bindingBuildingID.value);
+      }
+      ownerBindingLoaded = true;
+    } finally {
+      isInitializingOwnerBinding = false;
+      ownerBindingLoadPromise = null;
+    }
+  })();
+  await ownerBindingLoadPromise;
+};
+
+// 8.10 轉換物業綁定可選欄位
 const optionalBindingValue = (value: string): string | undefined => {
   const text = value.trim();
   return text || undefined;
 };
 
-// 8.10 提交物業綁定申請
+// 8.11 提交物業綁定申請
 const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
   if (hasPendingResidenceBinding.value) {
     feedbackStore.pushToast(t('account.center.binding.pendingSubmitBlocked'), 'error');
@@ -1397,26 +1455,30 @@ const openFurnitureCreate = () => {
   router.push('/account/listings/new');
 };
 
+// 13. 按目前面板首次載入非帳號管理資料
+const ensureActivePanelLoaded = async (): Promise<void> => {
+  if (activePanel.value === 'profile-subaccounts' && !subaccountsLoaded.value && !subaccountsLoading.value) {
+    await loadSubaccountGroups();
+    return;
+  }
+  if (activePanel.value === 'profile-property-binding') {
+    await ensureOwnerBindingLoaded();
+  }
+};
+
 onMounted(async () => {
   try {
     if (!sessionStore.me) {
       await sessionStore.loadCurrentUser();
     }
-    syncOwnerBindingContactFromProfile();
     syncBindFromProfile();
     await loadBindBuildings();
     await loadResidentUnitDetails();
-    await loadOwnerBindingBuildings();
-    const previousBindingBuildingID = bindingBuildingID.value;
-    syncOwnerBindingBuildingFromOptions();
     if (bindBuildingID.value) {
       await loadBindUnits(bindBuildingID.value);
       syncBindUnitFromProfile();
     }
-    if (bindingBuildingID.value && bindingBuildingID.value === previousBindingBuildingID) {
-      await loadOwnerBindingUnits(bindingBuildingID.value);
-    }
-    await loadSubaccountGroups();
+    await ensureActivePanelLoaded();
   } finally {
     isSyncingBindProfile = false;
   }
@@ -1446,6 +1508,9 @@ watch(bindingBuildingID, (nextValue, previousValue) => {
   }
   bindingFloor.value = '';
   bindingUnitID.value = '';
+  if (isInitializingOwnerBinding) {
+    return;
+  }
   void loadOwnerBindingUnits(nextValue);
 });
 
@@ -1469,6 +1534,10 @@ watch(
   },
   { immediate: true },
 );
+
+watch(activePanel, () => {
+  void ensureActivePanelLoaded();
+});
 </script>
 
 <template>
@@ -1562,68 +1631,36 @@ watch(
             <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
             <div class="work-bind-wrap">
               <div class="work-bind-current">{{ bindCurrent }}</div>
-              <div class="work-bind-grid">
-                <div class="work-bind-field">
-                  <label class="work-bind-label">{{ t('account.center.common.building') }}</label>
-                  <select
-                    v-model="bindBuildingID"
-                    class="work-bind-select"
-                    :disabled="bindLoading || bindBuildingOptions.length === 0"
-                  >
-                    <option value="">{{ bindLoading ? t('account.center.common.loading') : t('account.center.common.selectBuilding') }}</option>
-                    <option
-                      v-for="item in bindBuildingOptions"
-                      :key="item.value"
-                      :value="item.value"
+              <div class="work-bind-control-row">
+                <div class="work-bind-grid work-bind-grid--single">
+                  <div class="work-bind-field">
+                    <label class="work-bind-label">{{ t('building.context.property') }}</label>
+                    <select
+                      v-model="bindUnitID"
+                      class="work-bind-select"
+                      :disabled="bindLoading || bindUnitsLoading || bindPropertyOptions.length === 0"
                     >
-                      {{ item.label }}
-                    </option>
-                  </select>
+                      <option value="">{{ bindLoading || bindUnitsLoading ? t('account.center.common.loading') : t('building.context.selectProperty') }}</option>
+                      <option
+                        v-for="item in bindPropertyOptions"
+                        :key="item.value"
+                        :value="item.value"
+                      >
+                        {{ item.label }}
+                      </option>
+                    </select>
+                  </div>
                 </div>
-                <div class="work-bind-field">
-                  <label class="work-bind-label">{{ t('account.center.common.floor') }}</label>
-                  <select
-                    v-model="bindFloor"
-                    class="work-bind-select"
-                    :disabled="!bindBuildingID || bindUnitsLoading || bindFloorOptions.length === 0"
+                <div class="work-bind-actions">
+                  <button
+                    type="button"
+                    class="work-action work-compact-action"
+                    :disabled="!canSaveBindUnit || bindSaving"
+                    @click="handleSaveBindUnit"
                   >
-                    <option value="">{{ bindUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectFloor') }}</option>
-                    <option
-                      v-for="item in bindFloorOptions"
-                      :key="item.value"
-                      :value="item.value"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
+                    {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
+                  </button>
                 </div>
-                <div class="work-bind-field">
-                  <label class="work-bind-label">{{ t('account.center.common.unit') }}</label>
-                  <select
-                    v-model="bindUnitID"
-                    class="work-bind-select"
-                    :disabled="!bindFloor || bindUnitsLoading || bindUnitOptions.length === 0"
-                  >
-                    <option value="">{{ bindUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectUnit') }}</option>
-                    <option
-                      v-for="item in bindUnitOptions"
-                      :key="item.value"
-                      :value="item.value"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-              <div class="work-bind-actions">
-                <button
-                  type="button"
-                  class="work-action work-compact-action"
-                  :disabled="!canSaveBindUnit || bindSaving"
-                  @click="handleSaveBindUnit"
-                >
-                  {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
-                </button>
               </div>
             </div>
           </section>
@@ -2478,6 +2515,17 @@ watch(
   gap: 12px;
 }
 
+.work-bind-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.work-bind-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 680px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
 .work-bind-field {
   display: grid;
   gap: 8px;
@@ -3144,6 +3192,15 @@ watch(
 
   .work-nav {
     grid-template-columns: 1fr;
+  }
+
+  .work-bind-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .work-bind-actions,
+  .work-bind-actions .work-action {
+    width: 100%;
   }
 
 }

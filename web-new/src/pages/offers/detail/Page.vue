@@ -86,6 +86,7 @@ const trendHoverDate = ref('');
 const nearbyStores = ref<SupermarketNearbyStoreLocation[]>([]);
 const nearbyStatus = ref<NearbyStoreStatus>('idle');
 const nearbyMessage = ref('');
+const failedImageCodes = ref(new Set<string>());
 const alertForm = reactive({
   targetPrice: '',
   priceMode: 'effective' as PriceChartMode,
@@ -231,7 +232,12 @@ const relatedProductInitial = (item: SupermarketProduct): string => {
   return source.slice(0, 1);
 };
 
-// 18. 載入商品詳情
+// 18. 記錄無法載入的商品圖片，改用既有後備顯示。
+const handleProductImageError = (code: string): void => {
+  failedImageCodes.value = new Set([...failedImageCodes.value, code]);
+};
+
+// 19. 載入商品詳情
 const loadDetail = async (code: string): Promise<void> => {
   if (!code.trim()) {
     detail.value = null;
@@ -257,17 +263,17 @@ const loadDetail = async (code: string): Promise<void> => {
   }
 };
 
-// 19. 返回列表
+// 20. 返回列表
 const backToList = async (): Promise<void> => {
   await router.push('/supermarket-offers');
 };
 
-// 20. 開啟相關商品
+// 21. 開啟相關商品
 const openRelatedProduct = async (item: SupermarketProduct): Promise<void> => {
   await router.push(`/supermarket-offers/products/${encodeURIComponent(item.code)}`);
 };
 
-// 21. 切換收藏
+// 22. 切換收藏
 const toggleFavorite = async (): Promise<void> => {
   if (!detail.value) return;
   if (!readStoredAccessToken()) {
@@ -297,7 +303,7 @@ const toggleFavorite = async (): Promise<void> => {
   }
 };
 
-// 22. 開啟提醒表單
+// 23. 開啟提醒表單
 const openAlertForm = async (): Promise<void> => {
   if (!readStoredAccessToken()) {
     await openLogin();
@@ -306,7 +312,7 @@ const openAlertForm = async (): Promise<void> => {
   alertFormOpen.value = true;
 };
 
-// 23. 儲存價格提示
+// 24. 儲存價格提示
 const submitAlert = async (): Promise<void> => {
   if (!detail.value) return;
 
@@ -348,7 +354,7 @@ const submitAlert = async (): Promise<void> => {
   }
 };
 
-// 24. 刪除價格提示
+// 25. 刪除價格提示
 const removeAlert = async (): Promise<void> => {
   if (!detail.value?.alertRule) return;
 
@@ -367,7 +373,7 @@ const removeAlert = async (): Promise<void> => {
   }
 };
 
-// 25. 用現有提示填入表單
+// 26. 用現有提示填入表單
 const fillAlertForm = (rule: SupermarketPriceAlert | null): void => {
   alertForm.targetPrice = rule?.targetPrice !== undefined && rule?.targetPrice !== null ? String(rule.targetPrice) : '';
   alertForm.priceMode = rule?.priceMode ?? 'effective';
@@ -375,19 +381,19 @@ const fillAlertForm = (rule: SupermarketPriceAlert | null): void => {
   alertForm.enabled = rule?.enabled ?? true;
 };
 
-// 26. 前往登入
+// 27. 前往登入
 const openLogin = async (): Promise<void> => {
   await router.push({ path: '/login', query: { redirect: route.fullPath } });
 };
 
-// 27. 重設附近門店狀態
+// 28. 重設附近門店狀態
 const resetNearbyStores = (): void => {
   nearbyStores.value = [];
   nearbyStatus.value = 'idle';
   nearbyMessage.value = '';
 };
 
-// 28. 查找最優惠附近門店
+// 29. 查找最優惠附近門店
 const requestBestDealLocation = (): void => {
   if (!navigator.geolocation) {
     nearbyStatus.value = 'error';
@@ -432,7 +438,7 @@ const requestBestDealLocation = (): void => {
   );
 };
 
-// 29. 取得定位錯誤文字
+// 30. 取得定位錯誤文字
 const geolocationErrorMessage = (error: GeolocationPositionError): string => {
   if (error.code === error.PERMISSION_DENIED) return t('offers.detail.permissionDenied');
   if (error.code === error.POSITION_UNAVAILABLE) return t('offers.detail.positionUnavailable');
@@ -440,7 +446,7 @@ const geolocationErrorMessage = (error: GeolocationPositionError): string => {
   return t('offers.detail.locationError');
 };
 
-// 30. 按滑鼠位置更新走勢圖浮層
+// 31. 按滑鼠位置更新走勢圖浮層
 const handleTrendHover = (event: MouseEvent): void => {
   const chart = trendChart.value;
   if (!chart.hasData || chart.dates.length === 0) {
@@ -462,16 +468,16 @@ const handleTrendHover = (event: MouseEvent): void => {
   trendHoverDate.value = chart.dates[index] ?? '';
 };
 
-// 31. 清除走勢圖浮層
+// 32. 清除走勢圖浮層
 const clearTrendHover = (): void => {
   trendHoverDate.value = '';
 };
 
-// 32. 取得圖表價格
+// 33. 取得圖表價格
 const priceForMode = (item: SupermarketDailyStorePrice, mode: PriceChartMode): number =>
   mode === 'effective' ? item.effectiveUnitPrice : item.listPrice;
 
-// 33. 建立走勢圖
+// 34. 建立走勢圖
 const buildTrendChart = (history: SupermarketDailyStorePrice[], mode: PriceChartMode) => {
   const width = 720;
   const height = 280;
@@ -533,7 +539,7 @@ const buildTrendChart = (history: SupermarketDailyStorePrice[], mode: PriceChart
   };
 };
 
-// 34. 選取日期刻度
+// 35. 選取日期刻度
 const pickDateTicks = (dates: string[], maxTicks: number): string[] => {
   if (dates.length <= maxTicks) return dates;
   const lastIndex = dates.length - 1;
@@ -544,7 +550,7 @@ const pickDateTicks = (dates: string[], maxTicks: number): string[] => {
   return [...indexes].sort((a, b) => a - b).map((index) => dates[index]).filter(Boolean);
 };
 
-// 35. 格式化日期刻度
+// 36. 格式化日期刻度
 const formatDateTick = (date: string): string => {
   const parts = date.split('-');
   if (parts.length === 3) {
@@ -553,11 +559,11 @@ const formatDateTick = (date: string): string => {
   return date;
 };
 
-// 36. 格式化商店名稱
+// 37. 格式化商店名稱
 const formatStore = (value: string): string =>
   displaySupermarketStore(value, preferenceStore.locale);
 
-// 37. 格式化商品價格
+// 38. 格式化商品價格
 const formatOfferPrice = (value: number | null | undefined): string =>
   formatSupermarketHKPrice(value, preferenceStore.locale);
 
@@ -604,9 +610,10 @@ watch(
         <div class="gp-product-head">
           <div class="gp-product-img">
             <img
-              v-if="product.image_url || product.imageUrl"
+              v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
               :src="product.image_url || product.imageUrl"
               :alt="product.name"
+              @error="handleProductImageError(product.code)"
             >
             <span
               v-else
@@ -980,9 +987,10 @@ watch(
             >
               <div class="gp-related-img">
                 <img
-                  v-if="item.image_url || item.imageUrl"
+                  v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
                   :src="item.image_url || item.imageUrl"
                   :alt="item.name"
+                  @error="handleProductImageError(item.code)"
                 >
                 <span
                   v-else
@@ -1017,9 +1025,10 @@ watch(
             >
               <div class="gp-related-img">
                 <img
-                  v-if="item.image_url || item.imageUrl"
+                  v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
                   :src="item.image_url || item.imageUrl"
                   :alt="item.name"
+                  @error="handleProductImageError(item.code)"
                 >
                 <span
                   v-else
@@ -1126,9 +1135,11 @@ watch(
 }
 
 .gp-product-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
   display: block;
 }
 
@@ -1649,9 +1660,11 @@ watch(
 }
 
 .gp-related-img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
   display: block;
 }
 

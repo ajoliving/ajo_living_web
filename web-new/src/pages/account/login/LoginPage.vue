@@ -10,7 +10,6 @@ import LoginFormPanel from './widgets/LoginFormPanel.vue';
 import { useLoginPage } from './login';
 
 const {
-  authMode,
   buildingOptions,
   buildingsLoading,
   emailAction,
@@ -28,7 +27,6 @@ const {
   residenceFloorOptions,
   residenceUnitOptions,
   selectedHero,
-  setAuthMode,
   submitting,
   submitLabel,
   toggleEmailAction,
@@ -58,7 +56,6 @@ const {
         v-model:gender="formState.gender"
         v-model:is-receive-email="formState.isReceiveEmail"
         v-model:remember-me="rememberMe"
-        :auth-mode="authMode"
         :email-action="emailAction"
         :email-action-switch-label="emailActionSwitchLabel"
         :building-options="buildingOptions"
@@ -75,7 +72,6 @@ const {
         :validation-errors="validationErrors"
         @forgot-password="handleForgotPassword"
         @load-buildings="ensureBuildingsLoaded"
-        @set-auth-mode="setAuthMode"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"
         @toggle-email-action="toggleEmailAction"

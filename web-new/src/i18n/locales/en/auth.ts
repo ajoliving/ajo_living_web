@@ -1,12 +1,17 @@
+/*
+ * Authentication module English copy.
+ * 1. Provides unified sign-in, resident registration, and password reset text.
+ * 2. Keeps the same field structure as the Traditional Chinese locale.
+ */
 export default {
   title: 'Sign in',
-  subtitle: 'Use email password, phone password, or email verification code to continue.',
+  subtitle: 'Sign in with your mobile, email, or username and password.',
   emailMode: 'Email',
   phoneMode: 'Mobile',
   usernameMode: 'User name',
   loginModeLabel: 'Sign-in method',
   loginGroupPhone: 'Mobile',
-  loginGroupAccount: 'Mobile / Email / User name / iSmart',
+  loginGroupAccount: 'Mobile / Email / iSmart username',
   otpMode: 'Code',
   emailLogin: 'Sign in',
   emailRegister: 'Register',
@@ -20,7 +25,7 @@ export default {
   usernamePasswordLogin: 'User name password',
   username: 'User name',
   usernamePlaceholder: 'Enter your user name',
-  accountIdentifierPlaceholder: 'Enter mobile, email, user name, or iSmart account',
+  accountIdentifierPlaceholder: 'Enter mobile, email, or iSmart username',
   registerUsernamePlaceholder: 'Set your user name',
   email: 'Email',
   emailPlaceholder: 'resident' + '@' + 'example.com',
@@ -72,7 +77,7 @@ export default {
   requestOtp: 'Request OTP',
   submit: 'Sign in',
   registerSubmit: 'Create account',
-  note: 'Sign in with mobile, user name, email, or iSmart account and password.',
+  note: 'Enter your mobile, email, or username. The account type is detected automatically.',
   residentLogin: 'Welcome back, AJO Living!',
   residentRegister: 'Resident Register',
   activeSession: 'Current account',
@@ -104,7 +109,7 @@ export default {
   dontHaveAccount: 'Don’t have an account?',
   invalidEmail: 'Please enter a valid email address.',
   invalidPhone: 'Please enter a valid mobile number, for example +852 61234567.',
-  accountRequired: 'Enter a mobile number, email, user name, or iSmart account.',
+  accountRequired: 'Enter a mobile number, email, or iSmart username.',
   formInvalid: 'Check the highlighted required fields.',
   requiredFields: 'Required information is missing.',
   emailOtpRequiredFields: 'A valid email and verification code are required.',

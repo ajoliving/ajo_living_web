@@ -73,16 +73,48 @@ const selectedBuilding = computed<IcctvBuildingOption | undefined>(() =>
 
 // 6. 當前大廈鏡頭
 const buildingCameras = computed<ICCTVCameraSummary[]>(() => icctvProfile.value?.cameras ?? []);
+const cameraGroups = computed(() => {
+  const groupedDeviceIDs = new Set<number>();
+  const groups = (icctvProfile.value?.orangepis ?? []).map((orangepi) => {
+    groupedDeviceIDs.add(orangepi.orangepi_id);
+    return {
+      id: orangepi.orangepi_id,
+      name: String(orangepi.orangepi_name ?? '').trim(),
+      isActive: orangepi.is_active,
+      cameras: buildingCameras.value.filter((camera) => camera.orangepi_id === orangepi.orangepi_id),
+    };
+  });
+  const ungroupedCameras = buildingCameras.value.filter((camera) => !groupedDeviceIDs.has(camera.orangepi_id));
+  if (ungroupedCameras.length > 0) {
+    groups.push({
+      id: ungroupedCameras[0].orangepi_id,
+      name: String(ungroupedCameras[0].orangepi_name ?? '').trim(),
+      isActive: ungroupedCameras.some((camera) => camera.is_active),
+      cameras: ungroupedCameras,
+    });
+  }
+  return groups;
+});
 const totalCameraCount = computed(() => buildingCameras.value.length);
 const onlineCameraCount = computed(() => buildingCameras.value.filter((item) => item.is_active && item.url).length);
 const offlineCameraCount = computed(() => Math.max(0, totalCameraCount.value - onlineCameraCount.value));
 
 // 7. 取得鏡頭名稱
 const cameraName = (camera: ICCTVCameraSummary, index: number): string => {
+  const title = String(camera.title ?? '').trim();
+  if (title) return title;
   const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
   return t('marketplace.management.icctvCameraName', {
     number: match?.[1] ?? formatLocaleNumber(index + 1),
   });
+};
+
+// 7.1 取得 Orange Pi 裝置標籤
+const orangePiLabel = (orangepi: { id: number; name: string }): string => {
+  const name = orangepi.name.trim();
+  return name
+    ? `${t('marketplace.management.icctvDevice')} #${orangepi.id} · ${name}`
+    : `${t('marketplace.management.icctvDevice')} #${orangepi.id}`;
 };
 
 // 8. 取得鏡頭狀態
@@ -224,9 +256,29 @@ onMounted(() => {
           </thead>
           <tbody>
             <template
-              v-for="(camera, index) in buildingCameras"
-              :key="camera.id"
+              v-for="orangepi in cameraGroups"
+              :key="orangepi.id"
             >
+              <tr class="icctv-device-row">
+                <td colspan="3">
+                  <div class="icctv-device-head">
+                    <div>
+                      <strong>{{ orangePiLabel(orangepi) }}</strong>
+                      <span>{{ t('marketplace.management.icctvDeviceCameraCount', { count: formatLocaleNumber(orangepi.cameras.length) }) }}</span>
+                    </div>
+                    <span
+                      class="icctv-table-status"
+                      :class="orangepi.isActive ? 'on' : 'off'"
+                    >
+                      {{ orangepi.isActive ? t('marketplace.management.icctvAvailable') : t('marketplace.management.icctvUnavailable') }}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+              <template
+                v-for="(camera, index) in orangepi.cameras"
+                :key="camera.id"
+              >
               <tr :class="{ expanded: isCameraExpanded(camera.id) }">
                 <td>
                   <div class="icctv-camera-title">{{ cameraName(camera, index) }}</div>
@@ -278,8 +330,9 @@ onMounted(() => {
                   </div>
                 </td>
               </tr>
+              </template>
             </template>
-            <tr v-if="buildingCameras.length === 0">
+            <tr v-if="cameraGroups.length === 0">
               <td
                 class="icctv-table-message"
                 colspan="3"
@@ -484,6 +537,41 @@ onMounted(() => {
 
 .icctv-table tbody tr.expanded > td {
   background: var(--brand-light);
+}
+
+.icctv-device-row td {
+  background: var(--sur-2);
+  padding: 0;
+}
+
+.icctv-device-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.icctv-device-head > div {
+  min-width: 0;
+}
+
+.icctv-device-head strong,
+.icctv-device-head span {
+  display: block;
+}
+
+.icctv-device-head strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.icctv-device-head > div > span {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .icctv-camera-title {

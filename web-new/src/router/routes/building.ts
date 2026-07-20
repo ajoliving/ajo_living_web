@@ -1,7 +1,7 @@
 /*
- * 樓盤放售路由。
- * 1. 定義樓盤放售主路由。
- * 2. 對外輸出樓盤放售路由陣列供總路由組裝。
+ * 我的大廈與樓盤放售路由。
+ * 1. 定義我的大廈主路由。
+ * 2. 保留樓盤放售相關公開路由。
  */
 import type { RouteRecordRaw } from 'vue-router';
 
@@ -9,7 +9,7 @@ const BuildingPage = () => import('@/pages/building/BuildingPage.vue');
 const PropertyDetailPage = () => import('@/pages/property/detail/PropertyDetailPage.vue');
 const PropertyListPage = () => import('@/pages/property/list/PropertyListPage.vue');
 
-// 1. 輸出樓盤放售路由
+// 1. 輸出我的大廈與樓盤放售路由
 export const buildingRoutes: RouteRecordRaw[] = [
   {
     path: '/affairs',
