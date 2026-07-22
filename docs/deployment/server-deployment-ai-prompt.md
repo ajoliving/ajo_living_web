@@ -8,7 +8,7 @@
 
 | 服务器 | IP | 角色 | SSH |
 | --- | --- | --- | --- |
-| 网关 | `47.83.21.100` | frps + nginx(SSL) + certbot | `ssh admin@47.83.21.100` |
+| 网关 | `47.83.21.100` | frps + nginx(SSL) + acme.sh | `ssh admin@47.83.21.100` |
 | 应用 | `47.239.117.108` | 业务服务 + 数据库 + frpc | `ssh admin@47.239.117.108` |
 
 ### 请求链路
@@ -39,6 +39,7 @@
 | `ajoliving.skylinedances.com` | 47.239.117.108 | :20041 | nginx 静态 | 待申请 |
 | `ajoliving.server.skylinedances.com` | 47.239.117.108 | :20042 | Go + Supervisor | 待申请 |
 | `good.price.skylinedances.com` | 47.239.117.108 | :20045 → `/api/` :20044 | nginx 静态 + `/api/` 反代 | 独立 |
+| `ticket.skylinedances.com` | 47.239.117.108 | :20046 | Docker Compose（前端 + API + SQLite） | 独立（ACME DNS） |
 
 
 ---
@@ -49,7 +50,7 @@
 2. **端口冲突检查**：`ss -tlnp | grep <port>`。
 3. **数据库端口仅绑 127.0.0.1**，严禁 0.0.0.0。
 4. **改完先验证**：`nginx -t` 或 `supervisorctl reread`，确认再 reload。
-5. **SSL 证书操作需停 frps**（frps 占用 80 端口，certbot standalone 也需要 80）。
+5. **SSL 证书操作按验证方式执行**：`certbot --standalone` 需先停 `frps` 释放 80 端口；ACME DNS 验证不需停止 `frps`，应优先采用以避免中断现有 HTTP 服务。
 
 ### OrangePi 项目保护规则
 
@@ -66,6 +67,7 @@
 | `/etc/nginx/sites-enabled/*.conf` | HTTPS 反代站点 |
 | `/etc/nginx/snippets/proxy_params` | 通用反代头（Host, X-Real-IP, X-Forwarded-For, X-Forwarded-Proto） |
 | `/etc/letsencrypt/live/*/fullchain.pem` | SSL 证书 |
+| `/home/admin/.acme.sh/ticket.skylinedances.com_ecc/` | `ticket.skylinedances.com` ACME DNS 证书及私钥 |
 
 **应用 47.239.117.108：**
 
@@ -78,6 +80,7 @@
 | `/home/admin/<project>/` | 业务服务目录 |
 | `/home/admin/svavo_smart_databoard/` | svavo 项目目录（后端、前端 dist、.env、compose） |
 | `/home/admin/good_price_databoard/` | good-price 项目目录（后端、前端 dist、.env、PostgreSQL compose） |
+| `/home/admin/client-ticket-board/` | Client Ticket Board 项目目录（Docker Compose、`.env`、SQLite volume） |
 
 ### POS iSmart Relay 現況與部署
 
@@ -428,6 +431,7 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 20041 | 47.239.117.108 | ajoliving 前端 nginx | 127.0.0.1 |
 | 20042 | 47.239.117.108 | ajoliving 后端 API | 127.0.0.1 |
 | 20043 | 47.239.117.108 | hk-dashboard border API | 127.0.0.1 |
+| 20046 | 47.239.117.108 | Client Ticket Board 前端 + `/api/` | 127.0.0.1 |
 | 20044 | 47.239.117.108 | good-price 后端 API | 127.0.0.1 |
 | 20045 | 47.239.117.108 | good-price 前端 nginx | 127.0.0.1 |
 | 9002 | 47.239.117.108 | iboard 前端 | 0.0.0.0 |
@@ -783,6 +787,57 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"go
 - `db/docker-compose.yml` 必须保留顶层 `name: good_price_databoard`。如果缺失，`docker compose` 会用目录名作为 project，容易与其他 `/db` 目录项目冲突。
 - 静态前端更新只需同步 `frontend/dist/` 到 `/home/admin/good_price_databoard/frontend-dist/`，通常不需要重启后端或 nginx。
 - 后端更新需重新上传二进制并 `sudo supervisorctl restart good_price_databoard`。
+
+---
+
+## 十二、Client Ticket Board 固定配置（已落地）
+
+### 1. 应用服务器 47.239.117.108
+
+- 项目目录：`/home/admin/client-ticket-board`
+- Docker Compose 文件：`docker-compose.prod.yml`
+- Compose 项目名：`client_ticket_board`
+- 前端与 API 本地入口：`127.0.0.1:20046`
+- API 健康检查：`http://127.0.0.1:20046/api/health`
+- SQLite 数据卷：`client_ticket_board_data`
+- 附件储存：复用 AJO Living OSS，物件键前缀为 `tickets/`；凭证仅保存在服务器 `.env`，不得写入前端或文档。
+
+服务以同一域名承载前端和 API，浏览器请求 `/api/`，不设置独立 API 子域名。服务当前为公开访问，不配置登录鉴权。
+
+### 2. frpc 代理（应用服务器）
+
+`/home/admin/frp/frpc.toml` 已追加：
+
+- `client-ticket-board`: `ticket.skylinedances.com -> 127.0.0.1:20046`
+
+更新工单服务后，只重建该项目容器；不要删除 `client_ticket_board_data` volume，也不要改动其他 `frpc` 代理。
+
+```bash
+ssh admin@47.239.117.108 "cd /home/admin/client-ticket-board && sudo docker compose -f docker-compose.prod.yml up -d --build"
+ssh admin@47.239.117.108 "curl -fsS http://127.0.0.1:20046/api/health"
+```
+
+### 3. 网关服务器 47.83.21.100
+
+- HTTPS 站点文件：`/etc/nginx/sites-available/ticket.skylinedances.com`
+- 启用链接：`/etc/nginx/sites-enabled/ticket.skylinedances.com`
+- 反向代理目标：`http://127.0.0.1:80`（frps HTTP 虚拟主机）
+- 证书：ACME DNS 签发的 ECDSA 证书
+- 证书链：`/home/admin/.acme.sh/ticket.skylinedances.com_ecc/fullchain.cer`
+- 私钥：`/home/admin/.acme.sh/ticket.skylinedances.com_ecc/ticket.skylinedances.com.key`
+- 续期行为：`acme.sh` 续期后执行 `nginx -t && systemctl reload nginx`
+- 当前证书有效期：至 `2026-10-18`
+
+该证书使用 AliDNS 验证，申请或续期时不得停止 `frps`。不要将此域名的 HTTP 入口改为 Nginx 80 端口，因为该端口由 `frps` 持有。
+
+### 4. 验收命令
+
+```bash
+curl -fsS https://ticket.skylinedances.com/api/health
+curl -fsSI https://ticket.skylinedances.com/
+ssh admin@47.239.117.108 "cd /home/admin/client-ticket-board && sudo docker compose -f docker-compose.prod.yml ps"
+ssh admin@47.83.21.100 "sudo nginx -t"
+```
 
 ---
 

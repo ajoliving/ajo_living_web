@@ -24,5 +24,6 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 2026-07-17: 記錄 release `20260717094836-3321` 已通過 POS 大廈與單位目錄的快取建立、命中、TTL 及回應驗證。
 2026-07-17: 明確 `icctv_orangepi_auth_service` 為已部署 OrangePi 設備端保護項目，未獲明確授權不得修改或重新部署。
 2026-07-17: 記錄 release `20260717115200-3302` 以 `BACKUP_DB=0` 發布統一帳戶登入，並通過桌面、手機、路由、服務及 HTTPS 驗收。
+2026-07-21: 記錄 Client Ticket Board 的 Docker Compose、SQLite volume、AJO Living OSS `tickets/` 前綴、frpc `:20046`、ACME DNS HTTPS 與續期重載設定。
 
 [PROTOCOL]: When changing deployment prompts or server-operation instructions, update this map, `../PROMPT_INDEX.md`, and verify whether root `../AGENTS.md` deployment references need updating.
