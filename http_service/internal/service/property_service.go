@@ -389,6 +389,7 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 		return nil, err
 	}
 	if channel == PropertyChannelSale && len(summaries) > 0 && summaries[0].PropertySale != nil && viewerCanManage {
+		summaries[0].PropertySale.PropertyNo = rows[0].SalePropertyNo
 		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
 		summaries[0].PropertySale.FloorRaw = rows[0].SaleFloorRaw
 		summaries[0].PropertySale.PrivateNote = rows[0].SalePrivateNote

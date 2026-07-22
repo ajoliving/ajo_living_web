@@ -1214,9 +1214,14 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 	if item.CommunityID != nil {
 		community = communityMap[*item.CommunityID]
 	}
+	publicAgentPropertyNo := ""
+	if item.PublisherIdentityType == "agent" && strings.TrimSpace(item.SalePropertyNo) != "" && item.SalePropertyNo != item.PublicID {
+		publicAgentPropertyNo = item.SalePropertyNo
+	}
 
 	summary := PropertyListingSummary{
 		ListingID:             item.PublicID,
+		DisplayNumber:         item.ID,
 		Module:                item.Module,
 		Title:                 item.Title,
 		Summary:               item.Summary,
@@ -1233,7 +1238,7 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 	}
 	if channel == PropertyChannelSale {
 		summary.PropertySale = &PropertySalePayload{
-			PropertyNo:           item.SalePropertyNo,
+			PropertyNo:           publicAgentPropertyNo,
 			TransactionType:      normalizePropertyTransactionType(item.SaleTransactionType),
 			LocationScope:        normalizePropertyLocationScope(item.SaleLocationScope),
 			ListingCategory:      normalizePropertyListingCategory(item.SaleListingCategory),

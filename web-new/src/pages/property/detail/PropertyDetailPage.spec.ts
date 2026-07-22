@@ -25,6 +25,9 @@ vi.mock('vue-i18n', () => ({
       'property.publicDetail.appointmentRequiredError': '請填寫預約睇樓所需資料。',
       'property.publicDetail.contactNameRequired': '請填寫聯絡人姓名。',
       'property.publicDetail.phoneRequired': '請填寫聯絡電話。',
+      'property.publicDetail.grossArea': '建築呎數',
+      'property.publicDetail.usableArea': '實用呎數',
+      'property.publicDetail.areaUnverified': '面積資料未核實',
     }[key] ?? key),
   }),
 }));
@@ -61,13 +64,14 @@ describe('PropertyDetailPage', () => {
     mockedFetchDetail.mockResolvedValue({
       data: {
         data: {
-          listing_id: 'listing-1',
+          listing_id: 'listing-12345678',
+          display_number: 6,
           module: 'property_sale',
           title: '測試樓盤',
           summary: '',
           description: '',
           district_code: '',
-          publisher_identity_type: 'owner',
+          publisher_identity_type: 'agent',
           publication_status: 'active',
           business_status: 'available',
           updated_at: '',
@@ -76,6 +80,25 @@ describe('PropertyDetailPage', () => {
             show_chat: false,
             show_phone: false,
             show_whatsapp: false,
+          },
+          property_sale: {
+            transaction_type: 'sale',
+            property_type: 'residential',
+            property_no: 'AGENT-006',
+            estate_name: '測試屋苑',
+            address_text: '測試地址',
+            asking_price_hkd: 2690000,
+            usable_area_sqft: 0,
+            gross_area_sqft: 500,
+            area_mode: 'gross',
+            bedroom_count: 2,
+            bathroom_count: 1,
+            floor_level: '',
+            property_attributes: {
+              area_unverified: 'yes',
+            },
+            feature_tags: ['隔行測試'],
+            publisher_role_label: '',
           },
         },
       },
@@ -100,5 +123,24 @@ describe('PropertyDetailPage', () => {
     expect(wrapper.text()).toContain('請填寫聯絡電話。');
     expect(wrapper.findAll('.detail-required-mark')).toHaveLength(2);
     expect(mockedCreateAppointment).not.toHaveBeenCalled();
+  });
+
+  it('顯示樓盤序號、建築面積與已過濾的標籤', async () => {
+    const wrapper = mount(PropertyDetailPage, {
+      global: {
+        stubs: {
+          RouterLink: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('HK$269萬');
+    expect(wrapper.find('.detail-reference').text()).toBe('6');
+    expect(wrapper.text()).toContain('測試屋苑');
+    expect(wrapper.text()).toContain('AGENT-006');
+    expect(wrapper.text()).toContain('建築呎數');
+    expect(wrapper.text()).toContain('面積資料未核實');
+    expect(wrapper.text()).not.toContain('隔行測試');
   });
 });

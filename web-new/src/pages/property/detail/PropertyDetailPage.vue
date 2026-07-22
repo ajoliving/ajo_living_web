@@ -19,7 +19,6 @@ import {
   fetchPropertySaleContactAccess,
   fetchPropertySaleDetail,
   fetchSimilarPropertySales,
-  reportPropertySale,
   unfavoritePropertySale,
 } from '@/httpapis/properties';
 import type { ContactAccessResult, PropertyListingDetailResponse, PropertyListingSummaryResponse } from '@/model/property';
@@ -37,7 +36,6 @@ import {
   resolvePropertyImages,
   resolvePropertyPrice,
   resolvePropertyPriceText,
-  resolvePropertyRooms,
   resolvePropertyTagLabels,
   resolvePropertyTitle,
   resolvePropertyTransactionType,
@@ -58,7 +56,6 @@ const loading = ref(false);
 const actionMessage = ref('');
 const errorMessage = ref('');
 const appointmentOpen = ref(route.query.action === 'appointment');
-const reportOpen = ref(false);
 const openingChat = ref(false);
 
 const saleFieldProfile = computed(() =>
@@ -99,6 +96,7 @@ const tags = computed<PropertyTag[]>(() => {
 interface DetailStat {
   value: string;
   label: string;
+  note?: string;
 }
 const stats = computed<DetailStat[]>(() => {
   const sale = listing.value?.property_sale;
@@ -108,13 +106,19 @@ const stats = computed<DetailStat[]>(() => {
   const profile = saleFieldProfile.value;
   const result: DetailStat[] = [];
   if (profile.showUsableArea || profile.showGrossArea) {
-    const areaLabel = profile.requiredArea === 'gross'
-      ? t('property.publicDetail.grossArea')
-      : t('property.publicDetail.usableArea');
-    const areaValue = profile.requiredArea === 'gross' && sale.gross_area_sqft
-      ? sale.gross_area_sqft
-      : resolvePropertyArea(listing.value as PropertyListingSummaryResponse || emptyListing());
-    result.push({ value: areaValue.toLocaleString(preferenceStore.locale), label: areaLabel });
+    const useGrossArea = profile.requiredArea === 'gross' || sale.area_mode === 'gross';
+    const areaValue = useGrossArea
+      ? sale.gross_area_sqft || sale.usable_area_sqft
+      : sale.usable_area_sqft || sale.gross_area_sqft || 0;
+    result.push({
+      value: areaValue.toLocaleString(preferenceStore.locale),
+      label: useGrossArea
+        ? t('property.publicDetail.grossArea')
+        : t('property.publicDetail.usableArea'),
+      note: sale.property_attributes?.area_unverified === 'yes'
+        ? t('property.publicDetail.areaUnverified')
+        : undefined,
+    });
   }
   if (profile.showRooms) {
     result.push({
@@ -152,17 +156,9 @@ const buildingInfo = computed<BuildingInfo[]>(() => {
     return [];
   }
   const profile = saleFieldProfile.value;
-  const result: BuildingInfo[] = [
-    { label: t('property.publicDetail.reference'), value: sale.property_no || '-' },
-  ];
+  const result: BuildingInfo[] = [];
   if (sale.property_attributes?.lot_number) {
     result.push({ label: t('property.publicDetail.lotNumber'), value: sale.property_attributes.lot_number });
-  }
-  if (sale.property_attributes?.area_unverified === 'yes') {
-    result.push({
-      label: t('property.publicDetail.areaData'),
-      value: t('property.publicDetail.unverified'),
-    });
   }
   if (sale.property_attributes?.new_completion === 'yes') {
     result.push({
@@ -277,6 +273,13 @@ const similarListings = computed<SimilarListing[]>(() =>
 const title = computed(() => listing.value
   ? resolvePropertyTitle(listing.value, preferenceStore.locale)
   : '');
+const communityName = computed(() => listing.value
+  ? resolvePropertyCommunityName(listing.value, preferenceStore.locale)
+  : '');
+const displayNumber = computed(() => String(listing.value?.display_number || '-'));
+const agentListingNumber = computed(() => listing.value?.publisher_identity_type === 'agent'
+  ? listing.value.property_sale?.property_no?.trim() || ''
+  : '');
 const address = computed(() => {
   const sale = listing.value?.property_sale;
   if (!sale) {
@@ -382,11 +385,6 @@ const appointmentErrors = reactive({
   contactName: '',
   contactPhone: '',
 });
-const reportForm = reactive({
-  reason: 'incorrect_info',
-  message: '',
-});
-
 // 8. 選擇圖片
 const selectImage = (index: number): void => {
   selectedImageIndex.value = index;
@@ -503,26 +501,7 @@ const submitAppointment = async (): Promise<void> => {
   }
 };
 
-// 15. 提交舉報
-const submitReport = async (): Promise<void> => {
-  if (!listing.value) return;
-  if (!readStoredAccessToken()) {
-    await router.push({ path: '/login', query: { redirect: route.fullPath } });
-    return;
-  }
-  try {
-    await reportPropertySale(listing.value.listing_id, {
-      reason: reportForm.reason,
-      message: reportForm.message.trim() || undefined,
-    });
-    reportOpen.value = false;
-    actionMessage.value = t('property.publicDetail.reportSuccess');
-  } catch {
-    actionMessage.value = t('property.publicDetail.reportError');
-  }
-};
-
-// 16. 格式化港幣
+// 15. 格式化港幣
 const formatHKD = (value: number): string =>
   new Intl.NumberFormat(preferenceStore.locale, {
     style: 'currency',
@@ -530,9 +509,10 @@ const formatHKD = (value: number): string =>
     maximumFractionDigits: 0,
   }).format(value);
 
-// 17. 空資料 fallback
+// 16. 空資料 fallback
 const emptyListing = (): PropertyListingSummaryResponse => ({
   listing_id: '',
+  display_number: 0,
   module: 'property_sale',
   title: '',
   summary: '',
@@ -597,7 +577,27 @@ onMounted(() => {
               </span>
             </div>
 
-            <h2 class="detail-title">{{ title }}</h2>
+            <div class="detail-heading">
+              <div>
+                <h2 class="detail-title">{{ title }}</h2>
+                <div
+                  v-if="communityName"
+                  class="detail-community"
+                >
+                  {{ communityName }}
+                </div>
+              </div>
+              <div class="detail-reference">
+                {{ displayNumber }}
+              </div>
+            </div>
+            <button
+              class="detail-favorite-button"
+              type="button"
+              @click="toggleFavorite"
+            >
+              {{ listing.is_favorite ? t('property.publicDetail.favorited') : t('property.publicDetail.favorite') }}
+            </button>
             <div class="detail-address">{{ address }}</div>
 
             <div class="detail-price-row">
@@ -615,6 +615,12 @@ onMounted(() => {
               >
                 <div class="detail-stat-val">{{ stat.value }}</div>
                 <div class="detail-stat-label">{{ stat.label }}</div>
+                <div
+                  v-if="stat.note"
+                  class="detail-stat-note"
+                >
+                  {{ stat.note }}
+                </div>
               </div>
             </div>
 
@@ -642,6 +648,13 @@ onMounted(() => {
               <p class="body-text">
                 {{ descriptionText }}
               </p>
+              <div
+                v-if="agentListingNumber"
+                class="detail-agent-listing-number"
+              >
+                <span>{{ t('property.publicDetail.agentListingNumber') }}</span>
+                <strong>{{ agentListingNumber }}</strong>
+              </div>
             </section>
 
             <section class="detail-section">
@@ -751,7 +764,13 @@ onMounted(() => {
                     class="detail-thumb pat"
                     :style="{ background: image.background }"
                     @click="selectImage(index + 1)"
-                  />
+                  >
+                    <img
+                      v-if="image.url"
+                      :src="image.url"
+                      :alt="title"
+                    >
+                  </div>
                   <div
                     v-if="extraImageCount > 0"
                     class="detail-thumb detail-thumb-more pat"
@@ -804,11 +823,6 @@ onMounted(() => {
                 <div class="detail-agent-label">WeChat</div>
                 <a v-if="safeAgentWechatURL" :href="safeAgentWechatURL" target="_blank" rel="noreferrer">{{ t('property.publicDetail.wechatLink') }}</a>
                 <a v-if="agentSnapshot?.wechat_qr_url" :href="agentSnapshot.wechat_qr_url" target="_blank" rel="noreferrer">{{ t('property.publicDetail.wechatQr') }}</a>
-              </div>
-              <div class="detail-agent-time">
-                <div class="detail-agent-label">{{ t('property.publicDetail.listingInfo') }}</div>
-                <div class="detail-agent-value">{{ resolvePropertyCommunityName(listing, preferenceStore.locale) }}</div>
-                <div class="detail-agent-note">{{ resolvePropertyRooms(listing, preferenceStore.locale) }}</div>
               </div>
               <div
                 v-if="unlockedContactDetails.length > 0"
@@ -918,27 +932,13 @@ onMounted(() => {
                   {{ openingChat ? t('property.publicDetail.opening') : t('property.publicDetail.message') }}
                 </button>
               </div>
-              <div class="detail-agent-actions">
-                <button
-                  class="detail-agent-contact"
-                  type="button"
-                  @click="toggleFavorite"
-                >
-                  {{ listing.is_favorite ? t('property.publicDetail.favorited') : t('property.publicDetail.favorite') }}
-                </button>
+              <div class="detail-agent-actions detail-agent-actions--single">
                 <button
                   class="detail-agent-contact"
                   type="button"
                   @click="appointmentOpen = !appointmentOpen"
                 >
                   {{ t('property.publicDetail.appointment') }}
-                </button>
-                <button
-                  class="detail-agent-contact"
-                  type="button"
-                  @click="reportOpen = !reportOpen"
-                >
-                  {{ t('property.publicDetail.report') }}
                 </button>
               </div>
               <form
@@ -1003,20 +1003,6 @@ onMounted(() => {
                   <textarea v-model="appointmentForm.message" :placeholder="t('property.publicDetail.extraInfoPlaceholder')" rows="3" />
                 </label>
                 <button type="submit">{{ t('property.publicDetail.submitAppointment') }}</button>
-              </form>
-              <form
-                v-if="reportOpen"
-                class="detail-form"
-                @submit.prevent="submitReport"
-              >
-                <select v-model="reportForm.reason">
-                  <option value="incorrect_info">{{ t('property.publicDetail.reportIncorrect') }}</option>
-                  <option value="unavailable">{{ t('property.publicDetail.reportUnavailable') }}</option>
-                  <option value="suspicious">{{ t('property.publicDetail.reportSuspicious') }}</option>
-                  <option value="other">{{ t('property.publicDetail.reportOther') }}</option>
-                </select>
-                <textarea v-model="reportForm.message" :placeholder="t('property.publicDetail.reportMessagePlaceholder')" rows="3" />
-                <button type="submit">{{ t('property.publicDetail.submitReport') }}</button>
               </form>
             </div>
 
@@ -1202,12 +1188,52 @@ onMounted(() => {
 
 /* 7. 標題與地址 */
 .detail-title {
-  margin: 0 0 6px;
+  margin: 0;
   font-family: var(--font);
   font-size: 28px;
   font-weight: 500;
   line-height: 1.25;
   color: var(--ink);
+}
+
+.detail-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detail-favorite-button {
+  min-height: 36px;
+  margin: 12px 0;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.detail-favorite-button:hover {
+  border-color: var(--brand-mid);
+  color: var(--brand);
+}
+
+.detail-community {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.detail-reference {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: right;
 }
 
 .detail-address {
@@ -1277,6 +1303,12 @@ onMounted(() => {
   color: var(--ink-3);
 }
 
+.detail-stat-note {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
 /* 10. 區段 */
 .detail-section {
   border-top: 1px solid var(--g2);
@@ -1297,6 +1329,20 @@ onMounted(() => {
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--ink-3);
+}
+
+.detail-agent-listing-number {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.detail-agent-listing-number strong {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 /* 10.1 右欄 label-text 小標題（全域樣式，未被 detail-section 覆蓋） */
@@ -1370,7 +1416,7 @@ onMounted(() => {
 
 .detail-main-img {
   width: 100%;
-  height: 300px;
+  height: 400px;
   border-radius: 7px;
   cursor: pointer;
   margin-bottom: 8px;
@@ -1393,7 +1439,7 @@ onMounted(() => {
 }
 
 .detail-thumb {
-  height: 86px;
+  height: 112px;
   border-radius: 6px;
   cursor: pointer;
   background: #f3f3f3;
@@ -1540,6 +1586,10 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.detail-agent-actions--single {
+  grid-template-columns: 1fr;
 }
 
 .detail-agent-contact {
@@ -1764,16 +1814,26 @@ onMounted(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .detail-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .detail-reference {
+    text-align: left;
+  }
+
   .binfo-grid {
     grid-template-columns: 1fr;
   }
 
   .detail-main-img {
-    height: 220px;
+    height: 260px;
   }
 
   .detail-thumb {
-    height: 64px;
+    height: 76px;
   }
 
   .detail-price-main {

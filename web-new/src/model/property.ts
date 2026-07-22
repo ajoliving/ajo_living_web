@@ -220,6 +220,7 @@ export interface ServicedApartmentPayload {
 // 7. 定義物業列表項
 export interface PropertyListingSummaryResponse {
   listing_id: string;
+  display_number: number;
   module: 'property_sale' | 'serviced_apartment';
   title: string;
   summary: string;

@@ -328,6 +328,7 @@ type ServicedApartmentPayload struct {
 // 12. PropertyListingSummary defines public list payload for property channels.
 type PropertyListingSummary struct {
 	ListingID             string                    `json:"listing_id"`
+	DisplayNumber         int64                     `json:"display_number"`
 	Module                string                    `json:"module"`
 	Title                 string                    `json:"title"`
 	Summary               string                    `json:"summary"`
