@@ -1,6 +1,6 @@
 <!--
  * 登入頁表單面板。
- * 1. 展示統一帳戶密碼登入與住戶註冊表單。
+ * 1. 展示統一帳戶密碼登入與用戶註冊表單。
  * 2. 將表單輸入與操作事件回傳給頁面入口。
 -->
 <script setup lang="ts">
@@ -20,6 +20,8 @@ interface LoginFormPanelProps {
   chiName: string;
   email: string;
   password: string;
+  confirmPassword: string;
+  username: string;
   phone: string;
   phoneCountryCode: string;
   publisherIdentityType: string;
@@ -28,9 +30,7 @@ interface LoginFormPanelProps {
   residenceFloor: string;
   residenceUnit: string;
   idCard: string;
-  remark: string;
-  gender: '' | 'M' | 'F';
-  isReceiveEmail: boolean;
+  shouldBindResidence: boolean;
   rememberMe: boolean;
   residenceFloorOptions: LoginSelectOption[];
   residenceUnitOptions: LoginSelectOption[];
@@ -51,6 +51,8 @@ const emit = defineEmits<{
   'update:chiName': [value: string];
   'update:email': [value: string];
   'update:password': [value: string];
+  'update:confirmPassword': [value: string];
+  'update:username': [value: string];
   'update:phone': [value: string];
   'update:phoneCountryCode': [value: string];
   'update:publisherIdentityType': [value: string];
@@ -59,19 +61,17 @@ const emit = defineEmits<{
   'update:residenceFloor': [value: string];
   'update:residenceUnit': [value: string];
   'update:idCard': [value: string];
-  'update:remark': [value: string];
-  'update:gender': [value: '' | 'M' | 'F'];
-  'update:isReceiveEmail': [value: boolean];
+  'update:shouldBindResidence': [value: boolean];
   'update:rememberMe': [value: boolean];
   'sign-out': [];
   'submit-login': [];
   'forgot-password': [];
-  'load-buildings': [];
   'toggle-email-action': [];
 }>();
 
 const { t } = useI18n();
 const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 
 // 1. 讀取文字輸入值
 const readInputValue = (event: Event): string => (event.target as HTMLInputElement).value;
@@ -83,6 +83,11 @@ const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputE
 const togglePasswordVisibility = (): void => {
   showPassword.value = !showPassword.value;
 };
+
+// 4. 切換確認密碼顯示狀態
+const toggleConfirmPasswordVisibility = (): void => {
+  showConfirmPassword.value = !showConfirmPassword.value;
+};
 </script>
 
 <template>
@@ -92,12 +97,6 @@ const togglePasswordVisibility = (): void => {
         <h2 class="font-display text-3xl leading-tight text-text">
           {{ props.emailAction === 'register' ? t('auth.residentRegister') : t('auth.residentLogin') }}
         </h2>
-        <p
-          v-if="props.emailAction === 'login'"
-          class="mt-3 text-base leading-7 text-text-muted"
-        >
-          {{ t('auth.note') }}
-        </p>
       </div>
 
       <form
@@ -105,18 +104,43 @@ const togglePasswordVisibility = (): void => {
         @submit.prevent="emit('submit-login')"
       >
         <template v-if="props.emailAction === 'register'">
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.engName') }}</span>
+          <label class="block form-field--required">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.publisherIdentityType') }}</span>
+            <div class="group relative">
+              <select
+                :value="props.publisherIdentityType"
+                class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
+                @change="emit('update:publisherIdentityType', readInputValue($event))"
+              >
+                <option
+                  v-for="option in props.publisherIdentityOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+              <AppIcon
+                name="chevron-down"
+                :size="20"
+                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
+              />
+            </div>
+          </label>
+
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.username }]">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.username') }}</span>
             <div class="group relative">
               <input
-                :value="props.engName"
+                :value="props.username"
                 class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.engNamePlaceholder')"
-                autocomplete="name"
-                :aria-invalid="Boolean(props.validationErrors.engName)"
+                :placeholder="t('auth.registerUsernamePlaceholder')"
+                autocapitalize="none"
+                autocomplete="username"
+                :aria-invalid="Boolean(props.validationErrors.username)"
                 spellcheck="false"
                 type="text"
-                @input="emit('update:engName', readInputValue($event))"
+                @input="emit('update:username', readInputValue($event))"
               >
               <AppIcon
                 name="user"
@@ -124,56 +148,7 @@ const togglePasswordVisibility = (): void => {
                 class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
               />
             </div>
-            <small v-if="props.validationErrors.engName" class="form-field-error-message">{{ t(props.validationErrors.engName) }}</small>
-          </label>
-
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
-              {{ t('auth.chiName') }}
-              <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
-            </span>
-            <div class="group relative">
-              <input
-                :value="props.chiName"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.chiNamePlaceholder')"
-                autocomplete="name"
-                type="text"
-                @input="emit('update:chiName', readInputValue($event))"
-              >
-              <AppIcon
-                name="user"
-                :size="20"
-                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
-              />
-            </div>
-          </label>
-
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
-            <div class="group relative">
-              <input
-                :value="props.password"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.passwordPlaceholder')"
-                autocomplete="new-password"
-                :aria-invalid="Boolean(props.validationErrors.password)"
-                :type="showPassword ? 'text' : 'password'"
-                @input="emit('update:password', readInputValue($event))"
-              >
-              <button
-                type="button"
-                class="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition hover:bg-surface hover:text-primary"
-                :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
-                @click="togglePasswordVisibility"
-              >
-                <AppIcon
-                  :name="showPassword ? 'view-off' : 'view'"
-                  :size="18"
-                />
-              </button>
-            </div>
-            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
+            <small v-if="props.validationErrors.username" class="form-field-error-message">{{ t(props.validationErrors.username) }}</small>
           </label>
 
           <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
@@ -234,105 +209,123 @@ const togglePasswordVisibility = (): void => {
             <small v-if="props.validationErrors.email" class="form-field-error-message">{{ t(props.validationErrors.email) }}</small>
           </label>
 
-          <label class="block form-field--required">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.publisherIdentityType') }}</span>
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
-              <select
-                :value="props.publisherIdentityType"
-                class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
-                @change="emit('update:publisherIdentityType', readInputValue($event))"
-              >
-                <option
-                  v-for="option in props.publisherIdentityOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-              <AppIcon
-                name="chevron-down"
-                :size="20"
-                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary"
-              />
-            </div>
-          </label>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="block">
-              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
-                {{ t('auth.gender') }}
-                <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
-              </span>
-              <div class="group relative">
-                <select
-                  :value="props.gender"
-                  class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
-                  @change="emit('update:gender', readInputValue($event) as '' | 'M' | 'F')"
-                >
-                  <option value="">{{ t('auth.genderPlaceholder') }}</option>
-                  <option value="M">{{ t('auth.genderMale') }}</option>
-                  <option value="F">{{ t('auth.genderFemale') }}</option>
-                </select>
-                <AppIcon name="chevron-down" :size="20" class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted" />
-              </div>
-            </label>
-
-            <label class="block">
-              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
-                {{ t('auth.idCard') }}
-                <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
-              </span>
               <input
-                :value="props.idCard"
-                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-                :placeholder="t('auth.idCardPlaceholder')"
-                autocomplete="off"
-                type="text"
-                @input="emit('update:idCard', readInputValue($event))"
+                :value="props.password"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.passwordPlaceholder')"
+                autocomplete="new-password"
+                :aria-invalid="Boolean(props.validationErrors.password)"
+                :type="showPassword ? 'text' : 'password'"
+                @input="emit('update:password', readInputValue($event))"
               >
-            </label>
-          </div>
-
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
-              {{ t('auth.remark') }}
-              <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
-            </span>
-            <textarea
-              :value="props.remark"
-              class="login-form-input login-form-textarea w-full rounded-lg border-none bg-surface-raised px-4 py-3 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
-              :placeholder="t('auth.remarkPlaceholder')"
-              rows="2"
-              @input="emit('update:remark', readInputValue($event))"
-            />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition hover:bg-surface hover:text-primary"
+                :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+                @click="togglePasswordVisibility"
+              >
+                <AppIcon :name="showPassword ? 'view-off' : 'view'" :size="18" />
+              </button>
+            </div>
+            <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
           </label>
 
-          <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-text-muted">
-            <input
-              :checked="props.isReceiveEmail"
-              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-              type="checkbox"
-              @change="emit('update:isReceiveEmail', readCheckboxValue($event))"
-            >
-            <span>{{ t('auth.receiveEmail') }}</span>
+          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.confirmPassword }]">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.confirmPassword') }}</span>
+            <div class="group relative">
+              <input
+                :value="props.confirmPassword"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.confirmPasswordPlaceholder')"
+                autocomplete="new-password"
+                :aria-invalid="Boolean(props.validationErrors.confirmPassword)"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                @input="emit('update:confirmPassword', readInputValue($event))"
+              >
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-muted transition hover:bg-surface hover:text-primary"
+                :aria-label="showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+                @click="toggleConfirmPasswordVisibility"
+              >
+                <AppIcon :name="showConfirmPassword ? 'view-off' : 'view'" :size="18" />
+              </button>
+            </div>
+            <small v-if="props.validationErrors.confirmPassword" class="form-field-error-message">{{ t(props.validationErrors.confirmPassword) }}</small>
           </label>
 
           <template v-if="props.publisherIdentityType === 'personal'">
-          <label class="block">
+            <label class="login-residence-checkbox">
+              <input
+                :checked="props.shouldBindResidence"
+                type="checkbox"
+                @change="emit('update:shouldBindResidence', readCheckboxValue($event))"
+              >
+              <span>{{ t('auth.bindAjoBuilding') }}</span>
+            </label>
+
+            <template v-if="props.shouldBindResidence">
+              <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
+                <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.engName') }}</span>
+                <div class="group relative">
+                  <input
+                    :value="props.engName"
+                    class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                    :placeholder="t('auth.engNamePlaceholder')"
+                    autocomplete="name"
+                    :aria-invalid="Boolean(props.validationErrors.engName)"
+                    spellcheck="false"
+                    type="text"
+                    @input="emit('update:engName', readInputValue($event))"
+                  >
+                  <AppIcon name="user" :size="20" class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary" />
+                </div>
+                <small v-if="props.validationErrors.engName" class="form-field-error-message">{{ t(props.validationErrors.engName) }}</small>
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
+                  {{ t('auth.chiName') }}
+                  <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
+                </span>
+                <div class="group relative">
+                  <input
+                    :value="props.chiName"
+                    class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                    :placeholder="t('auth.chiNamePlaceholder')"
+                    autocomplete="name"
+                    type="text"
+                    @input="emit('update:chiName', readInputValue($event))"
+                  >
+                  <AppIcon name="user" :size="20" class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary" />
+                </div>
+              </label>
+
+              <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.idCard }]">
+                <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.idCard') }}</span>
+                <input
+                  :value="props.idCard"
+                  class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                  :placeholder="t('auth.idCardPlaceholder')"
+                  autocomplete="off"
+                  :aria-invalid="Boolean(props.validationErrors.idCard)"
+                  type="text"
+                  @input="emit('update:idCard', readInputValue($event))"
+                >
+                <small v-if="props.validationErrors.idCard" class="form-field-error-message">{{ t(props.validationErrors.idCard) }}</small>
+              </label>
+          <label class="block form-field--required">
             <span class="login-building-label mb-1.5 text-sm font-bold uppercase tracking-[0.16em] text-text">
               {{ t('auth.residenceBuilding') }}
-              <small class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small>
-              <small class="login-building-label__hint">
-                {{ t('auth.bindAjoPlatformDescription') }}
-              </small>
             </span>
             <div class="group relative">
               <select
                 :value="props.primaryCommunityId"
                 class="login-form-input login-form-select w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition focus:ring-1 focus:ring-primary"
                 @change="emit('update:primaryCommunityId', readInputValue($event))"
-                @focus="emit('load-buildings')"
               >
                 <option
                   v-for="option in props.buildingOptions"
@@ -352,7 +345,7 @@ const togglePasswordVisibility = (): void => {
 
           <div class="login-residence-hint">
             <span>{{ t('auth.residenceFloorUnit') }}</span>
-            <small>{{ t('auth.missingBuildingHint') }}</small>
+            <small v-if="props.validationErrors.residence" class="form-field-error-message">{{ t(props.validationErrors.residence) }}</small>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
@@ -404,6 +397,7 @@ const togglePasswordVisibility = (): void => {
               </div>
             </label>
           </div>
+          </template>
           </template>
         </template>
 
@@ -622,18 +616,24 @@ const togglePasswordVisibility = (): void => {
   text-transform: none;
 }
 
-.login-building-label {
-  display: block !important;
+.login-residence-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.login-building-label__hint {
-  color: rgb(var(--color-text-muted));
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 1.45;
-  margin-left: 0.45rem;
-  text-transform: none;
+.login-residence-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: rgb(var(--color-primary));
+}
+
+.login-building-label {
+  display: block !important;
 }
 
 .login-residence-hint {

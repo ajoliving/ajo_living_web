@@ -1,6 +1,6 @@
 /*
  * 認證模組繁體中文文案。
- * 1. 提供統一登入、住戶註冊及密碼重設介面文字。
+ * 1. 提供統一登入、用戶註冊及密碼重設介面文字。
  * 2. 維持與英文語系相同的欄位結構。
  */
 export default {
@@ -31,6 +31,8 @@ export default {
   emailPlaceholder: 'resident' + '@' + 'example.com',
   password: '密碼',
   passwordPlaceholder: '請輸入密碼',
+  confirmPassword: '確認密碼',
+  confirmPasswordPlaceholder: '請再次輸入密碼',
   emailOtp: '電郵驗證碼',
   emailOtpPlaceholder: '請輸入電郵驗證碼',
   engName: '英文姓名',
@@ -58,6 +60,7 @@ export default {
   residenceUnit: '單位',
   residenceUnitPlaceholder: '請選擇單位',
   residenceUnitLoading: '正在載入單位',
+  bindAjoBuilding: '綁定大廈（適用於 AJO iSmart 大廈）',
   bindAjoPlatformDescription: '*用戶亦可註冊後於會員中心綁定',
   missingBuildingHint: '如您的大廈未有顯示，可於會員中心提交資料。',
   optionalFieldHint: '（選填）',
@@ -77,9 +80,8 @@ export default {
   requestOtp: '取得驗證碼',
   submit: '登入',
   registerSubmit: '建立帳戶',
-  note: '輸入手提電話、電郵或 username，系統會自動識別帳戶類型。',
   residentLogin: '歡迎回來 AJO Living！',
-  residentRegister: '住戶註冊',
+  residentRegister: '用戶註冊',
   activeSession: '目前帳戶',
   securityTitle: '安全登入',
   securityDescription: '電郵驗證碼與密碼登入用於會員登入與身份校驗。',
@@ -116,9 +118,13 @@ export default {
   passwordRequired: '請填寫密碼。',
   usernamePasswordRequired: '請填寫正確用戶名稱與密碼。',
   phonePasswordRequired: '請填寫正確手提電話與密碼。',
-  registerRequiredFields: '請填寫英文姓名、正確手提電話與至少 8 個字元的密碼。',
+  registerRequiredFields: '請填寫用戶名稱、正確手提電話與至少 8 個字元的密碼。',
   registerEnglishNameInvalid: '請輸入 2 至 120 個字元的英文姓名。',
+  idCardRequired: '請輸入身份證或證件號碼。',
+  registerUsernameInvalid: '用戶名稱須為 2 至 120 個字元，且不可包含空格。',
   registerPasswordTooShort: '請輸入至少 8 個字元的密碼。',
+  registerPasswordMismatch: '兩次輸入的密碼不一致。',
+  residenceBindingRequired: '請選擇大廈、樓層及單位以提交綁定申請。',
   otpSent: '驗證碼已發送。',
   otpPreview: '驗證碼：{code}',
   signInSuccess: '登入成功。',

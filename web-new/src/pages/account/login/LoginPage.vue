@@ -1,7 +1,7 @@
 <!--
  * 登入頁主入口。
- * 1. 組裝登入主視覺與住戶登入/註冊表單。
- * 2. 對接真實認證接口、住戶註冊大廈與單位選項。
+ * 1. 組裝登入主視覺與用戶登入/註冊表單。
+ * 2. 對接真實認證接口、用戶註冊大廈與單位選項。
  * 3. 維持單一路由 page 負責登入頁資料流。
 -->
 <script setup lang="ts">
@@ -15,7 +15,6 @@ const {
   emailAction,
   emailActionSwitchLabel,
   emailPlaceholder,
-  ensureBuildingsLoaded,
   footerPrompt,
   formState,
   handleForgotPassword,
@@ -44,6 +43,8 @@ const {
         v-model:chi-name="formState.chiName"
         v-model:email="formState.email"
         v-model:password="formState.password"
+        v-model:confirm-password="formState.confirmPassword"
+        v-model:username="formState.username"
         v-model:phone="formState.phone"
         v-model:phone-country-code="formState.phoneCountryCode"
         v-model:publisher-identity-type="formState.publisherIdentityType"
@@ -52,9 +53,7 @@ const {
         v-model:residence-floor="formState.residenceFloor"
         v-model:residence-unit="formState.residenceUnit"
         v-model:id-card="formState.idCard"
-        v-model:remark="formState.remark"
-        v-model:gender="formState.gender"
-        v-model:is-receive-email="formState.isReceiveEmail"
+        v-model:should-bind-residence="formState.shouldBindResidence"
         v-model:remember-me="rememberMe"
         :email-action="emailAction"
         :email-action-switch-label="emailActionSwitchLabel"
@@ -71,7 +70,6 @@ const {
         :submit-label="submitLabel"
         :validation-errors="validationErrors"
         @forgot-password="handleForgotPassword"
-        @load-buildings="ensureBuildingsLoaded"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"
         @toggle-email-action="toggleEmailAction"

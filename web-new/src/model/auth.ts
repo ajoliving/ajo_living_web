@@ -77,6 +77,7 @@ export interface EmailPasswordPayload {
 export interface RegisterEmailAccountPayload {
   email: string;
   password: string;
+  username?: string;
   eng_name: string;
   chi_name?: string;
   phone_country_code: string;

@@ -1,6 +1,6 @@
 /*
  * Authentication module English copy.
- * 1. Provides unified sign-in, resident registration, and password reset text.
+ * 1. Provides unified sign-in, user registration, and password reset text.
  * 2. Keeps the same field structure as the Traditional Chinese locale.
  */
 export default {
@@ -31,6 +31,8 @@ export default {
   emailPlaceholder: 'resident' + '@' + 'example.com',
   password: 'Password',
   passwordPlaceholder: 'Enter your password',
+  confirmPassword: 'Confirm password',
+  confirmPasswordPlaceholder: 'Enter your password again',
   emailOtp: 'Email code',
   emailOtpPlaceholder: 'Enter email verification code',
   engName: 'English name',
@@ -58,6 +60,7 @@ export default {
   residenceUnit: 'Unit',
   residenceUnitPlaceholder: 'Select unit',
   residenceUnitLoading: 'Loading units',
+  bindAjoBuilding: 'Bind building (for AJO iSmart buildings)',
   bindAjoPlatformDescription: '*Users can also bind it in Member Centre after registration',
   missingBuildingHint: 'If your building is not listed, submit the information in Member Centre.',
   optionalFieldHint: '(Optional)',
@@ -77,9 +80,8 @@ export default {
   requestOtp: 'Request OTP',
   submit: 'Sign in',
   registerSubmit: 'Create account',
-  note: 'Enter your mobile, email, or username. The account type is detected automatically.',
   residentLogin: 'Welcome back, AJO Living!',
-  residentRegister: 'Resident Register',
+  residentRegister: 'User registration',
   activeSession: 'Current account',
   securityTitle: 'Secure sign-in',
   securityDescription: 'Email verification code and password sign-in are used for member sign-in and identity checks.',
@@ -116,9 +118,13 @@ export default {
   passwordRequired: 'Password is required.',
   usernamePasswordRequired: 'A valid user name and password are required.',
   phonePasswordRequired: 'A valid phone number and password are required.',
-  registerRequiredFields: 'English name, valid phone number, and a password with at least 8 characters are required.',
+  registerRequiredFields: 'A user name, valid phone number, and a password with at least 8 characters are required.',
   registerEnglishNameInvalid: 'Enter an English name between 2 and 120 characters.',
+  idCardRequired: 'Enter an ID card or document number.',
+  registerUsernameInvalid: 'Enter a user name between 2 and 120 characters without spaces.',
   registerPasswordTooShort: 'Enter a password with at least 8 characters.',
+  registerPasswordMismatch: 'The passwords do not match.',
+  residenceBindingRequired: 'Select a building, floor, and unit to submit the binding application.',
   otpSent: 'Verification code sent.',
   otpPreview: 'Verification code: {code}',
   signInSuccess: 'Signed in successfully.',

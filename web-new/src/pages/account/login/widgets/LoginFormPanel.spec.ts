@@ -1,7 +1,7 @@
 /*
  * 登入頁表單面板測試。
  * 1. 確認登入狀態只展示單一帳戶輸入，不再展示登入方式分頁。
- * 2. 確認住戶註冊仍保留手提電話欄位。
+ * 2. 確認用戶註冊的綁定大廈欄位按勾選狀態展開。
  */
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -20,6 +20,8 @@ const createProps = () => ({
   chiName: '',
   email: '',
   password: '',
+  confirmPassword: '',
+  username: '',
   phone: '',
   phoneCountryCode: '+852',
   publisherIdentityType: 'personal',
@@ -28,9 +30,7 @@ const createProps = () => ({
   residenceFloor: '',
   residenceUnit: '',
   idCard: '',
-  remark: '',
-  gender: '' as const,
-  isReceiveEmail: true,
+  shouldBindResidence: false,
   rememberMe: true,
   residenceFloorOptions: [],
   residenceUnitOptions: [],
@@ -57,7 +57,7 @@ describe('LoginFormPanel', () => {
     expect(wrapper.text()).toContain('手提電話 / 電郵 / iSmart username');
   });
 
-  it('keeps the mobile field in resident registration', async () => {
+  it('expands the building-binding fields only after the checkbox is selected', async () => {
     const wrapper = mount(LoginFormPanel, {
       props: createProps(),
       global: { plugins: [i18n] },
@@ -66,6 +66,13 @@ describe('LoginFormPanel', () => {
     await wrapper.setProps({ emailAction: 'register' });
 
     expect(wrapper.find('input[type="tel"]').exists()).toBe(true);
-    expect(wrapper.find('input[autocomplete="username"]').exists()).toBe(false);
+    expect(wrapper.find('input[autocomplete="username"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('綁定大廈');
+    expect(wrapper.text()).not.toContain('英文姓名');
+
+    await wrapper.setProps({ shouldBindResidence: true });
+
+    expect(wrapper.text()).toContain('英文姓名');
+    expect(wrapper.text()).toContain('大廈');
   });
 });

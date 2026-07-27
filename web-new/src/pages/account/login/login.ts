@@ -1,6 +1,6 @@
 /*
  * 登入頁 - 狀態與資料流程。
- * 1. 管理統一帳戶登入與住戶註冊表單狀態。
+ * 1. 管理統一帳戶登入與用戶註冊表單狀態。
  * 2. 登入只提交一次帳戶識別與密碼，由後端辨識電話、電郵或 username 並處理回退。
  * 3. 統一錯誤提示與登入成功後跳轉。
  */
@@ -22,6 +22,8 @@ export type LoginEmailAction = 'login' | 'register';
 export interface LoginFormState {
   email: string;
   password: string;
+  confirmPassword: string;
+  username: string;
   engName: string;
   chiName: string;
   phone: string;
@@ -33,9 +35,7 @@ export interface LoginFormState {
   residenceFloor: string;
   residenceUnit: string;
   idCard: string;
-  remark: string;
-  gender: '' | 'M' | 'F';
-  isReceiveEmail: boolean;
+  shouldBindResidence: boolean;
 }
 
 export interface LoginHeroImage {
@@ -56,11 +56,15 @@ interface ParsedPhoneInput {
 
 export type RegistrationValidationErrorKey =
   | 'auth.invalidEmail'
+  | 'auth.registerUsernameInvalid'
   | 'auth.registerEnglishNameInvalid'
+  | 'auth.idCardRequired'
   | 'auth.invalidPhone'
-  | 'auth.registerPasswordTooShort';
+  | 'auth.registerPasswordTooShort'
+  | 'auth.registerPasswordMismatch'
+  | 'auth.residenceBindingRequired';
 
-export type LoginFormField = 'email' | 'engName' | 'ismartAccount' | 'password' | 'phone';
+export type LoginFormField = 'email' | 'username' | 'engName' | 'idCard' | 'ismartAccount' | 'password' | 'confirmPassword' | 'phone' | 'residence';
 
 export type LoginValidationErrorKey = RegistrationValidationErrorKey | 'auth.accountRequired' | 'auth.passwordRequired';
 
@@ -89,6 +93,8 @@ const LOGIN_HERO_IMAGES: readonly LoginHeroImage[] = [
 const createInitialFormState = (): LoginFormState => ({
   email: '',
   password: '',
+  confirmPassword: '',
+  username: '',
   engName: '',
   chiName: '',
   phone: '',
@@ -100,9 +106,7 @@ const createInitialFormState = (): LoginFormState => ({
   residenceFloor: '',
   residenceUnit: '',
   idCard: '',
-  remark: '',
-  gender: '',
-  isReceiveEmail: true,
+  shouldBindResidence: false,
 });
 
 // 2. 解析手提電話輸入
@@ -226,20 +230,41 @@ const isValidEngNameInput = (value: string): boolean => {
   return engName.length >= 2 && engName.length <= 120;
 };
 
+// 4.1 檢查用戶名稱格式
+const isValidUsernameInput = (value: string): boolean => {
+  const username = value.trim();
+  return username.length >= 2 && username.length <= 120 && !/\s/.test(username);
+};
+
 // 5.1 逐項判斷註冊資料錯誤，避免使用無法定位問題的合併提示
 export const resolveRegistrationValidationError = (
   email: string,
+  username: string,
   engName: string,
   phoneCountryCode: string,
   phone: string,
   password: string,
+  confirmPassword: string,
+  shouldBindResidence = false,
+  primaryCommunityID = '',
+  residenceFloor = '',
+  residenceUnit = '',
+  idCard = '',
 ): RegistrationValidationErrorKey | null => {
+  if (!isValidUsernameInput(username)) {
+    return 'auth.registerUsernameInvalid';
+  }
+
   if (!isValidEmailInput(email)) {
     return 'auth.invalidEmail';
   }
 
-  if (!isValidEngNameInput(engName)) {
+  if (shouldBindResidence && !isValidEngNameInput(engName)) {
     return 'auth.registerEnglishNameInvalid';
+  }
+
+  if (shouldBindResidence && !idCard.trim()) {
+    return 'auth.idCardRequired';
   }
 
   if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
@@ -250,30 +275,57 @@ export const resolveRegistrationValidationError = (
     return 'auth.registerPasswordTooShort';
   }
 
+  if (password !== confirmPassword) {
+    return 'auth.registerPasswordMismatch';
+  }
+
+  if (shouldBindResidence && (!primaryCommunityID.trim() || !residenceFloor.trim() || !residenceUnit.trim())) {
+    return 'auth.residenceBindingRequired';
+  }
+
   return null;
 };
 
 // 5.2 取得註冊欄位的完整校驗結果
 export const resolveRegistrationValidationErrors = (
   email: string,
+  username: string,
   engName: string,
   phoneCountryCode: string,
   phone: string,
   password: string,
+  confirmPassword: string,
+  shouldBindResidence = false,
+  primaryCommunityID = '',
+  residenceFloor = '',
+  residenceUnit = '',
+  idCard = '',
 ): LoginValidationErrors => {
   const errors: LoginValidationErrors = {};
 
+  if (!isValidUsernameInput(username)) {
+    errors.username = 'auth.registerUsernameInvalid';
+  }
   if (!isValidEmailInput(email)) {
     errors.email = 'auth.invalidEmail';
   }
-  if (!isValidEngNameInput(engName)) {
+  if (shouldBindResidence && !isValidEngNameInput(engName)) {
     errors.engName = 'auth.registerEnglishNameInvalid';
+  }
+  if (shouldBindResidence && !idCard.trim()) {
+    errors.idCard = 'auth.idCardRequired';
   }
   if (!isValidParsedPhone(parsePhoneFormInput(phoneCountryCode, phone))) {
     errors.phone = 'auth.invalidPhone';
   }
   if (password.trim().length < 8) {
     errors.password = 'auth.registerPasswordTooShort';
+  }
+  if (password !== confirmPassword) {
+    errors.confirmPassword = 'auth.registerPasswordMismatch';
+  }
+  if (shouldBindResidence && (!primaryCommunityID.trim() || !residenceFloor.trim() || !residenceUnit.trim())) {
+    errors.residence = 'auth.residenceBindingRequired';
   }
 
   return errors;
@@ -414,7 +466,21 @@ export const useLoginPage = () => {
 
   // 20. 清除已修正表單的校驗提示
   watch(
-    () => [formState.email, formState.engName, formState.ismartAccount, formState.password, formState.phone, formState.phoneCountryCode],
+    () => [
+      formState.email,
+      formState.username,
+      formState.engName,
+      formState.ismartAccount,
+      formState.password,
+      formState.confirmPassword,
+      formState.phone,
+      formState.phoneCountryCode,
+      formState.shouldBindResidence,
+      formState.primaryCommunityID,
+      formState.residenceFloor,
+      formState.residenceUnit,
+      formState.idCard,
+    ],
     () => {
       validationErrors.value = {};
     },
@@ -530,11 +596,28 @@ export const useLoginPage = () => {
     () => formState.publisherIdentityType,
     (accountType) => {
       if (accountType !== 'personal') {
+        formState.shouldBindResidence = false;
         formState.primaryCommunityID = '';
         formState.residenceFloor = '';
         formState.residenceUnit = '';
         buildingUnits.value = [];
       }
+    },
+  );
+
+  // 21.1 大廈綁定只在用戶主動勾選後載入並保留資料
+  watch(
+    () => formState.shouldBindResidence,
+    (shouldBindResidence) => {
+      if (shouldBindResidence) {
+        void ensureBuildingsLoaded();
+        return;
+      }
+
+      formState.primaryCommunityID = '';
+      formState.residenceFloor = '';
+      formState.residenceUnit = '';
+      buildingUnits.value = [];
     },
   );
 
@@ -562,7 +645,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 23. 載入住戶註冊大廈選項
+  // 23. 載入用戶註冊大廈選項
   const loadBuildings = async (): Promise<boolean> => {
     buildingsLoading.value = true;
     try {
@@ -577,7 +660,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 24. 按需載入住戶註冊大廈選項
+  // 24. 按需載入用戶註冊大廈選項
   const ensureBuildingsLoaded = async (): Promise<void> => {
     if (buildingsRequested || buildingsLoading.value) {
       return;
@@ -624,14 +707,20 @@ export const useLoginPage = () => {
     await router.push(redirect);
   };
 
-  // 26. 執行住戶註冊
+  // 26. 執行用戶註冊
   const handleRegisterSubmit = async (): Promise<void> => {
     validationErrors.value = resolveRegistrationValidationErrors(
       formState.email,
+      formState.username,
       formState.engName,
       formState.phoneCountryCode,
       formState.phone,
       formState.password,
+      formState.confirmPassword,
+      formState.shouldBindResidence,
+      formState.primaryCommunityID,
+      formState.residenceFloor,
+      formState.residenceUnit,
     );
     if (Object.keys(validationErrors.value).length > 0) {
       feedbackStore.pushToast(t('auth.formInvalid'), 'error');
@@ -645,30 +734,25 @@ export const useLoginPage = () => {
       const registrationPayload: RegisterEmailAccountPayload = {
         email: formState.email.trim(),
         password: formState.password,
-        eng_name: formState.engName.trim(),
+        username: formState.username.trim(),
+        eng_name: formState.shouldBindResidence ? formState.engName.trim() : formState.username.trim(),
         phone_country_code: phoneCountryCode,
         phone_number: phoneNumber,
         account_type: formState.publisherIdentityType,
-        is_receive_email: formState.isReceiveEmail,
-        primary_community_id: formState.primaryCommunityID.trim(),
-        primary_community_name: selectedBuildingName.value.trim(),
-        residence_floor: formState.residenceFloor.trim(),
-        residence_unit: formState.residenceUnit.trim(),
       };
       const chiName = formState.chiName.trim();
       const idCard = formState.idCard.trim();
-      const remark = formState.remark.trim();
       if (chiName) {
         registrationPayload.chi_name = chiName;
       }
       if (idCard) {
         registrationPayload.id_card = idCard;
       }
-      if (remark) {
-        registrationPayload.remark = remark;
-      }
-      if (formState.gender) {
-        registrationPayload.gender = formState.gender;
+      if (formState.shouldBindResidence) {
+        registrationPayload.primary_community_id = formState.primaryCommunityID.trim();
+        registrationPayload.primary_community_name = selectedBuildingName.value.trim();
+        registrationPayload.residence_floor = formState.residenceFloor.trim();
+        registrationPayload.residence_unit = formState.residenceUnit.trim();
       }
       await sessionStore.registerEmailAccount(registrationPayload);
       feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
@@ -729,12 +813,6 @@ export const useLoginPage = () => {
     formState.otp = '';
     validationErrors.value = {};
   };
-
-  watch(emailAction, (action) => {
-    if (action === 'register') {
-      void ensureBuildingsLoaded();
-    }
-  });
 
   onMounted(() => {
     void loadConfiguredHero();
