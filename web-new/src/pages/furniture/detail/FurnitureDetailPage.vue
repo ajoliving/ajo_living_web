@@ -278,7 +278,7 @@ const stats = computed(() => [
 /* 1. 頁面容器 */
 .furniture-detail-page {
   width: 100%;
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 2. 雙欄布局（對齊設計稿 .detail-wrap + #page-market-detail 覆蓋） */

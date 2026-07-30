@@ -60,9 +60,65 @@ func TestAuthServiceRejectsRegistrationWithoutEmail(t *testing.T) {
 	}
 }
 
+// 2.1 TestAuthServiceAllowsIndividualAgentRegistrationWithoutEmail verifies individual agents may use their licence username without an email address.
+func TestAuthServiceAllowsIndividualAgentRegistrationWithoutEmail(t *testing.T) {
+	runtimeValue := newAuthTestRuntime(t, nil)
+	result, err := NewAuthService(runtimeValue).RegisterWithEmail(context.Background(), EmailPasswordParams{
+		Password: "password123", EngName: "CHAN TAI MAN", Username: "E-123456",
+		PhoneCountryCode: "+852", PhoneNumber: "61110014", AccountType: AccountTypeIndividualAgent,
+	})
+	if err != nil || result.User.MemberStatus != "pending_profile" {
+		t.Fatalf("expected pending individual agent registration without email: %#v %v", result, err)
+	}
+	var credential model.UserCredential
+	if err := runtimeValue.DB.Where("user_id = ?", 1).First(&credential).Error; err != nil || credential.Email != nil {
+		t.Fatalf("expected empty email credential: %#v %v", credential, err)
+	}
+}
+
+// 2.2 TestAuthServiceChecksRegistrationAvailability verifies email and phone are checked independently before registration.
+func TestAuthServiceChecksRegistrationAvailability(t *testing.T) {
+	runtimeValue := newAuthTestRuntime(t, nil)
+	auth := NewAuthService(runtimeValue)
+	if _, err := auth.RegisterWithEmail(context.Background(), EmailPasswordParams{
+		Email: "registered@example.com", Password: "password123", EngName: "Registered User", Username: "registered-user",
+		PhoneCountryCode: "+852", PhoneNumber: "61110015", AccountType: AccountTypePersonal,
+	}); err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+
+	availability, err := auth.CheckRegistrationAvailability(context.Background(), RegistrationAvailabilityParams{
+		Email: "REGISTERED@example.com", PhoneCountryCode: "+852", PhoneNumber: "61110015",
+	})
+	if err != nil {
+		t.Fatalf("check used identities: %v", err)
+	}
+	if availability.EmailAvailable || availability.PhoneAvailable {
+		t.Fatalf("expected used identities to be unavailable: %#v", availability)
+	}
+
+	availability, err = auth.CheckRegistrationAvailability(context.Background(), RegistrationAvailabilityParams{
+		Email: "available@example.com", PhoneCountryCode: "+852", PhoneNumber: "61110016",
+	})
+	if err != nil {
+		t.Fatalf("check available identities: %v", err)
+	}
+	if !availability.EmailAvailable || !availability.PhoneAvailable {
+		t.Fatalf("expected unused identities to be available: %#v", availability)
+	}
+}
+
 // 3. TestAuthServiceRegistersAndLinksIsmartAccount verifies registration uses the direct iSmart API and saves its identity.
 func TestAuthServiceRegistersAndLinksIsmartAccount(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/api/v1/integration/auth/client/" {
+			if request.URL.Query().Get("user_id") != "88" {
+				t.Fatalf("unexpected iSmart client user id: %s", request.URL.Query().Get("user_id"))
+			}
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = response.Write([]byte(`{"status":"success","data":{"user_id":88,"username":"200123","phone":"61110005","email":"agent@example.com","client":{"cli_id":"200123","cli_legalentity":"LE","cli_name":"CHAN T. M.","cli_chi_name":"陳大文","cli_id_card":"A1234567","cli_tel":"61110005","cli_email":"agent@example.com","cli_sex":"M"}}}`))
+			return
+		}
 		if request.URL.Path != "/api/v1/integration/auth/register/" {
 			t.Fatalf("unexpected iSmart path: %s", request.URL.Path)
 		}

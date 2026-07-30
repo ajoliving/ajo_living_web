@@ -801,7 +801,7 @@ onMounted(() => {
   display: block;
   width: 100%;
   min-height: calc(100svh - var(--nav-h));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 .breadcrumb {
@@ -863,7 +863,7 @@ onMounted(() => {
 
 .detail-main {
   max-width: 100%;
-  background: var(--sur-2);
+  background: var(--sur);
   padding: 0;
   overflow: visible;
 }

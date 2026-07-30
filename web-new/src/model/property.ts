@@ -238,6 +238,33 @@ export interface PropertyListingSummaryResponse {
   serviced_apartment?: ServicedApartmentPayload | null;
   is_favorite?: boolean;
   agent_snapshot?: PropertyAgentSnapshot | null;
+  draft_points_paid?: number;
+  publish_points_due?: number;
+  publish_points_total?: number;
+}
+
+// 7.1 定義樓盤列表卡片展示資料
+export interface PropertyListingCardTag {
+  label: string;
+  dark?: boolean;
+}
+
+export interface PropertyListingCardViewModel {
+  id: string;
+  propertyType: string;
+  publisherLabel: string;
+  imageUrl?: string;
+  tags: PropertyListingCardTag[];
+  title: string;
+  location: string;
+  facts: string[];
+  priceKind: 'sale' | 'rent';
+  price: string;
+  priceUnit: string;
+  area: string;
+  areaPrice: string;
+  pills: string[];
+  favorite: boolean;
 }
 
 // 8. 定義物業詳情

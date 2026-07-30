@@ -84,7 +84,7 @@ func (s *ChatService) CreateOrReuseChat(ctx context.Context, userID int64, commu
 
 // 5. CreateOrReusePropertyChat creates or reuses a property listing chat.
 func (s *ChatService) CreateOrReusePropertyChat(ctx context.Context, channel PropertyChannel, userID int64, listingPublicID string) (map[string]any, error) {
-	listing, contact, err := s.propertyService.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
+	listing, _, err := s.propertyService.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,10 +94,6 @@ func (s *ChatService) CreateOrReusePropertyChat(ctx context.Context, channel Pro
 	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for chat")
 	}
-	if !contact.ShowChat {
-		return nil, errcode.New(errcode.CodeAuthForbidden, "chat is not enabled for this listing")
-	}
-
 	return s.createOrReuseListingChat(ctx, userID, listing, string(channel))
 }
 

@@ -10,6 +10,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,7 @@ import (
 
 	"ajoliving_web/http_service/internal/config"
 	"ajoliving_web/http_service/internal/database"
+	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
 	"ajoliving_web/http_service/internal/utils"
 )
@@ -137,7 +140,7 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		t.Fatal("expected incomplete draft publication to fail")
 	}
 
-	detail, err := propertyService.CreatePropertySale(context.Background(), UpsertPropertySaleParams{
+	createParams := UpsertPropertySaleParams{
 		OwnerUserID:           owner.ID,
 		Title:                 "仁英大廈高層放售",
 		TitleEn:               "High floor unit in Yan Yee Building",
@@ -174,6 +177,7 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 		ManagementFeeHKD:      1200,
 		PrivateNote:           "內部測試記事",
 		AdPackageCode:         "premium",
+		ChargeDraftSave:       true,
 		FeatureTags:           []string{"residential_private_estate", "near_mtr", "high_floor"},
 		ContactMethod:         "phone",
 		Images: []ListingImageInput{
@@ -195,12 +199,16 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 			ShowWhatsApp:    true,
 			ShowInquiryForm: true,
 		},
-	})
+	}
+	detail, err := propertyService.CreatePropertySale(context.Background(), createParams)
 	if err != nil {
 		t.Fatalf("create property sale: %v", err)
 	}
 	if detail.ListingID == "" || detail.PublicationStatus != "draft" {
 		t.Fatalf("unexpected draft detail: %#v", detail)
+	}
+	if detail.PointsCharged != PropertySaleDraftCost || detail.PointsBalanceAfter == nil || *detail.PointsBalanceAfter != 4400 {
+		t.Fatalf("unexpected property draft prepayment: %#v", detail)
 	}
 	if detail.PublisherIdentityType != "owner" {
 		t.Fatalf("expected profile owner identity to override request, got %q", detail.PublisherIdentityType)
@@ -214,16 +222,103 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if !detail.PropertySale.PriceReferenceOnly || detail.PropertySale.PriceNegotiable {
 		t.Fatalf("unexpected draft price flags: %#v", detail.PropertySale)
 	}
+	if detail.ContactSummary.EditableContact == nil ||
+		detail.ContactSummary.EditableContact.ContactNameZH != "測試業主" ||
+		detail.ContactSummary.EditableContact.Phone != "61234567" ||
+		detail.ContactSummary.EditableContact.Phone2 != "62345678" ||
+		detail.ContactSummary.EditableContact.WhatsApp != "61234567" {
+		t.Fatalf("owner draft detail did not return editable contact: %#v", detail.ContactSummary.EditableContact)
+	}
+	myItems, _, err := propertyService.ListMyProperties(context.Background(), PropertyChannelSale, owner.ID, PropertyListFilters{Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list owner property drafts: %v", err)
+	}
+	foundChargedDraft := false
+	for _, item := range myItems {
+		if item.ListingID != detail.ListingID {
+			continue
+		}
+		if item.DraftPointsPaid == nil || item.PublishPointsTotal == nil || item.PublishPointsDue == nil || *item.DraftPointsPaid != PropertySaleDraftCost || *item.PublishPointsTotal != PropertySalePublishCost || *item.PublishPointsDue != 400 {
+			t.Fatalf("unexpected owner publish charge summary: %#v", item)
+		}
+		foundChargedDraft = true
+		break
+	}
+	if !foundChargedDraft {
+		t.Fatal("expected charged draft in owner property list")
+	}
 
 	published, err := propertyService.PublishProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID)
 	if err != nil {
 		t.Fatalf("publish property sale: %v", err)
 	}
-	if published.PublicationStatus != "active" || published.PointsCharged != 1500 {
+	if published.PublicationStatus != "active" || published.PointsCharged != 400 {
 		t.Fatalf("unexpected published detail: %#v", published)
 	}
 	if published.PropertySale == nil || published.PropertySale.AdPackageCode != "premium" || published.PropertySale.AdWeight != 2 {
 		t.Fatalf("unexpected published sale payload: %#v", published.PropertySale)
+	}
+	var publishedListing model.Listing
+	if err := db.Where("public_id = ?", detail.ListingID).First(&publishedListing).Error; err != nil {
+		t.Fatalf("load published property sale: %v", err)
+	}
+	if publishedListing.ExpireAt == nil {
+		t.Fatal("expected published property sale expiry")
+	}
+	publishedExpiry := *publishedListing.ExpireAt
+
+	now = now.Add(time.Hour)
+	renewed, err := propertyService.RenewPropertySale(context.Background(), owner.ID, detail.ListingID)
+	if err != nil {
+		t.Fatalf("renew active property sale: %v", err)
+	}
+	if renewed.PointsCharged != 750 {
+		t.Fatalf("expected premium renewal to charge 750 points, got %#v", renewed)
+	}
+	if err := db.Where("public_id = ?", detail.ListingID).First(&publishedListing).Error; err != nil {
+		t.Fatalf("load renewed property sale: %v", err)
+	}
+	if publishedListing.ExpireAt == nil || !publishedListing.ExpireAt.Equal(publishedExpiry.AddDate(0, 1, 0)) {
+		t.Fatalf("expected calendar-month renewal from %s, got %#v", publishedExpiry, publishedListing.ExpireAt)
+	}
+
+	createParams.ListingPublicID = detail.ListingID
+	createParams.Title = "仁英大廈高層放售更新"
+	updatedActive, err := propertyService.UpdatePropertySale(context.Background(), createParams)
+	if err != nil {
+		t.Fatalf("update active property sale: %v", err)
+	}
+	if updatedActive.PointsCharged != 0 || updatedActive.Title != createParams.Title {
+		t.Fatalf("active update should save without charging before republish: %#v", updatedActive)
+	}
+
+	now = now.Add(time.Hour)
+	activeRepublished, err := propertyService.RepublishProperty(context.Background(), PropertyChannelSale, owner.ID, detail.ListingID)
+	if err != nil {
+		t.Fatalf("republish active property sale: %v", err)
+	}
+	if activeRepublished.PointsCharged != 750 || activeRepublished.Title != createParams.Title {
+		t.Fatalf("active republish should charge the premium half price: %#v", activeRepublished)
+	}
+	if err := db.Where("public_id = ?", detail.ListingID).First(&publishedListing).Error; err != nil {
+		t.Fatalf("load active republished property sale: %v", err)
+	}
+	if publishedListing.ExpireAt == nil || !publishedListing.ExpireAt.Equal(now.Add(30*24*time.Hour)) {
+		t.Fatalf("unexpected active republish expiry: %#v", publishedListing.ExpireAt)
+	}
+	var activeRepublishTransaction model.WalletTransaction
+	if err := db.Where("listing_id = ? AND action_type = ?", publishedListing.ID, WalletActionRepublish).Order("id desc").First(&activeRepublishTransaction).Error; err != nil {
+		t.Fatalf("load active republish transaction: %v", err)
+	}
+	if activeRepublishTransaction.Amount != 750 || activeRepublishTransaction.ActionType != WalletActionRepublish {
+		t.Fatalf("unexpected active republish transaction: %#v", activeRepublishTransaction)
+	}
+	publicDetail, err := propertyService.GetPropertyDetail(context.Background(), PropertyChannelSale, detail.ListingID, nil)
+	if err != nil {
+		t.Fatalf("load public property detail: %v", err)
+	}
+	if publicDetail.ContactSummary.EditableContact != nil {
+		t.Fatalf("public detail exposed editable contact: %#v", publicDetail.ContactSummary.EditableContact)
 	}
 
 	items, pagination, err := propertyService.ListPublicProperties(context.Background(), PropertyChannelSale, PropertyListFilters{Page: 1, PageSize: 10})
@@ -278,7 +373,7 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("republish hidden property sale: %v", err)
 	}
-	if republished.PublicationStatus != "active" || republished.BusinessStatus != "available" || republished.PointsCharged != 1500 {
+	if republished.PublicationStatus != "active" || republished.BusinessStatus != "available" || republished.PointsCharged != 750 {
 		t.Fatalf("unexpected republished detail: %#v", republished)
 	}
 
@@ -364,6 +459,11 @@ func TestValidateResidentialSaleModes(t *testing.T) {
 	missingCategory.FeatureTags = []string{"feature_mtr"}
 	if err := propertyService.validateSaleParams(missingCategory); err == nil {
 		t.Fatal("expected missing residential category tag to fail")
+	} else {
+		var validationError *errcode.AppError
+		if !errors.As(err, &validationError) || len(validationError.Errors) != 1 || validationError.Errors[0].Field != "feature_tags" {
+			t.Fatalf("expected feature_tags field validation error, got %#v", err)
+		}
 	}
 
 	saleWithStudentTag := agentSale
@@ -555,7 +655,7 @@ func TestPropertySaleDraftSaveChargesPoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create charged property draft: %v", err)
 	}
-	if draft.PublicationStatus != "draft" || draft.PointsCharged != 1000 || draft.PointsBalanceAfter == nil || *draft.PointsBalanceAfter != 1500 {
+	if draft.PublicationStatus != "draft" || draft.PointsCharged != PropertySaleDraftCost || draft.PointsBalanceAfter == nil || *draft.PointsBalanceAfter != 1900 {
 		t.Fatalf("unexpected charged draft detail: %#v", draft)
 	}
 
@@ -569,19 +669,10 @@ func TestPropertySaleDraftSaveChargesPoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update charged property draft: %v", err)
 	}
-	if updated.Title != "第二次草稿" || updated.PointsCharged != 1000 || updated.PointsBalanceAfter == nil || *updated.PointsBalanceAfter != 500 {
+	if updated.Title != "第二次草稿" || updated.PointsCharged != 0 || updated.PointsBalanceAfter != nil {
 		t.Fatalf("unexpected updated charged draft: %#v", updated)
 	}
 
-	now = now.Add(time.Second)
-	if _, err := propertyService.UpdatePropertySale(context.Background(), UpsertPropertySaleParams{
-		OwnerUserID:     owner.ID,
-		ListingPublicID: draft.ListingID,
-		Title:           "不應保存的草稿",
-		ChargeDraftSave: true,
-	}); err == nil {
-		t.Fatal("expected insufficient points draft save to fail")
-	}
 	retained, err := propertyService.GetPropertyDetail(context.Background(), PropertyChannelSale, draft.ListingID, &owner.ID)
 	if err != nil {
 		t.Fatalf("load retained property draft: %v", err)
@@ -593,17 +684,110 @@ func TestPropertySaleDraftSaveChargesPoints(t *testing.T) {
 	if err := db.Where("user_id = ?", owner.ID).First(&wallet).Error; err != nil {
 		t.Fatalf("load wallet: %v", err)
 	}
-	if wallet.Balance != 500 || wallet.TotalSpent != 2000 {
+	if wallet.Balance != 1900 || wallet.TotalSpent != PropertySaleDraftCost {
 		t.Fatalf("unexpected wallet after draft saves: %#v", wallet)
 	}
 }
 
-// 6. ptrInt returns an int pointer for optional area fields.
+// 6. TestCorrectPropertySaleDraftCharge verifies legacy draft overcharges are refunded once and credited correctly.
+func TestCorrectPropertySaleDraftCharge(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+utils.NewPublicID()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+
+	now := time.Date(2026, 7, 28, 10, 0, 0, 0, time.UTC)
+	runtime := &Runtime{Config: &config.Config{}, DB: db, Now: func() time.Time { return now }}
+	walletService := NewWalletService(runtime)
+	runtime.WalletService = walletService
+	propertyService := NewPropertyService(runtime)
+	owner := model.User{PublicID: utils.NewPublicID(), PhoneCountryCode: "+852", PhoneNumber: "61234567", MemberStatus: "active", MemberType: "user", IsVerifiedPhone: true}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := db.Create(&model.WalletAccount{UserID: owner.ID, Balance: 2500}).Error; err != nil {
+		t.Fatalf("create wallet: %v", err)
+	}
+	listing := model.Listing{PublicID: utils.NewPublicID(), Module: string(PropertyChannelSale), OwnerUserID: owner.ID, PublicationStatus: "draft", ModerationStatus: "approved", BusinessStatus: "available"}
+	if err := db.Create(&listing).Error; err != nil {
+		t.Fatalf("create property draft: %v", err)
+	}
+
+	for index := 0; index < 2; index++ {
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			_, err := walletService.SpendPointsWithTx(context.Background(), tx, WalletSpendParams{
+				UserID:         owner.ID,
+				Amount:         1000,
+				BizModule:      string(PropertyChannelSale),
+				ActionType:     WalletActionSaveDraft,
+				ListingID:      &listing.ID,
+				IdempotencyKey: fmt.Sprintf("legacy-draft-charge:%d", index),
+			})
+			return err
+		}); err != nil {
+			t.Fatalf("create legacy draft debit %d: %v", index, err)
+		}
+	}
+
+	preview, err := walletService.CorrectPropertySaleDraftCharge(context.Background(), listing.PublicID, false)
+	if err != nil {
+		t.Fatalf("preview draft correction: %v", err)
+	}
+	if !preview.CorrectionNeeded || preview.DraftPointsPaid != 2000 || preview.RefundPoints != 1400 {
+		t.Fatalf("unexpected correction preview: %#v", preview)
+	}
+	corrected, err := walletService.CorrectPropertySaleDraftCharge(context.Background(), listing.PublicID, true)
+	if err != nil {
+		t.Fatalf("apply draft correction: %v", err)
+	}
+	if !corrected.CorrectionNeeded || corrected.DraftPointsPaid != PropertySaleDraftCost || corrected.RefundPoints != 1400 {
+		t.Fatalf("unexpected correction result: %#v", corrected)
+	}
+	repeated, err := walletService.CorrectPropertySaleDraftCharge(context.Background(), listing.PublicID, true)
+	if err != nil {
+		t.Fatalf("repeat draft correction: %v", err)
+	}
+	if repeated.CorrectionNeeded || repeated.DraftPointsPaid != PropertySaleDraftCost || repeated.RefundPoints != 0 {
+		t.Fatalf("unexpected repeated correction result: %#v", repeated)
+	}
+	paid, err := propertyService.propertyDraftPointsPaid(context.Background(), db, listing.ID)
+	if err != nil {
+		t.Fatalf("load corrected draft payment: %v", err)
+	}
+	if paid != PropertySaleDraftCost || propertyPublishPointsDue(PropertySalePublishCost, paid) != 400 {
+		t.Fatalf("unexpected corrected publish settlement: paid=%d", paid)
+	}
+	var wallet model.WalletAccount
+	if err := db.Where("user_id = ?", owner.ID).First(&wallet).Error; err != nil {
+		t.Fatalf("load corrected wallet: %v", err)
+	}
+	if wallet.Balance != 1900 || wallet.TotalSpent != 2000 || wallet.TotalEarned != 1400 {
+		t.Fatalf("unexpected corrected wallet: %#v", wallet)
+	}
+}
+
+// 7. TestPropertyPublishPointsDue verifies draft prepayment credits never exceed the total publish fee.
+func TestPropertyPublishPointsDue(t *testing.T) {
+	if due := propertyPublishPointsDue(PropertySalePublishCost, PropertySaleDraftCost); due != 400 {
+		t.Fatalf("expected 400 points due after draft prepayment, got %d", due)
+	}
+	if due := propertyPublishPointsDue(PropertySalePublishCost, PropertySalePublishCost); due != 0 {
+		t.Fatalf("expected fully prepaid publish to be free, got %d", due)
+	}
+	if due := propertyPublishPointsDue(PropertySalePublishCost, 1400); due != 0 {
+		t.Fatalf("expected legacy overpayment to avoid a second charge, got %d", due)
+	}
+}
+
+// 8. ptrInt returns an int pointer for optional area fields.
 func ptrInt(value int) *int {
 	return &value
 }
 
-// 7. TestDeriveServicedApartmentRentRange verifies project-level room rent range fields.
+// 9. TestDeriveServicedApartmentRentRange verifies project-level room rent range fields.
 func TestDeriveServicedApartmentRentRange(t *testing.T) {
 	derived := deriveServicedApartmentFields(UpsertServicedApartmentParams{
 		LowestMonthlyRentHKD:  20000,

@@ -332,7 +332,145 @@ func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
 	}
 }
 
-// 8. TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck verifies cache reuse and access isolation.
+// 8. TestIsmartServiceCasesUseCurrentIdentity verifies service-case submission, listing, and detail use the current iSmart account.
+func TestIsmartServiceCasesUseCurrentIdentity(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/v1/integration/buildings/comments/":
+			if request.Method != http.MethodPost {
+				t.Fatalf("unexpected service-case submit method: %s", request.Method)
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode service-case payload: %v", err)
+			}
+			if payload["user_id"] != float64(88) || payload["building_id"] != "0348200" || payload["unit_id"] != "0348200001" {
+				t.Fatalf("unexpected service-case identity payload: %#v", payload)
+			}
+			if payload["request_type"] != "repair" || payload["category"] != "water" || payload["subcategory"] != "leakage" || payload["content"] != "18樓走廊漏水" {
+				t.Fatalf("unexpected service-case taxonomy payload: %#v", payload)
+			}
+			if _, exists := payload["comment"]; exists {
+				t.Fatalf("new service-case payload must not use legacy comment: %#v", payload)
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"case_id":"case-1","status":"submitted"}}`))
+		case "/api/v1/integration/buildings/service-cases/":
+			if request.Method != http.MethodGet || request.URL.Query().Get("user_id") != "88" || request.URL.Query().Get("building_id") != "0348200" || request.URL.Query().Get("scope") != "mine" || request.URL.Query().Get("status") != "processing" {
+				t.Fatalf("unexpected service-case list request: %s %s", request.Method, request.URL.String())
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"cases":[{"case_id":"case-1","status":"processing"}],"total":1}}`))
+		case "/api/v1/integration/buildings/service-cases/case-1/":
+			if request.Method != http.MethodGet || request.URL.Query().Get("user_id") != "88" || request.URL.Query().Get("building_id") != "0348200" {
+				t.Fatalf("unexpected service-case detail request: %s %s", request.Method, request.URL.String())
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"case_id":"case-1","content":"18樓走廊漏水","messages":[]}}`))
+		default:
+			t.Fatalf("unexpected service-case path: %s", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	ismartService := NewIsmartExternalService(runtimeValue)
+	if _, err := ismartService.SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", RequestType: "repair", Category: "water", Subcategory: "leakage", Subject: "走廊漏水", Content: "18樓走廊漏水", UnitID: "0348200001",
+	}); err != nil {
+		t.Fatalf("submit service case: %v", err)
+	}
+	list, err := ismartService.ListBuildingServiceCases(context.Background(), user.ID, IsmartServiceCaseListParams{BuildingID: "0348200", Status: "processing"})
+	if err != nil || paymentInt64Value(list["total"]) != 1 {
+		t.Fatalf("list service cases: result=%#v err=%v", list, err)
+	}
+	detail, err := ismartService.GetBuildingServiceCase(context.Background(), user.ID, IsmartServiceCaseDetailParams{BuildingID: "0348200", CaseID: "case-1"})
+	if err != nil || detail["case_id"] != "case-1" {
+		t.Fatalf("get service case: result=%#v err=%v", detail, err)
+	}
+}
+
+// 9. TestIsmartServiceCaseRejectsInvisibleUnit verifies a resident cannot file for an inaccessible unit.
+func TestIsmartServiceCaseRejectsInvisibleUnit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		t.Fatalf("invisible unit must not reach upstream: %s", request.URL.String())
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	_, err := NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", RequestType: "repair", Category: "water", Subcategory: "leakage", Content: "18樓走廊漏水", UnitID: "0348200999",
+	})
+	if err == nil {
+		t.Fatal("expected invisible service-case unit to be rejected")
+	}
+}
+
+// 10. TestIsmartSubaccountsUseIntegrationPaths verifies the current iSmart identity is injected for every subaccount call.
+func TestIsmartSubaccountsUseIntegrationPaths(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/v1/integration/buildings/subaccounts/":
+			if request.Method != http.MethodGet || request.URL.Query().Get("user_id") != "88" || request.URL.Query().Get("unit_id") != "0348200001" {
+				t.Fatalf("unexpected subaccount list request: %s %s", request.Method, request.URL.String())
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"items":[{"unit_id":"0348200001","target_user_id":99}],"count":1}}`))
+		case "/api/v1/integration/buildings/subaccounts/grant/", "/api/v1/integration/buildings/subaccounts/revoke/":
+			if request.Method != http.MethodPost {
+				t.Fatalf("unexpected subaccount mutation method: %s", request.Method)
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode subaccount mutation payload: %v", err)
+			}
+			if payload["user_id"] != float64(88) || payload["unit_id"] != "0348200001" || payload["target_user_id"] != float64(99) {
+				t.Fatalf("unexpected subaccount mutation payload: %#v", payload)
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"unit_id":"0348200001","target_user_id":99}}`))
+		default:
+			t.Fatalf("unexpected path: %s", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	ismartService := NewIsmartExternalService(runtimeValue)
+	result, err := ismartService.ListSubaccounts(context.Background(), user.ID, IsmartSubaccountQuery{UnitID: "0348200001"})
+	if err != nil {
+		t.Fatalf("list subaccounts: %v", err)
+	}
+	if paymentInt64Value(result["count"]) != 1 {
+		t.Fatalf("expected one subaccount, got %#v", result)
+	}
+	params := IsmartSubaccountMutationParams{UnitID: "0348200001", TargetUserID: 99, Remark: "resident access"}
+	if _, err := ismartService.GrantSubaccount(context.Background(), user.ID, params); err != nil {
+		t.Fatalf("grant subaccount: %v", err)
+	}
+	if _, err := ismartService.RevokeSubaccount(context.Background(), user.ID, params); err != nil {
+		t.Fatalf("revoke subaccount: %v", err)
+	}
+}
+
+// 11. TestIsmartSubaccountsRejectInvisibleUnit verifies AJO blocks inaccessible unit requests before upstream calls.
+func TestIsmartSubaccountsRejectInvisibleUnit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		t.Fatalf("invisible unit must not reach upstream: %s", request.URL.String())
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	ismartService := NewIsmartExternalService(runtimeValue)
+	if _, err := ismartService.ListSubaccounts(context.Background(), user.ID, IsmartSubaccountQuery{UnitID: "0348200999"}); err == nil {
+		t.Fatal("expected invisible unit list to be rejected")
+	}
+	if _, err := ismartService.GrantSubaccount(context.Background(), user.ID, IsmartSubaccountMutationParams{UnitID: "0348200999", TargetUserID: 99}); err == nil {
+		t.Fatal("expected invisible unit grant to be rejected")
+	}
+	if _, err := ismartService.RevokeSubaccount(context.Background(), user.ID, IsmartSubaccountMutationParams{UnitID: "0348200999", TargetUserID: 99}); err == nil {
+		t.Fatal("expected invisible unit revoke to be rejected")
+	}
+}
+
+// 12. TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck verifies cache reuse and access isolation.
 func TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck(t *testing.T) {
 	var upstreamCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -400,7 +538,7 @@ func TestIsmartGetBuildingInfoUsesSharedCacheAfterPermissionCheck(t *testing.T) 
 	}
 }
 
-// 9. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
+// 13. newIsmartIntegrationTestRuntime creates a linked iSmart test member.
 func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, model.User) {
 	t.Helper()
 	runtimeValue := newAuthTestRuntime(
@@ -450,18 +588,18 @@ func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, mo
 	return runtimeValue, user
 }
 
-// 10. memoryCacheStore is an in-memory CacheStore used by service tests.
+// 14. memoryCacheStore is an in-memory CacheStore used by service tests.
 type memoryCacheStore struct {
 	mu     sync.Mutex
 	values map[string][]byte
 }
 
-// 11. newMemoryCacheStore creates an empty test cache.
+// 15. newMemoryCacheStore creates an empty test cache.
 func newMemoryCacheStore() *memoryCacheStore {
 	return &memoryCacheStore{values: make(map[string][]byte)}
 }
 
-// 12. Get returns one copied test cache value.
+// 16. Get returns one copied test cache value.
 func (s *memoryCacheStore) Get(_ context.Context, key string) ([]byte, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -469,7 +607,7 @@ func (s *memoryCacheStore) Get(_ context.Context, key string) ([]byte, bool, err
 	return append([]byte(nil), value...), ok, nil
 }
 
-// 13. Set stores one copied test cache value.
+// 17. Set stores one copied test cache value.
 func (s *memoryCacheStore) Set(_ context.Context, key string, value []byte, _ time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -477,12 +615,12 @@ func (s *memoryCacheStore) Set(_ context.Context, key string, value []byte, _ ti
 	return nil
 }
 
-// 14. Close completes the CacheStore contract for tests.
+// 18. Close completes the CacheStore contract for tests.
 func (s *memoryCacheStore) Close() error {
 	return nil
 }
 
-// 15. value returns one cache value for assertions.
+// 19. value returns one cache value for assertions.
 func (s *memoryCacheStore) value(key string) []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()

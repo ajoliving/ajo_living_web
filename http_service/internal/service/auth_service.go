@@ -86,14 +86,27 @@ type EmailPasswordParams struct {
 	ResidenceUnit         string
 }
 
-// 6.1 PasswordResetParams defines email password reset input.
+// 6.1 RegistrationAvailabilityParams defines the identity fields checked before registration.
+type RegistrationAvailabilityParams struct {
+	Email            string
+	PhoneCountryCode string
+	PhoneNumber      string
+}
+
+// 6.2 RegistrationAvailabilityResult reports whether each submitted registration identity is free locally.
+type RegistrationAvailabilityResult struct {
+	EmailAvailable bool `json:"email_available"`
+	PhoneAvailable bool `json:"phone_available"`
+}
+
+// 6.3 PasswordResetParams defines email password reset input.
 type PasswordResetParams struct {
 	Email    string
 	Code     string
 	Password string
 }
 
-// 6.2 PasswordResetResult defines password reset output.
+// 6.4 PasswordResetResult defines password reset output.
 type PasswordResetResult struct {
 	PasswordReset bool `json:"password_reset"`
 }
@@ -335,6 +348,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	if accountType == "" {
 		return nil, errcode.New(errcode.CodeValidationError, "account type is invalid")
 	}
+	isIndividualAgent := accountType == AccountTypeIndividualAgent
 	memberStatus := "active"
 	if accountType == AccountTypeIndividualAgent || accountType == AccountTypeAgencyCompany {
 		memberStatus = "pending_profile"
@@ -347,7 +361,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	if err != nil {
 		return nil, err
 	}
-	if !isValidEmail(email) {
+	if !isValidEmail(email) && !(isIndividualAgent && email == "") {
 		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 	}
 	if !isValidPhone(phoneCountryCode, phoneNumber) || !isValidEnglishName(engName) || !isValidUsername(normalizedUsername) || len(password) < 8 {
@@ -400,11 +414,13 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	var profile model.UserProfile
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
-		if err := tx.Model(&model.UserCredential{}).Where("email = ?", email).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
-			return errcode.New(errcode.CodeValidationError, "email is already registered")
+		if email != "" {
+			if err := tx.Model(&model.UserCredential{}).Where("email = ?", email).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return errcode.New(errcode.CodeValidationError, "email is already registered")
+			}
 		}
 		if err := tx.Model(&model.User{}).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).Count(&count).Error; err != nil {
 			return err
@@ -439,7 +455,9 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 			PasswordEncrypted: passwordEncrypted,
 			IsVerified:        true,
 		}
-		credential.Email = &email
+		if email != "" {
+			credential.Email = &email
+		}
 		if err := tx.Select("UserID", "Username", "Email", "PasswordHash", "PasswordEncrypted", "IsVerified").Create(&credential).Error; err != nil {
 			return err
 		}
@@ -480,7 +498,35 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 21.1 ensureEmailRegistrationAvailable checks local identities before creating an iSmart account.
+// 21.1 CheckRegistrationAvailability checks local email and phone availability before registration.
+func (s *AuthService) CheckRegistrationAvailability(ctx context.Context, params RegistrationAvailabilityParams) (*RegistrationAvailabilityResult, error) {
+	email := normalizeEmail(params.Email)
+	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
+	phoneNumber := normalizePhoneNumber(params.PhoneNumber)
+	if !isValidPhone(phoneCountryCode, phoneNumber) {
+		return nil, errcode.New(errcode.CodeValidationError, "valid phone number is required")
+	}
+	if email != "" && !isValidEmail(email) {
+		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
+	}
+
+	result := &RegistrationAvailabilityResult{EmailAvailable: true, PhoneAvailable: true}
+	var count int64
+	if email != "" {
+		if err := s.runtime.DB.WithContext(ctx).Model(&model.UserCredential{}).Where("email = ?", email).Count(&count).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to validate registration email")
+		}
+		result.EmailAvailable = count == 0
+	}
+	if err := s.runtime.DB.WithContext(ctx).Model(&model.User{}).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).Count(&count).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to validate registration phone")
+	}
+	result.PhoneAvailable = count == 0
+
+	return result, nil
+}
+
+// 21.2 ensureEmailRegistrationAvailable checks local identities before creating an iSmart account.
 func (s *AuthService) ensureEmailRegistrationAvailable(ctx context.Context, email string, phoneCountryCode string, phoneNumber string, username string) error {
 	checks := []struct {
 		model   any
@@ -488,9 +534,16 @@ func (s *AuthService) ensureEmailRegistrationAvailable(ctx context.Context, emai
 		args    []any
 		message string
 	}{
-		{&model.UserCredential{}, "email = ?", []any{email}, "email is already registered"},
 		{&model.User{}, "phone_country_code = ? AND phone_number = ?", []any{phoneCountryCode, phoneNumber}, "phone number is already registered"},
 		{&model.UserCredential{}, "username = ?", []any{username}, "username is already registered"},
+	}
+	if email != "" {
+		checks = append([]struct {
+			model   any
+			query   string
+			args    []any
+			message string
+		}{{&model.UserCredential{}, "email = ?", []any{email}, "email is already registered"}}, checks...)
 	}
 	for _, check := range checks {
 		var count int64

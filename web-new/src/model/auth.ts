@@ -93,6 +93,19 @@ export interface RegisterEmailAccountPayload {
   residence_unit?: string;
 }
 
+// 4.2 註冊資料可用性檢查請求
+export interface RegistrationAvailabilityPayload {
+	phone_country_code: string;
+	phone_number: string;
+	email?: string;
+}
+
+// 4.3 註冊資料可用性檢查結果
+export interface RegistrationAvailabilityResult {
+	email_available: boolean;
+	phone_available: boolean;
+}
+
 // 5. 重設密碼請求
 export interface EmailPasswordResetPayload {
   email: string;

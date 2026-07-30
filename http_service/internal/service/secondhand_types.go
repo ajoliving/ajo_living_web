@@ -100,11 +100,23 @@ type ListingImageResponse struct {
 
 // 8. ListingContactSummary defines contact channel summary.
 type ListingContactSummary struct {
-	ShowPhone         bool              `json:"show_phone"`
-	ShowWhatsApp      bool              `json:"show_whatsapp"`
-	ShowChat          bool              `json:"show_chat"`
-	ShowInquiry       bool              `json:"show_inquiry_form"`
-	ContactAttributes map[string]string `json:"contact_attributes,omitempty"`
+	ShowPhone         bool                    `json:"show_phone"`
+	ShowWhatsApp      bool                    `json:"show_whatsapp"`
+	ShowChat          bool                    `json:"show_chat"`
+	ShowInquiry       bool                    `json:"show_inquiry_form"`
+	ContactAttributes map[string]string       `json:"contact_attributes,omitempty"`
+	EditableContact   *ListingEditableContact `json:"editable_contact,omitempty"`
+}
+
+// 8.1 ListingEditableContact defines decrypted contact data for an authorized listing editor only.
+type ListingEditableContact struct {
+	ContactNameZH string `json:"contact_name_zh"`
+	ContactNameEN string `json:"contact_name_en"`
+	Phone         string `json:"phone"`
+	Phone2        string `json:"phone_2"`
+	WhatsApp      string `json:"whatsapp"`
+	WeChat        string `json:"wechat"`
+	Email         string `json:"email"`
 }
 
 // 9. SecondhandListingSummary defines public list payload.

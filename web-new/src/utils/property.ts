@@ -5,7 +5,16 @@
  */
 import type { PropertyChannel, PropertyListingSummaryResponse } from '@/model/property';
 import type { AppLocale } from '@/stores/preferences';
-import { getPropertyDistrictLabel, getPropertyTagLabel, getPropertyTypeLabel } from '@/constants/property';
+import {
+  carParkCategoryTagOptions,
+  getPropertyDistrictLabel,
+  getPropertyTagLabel,
+  getPropertyTypeLabel,
+  industrialCategoryTagOptions,
+  landCategoryTagOptions,
+  residentialCategoryTagOptions,
+  shopCategoryTagOptions,
+} from '@/constants/property';
 import { formatPrice } from '@/utils/format';
 import { humanizeCodeLabel } from '@/utils/marketplace';
 
@@ -23,6 +32,15 @@ interface PropertyAutoTagSource {
   annual_prepay_discount?: boolean;
   annual_prepay_option?: string;
 }
+
+// 1. 樓盤分類標籤在卡片中優先顯示
+const propertyCategoryTagValues = new Set([
+  ...residentialCategoryTagOptions,
+  ...carParkCategoryTagOptions,
+  ...industrialCategoryTagOptions,
+  ...shopCategoryTagOptions,
+  ...landCategoryTagOptions,
+].map((option) => option.value));
 
 // 1. 取得樓盤自動標籤
 export const resolvePropertyAutoTags = (sale?: PropertyAutoTagSource | null): string[] => {
@@ -127,37 +145,78 @@ export const resolvePropertyPriceText = (
     }
   }
 
-  const priceText = formatPrice(price, locale);
+  const priceText = listing.property_sale?.transaction_type === 'sale' && locale !== 'en'
+    ? formatPropertySalePrice(price)
+    : formatPrice(price, locale);
   return flags.referenceOnly ? `${priceText}${locale === 'en' ? ' from' : ' 起'}` : priceText;
 };
 
-// 11. 取得物業面積
+// 11. 格式化中文樓盤放售價格
+export const formatPropertySalePrice = (value: number): string => {
+  const priceInTenThousands = Math.round((value / 10_000) * 10) / 10;
+  return `HK$${new Intl.NumberFormat('zh-HK', { maximumFractionDigits: 1 }).format(priceInTenThousands)}萬`;
+};
+
+// 12. 取得物業面積
 export const resolvePropertyArea = (listing: PropertyListingSummaryResponse) =>
   listing.serviced_apartment?.min_usable_area_sqft ||
   listing.serviced_apartment?.room_types?.[0]?.usable_area_sqft ||
   listing.property_sale?.usable_area_sqft ||
   0;
 
-// 12. 取得物業房間摘要
+// 12. 取得物業公開位置片段
+export const resolvePropertyLocationFacts = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+): string[] => {
+  const sale = listing.property_sale;
+  if (!sale) {
+    return [];
+  }
+
+  const facts = [
+    sale.block_name?.trim(),
+    sale.floor_level?.trim(),
+    sale.show_unit ? sale.unit_name?.trim() : '',
+  ].filter((value): value is string => Boolean(value));
+
+  if (facts.length > 0) {
+    return facts;
+  }
+
+  const fallback = locale === 'en'
+    ? sale.address_text_en?.trim() || sale.public_location_text?.trim()
+    : sale.public_location_text?.trim();
+  return fallback ? [fallback] : [];
+};
+
+// 13. 取得物業房間摘要
 export const resolvePropertyRooms = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale = 'zh-HK',
 ) => {
   const sale = listing.property_sale;
   if (sale) {
-    const locationText = locale === 'en'
-      ? sale.address_text_en || sale.public_location_text
-      : sale.public_location_text;
-    const location = locationText ? `${locationText} · ` : '';
+    if (sale.property_type !== 'residential') {
+      return '';
+    }
+
     const bedroomText = sale.bedroom_count < 0
-      ? 'N/A'
-      : locale === 'en'
-        ? `${sale.bedroom_count} bed`
-        : `${sale.bedroom_count}房`;
+      ? ''
+      : sale.bedroom_count === 0
+        ? locale === 'en' ? 'Studio' : '開放式間隔'
+        : locale === 'en'
+          ? `${sale.bedroom_count} bed`
+          : `${sale.bedroom_count}房`;
     const bathroomLabel = locale === 'en'
       ? ['industrial', 'shop'].includes(sale.property_type) ? 'toilet' : 'bath'
       : ['industrial', 'shop'].includes(sale.property_type) ? '廁' : '浴室';
-    return `${location}${bedroomText} ${sale.bathroom_count} ${bathroomLabel}`;
+    const bathroomText = sale.bathroom_count > 0
+      ? locale === 'en'
+        ? `${sale.bathroom_count} ${bathroomLabel}`
+        : `${sale.bathroom_count}${bathroomLabel}`
+      : '';
+    return [bedroomText, bathroomText].filter(Boolean).join(' · ');
   }
 
   const roomCount = listing.serviced_apartment?.room_types.length ?? 0;
@@ -166,7 +225,21 @@ export const resolvePropertyRooms = (
     : '-';
 };
 
-// 13. 取得地區標籤
+// 14. 取得樓盤卡片中間資料
+export const resolvePropertyListingFacts = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+): string[] => {
+  const sale = listing.property_sale;
+  const direction = sale?.direction?.trim();
+  return [
+    ...resolvePropertyLocationFacts(listing, locale),
+    resolvePropertyRooms(listing, locale),
+    direction && direction !== 'N/A' ? direction : '',
+  ].filter(Boolean);
+};
+
+// 15. 取得地區標籤
 export const resolvePropertyDistrict = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale,
@@ -275,10 +348,24 @@ export const resolvePropertyTagLabels = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale,
   limit = 5,
-) => mergePropertyFeatureTags(listing.property_sale?.feature_tags ?? [], listing.property_sale)
-  .concat(listing.serviced_apartment?.facility_tags ?? [], listing.serviced_apartment?.service_tags ?? [])
-  .slice(0, limit)
-  .map((tag) => getPropertyTagLabel(tag, locale));
+) => {
+  const saleTags = mergePropertyFeatureTags(listing.property_sale?.feature_tags ?? [], listing.property_sale)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+  const saleLabels = [
+    ...saleTags.filter((tag) => propertyCategoryTagValues.has(tag)),
+    ...saleTags.filter((tag) => !propertyCategoryTagValues.has(tag)),
+  ]
+    .map((tag) => ({ tag, label: getPropertyTagLabel(tag, locale) }))
+    .filter(({ tag, label }) => label !== tag)
+    .map(({ label }) => label);
+  const servicedLabels = (listing.serviced_apartment?.facility_tags ?? [])
+    .concat(listing.serviced_apartment?.service_tags ?? [])
+    .map((tag) => getPropertyTagLabel(tag.trim(), locale))
+    .filter(Boolean);
+
+  return [...new Set([...saleLabels, ...servicedLabels])].slice(0, limit);
+};
 
 // 21. 取得發布身份標籤
 const resolvePublisherRoleLabel = (identityType: string, locale: AppLocale) => {

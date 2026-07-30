@@ -400,7 +400,7 @@ watch(
           class="clear-filter-btn desktop-filter-clear"
           @click="handleClearFilters"
         >
-          {{ t('marketplace.filter.clearAll') }}
+          {{ t('marketplace.filter.reset') }}
         </button>
 
         <div class="filter-sheet-actions">
@@ -408,7 +408,7 @@ watch(
             type="button"
             class="filter-sheet-reset"
             @click="handleClearFilters"
-          >{{ t('marketplace.filter.clearAll') }}</button>
+          >{{ t('marketplace.filter.reset') }}</button>
           <button
             type="button"
             class="filter-sheet-apply"
@@ -647,7 +647,7 @@ watch(
 .page {
   width: 100%;
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 2. 三欄布局：對齊全局頁面寬度與左右留白 */
@@ -659,7 +659,7 @@ watch(
   width: min(100%, var(--layout-page-max-width));
   margin: 0 auto;
   padding: 0 var(--layout-page-padding-inline);
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 3. 左側篩選欄：對齊 .mf 與 #page-market .mf */
@@ -791,7 +791,7 @@ watch(
   padding: 14px 14px 36px;
   min-width: 0;
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 .sort-row {
@@ -879,7 +879,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--g1);
+  background: var(--sur);
 }
 
 .mimg img {
@@ -1066,7 +1066,7 @@ watch(
   align-self: start;
   overflow: visible;
   border-left: 1px solid var(--bdr);
-  background: var(--sur-2);
+  background: var(--sur);
   padding: 18px 18px 40px;
 }
 

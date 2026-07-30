@@ -79,6 +79,7 @@ const searchQuery = ref('');
 const searchSuggestions = ref<SupermarketProduct[]>([]);
 const suggestionsVisible = ref(false);
 const suggestionsLoading = ref(false);
+const suggestionsExpanded = ref(false);
 const failedImageCodes = ref(new Set<string>());
 const activeCategory = ref('');
 const activeStore = ref('');
@@ -99,7 +100,15 @@ const sortOptions = computed<SortOption[]>(() => [
   { label: t('offers.list.sortBrand'), value: 'brand' },
 ]);
 
-// 1. 建立 Hero 統計資料
+// 1. 控制搜尋建議的初始與展開顯示數量。
+const visibleSearchSuggestions = computed<SupermarketProduct[]>(() =>
+  searchSuggestions.value.slice(0, suggestionsExpanded.value ? 12 : 6),
+);
+const canExpandSearchSuggestions = computed(() =>
+  !suggestionsExpanded.value && searchSuggestions.value.length > 6,
+);
+
+// 2. 建立 Hero 統計資料
 const heroStats = computed<HeroStat[]>(() => {
   const stats = summary.value?.stats;
   const discountSource = summary.value?.bestDiscounts?.length
@@ -117,7 +126,7 @@ const heroStats = computed<HeroStat[]>(() => {
   ];
 });
 
-// 2. 建立分類篩選項
+// 3. 建立分類篩選項
 const categoryPills = computed<FilterPill[]>(() => [
   { label: t('offers.list.all'), value: '' },
   ...valueCountPills(
@@ -127,7 +136,7 @@ const categoryPills = computed<FilterPill[]>(() => [
   ),
 ]);
 
-// 3. 建立商店篩選項
+// 4. 建立商店篩選項
 const storePills = computed<FilterPill[]>(() => [
   { label: t('offers.list.allStores'), value: '' },
   ...valueCountPills(
@@ -137,10 +146,10 @@ const storePills = computed<FilterPill[]>(() => [
   ),
 ]);
 
-// 4. 建立品牌篩選項
+// 5. 建立品牌篩選項
 const brandOptions = computed<string[]>(() => searchResult.value?.brands ?? []);
 
-// 5. 計算目前已套用的手機端篩選數量
+// 6. 計算目前已套用的手機端篩選數量
 const activeFilterCount = computed(() =>
   Number(Boolean(activeCategory.value))
   + Number(Boolean(activeStore.value))
@@ -148,7 +157,7 @@ const activeFilterCount = computed(() =>
   + Number(showFavoritesOnly.value),
 );
 
-// 6. 取得目前列表商品
+// 7. 取得目前列表商品
 const visibleProducts = computed<SupermarketProduct[]>(() => {
   if (showFavoritesOnly.value) {
     const start = (currentPage.value - 1) * pageSize;
@@ -157,13 +166,13 @@ const visibleProducts = computed<SupermarketProduct[]>(() => {
   return searchResult.value?.items ?? [];
 });
 
-// 7. 取得目前總數
+// 8. 取得目前總數
 const totalCount = computed(() => (showFavoritesOnly.value ? favorites.value.length : searchResult.value?.total ?? 0));
 
-// 8. 取得目前總頁數
+// 9. 取得目前總頁數
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
 
-// 9. 建立分頁按鈕
+// 10. 建立分頁按鈕
 const pageButtons = computed<PageButton[]>(() => {
   const pages = new Set<number>([1, totalPages.value, currentPage.value]);
   if (currentPage.value > 1) pages.add(currentPage.value - 1);
@@ -195,7 +204,7 @@ const pageButtons = computed<PageButton[]>(() => {
   ];
 });
 
-// 10. 建立更新資訊文字
+// 11. 建立更新資訊文字
 const updatedBarText = computed(() => {
   const updatedDate = formatSupermarketDate(
     summary.value?.metadata?.latestSnapshotDate,
@@ -208,7 +217,7 @@ const updatedBarText = computed(() => {
   return t('offers.list.updatedSummary', { prefix, count: productCount });
 });
 
-// 11. 載入摘要
+// 12. 載入摘要
 const loadSummary = async (): Promise<void> => {
   summaryLoading.value = true;
   summaryError.value = '';
@@ -222,7 +231,7 @@ const loadSummary = async (): Promise<void> => {
   }
 };
 
-// 12. 載入搜尋結果
+// 13. 載入搜尋結果
 const loadSearch = async (): Promise<void> => {
   searchLoading.value = true;
   searchError.value = '';
@@ -247,10 +256,11 @@ const loadSearch = async (): Promise<void> => {
   }
 };
 
-// 13. 載入搜尋建議，保留所有名稱、品牌或分類匹配的商品。
+// 14. 載入搜尋建議，保留最多 12 個名稱、品牌或分類匹配的商品。
 const loadSearchSuggestions = async (): Promise<void> => {
   const query = searchQuery.value.trim();
   const requestVersion = ++suggestionRequestVersion;
+  suggestionsExpanded.value = false;
   if (!query) {
     searchSuggestions.value = [];
     suggestionsVisible.value = false;
@@ -264,7 +274,7 @@ const loadSearchSuggestions = async (): Promise<void> => {
       offerOnly: false,
       sort: 'name',
       page: 1,
-      pageSize: 8,
+      pageSize: 12,
     });
     if (requestVersion === suggestionRequestVersion) {
       searchSuggestions.value = data.data.items;
@@ -282,7 +292,7 @@ const loadSearchSuggestions = async (): Promise<void> => {
   }
 };
 
-// 14. 延遲查詢輸入建議，避免每個字元都立即發送請求。
+// 15. 延遲查詢輸入建議，避免每個字元都立即發送請求。
 const scheduleSearchSuggestions = (): void => {
   if (suggestionTimer) {
     clearTimeout(suggestionTimer);
@@ -292,33 +302,38 @@ const scheduleSearchSuggestions = (): void => {
   }, 180);
 };
 
-// 15. 顯示目前搜尋字詞的建議。
+// 16. 顯示目前搜尋字詞的建議。
 const showSearchSuggestions = (): void => {
   if (searchQuery.value.trim()) {
     scheduleSearchSuggestions();
   }
 };
 
-// 16. 延後收起建議，讓點選結果可以完成。
+// 17. 延後收起建議，讓點選結果可以完成。
 const hideSearchSuggestions = (): void => {
   window.setTimeout(() => {
     suggestionsVisible.value = false;
   }, 120);
 };
 
-// 17. 套用一個建議商品並提交搜尋。
+// 18. 展開更多搜尋建議。
+const expandSearchSuggestions = (): void => {
+  suggestionsExpanded.value = true;
+};
+
+// 19. 套用一個建議商品並提交搜尋。
 const selectSearchSuggestion = (product: SupermarketProduct): void => {
   searchQuery.value = product.name;
   suggestionsVisible.value = false;
   submitSearch();
 };
 
-// 18. 記錄無法載入的商品圖片，改用既有後備顯示。
+// 20. 記錄無法載入的商品圖片，改用既有後備顯示。
 const handleProductImageError = (code: string): void => {
   failedImageCodes.value = new Set([...failedImageCodes.value, code]);
 };
 
-// 19. 載入收藏
+// 21. 載入收藏
 const loadFavorites = async (): Promise<void> => {
   if (!readStoredAccessToken()) {
     favorites.value = [];
@@ -337,7 +352,7 @@ const loadFavorites = async (): Promise<void> => {
   }
 };
 
-// 20. 提交搜尋
+// 22. 提交搜尋
 const submitSearch = (): void => {
   showFavoritesOnly.value = false;
   currentPage.value = 1;
@@ -345,7 +360,7 @@ const submitSearch = (): void => {
   void loadSearch();
 };
 
-// 21. 切換分類
+// 23. 切換分類
 const selectCategory = (category: string): void => {
   activeCategory.value = category;
   showFavoritesOnly.value = false;
@@ -353,7 +368,7 @@ const selectCategory = (category: string): void => {
   void loadSearch();
 };
 
-// 22. 切換商店
+// 24. 切換商店
 const selectStore = (store: string): void => {
   activeStore.value = store;
   showFavoritesOnly.value = false;
@@ -361,7 +376,7 @@ const selectStore = (store: string): void => {
   void loadSearch();
 };
 
-// 23. 套用手機端快捷篩選
+// 25. 套用手機端快捷篩選
 const handleMobileQuickFilter = (filter: 'category' | 'store', event: Event): void => {
   const value = (event.target as HTMLSelectElement).value;
   if (filter === 'category') {
@@ -371,7 +386,7 @@ const handleMobileQuickFilter = (filter: 'category' | 'store', event: Event): vo
   selectStore(value);
 };
 
-// 24. 開關手機端篩選彈窗
+// 26. 開關手機端篩選彈窗
 const openMobileFilter = (): void => {
   isMobileFilterOpen.value = true;
 };
@@ -380,7 +395,7 @@ const closeMobileFilter = (): void => {
   isMobileFilterOpen.value = false;
 };
 
-// 25. 重設篩選條件並保留搜尋文字
+// 27. 重設篩選條件並保留搜尋文字
 const resetFilters = (): void => {
   activeCategory.value = '';
   activeStore.value = '';
@@ -391,14 +406,14 @@ const resetFilters = (): void => {
   void loadSearch();
 };
 
-// 26. 切換品牌
+// 28. 切換品牌
 const selectBrand = (): void => {
   showFavoritesOnly.value = false;
   currentPage.value = 1;
   void loadSearch();
 };
 
-// 27. 切換排序
+// 29. 切換排序
 const selectSort = (): void => {
   currentPage.value = 1;
   if (!showFavoritesOnly.value) {
@@ -406,7 +421,7 @@ const selectSort = (): void => {
   }
 };
 
-// 28. 切換收藏列表
+// 30. 切換收藏列表
 const toggleFavoritesOnly = async (): Promise<void> => {
   if (!showFavoritesOnly.value && !readStoredAccessToken()) {
     await openLogin('/supermarket-offers');
@@ -422,7 +437,7 @@ const toggleFavoritesOnly = async (): Promise<void> => {
   }
 };
 
-// 29. 切換商品收藏
+// 31. 切換商品收藏
 const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
   if (!readStoredAccessToken()) {
     await openLogin(`/supermarket-offers/products/${encodeURIComponent(product.code)}`);
@@ -448,12 +463,12 @@ const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
   }
 };
 
-// 30. 切換視圖模式
+// 32. 切換視圖模式
 const setView = (mode: ViewMode): void => {
   viewMode.value = mode;
 };
 
-// 31. 切換分頁
+// 33. 切換分頁
 const selectPage = (page: PageButton): void => {
   if (page.disabled || currentPage.value === page.page) {
     return;
@@ -464,17 +479,17 @@ const selectPage = (page: PageButton): void => {
   }
 };
 
-// 32. 開啟商品詳情
+// 34. 開啟商品詳情
 const openDetail = (product: SupermarketProduct): void => {
   void router.push({ path: `/supermarket-offers/products/${encodeURIComponent(product.code)}` });
 };
 
-// 33. 前往登入
+// 35. 前往登入
 const openLogin = async (redirect: string): Promise<void> => {
   await router.push({ path: '/login', query: { redirect } });
 };
 
-// 34. 更新商品收藏狀態
+// 36. 更新商品收藏狀態
 const patchFavoriteState = (productCode: string, isFavorite: boolean): void => {
   searchResult.value?.items.forEach((item) => {
     if (item.code === productCode) {
@@ -488,7 +503,7 @@ const patchFavoriteState = (productCode: string, isFavorite: boolean): void => {
   });
 };
 
-// 35. 建立篩選按鈕
+// 37. 建立篩選按鈕
 const valueCountPills = (
   values: SupermarketValueCount[],
   formatter: (value: string) => string,
@@ -499,31 +514,31 @@ const valueCountPills = (
     .map((item) => ({ label: formatter(item.value), value: item.value }))
     .filter((item) => item.value);
 
-// 36. 格式化整數
+// 38. 格式化整數
 const formatInteger = (value: number | undefined): string =>
   (value ?? 0).toLocaleString(preferenceStore.locale);
 
-// 37. 格式化商店名稱
+// 39. 格式化商店名稱
 const formatStore = (value: string): string =>
   displaySupermarketStore(value, preferenceStore.locale);
 
-// 38. 格式化商品分類
+// 40. 格式化商品分類
 const formatCategory = (value: string): string =>
   displaySupermarketCategory(value, preferenceStore.locale);
 
-// 39. 格式化商品價格
+// 41. 格式化商品價格
 const formatOfferPrice = (value: number | null | undefined): string =>
   formatSupermarketHKPrice(value, preferenceStore.locale);
 
-// 40. 取得商品商店價格
+// 42. 取得商品商店價格
 const productStorePrices = (product: SupermarketProduct) =>
   supermarketStorePrices(product, preferenceStore.locale);
 
-// 41. 取得商品主要價格
+// 43. 取得商品主要價格
 const productPrimaryPrice = (product: SupermarketProduct) =>
   supermarketPrimaryPrice(product, preferenceStore.locale);
 
-// 42. 取得商品優惠文字
+// 44. 取得商品優惠文字
 const productOfferTexts = (product: SupermarketProduct): string[] =>
   supermarketOfferTexts(product, preferenceStore.locale);
 
@@ -722,7 +737,7 @@ onBeforeUnmount(() => {
               class="gp-search-suggestion-state"
             >{{ t('offers.list.loading') }}</p>
             <button
-              v-for="product in searchSuggestions"
+              v-for="product in visibleSearchSuggestions"
               :key="product.code"
               type="button"
               class="gp-search-suggestion"
@@ -731,6 +746,12 @@ onBeforeUnmount(() => {
               <span class="gp-search-suggestion-name">{{ product.name }}</span>
               <span class="gp-search-suggestion-brand">{{ product.brand || t('offers.list.noBrand') }}</span>
             </button>
+            <button
+              v-if="canExpandSearchSuggestions"
+              type="button"
+              class="gp-search-suggestions-more"
+              @mousedown.prevent="expandSearchSuggestions"
+            >{{ t('offers.list.showMoreSuggestions') }}</button>
             <p
               v-if="!suggestionsLoading && searchSuggestions.length === 0"
               class="gp-search-suggestion-state"
@@ -1085,7 +1106,7 @@ onBeforeUnmount(() => {
 .page {
   width: 100%;
   min-height: calc(100svh - 48px);
-  background: var(--sur-2);
+  background: var(--sur);
   color: var(--ink);
 }
 
@@ -1237,8 +1258,28 @@ onBeforeUnmount(() => {
   background: var(--sur-2);
 }
 
+.gp-search-suggestions-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--bdr);
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.gp-search-suggestions-more:hover {
+  background: var(--sur-2);
+}
+
 .gp-search-suggestion:last-child,
-.gp-search-suggestion-state:last-child {
+.gp-search-suggestion-state:last-child,
+.gp-search-suggestions-more:last-child {
   border-bottom: 0;
 }
 
@@ -1350,8 +1391,8 @@ onBeforeUnmount(() => {
 .gp-content {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 26px 28px 44px;
-  background: var(--sur-2);
+  padding: 26px 0 44px;
+  background: var(--sur);
 }
 
 .gp-content-header {
@@ -1360,6 +1401,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
+  padding: 0 28px;
 }
 
 .gp-count {

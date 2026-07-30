@@ -49,6 +49,19 @@ type IsmartSubaccountMutationParams struct {
 	Remark       string
 }
 
+// 4.1 IsmartServiceCaseListParams defines the current member's service-case filters.
+type IsmartServiceCaseListParams struct {
+	BuildingID  string
+	Status      string
+	RequestType string
+}
+
+// 4.2 IsmartServiceCaseDetailParams defines one visible service-case lookup.
+type IsmartServiceCaseDetailParams struct {
+	BuildingID string
+	CaseID     string
+}
+
 // 5. IsmartPaymentUnpaidInvoiceParams defines unpaid invoice lookup input.
 type IsmartPaymentUnpaidInvoiceParams struct {
 	UnitID string
@@ -279,6 +292,49 @@ func (s *IsmartExternalService) RevokeSubaccount(ctx context.Context, userID int
 	return s.mutateSubaccount(ctx, userID, params, "/buildings/subaccounts/revoke/")
 }
 
+// 18.1 ListBuildingServiceCases returns only service cases visible to the current member.
+func (s *IsmartExternalService) ListBuildingServiceCases(ctx context.Context, userID int64, params IsmartServiceCaseListParams) (map[string]any, error) {
+	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := url.Values{}
+	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
+	query.Set("building_id", buildingID)
+	query.Set("scope", "mine")
+	copyQueryValue(query, "status", params.Status)
+	copyQueryValue(query, "request_type", params.RequestType)
+	result, err := s.getIntegration(ctx, "/buildings/service-cases/", query)
+	if err != nil {
+		return nil, err
+	}
+
+	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
+}
+
+// 18.2 GetBuildingServiceCase returns one current member-visible service case and message thread.
+func (s *IsmartExternalService) GetBuildingServiceCase(ctx context.Context, userID int64, params IsmartServiceCaseDetailParams) (map[string]any, error) {
+	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	if err != nil {
+		return nil, err
+	}
+	caseID := strings.TrimSpace(params.CaseID)
+	if caseID == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "service case id is required")
+	}
+
+	query := url.Values{}
+	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
+	query.Set("building_id", buildingID)
+	result, err := s.getIntegration(ctx, "/buildings/service-cases/"+url.PathEscape(caseID)+"/", query)
+	if err != nil {
+		return nil, err
+	}
+
+	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
+}
+
 // 19. ListPaymentUnpaidInvoices proxies unit unpaid invoice lookup.
 func (s *IsmartExternalService) ListPaymentUnpaidInvoices(ctx context.Context, params IsmartPaymentUnpaidInvoiceParams) (any, error) {
 	unitID := strings.TrimSpace(params.UnitID)
@@ -417,6 +473,13 @@ func (s *IsmartExternalService) visibleUnitIDs(account *model.UserIsmartAccount)
 func copyOptionalString(payload map[string]any, key string, value string) {
 	if strings.TrimSpace(value) != "" {
 		payload[key] = strings.TrimSpace(value)
+	}
+}
+
+// 27. copyQueryValue adds one non-empty integration query parameter.
+func copyQueryValue(query url.Values, key string, value string) {
+	if strings.TrimSpace(value) != "" {
+		query.Set(key, strings.TrimSpace(value))
 	}
 }
 

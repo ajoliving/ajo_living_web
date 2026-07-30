@@ -71,13 +71,19 @@ export const republishPropertySale = (listingId: string) =>
     `/property-sales/${listingId}/republish`,
   );
 
-// 7. 標記樓盤成交
+// 7. 延期一個月上架中的樓盤放售
+export const renewPropertySale = (listingId: string) =>
+  httpClient.post<ApiResponse<PropertyListingDetailResponse>>(
+    `/property-sales/${listingId}/renew`,
+  );
+
+// 8. 標記樓盤成交
 export const markPropertySaleSold = (listingId: string) =>
   httpClient.post<ApiResponse<{ listing_id: string; business_status: string }>>(
     `/property-sales/${listingId}/mark-sold`,
   );
 
-// 8. 下架樓盤放售
+// 9. 下架樓盤放售
 export const deactivatePropertySale = (listingId: string) =>
   httpClient.post<ApiResponse<{ listing_id: string; publication_status: string }>>(
     `/property-sales/${listingId}/deactivate`,

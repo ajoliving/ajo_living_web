@@ -43,6 +43,7 @@ export default {
     heroSubtitle: '搜尋全港主要超市價格，按優惠後價格、折扣力度與商店快速篩選。',
     searchPlaceholder: '搜尋商品、品牌或分類...',
     noSuggestions: '沒有相關建議。',
+    showMoreSuggestions: '顯示更多建議',
     search: '搜尋',
     loading: '載入中',
     myFavorites: '我的收藏',

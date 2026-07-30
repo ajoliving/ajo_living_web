@@ -32,13 +32,13 @@ const mockedFetchSummary = vi.mocked(fetchSupermarketSummary);
 const mockedSearchProducts = vi.mocked(searchSupermarketProducts);
 
 // 1. 建立最小可渲染的商品搜尋回應。
-const createSearchResponse = (query = '') => ({
+const createSearchResponse = (query = '', itemCount = 1) => ({
   data: {
     data: {
       items: query
-        ? [{
-            code: 'P000003682',
-            name: '花生醬 - 幼滑裝 340克',
+        ? Array.from({ length: itemCount }, (_, index) => ({
+            code: `P00000368${index}`,
+            name: index === 0 ? '花生醬 - 幼滑裝 340克' : `花生醬 - 幼滑裝 340克 ${index + 1}`,
             brand: 'Meadows',
             category1: '',
             category2: '',
@@ -58,9 +58,9 @@ const createSearchResponse = (query = '') => ({
             offerType: 'none',
             offerPattern: 'none',
             parseStatus: 'none',
-          }]
+          }))
         : [],
-      total: query ? 1 : 0,
+      total: query ? itemCount : 0,
       page: 1,
       pageSize: 20,
       stats: {
@@ -127,7 +127,7 @@ describe('SupermarketOffersPage search', () => {
     expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({
       q: '花生醬',
       offerOnly: false,
-      pageSize: 8,
+      pageSize: 12,
     }));
 
     await wrapper.find('.gp-search-suggestion').trigger('mousedown');
@@ -139,5 +139,20 @@ describe('SupermarketOffersPage search', () => {
       offerOnly: false,
       pageSize: 20,
     }));
+  });
+
+  // 4. 搜尋建議預設顯示 6 項，點選後可展開至 12 項。
+  it('expands search suggestions from six to twelve items', async () => {
+    mockedSearchProducts.mockImplementation((params) => Promise.resolve(createSearchResponse(params.q, 12)));
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+
+    await wrapper.find('.gp-sinput').setValue('花生醬');
+    await vi.advanceTimersByTimeAsync(180);
+    await flushPromises();
+
+    expect(wrapper.findAll('.gp-search-suggestion')).toHaveLength(6);
+    await wrapper.find('.gp-search-suggestions-more').trigger('mousedown');
+    expect(wrapper.findAll('.gp-search-suggestion')).toHaveLength(12);
   });
 });

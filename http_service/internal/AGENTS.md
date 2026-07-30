@@ -31,7 +31,8 @@ utils/: 無業務狀態的通用工具。
 - 代理 EAA 牌照及商業登記證以 private ACL 上傳，會員本人與管理審核只能取得短時 OSS 簽名下載地址；不得以公開 CDN URL 返回證件。
 - 樓盤標題及單位介紹翻譯歸入 property service；handler 只綁定輸入，service 負責長度校驗、DeepL 請求與上游錯誤隔離，router 負責會員鑑權及限流。
 - 樓盤聯絡解鎖由 property service 按 `contact_attributes` 的電話1與電話2區號及 WhatsApp 狀態分別生成 URL；電話2缺少獨立區號時兼容使用電話1區號。不得向公開列表暴露原始電話，只有受控解鎖回應可返回電話或聯絡入口。
-- 樓盤草稿收費由 handler 映射 `charge_draft=true`，property service 在同一交易內保存資料並扣除 1,000 AJO Points；未帶標記的發布前暫存不得收取草稿費。
+- 樓盤草稿收費由 handler 映射 `charge_draft=true`，property service 在同一交易內首次保存資料並預扣 600 AJO Points；發布總費 1,000，由 service 查詢同一 `listing_id` 的草稿扣款流水後只收取未付差額。舊草稿超額預付不再扣款，未帶標記的發布前暫存及已預付草稿的後續保存不得收取草稿費。
+- 歷史草稿重複扣費只可由受限維護流程對指定、未發布的 `property_sale` 以 `listing_refund` / `draft_charge_correction` 新增退款流水；不得改寫原扣款。後續草稿抵扣查詢必須扣除該專用退款，維持淨預付 600 與發布待付 400。
 - AJO 註冊建立 iSmart 帳戶時，註冊值只可補足 iSmart 回應缺失的受控會員資料快照；快照不得保存密碼，後續 POS 基礎登入回應不得覆蓋既有完整資料。若需返回上游原始業務欄位，使用獨立 `ismart_raw`，遞迴排除密碼、token、secret、authorization、憑證及 session 欄位，不與固定 `ismart_msg` 摘要混用。
 - 個人帳戶註冊若同時提交大廈、樓層及單位，必須在 iSmart 建戶與本地關聯提交後才發送 OwnerReg 審批申請；僅 HTTP `2xx` 代表申請已受理，`residence_binding_status=pending` 不得寫入 `bound_building_ids` 或 `bound_flat_unit_ids`，審批前不得視為已綁定。
 - 會員從已授權 iSmart 單位保存本地 `bound_building_ids` 後，大廈服務必須優先使用該明確選擇，即使帳戶仍保留舊 pending 記錄；只有未寫入本地綁定的 OwnerReg 待審申請繼續受 pending 限制。社區名稱若仍等於 `public_id` 佔位值，收到正式大廈名稱時必須補正。
@@ -61,5 +62,8 @@ utils/: 無業務狀態的通用工具。
 2026-07-16: 固定會員 POS 大廈列表的完整性，部分 relay 結果須以公共 POS 目錄補齊缺失大廈及正式名稱。
 2026-07-17: 固定 POS 大廈與單位共用目錄 Redis 快取、會員權限先行、個人資料排除及 relay 回退契約。
 2026-07-17: 固定統一帳戶登入的自動分類、本地優先、受控 iSmart 回退、故障保真及舊接口兼容契約。
+2026-07-28: 固定樓盤草稿預付流水作為發布差額抵扣依據，發布交易鎖定樓盤並兼容歷史超額草稿扣款。
+2026-07-28: 記錄舊版草稿重複扣費的不可變退款流水、淨預付查詢與受限維護命令邊界。
+2026-07-30: 記錄代理註冊即上載牌照、建立待審版本及 Staff 批准後啟用帳戶的 API 契約；個人代理可不提供電郵。
 
 [PROTOCOL]: When adding, moving, renaming, or changing backend internal ownership, update this map, check parent `../AGENTS.md`, and update `../../docs/PROMPT_INDEX.md` when API documentation prompts or model-facing contracts changed.

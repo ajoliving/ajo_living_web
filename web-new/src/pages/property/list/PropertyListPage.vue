@@ -17,28 +17,35 @@ import { favoritePropertySale, fetchPropertySaleListings, unfavoritePropertySale
 import { readStoredAccessToken } from '@/httpapis/auth-session';
 import {
   propertyAreaRangeFilterOptions,
+  propertyAreaModeFilterOptions,
   propertyBedroomFilterOptions,
-  propertyPriceRangeFilterOptions,
+  propertyRentPriceRangeFilterOptions,
   propertyPublisherFilterOptions,
   propertyRegionFilterOptions,
-  propertyRenovationFilterOptions,
+  propertySalePriceRangeFilterOptions,
+  propertyTagFilterOptions,
   propertyTransactionTypeFilterOptions,
   propertyTypeFilterOptions,
 } from '@/constants/property';
 import type { PaginationMeta } from '@/model/api';
-import type { PropertyListParams, PropertyListingSummaryResponse } from '@/model/property';
+import type {
+  PropertyListingCardViewModel,
+  PropertyListParams,
+  PropertyListingSummaryResponse,
+} from '@/model/property';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
 import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+import PropertyListingCard from '@/shared/components/property/PropertyListingCard.vue';
 import { usePreferenceStore } from '@/stores/preferences';
 import {
   resolvePropertyArea,
   resolvePropertyCommunityName,
   resolvePropertyCoverImage,
   resolvePropertyDistrict,
+  resolvePropertyListingFacts,
   resolvePropertyPrice,
   resolvePropertyPriceText,
-  resolvePropertyRooms,
   resolvePropertyTagLabels,
   resolvePropertyTitle,
   resolvePropertyTransactionType,
@@ -101,9 +108,10 @@ const activeFilterValues = reactive<Record<string, string>>({
   transaction: '',
   property_type: '',
   price: '',
+  area_mode: 'usable',
   area: '',
   bedroom: '',
-  renovation: '',
+  tag: '',
   publisher: '',
 });
 const translateFilterOptions = (groupKey: string, options: FilterOption[]): FilterOption[] => {
@@ -132,15 +140,28 @@ const filterGroups = computed<FilterGroup[]>(() => [
     options: translateFilterOptions('property_type', propertyTypeFilterOptions),
     activeValue: activeFilterValues.property_type,
   },
+  ...(activeFilterValues.transaction === 'sale' || activeFilterValues.transaction === 'rent'
+    ? [{
+      key: 'price',
+      title: t(`property.publicList.filterTitles.${activeFilterValues.transaction === 'sale' ? 'salePrice' : 'rentPrice'}`),
+      options: translateFilterOptions(
+        activeFilterValues.transaction === 'sale' ? 'salePrice' : 'rentPrice',
+        activeFilterValues.transaction === 'sale'
+          ? propertySalePriceRangeFilterOptions
+          : propertyRentPriceRangeFilterOptions,
+      ),
+      activeValue: activeFilterValues.price,
+    }]
+    : []),
   {
-    key: 'price',
-    title: t('property.publicList.filterTitles.price'),
-    options: translateFilterOptions('price', propertyPriceRangeFilterOptions),
-    activeValue: activeFilterValues.price,
+    key: 'area_mode',
+    title: t('property.publicList.filterTitles.area'),
+    options: translateFilterOptions('areaMode', propertyAreaModeFilterOptions),
+    activeValue: activeFilterValues.area_mode,
   },
   {
     key: 'area',
-    title: t('property.publicList.filterTitles.area'),
+    title: t('property.publicList.filterTitles.areaRange'),
     options: translateFilterOptions('area', propertyAreaRangeFilterOptions),
     activeValue: activeFilterValues.area,
   },
@@ -151,10 +172,10 @@ const filterGroups = computed<FilterGroup[]>(() => [
     activeValue: activeFilterValues.bedroom,
   },
   {
-    key: 'renovation',
-    title: t('property.publicList.filterTitles.renovation'),
-    options: translateFilterOptions('renovation', propertyRenovationFilterOptions),
-    activeValue: activeFilterValues.renovation,
+    key: 'tag',
+    title: t('property.publicList.filterTitles.tag'),
+    options: translateFilterOptions('tag', propertyTagFilterOptions),
+    activeValue: activeFilterValues.tag,
   },
   {
     key: 'publisher',
@@ -167,34 +188,14 @@ const activeFilterCount = computed(() =>
   filterGroups.value.filter((group) => Boolean(group.activeValue)).length,
 );
 const mobileQuickFilterGroups = computed<FilterGroup[]>(() =>
-  ['region', 'property_type', 'bedroom', 'renovation']
+  ['region', 'property_type', 'area_mode', 'bedroom', 'tag']
     .map((key) => filterGroups.value.find((group) => group.key === key))
     .filter((group): group is FilterGroup => Boolean(group)),
 );
 
 // 7. 樓盤卡片資料
-interface PropertyCard {
-  id: string;
+interface PropertyCard extends PropertyListingCardViewModel {
   listing: PropertyListingSummaryResponse;
-  typeStack: string[];
-  imageUrl?: string;
-  tags: { label: string; dark?: boolean }[];
-  title: string;
-  location: string;
-  sub: string;
-  agent?: string;
-  agentAvatarUrl?: string;
-  agentDefaultAvatar?: 'male' | 'female' | 'custom' | '';
-  agentLicense?: string;
-  agentSignature?: string;
-  agentCompanyCardUrl?: string;
-  priceKind: 'sale' | 'rent';
-  price: string;
-  priceUnit: string;
-  area: string;
-  areaPrice: string;
-  pills: string[];
-  favorite: boolean;
 }
 const cards = computed<PropertyCard[]>(() => items.value.map((listing) => toPropertyCard(listing)));
 
@@ -258,21 +259,28 @@ const buildListParams = (): PropertyListParams => {
   const region = activeValue('region');
   const transaction = activeValue('transaction');
   const propertyType = activeValue('property_type');
-  const price = propertyPriceRangeFilterOptions.find((item) => item.value === activeValue('price'));
+  const priceOptions = transaction === 'sale'
+    ? propertySalePriceRangeFilterOptions
+    : transaction === 'rent'
+      ? propertyRentPriceRangeFilterOptions
+      : [];
+  const price = priceOptions.find((item) => item.value === activeValue('price'));
+  const areaMode = activeValue('area_mode');
   const area = propertyAreaRangeFilterOptions.find((item) => item.value === activeValue('area'));
   const bedroom = activeValue('bedroom');
-  const renovation = activeValue('renovation');
+  const tag = activeValue('tag');
   const publisher = activeValue('publisher');
 
   if (region) params.region_code = region;
   if (transaction === 'sale' || transaction === 'rent') params.transaction_type = transaction;
   if (propertyType) params.property_type = propertyType;
+  if (areaMode === 'usable' || areaMode === 'gross') params.area_mode = areaMode;
   if (price?.min) params.min_price_hkd = price.min;
   if (price?.max) params.max_price_hkd = price.max;
   if (area?.min) params.min_area_sqft = area.min;
   if (area?.max) params.max_area_sqft = area.max;
   if (bedroom) params.bedroom_count = Number(bedroom);
-  if (renovation) params.feature_tags = renovation;
+  if (tag) params.feature_tags = tag;
   if (publisher) params.publisher_identity_type = publisher;
 
   return params;
@@ -286,6 +294,9 @@ const activeValue = (groupKey: string): string =>
 const handleFilterToggle = (groupKey: string, optionValue: string) => {
   if (groupKey in activeFilterValues) {
     activeFilterValues[groupKey] = optionValue;
+  }
+  if (groupKey === 'transaction') {
+    activeFilterValues.price = '';
   }
   currentPage.value = 1;
   void loadListings();
@@ -305,6 +316,7 @@ const clearFilters = (): void => {
   Object.keys(activeFilterValues).forEach((groupKey) => {
     activeFilterValues[groupKey] = '';
   });
+  activeFilterValues.area_mode = 'usable';
   currentPage.value = 1;
   void loadListings();
 };
@@ -314,12 +326,7 @@ const handleCardClick = (id: string) => {
   void router.push(`/properties/${id}`);
 };
 
-// 16. 隱藏失效樓盤封面
-const hideFailedImage = (event: Event): void => {
-  (event.currentTarget as HTMLImageElement).style.display = 'none';
-};
-
-// 17. 點擊分頁
+// 16. 點擊分頁
 const handlePageSelect = (page: PaginationPage) => {
   if (page.disabled || page.page === currentPage.value) {
     return;
@@ -360,21 +367,15 @@ const toggleFavorite = async (card: PropertyCard): Promise<void> => {
   }
 };
 
-// 21. 預約睇樓
-const openAppointment = (card: PropertyCard): void => {
-  void router.push({ path: `/properties/${card.id}`, query: { action: 'appointment' } });
-};
-
-// 22. 更新收藏狀態
+// 21. 更新收藏狀態
 const patchFavorite = (listingId: string, isFavorite: boolean): void => {
   items.value = items.value.map((listing) =>
     listing.listing_id === listingId ? { ...listing, is_favorite: isFavorite } : listing,
   );
 };
 
-// 23. 轉換卡片資料
+// 21. 轉換卡片資料
 const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard => {
-  const sale = listing.property_sale;
   const priceKind = resolvePropertyTransactionType(listing);
   const area = resolvePropertyArea(listing);
   const price = resolvePropertyPrice(listing);
@@ -385,42 +386,20 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
   const district = resolvePropertyDistrict(listing, preferenceStore.locale);
   const community = resolvePropertyCommunityName(listing, preferenceStore.locale);
   const isAgent = listing.publisher_identity_type === 'agent';
-  const role = isAgent
+  const typeLabel = resolvePropertyTypeLabel(listing, preferenceStore.locale);
+  const publisherLabel = isAgent
     ? t('property.publicList.agentListing')
     : t('property.publicList.ownerListing');
-  const typeLabel = resolvePropertyTypeLabel(listing, preferenceStore.locale);
-  const agent = (preferenceStore.locale === 'en'
-    ? listing.agent_snapshot?.name_en?.trim() || listing.agent_snapshot?.name_zh?.trim()
-    : listing.agent_snapshot?.name_zh?.trim() || listing.agent_snapshot?.name_en?.trim())
-    || sale?.agency_company_name?.trim()
-    || (isAgent
-      ? preferenceStore.locale === 'en' ? role : sale?.publisher_role_label || role
-      : t('property.publicList.ownerDirect'));
-  const publicLocation = preferenceStore.locale === 'en'
-    ? sale?.address_text_en || sale?.public_location_text
-    : sale?.public_location_text;
-
   return {
     id: listing.listing_id,
     listing,
-    typeStack: [typeLabel, role],
+    propertyType: typeLabel,
+    publisherLabel,
     imageUrl: cover?.url,
     tags: [{ label: district }, { label: typeLabel, dark: priceKind === 'rent' }],
     title: resolvePropertyTitle(listing, preferenceStore.locale),
     location: `${district} · ${community}`,
-    sub: [
-      publicLocation,
-      resolvePropertyRooms(listing, preferenceStore.locale),
-      sale?.direction,
-    ].filter(Boolean).join(' · '),
-    agent,
-    agentAvatarUrl: listing.agent_snapshot?.avatar_url || undefined,
-    agentDefaultAvatar: listing.agent_snapshot?.default_avatar,
-    agentLicense: listing.agent_snapshot?.license_number || undefined,
-    agentSignature: preferenceStore.locale === 'en'
-      ? listing.agent_snapshot?.signature_en || listing.agent_snapshot?.signature_zh || undefined
-      : listing.agent_snapshot?.signature_zh || listing.agent_snapshot?.signature_en || undefined,
-    agentCompanyCardUrl: listing.agent_snapshot?.company_card_url || undefined,
+    facts: resolvePropertyListingFacts(listing, preferenceStore.locale),
     priceKind,
     price: resolvePropertyPriceText(listing, preferenceStore.locale),
     priceUnit: priceKind === 'rent' ? t('property.publicList.rentUnit') : '',
@@ -431,7 +410,7 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
   };
 };
 
-// 24. 格式化港幣
+// 22. 格式化港幣
 const formatHKD = (value: number): string =>
   new Intl.NumberFormat(preferenceStore.locale, {
     style: 'currency',
@@ -439,19 +418,19 @@ const formatHKD = (value: number): string =>
     maximumFractionDigits: 0,
   }).format(value);
 
-// 25. 顯示自動補全
+// 24. 顯示自動補全
 const showAC = () => {
   showAutocomplete.value = keyword.value.length > 0;
 };
 
-// 26. 隱藏自動補全
+// 25. 隱藏自動補全
 const hideAC = () => {
   setTimeout(() => {
     showAutocomplete.value = false;
   }, 200);
 };
 
-// 27. 選擇自動補全項目
+// 26. 選擇自動補全項目
 const selectAC = (value: string) => {
   keyword.value = value;
   showAutocomplete.value = false;
@@ -583,6 +562,7 @@ onMounted(() => {
             v-for="group in filterGroups"
             :key="group.key"
             class="fs"
+            :class="{ 'price-range-filter': group.key === 'price' }"
           >
             <div class="ft-title">{{ group.title }}</div>
             <div class="ftags">
@@ -597,12 +577,20 @@ onMounted(() => {
           </section>
         </div>
 
+        <div class="desktop-filter-actions">
+          <button
+            type="button"
+            class="desktop-filter-reset"
+            @click="clearFilters"
+          >{{ t('property.publicList.reset') }}</button>
+        </div>
+
         <div class="filter-sheet-actions">
           <button
             type="button"
             class="filter-sheet-reset"
             @click="clearFilters"
-          >{{ t('property.publicList.clearAll') }}</button>
+          >{{ t('property.publicList.reset') }}</button>
           <button
             type="button"
             class="filter-sheet-apply"
@@ -758,119 +746,13 @@ onMounted(() => {
         <!-- 2.2 列表視圖 -->
         <div class="list-view">
           <div class="grid">
-            <div
+            <PropertyListingCard
               v-for="card in cards"
               :key="card.id"
-              class="gc"
-              @click="handleCardClick(card.id)"
-            >
-              <!-- 2.2.1 類型堆疊 -->
-              <div class="listing-card-type-stack">
-                <span
-                  v-for="(label, idx) in card.typeStack"
-                  :key="idx"
-                >{{ label }}</span>
-              </div>
-              <!-- 2.2.3 圖片區 -->
-              <div
-                class="gi pat"
-              >
-                <img
-                  v-if="card.imageUrl"
-                  :src="card.imageUrl"
-                  :alt="card.title"
-                  @error="hideFailedImage"
-                >
-                <svg
-                  v-else
-                  width="80"
-                  height="60"
-                  viewBox="0 0 80 60"
-                  opacity=".2"
-                >
-                  <rect x="5" y="15" width="70" height="40" rx="1" stroke="#000" stroke-width="1.2" fill="none" />
-                  <rect x="10" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
-                  <rect x="31" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
-                  <rect x="52" y="20" width="18" height="14" rx="1" stroke="#000" fill="none" />
-                  <rect x="28" y="37" width="24" height="18" rx="1" stroke="#000" fill="none" />
-                </svg>
-              </div>
-              <!-- 2.2.4 卡片內容 -->
-              <div class="gb">
-                <div class="gtags">
-                  <span
-                    v-for="(tag, idx) in card.tags"
-                    :key="idx"
-                    class="gtag"
-                    :class="tag.dark ? 'dark' : ''"
-                  >{{ tag.label }}</span>
-                </div>
-                <div class="gtitle">{{ card.title }}</div>
-                <div class="g-location">{{ card.location }}</div>
-                <div class="gsub">{{ card.sub }}</div>
-                <div
-                  v-if="card.agent"
-                  class="listing-agent"
-                >
-                  <div class="listing-agent-avatar" :class="card.agentDefaultAvatar ? `listing-agent-avatar--${card.agentDefaultAvatar}` : ''">
-                    <img v-if="card.agentAvatarUrl" :src="card.agentAvatarUrl" :alt="card.agent">
-                    <span v-else>{{ card.agent.slice(0, 1) }}</span>
-                  </div>
-                  <div class="listing-agent-copy">
-                    <strong>{{ card.agent }}</strong>
-                    <span v-if="card.agentLicense">{{ t('property.publicDetail.agentLicense', { license: card.agentLicense }) }}</span>
-                    <span v-if="card.agentSignature">{{ card.agentSignature }}</span>
-                  </div>
-                  <a
-                    v-if="card.agentCompanyCardUrl"
-                    class="listing-agent-card-link"
-                    :href="card.agentCompanyCardUrl"
-                    target="_blank"
-                    rel="noreferrer"
-                    @click.stop
-                  >{{ t('property.publicDetail.companyCard') }}</a>
-                </div>
-                <div class="gprice">
-                  <span
-                    class="listing-price-kind"
-                    :class="card.priceKind"
-                  >{{ card.priceKind === 'sale'
-                    ? t('property.publicList.sale')
-                    : t('property.publicList.rent') }}</span>{{ card.price }}<span v-if="card.priceUnit"> {{ card.priceUnit }}</span>
-                </div>
-                <div class="garea">
-                  {{ card.area }} <span class="garea-price">{{ card.areaPrice }}</span>
-                </div>
-                <div
-                  v-if="card.pills.length > 0"
-                  class="gpills"
-                >
-                  <span
-                    v-for="(pill, idx) in card.pills"
-                    :key="idx"
-                    class="gpill"
-                  >{{ pill }}</span>
-                </div>
-              </div>
-              <!-- 2.2.5 懸停操作按鈕 -->
-              <div class="gc-actions">
-                <button
-                  type="button"
-                  class="gc-action-btn"
-                  @click.stop="toggleFavorite(card)"
-                >{{ card.favorite ? t('property.publicList.favorited') : t('property.publicList.favorite') }}</button>
-                <button
-                  type="button"
-                  class="gc-action-btn"
-                  @click.stop="openAppointment(card)"
-                >{{ t('property.publicList.appointment') }}</button>
-                <button
-                  type="button"
-                  class="gc-action-btn primary"
-                  @click.stop="handleCardClick(card.id)"
-                >{{ t('property.publicList.view') }}</button>
-              </div>
-            </div>
+              :card="card"
+              @favorite="toggleFavorite(card)"
+              @open="handleCardClick(card.id)"
+            />
 
           </div>
         </div>
@@ -911,7 +793,7 @@ onMounted(() => {
 .page {
   width: 100%;
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 2. 三欄布局：對齊全局頁面寬度與左右留白 */
@@ -922,7 +804,7 @@ onMounted(() => {
   width: min(100%, var(--layout-page-max-width));
   margin: 0 auto;
   padding: 0 var(--layout-page-padding-inline);
-  background: var(--sur-2);
+  background: var(--sur);
   min-height: calc(100svh - var(--nav-h, 52px));
   align-items: stretch;
 }
@@ -947,6 +829,28 @@ onMounted(() => {
 .filter-sheet-actions,
 .mobile-listing-controls {
   display: none;
+}
+
+.desktop-filter-actions {
+  padding-top: 4px;
+}
+
+.desktop-filter-reset {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--sur);
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.desktop-filter-reset:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
 }
 
 /* 4. 搜尋欄（左側欄內嵌，負邊距撐滿） */
@@ -1024,9 +928,29 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 6. 中間列表區 */
+/* 6. 售價與租金區間採統一寬度選項，避免不同金額文字造成不規則換行 */
+.price-range-filter .ftags {
+  display: grid;
+  gap: 4px;
+}
+
+.price-range-filter :deep(.ft) {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 4px;
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.price-range-filter :deep(.ft.on) {
+  font-weight: 700;
+}
+
+/* 7. 中間列表區 */
 .lr {
-  background: var(--sur-2);
+  background: var(--sur);
   padding: 14px 14px 36px;
   min-width: 0;
   min-height: calc(100svh - var(--nav-h, 52px));
@@ -1142,7 +1066,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f3f3;
+  background: var(--sur);
 }
 
 .gi img {
@@ -1160,27 +1084,7 @@ onMounted(() => {
   min-height: 90px;
 }
 
-/* 12. 斜紋底圖 */
-.pat {
-  position: relative;
-  overflow: hidden;
-}
-
-.pat::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 5px,
-    rgba(0, 0, 0, 0.025) 5px,
-    rgba(0, 0, 0, 0.025) 10px
-  );
-  pointer-events: none;
-}
-
-/* 13. 卡片內容區 */
+/* 12. 卡片內容區 */
 .list-view .gc .gb {
   grid-column: 2;
   grid-row: 1;
@@ -1255,70 +1159,7 @@ onMounted(() => {
   line-height: 1.55;
 }
 
-/* 18. 代理公司 */
-.listing-agent {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.listing-agent-avatar {
-  display: grid;
-  overflow: hidden;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--sur-2);
-}
-
-.listing-agent-avatar--male {
-  background: #e8f1f6;
-  color: #315b70;
-}
-
-.listing-agent-avatar--female {
-  background: #f5e9ed;
-  color: #7f4758;
-}
-
-.listing-agent-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.listing-agent-copy {
-  display: grid;
-  min-width: 0;
-  gap: 1px;
-}
-
-.listing-agent-copy strong,
-.listing-agent-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.listing-agent-copy span {
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
-.listing-agent-card-link {
-  color: var(--ink-2);
-  font-size: var(--text-xs);
-  text-decoration: underline;
-}
-
-/* 19. 價格 */
+/* 18. 價格 */
 .gprice {
   display: flex;
   align-items: center;
@@ -1433,7 +1274,7 @@ onMounted(() => {
 /* 24. 懸停操作按鈕 */
 .gc-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   height: auto;
   max-height: 0;
@@ -1598,7 +1439,7 @@ onMounted(() => {
   align-self: start;
   overflow: visible;
   border-left: 1px solid var(--bdr);
-  background: var(--sur-2);
+  background: var(--sur);
   padding: 18px 18px 40px;
 }
 
@@ -1690,6 +1531,10 @@ onMounted(() => {
   }
 
   .desktop-filter-search {
+    display: none;
+  }
+
+  .desktop-filter-actions {
     display: none;
   }
 

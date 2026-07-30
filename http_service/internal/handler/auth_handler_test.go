@@ -28,3 +28,18 @@ func TestAuthHandlerLoginIdentifierRejectsMissingIdentifier(t *testing.T) {
 		t.Fatalf("unexpected validation response: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+// 2. TestAuthHandlerRegistrationAvailabilityRejectsMissingPhone validates the registration precheck request contract.
+func TestAuthHandlerRegistrationAvailabilityRejectsMissingPhone(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/registration/availability", strings.NewReader(`{"email":"member@example.com"}`))
+	context.Request.Header.Set("Content-Type", "application/json")
+
+	NewAuthHandler(nil).CheckRegistrationAvailability(context)
+
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"VALIDATION_ERROR"`) {
+		t.Fatalf("unexpected validation response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}

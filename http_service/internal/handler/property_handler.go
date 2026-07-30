@@ -310,12 +310,29 @@ func (h *PropertyHandler) PublishPropertySale(c *gin.Context) {
 	h.publish(c, service.PropertyChannelSale)
 }
 
-// 20. RepublishPropertySale republishes an expired sale listing.
+// 20. RepublishPropertySale republishes an active, expired, or hidden sale listing.
 func (h *PropertyHandler) RepublishPropertySale(c *gin.Context) {
 	h.republish(c, service.PropertyChannelSale)
 }
 
-// 21. MarkPropertySaleSold marks a sale listing as sold.
+// 21. RenewPropertySale extends one active sale listing by one calendar month.
+func (h *PropertyHandler) RenewPropertySale(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.propertyService.RenewPropertySale(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("listingId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 22. MarkPropertySaleSold marks a sale listing as sold.
 func (h *PropertyHandler) MarkPropertySaleSold(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -330,17 +347,17 @@ func (h *PropertyHandler) MarkPropertySaleSold(c *gin.Context) {
 	errcode.Success(c, gin.H{"listing_id": listingID, "business_status": "sold"})
 }
 
-// 22. DeactivatePropertySale hides a sale listing.
+// 23. DeactivatePropertySale hides a sale listing.
 func (h *PropertyHandler) DeactivatePropertySale(c *gin.Context) {
 	h.deactivate(c, service.PropertyChannelSale)
 }
 
-// 23. ContactAccessPropertySale grants sale contact access.
+// 24. ContactAccessPropertySale grants sale contact access.
 func (h *PropertyHandler) ContactAccessPropertySale(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelSale)
 }
 
-// 24. FavoritePropertySale saves one property sale listing.
+// 25. FavoritePropertySale saves one property sale listing.
 func (h *PropertyHandler) FavoritePropertySale(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -355,7 +372,7 @@ func (h *PropertyHandler) FavoritePropertySale(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 25. UnfavoritePropertySale removes one property sale listing from favorites.
+// 26. UnfavoritePropertySale removes one property sale listing from favorites.
 func (h *PropertyHandler) UnfavoritePropertySale(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {
@@ -370,7 +387,7 @@ func (h *PropertyHandler) UnfavoritePropertySale(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 26. SimilarPropertySales returns related public sale listings.
+// 27. SimilarPropertySales returns related public sale listings.
 func (h *PropertyHandler) SimilarPropertySales(c *gin.Context) {
 	limit, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("limit", "8")))
 	items, err := h.propertyService.ListSimilarProperties(c.Request.Context(), strings.TrimSpace(c.Param("listingId")), limit)

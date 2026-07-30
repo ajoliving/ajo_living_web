@@ -261,7 +261,7 @@ onMounted(() => {
   --pay-highlight-surface: rgb(var(--color-primary) / 0.12);
   display: grid;
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--pay-surface-2);
+  background: rgb(var(--color-surface));
   color: var(--pay-ink);
 }
 

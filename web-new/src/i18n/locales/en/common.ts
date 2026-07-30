@@ -19,9 +19,6 @@ export default {
     saveDraft: 'Save draft',
     signIn: 'Sign in',
     signOut: 'Sign out',
-    switchTheme: 'Switch theme',
-    switchToDark: 'Switch to dark mode',
-    switchToLight: 'Switch to light mode',
     switchLanguage: 'Switch language',
     close: 'Close',
     retry: 'Try again',
@@ -55,12 +52,6 @@ export default {
     enShort: 'EN',
     zhHk: 'Traditional Chinese',
     en: 'English',
-  },
-  theme: {
-    default: 'Default',
-    htmlFidelity: 'HTML Fidelity',
-    copperSun: 'Copper',
-    darkNeutral: 'Dark',
   },
   empty: {
     listingsTitle: 'No listings match the current filters.',

@@ -848,6 +848,8 @@ export default {
     confirmPublishCharge: 'Publishing will charge',
     confirmRepublishCharge: 'Republishing will charge',
     confirmRenewCharge: 'Renewing will charge',
+    confirmActionTitle: 'Confirm action',
+    cancelAction: 'Cancel',
     detailKicker: 'Publisher view',
     detailDescription: 'Review listing content, publishing status, and management actions.',
     editDetailAction: 'Edit listing details',

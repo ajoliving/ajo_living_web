@@ -153,7 +153,7 @@ const toFeaturedCard = (
       })}`
       : t('property.editor.areaUnverifiedField'),
     imgClass: index % 2 === 1 ? 'short' : 'tall',
-    bg: 'linear-gradient(160deg,#e8e8e8,#d0d0d0)',
+    bg: 'var(--sur)',
     imageUrl,
     targetPath: resolvePropertyDetailPath(listing),
   };
@@ -383,7 +383,7 @@ onMounted(() => {
     </div>
 
     <!-- 3. 精選樓盤 -->
-    <div class="home-section" style="background:var(--g1);padding-top:32px;padding-bottom:32px;">
+    <div class="home-section" style="background:var(--sur);padding-top:32px;padding-bottom:32px;">
       <div class="home-sec-title">{{ t('home.newShell.featuredTitle') }}</div>
       <div class="feat-grid">
         <div

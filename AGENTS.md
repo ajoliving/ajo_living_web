@@ -194,5 +194,8 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 2026-07-09: 補充每次修改後必須執行 prompt/context 記憶檢查的默認規則。
 2026-07-16: 補充個人註冊先完成 iSmart 與本地帳戶建立、再提交 OwnerReg 審批申請；pending 申請不得被視為已綁定物業。
 2026-07-16: 補充 iSmart 共用大廈資料使用 Redis 短時快取，會員權限與個人回應欄位維持即時校驗及組裝。
+2026-07-28: 補充樓盤草稿預付積分抵扣正式發布費用的統一收費與會員確認契約。
+2026-07-28: 補充歷史樓盤草稿重複扣費以不可變退款流水更正，以及錢包來源必須本地化顯示的契約。
+2026-07-30: 補充個人與公司代理於註冊頁完成牌照上載及待審資料提交，牌照號碼作為登入用戶名稱，僅審核通過後啟用正常帳戶權限。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

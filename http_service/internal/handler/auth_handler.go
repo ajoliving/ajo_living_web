@@ -64,6 +64,13 @@ type emailPasswordRequest struct {
 	ResidenceUnit         string `json:"residence_unit"`
 }
 
+// 5.1 registrationAvailabilityRequest defines identity fields checked before account creation.
+type registrationAvailabilityRequest struct {
+	Email            string `json:"email"`
+	PhoneCountryCode string `json:"phone_country_code" binding:"required"`
+	PhoneNumber      string `json:"phone_number" binding:"required"`
+}
+
 // 6. passwordResetRequest defines email password reset payload.
 type passwordResetRequest struct {
 	Email    string `json:"email" binding:"required"`
@@ -249,6 +256,27 @@ func (h *AuthHandler) RegisterEmail(c *gin.Context) {
 		PrimaryCommunityName:  strings.TrimSpace(request.PrimaryCommunityName),
 		ResidenceFloor:        strings.TrimSpace(request.ResidenceFloor),
 		ResidenceUnit:         strings.TrimSpace(request.ResidenceUnit),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 16.1 CheckRegistrationAvailability checks whether registration email and phone values are already in use.
+func (h *AuthHandler) CheckRegistrationAvailability(c *gin.Context) {
+	var request registrationAvailabilityRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.authService.CheckRegistrationAvailability(c.Request.Context(), service.RegistrationAvailabilityParams{
+		Email:            strings.TrimSpace(request.Email),
+		PhoneCountryCode: strings.TrimSpace(request.PhoneCountryCode),
+		PhoneNumber:      strings.TrimSpace(request.PhoneNumber),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)

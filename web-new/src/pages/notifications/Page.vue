@@ -439,7 +439,7 @@ onMounted(() => {
 /* 1. 頁面外框 */
 #page-notif {
   min-height: calc(100svh - 48px);
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 2. 雙欄主版面 */

@@ -42,6 +42,9 @@ func registerAuthRoutes(
 	api.POST("/auth/email/register", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
 		return "email_register:" + c.ClientIP()
 	}), authHandler.RegisterEmail)
+	api.POST("/auth/registration/availability", limiter.Limit(10, 10*time.Minute, func(c *gin.Context) string {
+		return "registration_availability:" + c.ClientIP()
+	}), authHandler.CheckRegistrationAvailability)
 	api.POST("/auth/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
 		return "identifier_login:" + c.ClientIP()
 	}), authHandler.LoginIdentifier)

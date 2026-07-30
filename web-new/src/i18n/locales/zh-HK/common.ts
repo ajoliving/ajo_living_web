@@ -19,9 +19,6 @@ export default {
     saveDraft: '儲存草稿',
     signIn: '登入',
     signOut: '登出帳戶',
-    switchTheme: '切換主題',
-    switchToDark: '切換至深色模式',
-    switchToLight: '切換至淺色模式',
     switchLanguage: '切換語系',
     close: '關閉',
     retry: '再次嘗試',
@@ -55,12 +52,6 @@ export default {
     enShort: 'EN',
     zhHk: '繁體中文',
     en: 'English',
-  },
-  theme: {
-    default: '預設',
-    htmlFidelity: '高保真',
-    copperSun: '暖銅',
-    darkNeutral: '深色',
   },
   empty: {
     listingsTitle: '暫時未有符合條件的帖子',

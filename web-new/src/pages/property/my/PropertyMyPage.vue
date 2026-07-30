@@ -27,6 +27,7 @@ import {
   publishServicedApartment,
   republishPropertySale,
   republishServicedApartment,
+  renewPropertySale,
 } from '@/httpapis/properties';
 import type { PaginationMeta } from '@/model/api';
 import type {
@@ -34,6 +35,7 @@ import type {
   PropertyListParams,
   PropertyListingSummaryResponse,
 } from '@/model/property';
+import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -61,7 +63,7 @@ const props = defineProps<{
 }>();
 
 type MyPropertyTab = 'all' | 'draft' | 'active' | 'hidden' | 'expired' | 'sold';
-type MyPropertyAction = 'publish' | 'republish' | 'mark-sold' | 'deactivate';
+type MyPropertyAction = 'publish' | 'republish' | 'renew' | 'mark-sold' | 'deactivate';
 interface PropertyEditorDialogStepPayload {
   activeIndex: number;
   total: number;
@@ -90,6 +92,8 @@ const editorListingId = ref('');
 const editorStepIndex = ref(0);
 const editorStepTotal = ref(4);
 const propertyEditorDialog = ref<PropertyEditorDialogInstance | null>(null);
+const pendingAction = ref<{ action: MyPropertyAction; listing: PropertyListingSummaryResponse } | null>(null);
+const actionLoading = ref(false);
 
 const pageTitle = computed(() =>
   props.channel === 'sale' ? t('property.sale.myTitle') : t('property.serviced.myTitle'),
@@ -137,6 +141,28 @@ const editorDialogKey = computed(() =>
 );
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
+const resolveActionCharge = (action: MyPropertyAction, listing: PropertyListingSummaryResponse): number => {
+  if (action === 'publish') {
+    const publishTotal = listing.publish_points_total ?? chargeCost.value;
+    const draftPointsPaid = listing.draft_points_paid ?? 0;
+    return Math.max(publishTotal - draftPointsPaid, 0);
+  }
+  if (action === 'republish') {
+    return listing.property_sale?.ad_price_points ?? listing.serviced_apartment?.ad_price_points ?? chargeCost.value;
+  }
+  if (action === 'renew') {
+    const publishCost = listing.property_sale?.ad_price_points ?? chargeCost.value;
+    return Math.ceil(publishCost / 2);
+  }
+  return 0;
+};
+const resolvePublishActionLabel = (listing: PropertyListingSummaryResponse): string => {
+  const pointsDue = resolveActionCharge('publish', listing);
+  if (pointsDue === 0) {
+    return t('property.mine.publish');
+  }
+  return `${t('property.mine.publish')} · ${formatPoints(pointsDue)}`;
+};
 const tabOptions = computed<Array<{ label: string; value: MyPropertyTab }>>(() => [
   { label: t('property.mine.all'), value: 'all' },
   { label: t('property.mine.draft'), value: 'draft' },
@@ -163,6 +189,53 @@ const paginationText = computed(() => {
     end,
     total: pagination.value.total,
   });
+});
+const confirmDescription = computed(() => {
+  const action = pendingAction.value?.action;
+  if (!action) {
+    return '';
+  }
+
+  const listing = pendingAction.value?.listing;
+  if (!listing) {
+    return '';
+  }
+  if (action === 'publish') {
+    const due = resolveActionCharge(action, listing);
+    const paid = listing.draft_points_paid ?? 0;
+    const total = listing.publish_points_total ?? chargeCost.value;
+    if (due === 0 && paid >= total) {
+      return t('property.mine.confirmPublishDraftFullyPaid');
+    }
+    if (paid > 0) {
+      return t('property.mine.confirmPublishDraftCharge', {
+        due: formatPoints(due),
+        total: formatPoints(total),
+        paid: formatPoints(paid),
+      });
+    }
+    return `${t('property.mine.confirmPublishCharge')} ${formatPoints(due)}`;
+  }
+  if (action === 'republish') {
+    return `${t('property.mine.confirmRepublishCharge')} ${formatPoints(resolveActionCharge(action, listing))}`;
+  }
+  if (action === 'renew') {
+    return `${t('property.mine.confirmRenewCharge')} ${formatPoints(resolveActionCharge(action, listing))}`;
+  }
+
+  if (action === 'deactivate') {
+    return t('property.mine.confirmDeactivate');
+  }
+
+  return t('property.sale.soldConfirm');
+});
+const confirmActionLabel = computed(() => {
+  const action = pendingAction.value?.action;
+  if (action === 'mark-sold') {
+    return t('property.sale.soldAction');
+  }
+
+  return action ? t(`property.mine.${action}`) : '';
 });
 
 // 1.1 重置彈窗步驟狀態
@@ -343,50 +416,57 @@ const resolveAdPackageText = (listing: PropertyListingSummaryResponse): string =
   return matched ? getPropertyOptionLabel(matched, preferenceStore.locale) : packageCode;
 };
 
-// 18. 執行狀態操作
-const runAction = async (action: MyPropertyAction, listingId: string): Promise<void> => {
-  if ((action === 'publish' || action === 'republish') &&
-    !window.confirm(`${t(action === 'publish' ? 'property.mine.confirmPublishCharge' : 'property.mine.confirmRepublishCharge')} ${formatPoints(chargeCost.value)}`)) {
-    return;
+// 18. 開啟狀態操作確認
+const requestAction = (action: MyPropertyAction, listing: PropertyListingSummaryResponse): void => {
+  if (!actionLoading.value) {
+    pendingAction.value = { action, listing };
   }
-  if (action === 'deactivate' && !window.confirm(t('property.mine.confirmDeactivate'))) {
-    return;
-  }
-  if (action === 'mark-sold' && !window.confirm(t('property.sale.soldConfirm'))) {
+};
+
+// 19. 執行已確認的狀態操作
+const confirmAction = async (): Promise<void> => {
+  const target = pendingAction.value;
+  if (!target || actionLoading.value) {
     return;
   }
 
+  pendingAction.value = null;
+  actionLoading.value = true;
   try {
+    const listingId = target.listing.listing_id;
     if (props.channel === 'sale') {
-      if (action === 'publish') {
+      if (target.action === 'publish') {
         await publishPropertySale(listingId);
       }
-      if (action === 'republish') {
+      if (target.action === 'republish') {
         await republishPropertySale(listingId);
       }
-      if (action === 'mark-sold') {
+      if (target.action === 'renew') {
+        await renewPropertySale(listingId);
+      }
+      if (target.action === 'mark-sold') {
         await markPropertySaleSold(listingId);
       }
-      if (action === 'deactivate') {
+      if (target.action === 'deactivate') {
         await deactivatePropertySale(listingId);
       }
     } else {
-      if (action === 'publish') {
+      if (target.action === 'publish') {
         await publishServicedApartment(listingId);
       }
-      if (action === 'republish') {
+      if (target.action === 'republish') {
         await republishServicedApartment(listingId);
       }
-      if (action === 'deactivate') {
+      if (target.action === 'deactivate') {
         await deactivateServicedApartment(listingId);
       }
     }
 
     feedbackStore.pushToast(t('property.mine.statusUpdated'), 'success');
-    if (action === 'publish' || action === 'republish') {
+    if (target.action === 'publish' || target.action === 'republish' || target.action === 'renew') {
       await sessionStore.loadCurrentUser();
     }
-    if (action === 'publish' || action === 'republish') {
+    if (target.action === 'publish' || target.action === 'republish') {
       activeTab.value = 'active';
       await loadMyListings(1);
       return;
@@ -400,10 +480,17 @@ const runAction = async (action: MyPropertyAction, listingId: string): Promise<v
         : t('property.mine.updateError'),
       'error',
     );
+  } finally {
+    actionLoading.value = false;
   }
 };
 
-// 19. 輸出狀態顯示
+// 20. 關閉狀態操作確認
+const cancelAction = (): void => {
+  pendingAction.value = null;
+};
+
+// 21. 輸出狀態顯示
 const resolveStatusLabel = (listing: PropertyListingSummaryResponse): string =>
   t(`property.mine.${resolvePropertyStatus(listing)}`);
 
@@ -599,23 +686,31 @@ onMounted(() => {
               v-if="listing.publication_status === 'draft'"
               type="button"
               class="property-button property-button--primary"
-              @click="runAction('publish', listing.listing_id)"
+              @click="requestAction('publish', listing)"
             >
-              {{ t('property.mine.publish') }} · {{ formatPoints(chargeCost) }}
+              {{ resolvePublishActionLabel(listing) }}
             </button>
             <button
               v-if="listing.publication_status === 'expired' || listing.publication_status === 'hidden'"
               type="button"
               class="property-button property-button--primary"
-              @click="runAction('republish', listing.listing_id)"
+              @click="requestAction('republish', listing)"
             >
-              {{ t('property.mine.republish') }} · {{ formatPoints(chargeCost) }}
+              {{ t('property.mine.republish') }} · {{ formatPoints(resolveActionCharge('republish', listing)) }}
             </button>
             <button
               v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
               type="button"
               class="property-button property-button--secondary"
-              @click="runAction('mark-sold', listing.listing_id)"
+              @click="requestAction('renew', listing)"
+            >
+              {{ t('property.mine.renew') }} · {{ formatPoints(resolveActionCharge('renew', listing)) }}
+            </button>
+            <button
+              v-if="channel === 'sale' && listing.publication_status === 'active' && listing.business_status !== 'sold'"
+              type="button"
+              class="property-button property-button--secondary"
+              @click="requestAction('mark-sold', listing)"
             >
               {{ t('property.sale.soldAction') }}
             </button>
@@ -623,7 +718,7 @@ onMounted(() => {
               v-if="listing.publication_status === 'active'"
               type="button"
               class="property-button property-button--secondary"
-              @click="runAction('deactivate', listing.listing_id)"
+              @click="requestAction('deactivate', listing)"
             >
               {{ t('property.mine.deactivate') }}
             </button>
@@ -719,6 +814,17 @@ onMounted(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <AppActionConfirmDialog
+      :open="Boolean(pendingAction)"
+      :title="t('property.mine.confirmActionTitle')"
+      :description="confirmDescription"
+      :cancel-label="t('property.mine.cancelAction')"
+      :confirm-label="confirmActionLabel"
+      :confirming="actionLoading"
+      @cancel="cancelAction"
+      @confirm="confirmAction"
+    />
   </main>
 </template>
 

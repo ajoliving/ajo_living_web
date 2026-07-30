@@ -29,6 +29,7 @@ func TestRegisterAuthRoutesIncludesUnifiedLogin(t *testing.T) {
 		routes[route.Method+" "+route.Path] = true
 	}
 	for _, route := range []string{
+		"POST /api/v1/auth/registration/availability",
 		"POST /api/v1/auth/login",
 		"POST /api/v1/auth/email/login",
 		"POST /api/v1/auth/username/login",

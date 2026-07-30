@@ -5,17 +5,21 @@
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 
 import { useMarketplaceMyListingPreviewPage } from './preview';
 
 const {
   actionLoading,
+  cancelAction,
   canDeactivate,
   canMarkSold,
   canPublish,
   canRepublish,
   canRenew,
   categoryLabel,
+  confirmAction,
+  confirmDescription,
   coverImage,
   districtLabel,
   formatAjoPoints,
@@ -26,7 +30,8 @@ const {
   openEditor,
   openPublicDetail,
   publishedAt,
-  runAction,
+  pendingAction,
+  requestAction,
   secondhandRenewChargeCost,
   statusLabel,
   t,
@@ -86,7 +91,7 @@ const {
           type="button"
           class="preview-action preview-action--primary"
           :disabled="actionLoading"
-          @click="runAction('publish')"
+          @click="requestAction('publish')"
         >
           <AppIcon
             name="plus-square"
@@ -99,7 +104,7 @@ const {
           type="button"
           class="preview-action preview-action--primary"
           :disabled="actionLoading"
-          @click="runAction('republish')"
+          @click="requestAction('republish')"
         >
           <AppIcon
             name="reload"
@@ -112,7 +117,7 @@ const {
           type="button"
           class="preview-action preview-action--primary"
           :disabled="actionLoading"
-          @click="runAction('renew')"
+          @click="requestAction('renew')"
         >
           <AppIcon
             name="clock"
@@ -125,7 +130,7 @@ const {
           type="button"
           class="preview-action"
           :disabled="actionLoading"
-          @click="runAction('mark-sold')"
+          @click="requestAction('mark-sold')"
         >
           <AppIcon
             name="check-circle"
@@ -138,7 +143,7 @@ const {
           type="button"
           class="preview-action"
           :disabled="actionLoading"
-          @click="runAction('deactivate')"
+          @click="requestAction('deactivate')"
         >
           <AppIcon
             name="close"
@@ -200,6 +205,17 @@ const {
         </ol>
       </aside>
     </section>
+
+    <AppActionConfirmDialog
+      :open="Boolean(pendingAction)"
+      :title="t('marketplace.mine.confirmActionTitle')"
+      :description="confirmDescription"
+      :cancel-label="t('marketplace.mine.cancelAction')"
+      :confirm-label="pendingAction ? t(`marketplace.mine.${pendingAction}Action`) : ''"
+      :confirming="actionLoading"
+      @cancel="cancelAction"
+      @confirm="confirmAction"
+    />
   </main>
 </template>
 

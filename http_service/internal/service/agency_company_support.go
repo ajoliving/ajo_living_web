@@ -102,11 +102,10 @@ func (s *AgencyProfileService) validateIndividualAgencySubmission(ctx context.Co
 	return s.validateAgencyProfileAssets(ctx, tx, profile, userID)
 }
 
-// 5. validateCompanyAgencySubmission validates company fields and certificates.
+// 5. validateCompanyAgencySubmission validates company identity and licence evidence.
 func (s *AgencyProfileService) validateCompanyAgencySubmission(ctx context.Context, tx *gorm.DB, profile *model.AgencyProfile, userID int64) error {
-	if !validRequiredText(profile.AddressZH, 500) || !validRequiredText(profile.AddressEN, 500) ||
-		!validRequiredText(profile.LicenseNumber, 120) || profile.EAALicenseAssetID == nil || profile.BusinessRegistrationAssetID == nil {
-		return errcode.New(errcode.CodeValidationError, "complete agency company information and certificates are required")
+	if !validRequiredText(profile.LicenseNumber, 120) || profile.EAALicenseAssetID == nil {
+		return errcode.New(errcode.CodeValidationError, "company licence number and licence image are required")
 	}
 	return s.validateAgencyProfileAssets(ctx, tx, profile, userID)
 }

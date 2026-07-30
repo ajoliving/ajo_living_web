@@ -43,6 +43,7 @@ export default {
     heroSubtitle: 'Search prices across major Hong Kong supermarkets and filter by effective price, discount, or store.',
     searchPlaceholder: 'Search products, brands, or categories...',
     noSuggestions: 'No matching suggestions.',
+    showMoreSuggestions: 'Show more suggestions',
     search: 'Search',
     loading: 'Loading',
     myFavorites: 'My favorites',

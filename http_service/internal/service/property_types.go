@@ -346,6 +346,9 @@ type PropertyListingSummary struct {
 	PropertySale          *PropertySalePayload      `json:"property_sale,omitempty"`
 	ServicedApartment     *ServicedApartmentPayload `json:"serviced_apartment,omitempty"`
 	IsFavorite            bool                      `json:"is_favorite"`
+	DraftPointsPaid       *int64                    `json:"draft_points_paid,omitempty"`
+	PublishPointsDue      *int64                    `json:"publish_points_due,omitempty"`
+	PublishPointsTotal    *int64                    `json:"publish_points_total,omitempty"`
 }
 
 // 12.1 PropertyAgentSnapshot defines approved public agent data captured by a listing.

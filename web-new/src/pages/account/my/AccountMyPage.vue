@@ -172,12 +172,6 @@ const displayText = (value: unknown, fallback = unsetText.value): string => {
   return text || fallback;
 };
 
-// 8. 遮罩證件編號
-const maskIdentityNumber = (value: unknown): string => {
-  const text = String(value ?? '').trim();
-  return text ? '********' : unsetText.value;
-};
-
 const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
 const accountDisplayName = computed(() => displayText(sessionStore.me?.display_name, sessionStore.currentUser.display_name));
 const accountAvatarText = computed(() => accountDisplayName.value.trim().slice(0, 1).toUpperCase() || 'A');
@@ -799,17 +793,24 @@ const ismartAccountData = computed<AccountDisplayField[]>(() => [
   },
   { label: t('account.center.account.ownerNameEnglish'), value: displayText(ismartProfile.value?.owner_name_en) },
   { label: t('account.center.account.ownerNameChinese'), value: displayText(ismartProfile.value?.owner_name_zh) },
-  { label: t('account.center.account.identityNumber'), value: maskIdentityNumber(ismartProfile.value?.identity_number) },
+  { label: t('account.center.account.accountName'), value: displayText(ismartProfile.value?.account_name) },
+  { label: t('account.center.account.identityNumber'), value: displayText(ismartProfile.value?.identity_number) },
 ]);
 
 const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
   { label: t('account.center.account.legalEntity'), value: displayText(ismartProfile.value?.legal_entity) },
+  { label: t('account.center.account.clientType'), value: displayText(ismartProfile.value?.client_type) },
   { label: t('account.center.account.gender'), value: displayText(ismartProfile.value?.gender) },
   { label: t('account.center.account.birthDate'), value: displayText(ismartProfile.value?.birth_date) },
   { label: t('account.center.account.contactName'), value: displayText(ismartProfile.value?.contact_name) },
   { label: t('account.center.account.contactPhone'), value: displayText(ismartProfile.value?.contact_phone) },
+  { label: t('account.center.account.emergencyContactName'), value: displayText(ismartProfile.value?.emergency_contact_name) },
+  { label: t('account.center.account.emergencyContactPhone'), value: displayText(ismartProfile.value?.emergency_contact_phone) },
+  { label: t('account.center.account.billingPhone'), value: displayText(ismartProfile.value?.billing_phone) },
   { label: t('account.center.account.billingEmail'), value: displayText(ismartProfile.value?.billing_email) },
   { label: t('account.center.account.billingAddress'), value: displayText(ismartProfile.value?.billing_address) },
+  { label: t('account.center.account.billingAddressEnglish'), value: displayText(ismartProfile.value?.billing_address_en) },
+  { label: t('account.center.account.billingAddressChinese'), value: displayText(ismartProfile.value?.billing_address_zh) },
 ]);
 
 interface SubaccountDisplayRow {
@@ -2134,7 +2135,7 @@ watch(activePanel, () => {
 /* 1. 頁面容器 */
 .page {
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur-2);
+  background: var(--sur);
   color: var(--ink);
 }
 

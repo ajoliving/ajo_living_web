@@ -129,6 +129,13 @@ func (s *PropertyService) upsertPropertySale(ctx context.Context, params UpsertP
 			return err
 		}
 		if chargeDraftSave {
+			hasPrepaid, err := s.hasPropertyDraftPrepayment(ctx, tx, listing.ID)
+			if err != nil {
+				return err
+			}
+			if hasPrepaid {
+				return nil
+			}
 			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, WalletActionSaveDraft)
 			if err != nil {
 				return err
@@ -197,10 +204,19 @@ func (s *PropertyService) updatePropertySaleWithCharge(ctx context.Context, para
 		returnPublicID = listing.PublicID
 
 		chargeAction := ""
-		if shouldChargeListingEdit(listing) {
-			chargeAction = WalletActionEdit
-		} else if params.ChargeDraftSave {
+		if listing.PublicationStatus == "draft" && params.ChargeDraftSave {
 			chargeAction = WalletActionSaveDraft
+		}
+		if chargeAction != "" {
+			if chargeAction == WalletActionSaveDraft {
+				hasPrepaid, err := s.hasPropertyDraftPrepayment(ctx, tx, listing.ID)
+				if err != nil {
+					return err
+				}
+				if hasPrepaid {
+					chargeAction = ""
+				}
+			}
 		}
 		if chargeAction != "" {
 			chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, chargeAction)
@@ -624,7 +640,11 @@ func (s *PropertyService) preserveExistingPropertyContact(ctx context.Context, t
 }
 
 // 9. validateSaleParams validates sale listing payloads.
-func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) error {
+func (s *PropertyService) validateSaleParams(params UpsertPropertySaleParams) (validationError error) {
+	defer func() {
+		validationError = propertyValidationErrorWithField(validationError)
+	}()
+
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.Description) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.PropertyType) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required property fields")
 	}
@@ -805,7 +825,11 @@ func hasStringValue(values []string, target string) bool {
 }
 
 // 13. validateServicedParams validates serviced apartment payloads.
-func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentParams) error {
+func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentParams) (validationError error) {
+	defer func() {
+		validationError = propertyValidationErrorWithField(validationError)
+	}()
+
 	if strings.TrimSpace(params.Title) == "" || strings.TrimSpace(params.ProjectName) == "" || strings.TrimSpace(params.DistrictCode) == "" || strings.TrimSpace(params.AddressText) == "" {
 		return errcode.New(errcode.CodeValidationError, "missing required serviced apartment fields")
 	}
@@ -875,6 +899,79 @@ func (s *PropertyService) validateServicedParams(params UpsertServicedApartmentP
 	}
 
 	return nil
+}
+
+// 13.1 propertyValidationErrorWithField maps property validation failures to stable API field identifiers.
+func propertyValidationErrorWithField(validationError error) error {
+	if validationError == nil {
+		return nil
+	}
+
+	var appError *errcode.AppError
+	if !errors.As(validationError, &appError) || appError.Code != errcode.CodeValidationError || len(appError.Errors) > 0 {
+		return validationError
+	}
+
+	field, reason := propertyValidationField(appError.Message)
+	if field == "" {
+		return validationError
+	}
+	return errcode.NewWithFields(errcode.CodeValidationError, "請檢查表單資料", []errcode.FieldError{{
+		Field:  field,
+		Reason: reason,
+	}})
+}
+
+// 13.2 propertyValidationField maps existing validation reasons without changing persistence behavior.
+func propertyValidationField(message string) (string, string) {
+	fields := map[string]struct {
+		field  string
+		reason string
+	}{
+		"missing required property fields":                           {"title", "請填寫樓盤基本資料"},
+		"missing required property english fields":                   {"title_en", "請補充 English 標題、介紹及地址"},
+		"title is too long":                                          {"title", "標題超過可接受長度"},
+		"english title is too long":                                  {"title_en", "English 標題超過可接受長度"},
+		"description is too long":                                    {"description", "介紹超過可接受長度"},
+		"english description is too long":                            {"description_en", "English 介紹超過可接受長度"},
+		"invalid transaction type":                                   {"transaction_type", "租售類型無效"},
+		"invalid location scope":                                     {"location_scope", "地點範圍無效"},
+		"invalid listing category":                                   {"listing_category", "放盤類別無效"},
+		"invalid property type":                                      {"property_type", "物業類型無效"},
+		"estate name is required":                                    {"estate_name", "請填寫大廈名稱"},
+		"valid asking price is required":                             {"asking_price_hkd", "請填寫有效放售價"},
+		"valid monthly rent is required":                             {"monthly_rent_hkd", "請填寫有效月租"},
+		"property no is required":                                    {"property_no", "請填寫物業編號"},
+		"valid usable area is required":                              {"usable_area_sqft", "請填寫有效實用面積"},
+		"valid gross area is required":                               {"gross_area_sqft", "請填寫有效建築面積"},
+		"category tag is required":                                   {"feature_tags", "請選擇至少一項物業分類"},
+		"residential category tag is required":                       {"feature_tags", "請選擇至少一項住宅分類"},
+		"invalid area mode":                                          {"area_mode", "面積類型無效"},
+		"invalid contact method":                                     {"contact_method", "主要聯絡方式無效"},
+		"invalid business status":                                    {"business_status", "樓盤狀態無效"},
+		"invalid district code":                                      {"district_code", "請選擇有效地區"},
+		"at least one contact channel must be enabled":               {"contact", "請保留至少一種聯絡方式"},
+		"invalid ad package":                                         {"ad_package_code", "廣告等級無效"},
+		"owner contact name and phone are required":                  {"contact", "請填寫聯絡人姓名及電話"},
+		"student friendly tag is only available for rental listings": {"feature_tags", "學生友善只適用於放租樓盤"},
+		"missing required serviced apartment fields":                 {"project_name", "請填寫服務住宅基本資料"},
+		"minimum stay is required":                                   {"min_stay_value", "請填寫最短入住期"},
+		"maximum area cannot be lower than minimum area":             {"max_usable_area_sqft", "最高面積不可小於最低面積"},
+		"at least one room type is required":                         {"room_types", "請新增至少一個房型"},
+		"room type name is required":                                 {"room_types", "請填寫房型名稱"},
+		"room type requires a monthly or daily price":                {"room_types", "請填寫房型月租或日租"},
+		"monthly maximum rent cannot be lower than minimum rent":     {"room_types", "房型最高月租不可低於最低月租"},
+		"daily maximum rent cannot be lower than minimum rent":       {"room_types", "房型最高日租不可低於最低日租"},
+		"invalid room type area":                                     {"room_types", "房型面積無效"},
+		"room type maximum area cannot be lower than minimum area":   {"room_types", "房型最高面積不可低於最低面積"},
+		"invalid minimum stay unit":                                  {"room_types", "房型入住單位無效"},
+		"serviced apartment contact is required":                     {"contact", "請填寫至少一種聯絡資料"},
+	}
+	item, ok := fields[message]
+	if !ok {
+		return "", ""
+	}
+	return item.field, item.reason
 }
 
 // 11. validatePropertyTextLimits validates xlsx text length rules.
@@ -1468,6 +1565,53 @@ func (s *PropertyService) buildPropertyContact(listingID int64, input PropertyCo
 	return contact, nil
 }
 
+// 17.1 buildPropertyEditableContact decrypts contact data for the listing owner or an authorized manager.
+func (s *PropertyService) buildPropertyEditableContact(contact *model.ListingContact) (*ListingEditableContact, error) {
+	phone, err := s.decryptPropertyContactValue(contact.PhoneEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	phone2, err := s.decryptPropertyContactValue(contact.Phone2Encrypted)
+	if err != nil {
+		return nil, err
+	}
+	whatsApp, err := s.decryptPropertyContactValue(contact.WhatsAppEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	weChat, err := s.decryptPropertyContactValue(contact.WeChatEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	email, err := s.decryptPropertyContactValue(contact.EmailEncrypted)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ListingEditableContact{
+		ContactNameZH: contact.ContactNameZH,
+		ContactNameEN: contact.ContactNameEN,
+		Phone:         phone,
+		Phone2:        phone2,
+		WhatsApp:      whatsApp,
+		WeChat:        weChat,
+		Email:         email,
+	}, nil
+}
+
+// 17.2 decryptPropertyContactValue returns an empty value for an unconfigured contact field.
+func (s *PropertyService) decryptPropertyContactValue(encrypted string) (string, error) {
+	if strings.TrimSpace(encrypted) == "" {
+		return "", nil
+	}
+
+	value, err := utils.DecryptString(s.runtime.Config.EncryptionKey, encrypted)
+	if err != nil {
+		return "", errcode.New(errcode.CodeInternalError, "failed to read listing contact")
+	}
+	return value, nil
+}
+
 // 18. resolveCommunityID resolves an optional community id.
 func (s *PropertyService) resolveCommunityID(ctx context.Context, communityPublicID string) (*int64, error) {
 	if strings.TrimSpace(communityPublicID) == "" {
@@ -1632,7 +1776,10 @@ func (s *PropertyService) validatePropertyReadyWithTx(ctx context.Context, tx *g
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing images")
 	}
 	if imageCount == 0 {
-		return errcode.New(errcode.CodeValidationError, "at least one image is required before publish")
+		return errcode.NewWithFields(errcode.CodeValidationError, "請檢查表單資料", []errcode.FieldError{{
+			Field:  "images",
+			Reason: "發布前至少需要一張相片",
+		}})
 	}
 
 	var contact model.ListingContact
@@ -1640,7 +1787,10 @@ func (s *PropertyService) validatePropertyReadyWithTx(ctx context.Context, tx *g
 		return errcode.New(errcode.CodeInternalError, "failed to validate listing contacts")
 	}
 	if !contact.ShowPhone && !contact.ShowWhatsApp && !contact.ShowChat && !contact.ShowInquiryForm {
-		return errcode.New(errcode.CodeValidationError, "at least one contact channel must be enabled")
+		return errcode.NewWithFields(errcode.CodeValidationError, "請檢查表單資料", []errcode.FieldError{{
+			Field:  "contact",
+			Reason: "請保留至少一種聯絡方式",
+		}})
 	}
 
 	return nil

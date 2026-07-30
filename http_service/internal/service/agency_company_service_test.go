@@ -39,8 +39,7 @@ func TestAgencyProfileReviewWorkflow(t *testing.T) {
 	service := NewAgencyCompanyService(runtime)
 	user := createAgencyProfileTestUser(t, db, AccountTypeAgencyCompany, "pending_profile", "61234567")
 	eaa := createAgencyProfileAsset(t, db, user.ID, agencyCompanyEAAObjectPrefix+"eaa.jpg")
-	registration := createAgencyProfileAsset(t, db, user.ID, agencyCompanyBusinessRegistrationObjectPrefix+"br.jpg")
-	params := AgencyProfileUpsertParams{ProfileType: AgencyProfileTypeCompany, NameZH: "測試地產", NameEN: "Test Agency", AddressZH: "香港中環", AddressEN: "Central Hong Kong", LicenseNumber: "C-123456", Phone1CountryCode: "+852", Phone1Number: "21234567", EAALicenseAssetID: eaa.PublicID, BusinessRegistrationAssetID: registration.PublicID}
+	params := AgencyProfileUpsertParams{ProfileType: AgencyProfileTypeCompany, NameZH: "測試地產", NameEN: "Test Agency", LicenseNumber: "C-123456", Phone1CountryCode: "+852", Phone1Number: "21234567", EAALicenseAssetID: eaa.PublicID}
 	draft, err := service.CreateMemberAgencyProfile(context.Background(), user.ID, params)
 	if err != nil || draft.Revision == nil {
 		t.Fatalf("create draft: %#v %v", draft, err)

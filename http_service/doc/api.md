@@ -50,6 +50,7 @@ go run ./http_service/cmd/server
 | 5 | /api/v1/auth/otp/verify | POST | 驗證 OTP 並登入 | 無 |
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
+| 48.1 | /api/v1/auth/registration/availability | POST | 檢查註冊電郵及手提電話是否可用 | 無 |
 | 49 | /api/v1/auth/email/register | POST | 建立電郵與手機密碼帳戶 | 無 |
 | 49.1 | /api/v1/auth/login | POST | 自動識別手提電話、電郵、本地用戶名稱或 iSmart username 並登入 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
@@ -58,8 +59,16 @@ go run ./http_service/cmd/server
 | 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
 | 73 | /api/v1/auth/ismart/login | POST | 使用 ismart 帳戶登入並同步 POS 權限 | 無 |
 | 73.1 | /api/v1/me/ismart/building-info | GET | 查詢目前會員可見大廈資料與文件中繼資料 | 會員 |
+| 73.2 | /api/v1/me/ismart/notices | GET | 查詢目前會員可見大廈的有效通告 | 會員 |
+| 73.3 | /api/v1/me/ismart/owner-binding-requests | POST | 提交業主單位綁定申請 | 會員 |
+| 73.4 | /api/v1/me/ismart/subaccounts | GET | 查詢目前會員可管理單位的授權用戶 | 會員 |
+| 73.5 | /api/v1/me/ismart/subaccounts/grant | POST | 授予單位授權用戶 | 會員 |
+| 73.6 | /api/v1/me/ismart/subaccounts/revoke | POST | 撤銷單位授權用戶 | 會員 |
+| 73.7 | /api/v1/me/ismart/building-comments | POST | 提交目前會員的維修或意見服務個案 | 會員 |
+| 73.8 | /api/v1/me/ismart/service-cases | GET | 查詢目前會員可見的服務個案 | 會員 |
+| 73.9 | /api/v1/me/ismart/service-cases/{caseId} | GET | 查詢服務個案詳情與訊息紀錄 | 會員 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
-| 7 | /api/v1/me | GET | 取得目前會員資料 | 會員 |
+| 7 | /api/v1/me | GET | 取得目前會員資料，並受控刷新已綁定 iSmart ClientTbl 資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
 | 9 | /api/v1/me/secondhand/listings | GET | 取得我的二手帖子 | 會員 |
 | 66 | /api/v1/me/secondhand/favorites | GET | 取得我的二手收藏 | 會員 |
@@ -129,6 +138,8 @@ go run ./http_service/cmd/server
 | 76 | /api/v1/property-sales/{listingId} | GET | 查詢樓盤詳情，公開回應不返回真實樓層 | 無 / 會員 |
 | 77 | /api/v1/property-sales | POST | 建立樓盤草稿 | 會員 |
 | 78 | /api/v1/property-sales/{listingId} | PATCH | 更新樓盤草稿或已發布樓盤 | 會員 |
+| 78A | /api/v1/property-sales/{listingId}/republish | POST | 重新發布已上架、已下架或已過期樓盤 | 會員 |
+| 78B | /api/v1/property-sales/{listingId}/renew | POST | 延期已上架樓盤一個自然月 | 會員 |
 | 79 | /api/v1/property-addresses/search | GET | 查詢屋苑或大廈地址聯想 | 無 |
 | 79A | /api/v1/property-sales/translation | POST | 將樓盤標題及單位介紹翻譯成 English | 會員 |
 | 80 | /api/v1/market-trends/rent | GET | 香港住宅租金走勢 | 無 |
@@ -193,9 +204,9 @@ go run ./http_service/cmd/server
 
 ## 代理帳戶與資料審核
 
-- 註冊 `POST /api/v1/auth/email/register` 接受 `account_type`: `personal`、`individual_agent`、`agency_company`。代理帳戶註冊後狀態為 `pending_profile`；`pending_profile`、`pending_review`、`rejected` 均可使用電郵、手提電話或用戶名稱配合密碼取得受限 session，只可使用 `/me`、代理資料、代理專用 OSS 上傳及登出接口，以查看審核狀態、拒絕原因及重新提交。
+- 註冊 `POST /api/v1/auth/email/register` 接受 `account_type`: `personal`、`individual_agent`、`agency_company`。個人代理以 `E-xxxxxx` 或 `S-xxxxxx` 牌照號碼、公司代理以 `C-xxxxxx` 牌照號碼作為登入用戶名稱；個人代理電郵可選填，公司代理電郵必填。代理帳戶註冊後狀態為 `pending_profile`；註冊頁會先上載牌照、建立代理資料並提交審核。`pending_profile`、`pending_review`、`rejected` 均可使用電郵、手提電話或用戶名稱配合密碼取得受限 session，只可使用 `/me`、代理資料、代理專用 OSS 上傳及登出接口，以查看審核狀態、拒絕原因及重新提交。
 - 會員資料接口：`GET|POST|PATCH /api/v1/me/agency-profile`、`POST /api/v1/me/agency-profile/submit`。回應同時返回 `active_profile` 與 `revision`，修訂審核期間繼續使用已批准版本。
-- 個人代理必填中英文名、電話1及 WhatsApp 狀態、預設頭像；非海外代理另須牌照號碼及 EAA 圖片。公司必填中英文名及地址、電話1、牌照號碼、EAA 圖片及商業登記證。
+- 個人代理必填中英文名、電話1、牌照號碼及個人牌照圖片；公司代理必填公司中英文名、聯絡人、電話1、電郵、牌照號碼及公司牌照圖片。管理員批准資料後，帳戶狀態才會轉為 `active` 並可正常使用系統。
 - 代理 OSS `purpose`：`agency_individual_avatar`、`agency_individual_eaa`、`agency_individual_company_card`、`agency_individual_wechat_qr`、`agency_company_logo`、`agency_company_eaa`、`agency_company_business_registration`、`agency_company_company_card`。
 - 管理審核接口：`GET /api/v1/staff/agency-profiles`、`GET /api/v1/staff/agency-profiles/{profileId}`、`POST /api/v1/staff/agency-profiles/{profileId}/review`。拒絕時 `review_note` 必填；列表支援 `status`、`profile_type`、`keyword`，`status=all` 表示全部。審核結果會寫入站內通知，註冊帳戶有電郵時另透過 `MailSender` 發送通過或拒絕郵件，拒絕郵件包含 `review_note`；郵件發送失敗不回滾已提交的審核交易。
 - 已批准公司子帳戶接口：`GET|POST /api/v1/me/agency-profile/subaccounts`、`PATCH /api/v1/me/agency-profile/subaccounts/{subaccountId}/status`、`DELETE /api/v1/me/agency-profile/subaccounts/{subaccountId}`。權限只接受 `property_publish`、`property_manage`；建立、發布及重新發布使用 `property_publish`，更新、下架及標記售出使用 `property_manage`。公司主帳戶可統一管理所屬子帳戶樓盤。
@@ -564,16 +575,41 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 
 ---
 
+### 48.1 /api/v1/auth/registration/availability [POST]
+- **簡介**: 註冊提交前檢查本地 AJO 帳戶的電郵及手提電話是否已被使用。個人代理未填電郵時可省略 `email`，回應的 `email_available` 固定為 `true`。
+- **請求參數**
+```json
+{
+  "email": "member@example.com", // 選填
+  "phone_country_code": "+852", // 必填
+  "phone_number": "91234567" // 必填
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "email_available": true,
+    "phone_available": true
+  }
+}
+```
+- **說明**: 此為註冊前提示；`/api/v1/auth/email/register` 仍會在寫入時再次驗證，避免並發註冊造成重複帳戶。
+
+---
+
 ### 49. /api/v1/auth/email/register [POST]
 - **簡介**: 建立電郵與手機密碼帳戶
 - **請求參數**
 ```json
 {
-  "email": "member@example.com", // 必填
+  "email": "member@example.com", // 個人代理選填；其他帳戶必填
   "password": "safe-password-123", // 必填，至少 8 個字元
   "eng_name": "CHAN TAI MAN", // 必填，英文姓名；舊 display_name 仍兼容
 	"chi_name": "陳大文", // 選填，中文姓名，會同步至 iSmart
-  "username": "email-member", // 選填，未提供時後端使用手機號碼生成本地登入名
+  "username": "email-member", // 個人及公司代理使用牌照號碼；其他帳戶選填，未提供時後端使用手機號碼生成本地登入名
   "phone_country_code": "+852", // 必填
   "phone_number": "91234567", // 必填
 	"id_card": "A1234567", // 選填，身份證或證件號碼
@@ -1064,13 +1100,35 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
     "ismart_linked": true,
     "ismart_username": "testowner02",
     "ismart_bound_phone": "+85291234567",
-    "ismart_password": "test02test02",
-    "local_password": "new-password-123"
+    "ismart_profile_sync_status": "synced",
+    "ismart_account_profile": {
+      "account_code": "03141139",
+      "account_phone": "+85296022060",
+      "account_email": "977052wk@gmail.com",
+      "owner_name_en": "",
+      "owner_name_zh": "",
+      "account_name": "",
+      "identity_number": "",
+      "legal_entity": "NA",
+      "client_type": "",
+      "gender": "U",
+      "birth_date": "",
+      "contact_name": "",
+      "contact_phone": "+85296022060",
+      "emergency_contact_name": "",
+      "emergency_contact_phone": "",
+      "billing_phone": "+85296022060",
+      "billing_email": "977052wk@gmail.com",
+      "billing_address": "",
+      "billing_address_en": "",
+      "billing_address_zh": ""
+    }
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:15:00Z"
 }
 ```
+- **備註**: AJO 僅以目前登入會員已綁定的 iSmart `user_id` 查詢 `/api/v1/integration/auth/client/`，不接受前端傳入上游身份。`ismart_account_profile` 是會員本人可讀的穩定展示欄位；上游暫時不可用時回傳既有快照並標記 `ismart_profile_sync_status: "cached"`。iSmart 與 AJO 登入密碼、token、session 等敏感欄位均不會返回。
 - **Curl測試**
 ```bash
 curl -X GET "http://127.0.0.1:8080/api/v1/me" \
@@ -1218,6 +1276,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 }
 ```
 - **備註**: 後端會兼容 `floorplan` / `floorplans`、`auditreport` / `audition` / `audit_report` / `auditreports` / `auditions` / `audit_reports`、`mfinreport` / `financial_reports`，並統一補齊 canonical 陣列。共享的大廈資料預設以 Redis 快取 5 分鐘；會員所屬大廈權限會在讀取快取前即時校驗，`building_options` 等會員資料不會寫入共享快取。
+
+---
+
+### 8C. iSmart 通告、業主綁定與授權用戶 [會員]
+- **上游主路徑**: AJO 後端分別代理 `GET /api/v1/integration/buildings/notices/`、`POST /api/v1/integration/buildings/building-flat-owner-binding-requests/`、`GET /api/v1/integration/buildings/subaccounts/`、`POST /api/v1/integration/buildings/subaccounts/grant/` 與 `POST /api/v1/integration/buildings/subaccounts/revoke/`。大廈資料使用 `GET /api/v1/integration/buildings/info/`；只有上游讀取路徑不可用時才兼容既有舊路徑。
+- **通告**: `GET /api/v1/me/ismart/notices?building_id=<building_id>`。`building_id` 可省略，由後端選取目前會員可見大廈；回應含 `selected_building_id`、`building_options` 與有效通告 `result`。
+- **業主綁定**: `POST /api/v1/me/ismart/owner-binding-requests`。請求使用 `building_id`、`ownedflat` 陣列，並可選 `cli_role`、`ownernote`、`is_receive_email`、`reg_tel`、`reg_email`、`cli_name`、`cli_id_card`、`cli_tel`。成功只代表 iSmart 已建立 `OwnerReg` 待審申請，不會建立有效 AJO 物業綁定。
+- **授權用戶**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`；新增和撤銷分別使用 `POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke`，請求為 `unit_id`、`target_user_id` 及可選 `remark`。單位必須屬於目前會員可見範圍；是否為已批准業主、每單位名額、重複關係與撤銷狀態仍由 iSmart 最終校驗。
+- **安全邊界**: 瀏覽器不得提交 iSmart `user_id`。AJO 後端從目前 JWT 與 `UserIsmartAccount` 注入上游身份，並維持 AJO 穩定回應結構。
+- **服務個案提交**: `POST /api/v1/me/ismart/building-comments` 使用 `building_id`、`request_type`（`repair` 或 `feedback`）、`category`、`subcategory`、`content`，並可選 `subject`、`location_text`、`unit_id`、`contact_name`、`contact_phone`。`unit_id` 非空時必須屬於目前會員可見單位。舊 `comment_type` 與 `comment` 請求仍兼容；AJO 優先把完整分類提交到 `POST /api/v1/integration/buildings/comments/`，僅在上游回傳 404 時回退舊寫入接口。
+- **服務個案查詢**: `GET /api/v1/me/ismart/service-cases?building_id=&status=&request_type=` 固定查詢目前會員本人個案；`GET /api/v1/me/ismart/service-cases/{caseId}?building_id=` 返回個案內容、非內部訊息與附件。兩者使用 iSmart `GET /api/v1/integration/buildings/service-cases/` 主路徑，不設舊接口回退，也不快取動態處理狀態或訊息紀錄。
 
 ---
 
@@ -2662,7 +2731,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     ],
     "charge_rules": [
       { "biz_module": "secondhand", "label": "二手交易", "publish": 100, "draft_save": 50, "edit": 100, "republish": 100, "renew": 50 },
-      { "biz_module": "property_sale", "label": "樓盤租售", "publish": 1000, "draft_save": 1000, "edit": 1000, "republish": 1000 },
+      { "biz_module": "property_sale", "label": "樓盤租售", "publish": 1000, "draft_save": 600, "edit": 1000, "republish": 1000 },
       { "biz_module": "serviced_apartment", "label": "服務式住宅", "publish": 800, "edit": 800, "republish": 800 }
     ],
     "recharge_enabled": true,
@@ -3476,15 +3545,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
   }
 }
 ```
-- **草稿規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。會員明確儲存草稿時，前端以 `charge_draft=true` 查詢參數提交，建立或更新成功會在同一交易扣除 1,000 AJO Points；餘額不足時資料與扣款均不生效。正式發布流程內部的暫存請求不帶此參數，避免重複扣款。
+- **草稿與發布收費規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。會員首次明確儲存草稿時，前端以 `charge_draft=true` 查詢參數提交，建立或更新成功會在同一交易預扣 600 AJO Points；同一樓盤後續草稿保存不重複扣款。正式發布總費為 1,000 AJO Points，後端會按該樓盤既有草稿扣款抵扣差額，例如已扣 600 時發布只扣 400；歷史草稿已扣超過 1,000 時發布不再扣款。餘額不足時資料與扣款均不生效。正式發布流程內部的暫存請求不帶此參數。
+- **歷史草稿扣費更正**: 既有錢包流水不可修改或刪除。僅限仍為草稿的指定放售樓盤，可使用 `go run ./cmd/reconcile-property-draft-charge -listing-id <listing_id>` 預覽；確認後加上 `-apply` 以新增一筆 `property_sale · draft_charge_correction` 退款流水。命令使用穩定幂等鍵，重複執行不重複退款；草稿抵扣會以原草稿扣款減去更正退款計算。
+- **欄位錯誤規則**: 樓盤校驗失敗時，回應使用既有 `errors` 陣列返回穩定欄位名與可讀原因，例如 `{"field":"images","reason":"發布前至少需要一張相片"}`。前端應以 `field` 定位相應輸入項，訪客不會取得任何聯絡原文。
 - **發布者身份規則**: 會員建立、更新、發布或重新發布樓盤時，後端按 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生身份並忽略請求中的 `publisher_identity_type`；發布及重新發布會重新寫入當時有效的代理公開快照。
 - **樓層規則**: `floor_raw` 保存會員輸入的實際樓層，`floor_zone` 保存對外顯示的 `low`、`middle` 或 `high`；公開回應不洩露 `floor_raw`。
-- **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片，並按 `ad_package_code` 扣除相應 AJO Points。建立草稿、圖片登記與 `publish` 為連續但獨立的請求；直接儲存並發布只收取發布套餐費用，不另收草稿費用。
+- **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片。建立草稿、圖片登記與 `publish` 為連續但獨立的請求；直接儲存並發布收取完整 1,000 AJO Points，已支付草稿預付款則只收取未付差額。會員自己的草稿列表與詳情會返回 `draft_points_paid`、`publish_points_total`、`publish_points_due`；即使未付差額為 `0`，`publish_points_due` 仍會明確返回 `0`，供確認框顯示實際應扣積分。
 - **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低周租或月租。
 - **聯絡資料規則**: 業主可在 `contact.contact_attributes` 以 `phone_whatsapp_enabled=yes` 與 `phone_2_whatsapp_enabled=yes` 分別標記電話1及電話2可使用 WhatsApp，並以 `phone_country_code` 與 `phone_2_country_code` 分別保存兩個電話區號。聯絡方式解鎖成功後，`contact_payload.phone_whatsapp_url` 與 `contact_payload.phone_2_whatsapp_url` 分別返回兩個號碼的 WhatsApp 入口，`whatsapp_url` 保留為舊版單一入口兼容欄位；舊資料缺少 `phone_2_country_code` 時，電話2會兼容使用 `phone_country_code`。`wechat` 欄位在前端顯示為 `Wechat ID`。
-- **公開回應規則**: `display_number` 為平台穩定的數字樓盤序號，供公開頁、列表、相似樓盤與會員列表統一顯示；`listing_id` 仍為 UUID 路由及操作識別，不作前台顯示。公開代理盤會返回代理實際填寫的 `property_no`，供前台在物業描述下方顯示「代理盤編號」；與內部 `listing_id` 相同的歷史回退值不會公開。業主本人或可管理該樓盤的代理查看詳情時，仍可取得完整 `property_no`。`floor_raw` 同樣只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。
+- **公開回應規則**: `display_number` 為平台穩定的數字樓盤序號，供公開頁、列表、相似樓盤與會員列表統一顯示；`listing_id` 仍為 UUID 路由及操作識別，不作前台顯示。公開代理盤會返回代理實際填寫的 `property_no`，供前台在物業描述下方顯示「代理盤編號」；與內部 `listing_id` 相同的歷史回退值不會公開。業主本人或可管理該樓盤的代理查看詳情時，仍可取得完整 `property_no`。`floor_raw` 同樣只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。同一授權範圍內，詳情的 `contact_summary.editable_contact` 才會返回已解密的姓名、電話、WhatsApp、Wechat 與 Email，供編輯頁回填；公開訪客及其他會員不會取得此欄位。
 - **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天。
-- **會員狀態操作**: `publish` 僅支援草稿；`republish` 支援過期或已下架樓盤重新上架；`deactivate` 會將樓盤設為已下架。
+- **會員狀態操作與收費**: `publish` 僅支援草稿。已上架樓盤的 `PATCH` 只保存修改，不扣積分；頁面隨後以 `republish` 完成重新發布。樓盤放售 `republish` 支援已上架、已下架或已過期樓盤，會刷新有效期並按目前廣告套餐扣除原發布積分一半，錢包流水 `action_type=republish`。`renew` 不接收請求參數，只支援未成交的已上架樓盤，會從現有 `expire_at` 延後一個自然月、同步 `ad_expires_at`，並按目前廣告套餐扣除原發布積分一半，錢包流水 `action_type=renew`。`deactivate` 會將樓盤設為已下架。
 - **內容翻譯**: `POST /api/v1/property-sales/translation` 接受繁體中文 `title` 與 `description`，返回 `title_en` 與 `description_en`。接口需要會員登入，並按會員限制為每 10 分鐘 20 次。後端以 `TRANSLATION_PROVIDER=deepl`、`DEEPL_API_BASE_URL`、`DEEPL_AUTH_KEY`、`TRANSLATION_REQUEST_TIMEOUT` 配置 DeepL；未配置時返回統一服務錯誤，不會把供應商錯誤內容寫入樓盤欄位。
 ```json
 {

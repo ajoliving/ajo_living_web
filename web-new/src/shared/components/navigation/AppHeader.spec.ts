@@ -38,8 +38,6 @@ vi.mock('vue-i18n', () => ({
       const messages: Record<string, string> = {
         'common.action.close': '關閉',
         'common.action.signOut': '登出',
-        'common.action.switchToDark': '切換深色模式',
-        'common.action.switchToLight': '切換淺色模式',
         'common.action.switchLanguage': '切換語系',
         'common.locale.zhHkShort': '繁中',
         'common.locale.enShort': 'EN',
@@ -168,7 +166,7 @@ describe('AppHeader mobile navigation', () => {
     expect(drawerText).toContain('管理');
   });
 
-  it('keeps menu, theme, and locale controls available in the mobile header', async () => {
+  it('keeps menu and locale controls available in the mobile header', async () => {
     const preferenceStore = usePreferenceStore();
     const wrapper = mountHeader();
     const headerChildren = [...wrapper.find('.nav').element.children];
@@ -177,7 +175,7 @@ describe('AppHeader mobile navigation', () => {
     const localeToggle = wrapper.find('.locale-toggle');
 
     expect(hamburgerIndex).toBeLessThan(logoIndex);
-    expect(wrapper.find('.theme-toggle').exists()).toBe(true);
+    expect(wrapper.find('.theme-toggle').exists()).toBe(false);
     expect(wrapper.find('.hamburger').attributes('aria-label')).toBe('選單');
     expect(localeToggle.attributes('aria-label')).toBe('切換語系');
     expect(localeToggle.text()).toBe('EN');

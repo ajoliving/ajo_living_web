@@ -1,8 +1,11 @@
 /*
  * AJO Point 錢包工具。
  * 1. 集中提供三模組扣費規則與積分顯示。
- * 2. 避免頁面重複硬編碼扣費金額。
+ * 2. 提供積分流水來源的本地化顯示。
+ * 3. 避免頁面重複硬編碼扣費金額。
  */
+
+import type { WalletTransactionResponse } from '@/model/wallet';
 
 export const WALLET_CHARGE_COSTS = {
   secondhand: 100,
@@ -12,6 +15,7 @@ export const WALLET_CHARGE_COSTS = {
 
 export const WALLET_DRAFT_CHARGE_COSTS = {
   secondhand: WALLET_CHARGE_COSTS.secondhand / 2,
+  property_sale: 600,
 } as const;
 
 export const WALLET_RENEW_CHARGE_COSTS = {
@@ -20,19 +24,54 @@ export const WALLET_RENEW_CHARGE_COSTS = {
 
 export type WalletBizModule = keyof typeof WALLET_CHARGE_COSTS;
 export type WalletChargeAction = 'publish' | 'edit' | 'republish' | 'renew';
+type WalletTransactionSource = Pick<WalletTransactionResponse, 'biz_module' | 'action_type'>;
+type WalletTranslator = (key: string) => string;
+
+const walletTransactionModules: Record<string, string> = {
+  wallet: 'wallet',
+  secondhand: 'secondhand',
+  property_sale: 'propertySale',
+  serviced_apartment: 'servicedApartment',
+  payment: 'payment',
+  profile: 'profile',
+};
+
+const walletTransactionActions: Record<string, string> = {
+  save_draft: 'saveDraft',
+  publish: 'publish',
+  edit: 'edit',
+  republish: 'republish',
+  renew: 'renew',
+  avatar_update: 'avatarUpdate',
+  ad_reward: 'adReward',
+  contact_access: 'contactAccess',
+  recharge: 'recharge',
+  pos_payment_reward: 'posPaymentReward',
+  operator_grant: 'operatorGrant',
+  draft_charge_correction: 'draftChargeCorrection',
+};
 
 // 1. 格式化積分數字
 export const formatAjoPoints = (value: number, pointName: string, locale: string): string =>
   `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value)} ${pointName}`;
 
-// 2. 取得模組扣費
+// 2. 輸出本地化積分流水來源
+export const formatWalletTransactionSource = (transaction: WalletTransactionSource, t: WalletTranslator): string => {
+  const moduleKey = walletTransactionModules[transaction.biz_module];
+  const actionKey = walletTransactionActions[transaction.action_type];
+  const moduleLabel = moduleKey ? t(`account.wallet.transactionModules.${moduleKey}`) : transaction.biz_module;
+  const actionLabel = actionKey ? t(`account.wallet.transactionActions.${actionKey}`) : transaction.action_type;
+  return `${moduleLabel} · ${actionLabel}`;
+};
+
+// 3. 取得模組扣費
 export const resolveWalletChargeCost = (module: WalletBizModule): number =>
   WALLET_CHARGE_COSTS[module];
 
-// 3. 取得草稿保存扣費
-export const resolveWalletDraftChargeCost = (module: 'secondhand'): number =>
+// 4. 取得草稿保存扣費
+export const resolveWalletDraftChargeCost = (module: keyof typeof WALLET_DRAFT_CHARGE_COSTS): number =>
   WALLET_DRAFT_CHARGE_COSTS[module];
 
-// 4. 取得續期扣費
+// 5. 取得續期扣費
 export const resolveWalletRenewChargeCost = (module: 'secondhand'): number =>
   WALLET_RENEW_CHARGE_COSTS[module];

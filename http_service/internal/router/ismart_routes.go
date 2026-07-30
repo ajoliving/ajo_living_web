@@ -35,6 +35,8 @@ func registerIsmartRoutes(
 	api.GET("/me/ismart/other-fees", requireAuth, ismartHandler.ListOtherFees)
 	api.GET("/me/ismart/notices", requireAuth, ismartHandler.ListBuildingNotices)
 	api.POST("/me/ismart/building-comments", requireAuth, ismartHandler.SubmitBuildingComment)
+	api.GET("/me/ismart/service-cases", requireAuth, ismartHandler.ListBuildingServiceCases)
+	api.GET("/me/ismart/service-cases/:caseId", requireAuth, ismartHandler.GetBuildingServiceCase)
 	api.POST("/me/ismart/owner-binding-requests", requireAuth, ismartHandler.SubmitOwnerBindingRequest)
 	api.GET("/me/ismart/subaccounts", requireAuth, ismartHandler.ListSubaccounts)
 	api.POST("/me/ismart/subaccounts/grant", requireAuth, ismartHandler.GrantSubaccount)

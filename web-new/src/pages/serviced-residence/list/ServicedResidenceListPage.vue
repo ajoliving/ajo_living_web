@@ -258,35 +258,9 @@ onMounted(() => {
 
 <style scoped>
 .sv-page {
-  --brand: #F05A00;
-  --brand-dark: #C04600;
-  --brand-light: #FFF0E6;
-  --brand-mid: #FDA96A;
-  --ink: #1A1A1A;
-  --ink-2: #444444;
-  --ink-3: #777777;
-  --ink-4: #AAAAAA;
-  --sur: #FFFFFF;
-  --sur-2: #F6F6F6;
-  --sur-3: #EFEFEF;
-  --bdr: #E4E4E4;
-  --bdr-2: #CCCCCC;
-  --font: 'DM Sans', 'Noto Sans TC', sans-serif;
-  --font-serif: 'DM Serif Display', serif;
-  --g1: var(--sur-2);
-  --g2: var(--bdr);
-  --g3: var(--ink-4);
-  --g4: var(--ink-3);
-  --g5: var(--ink-2);
-  --white: var(--sur);
-  --accent: var(--brand);
-  --accent-light: var(--brand-light);
-  --accent-dark: var(--brand-dark);
-  --nav-h: 52px;
-
   width: 100%;
   min-height: calc(100svh - var(--nav-h));
-  background: var(--sur-2);
+  background: var(--sur);
   font-family: var(--font);
   font-size: 13px;
   color: var(--ink);

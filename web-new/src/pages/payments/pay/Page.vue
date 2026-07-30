@@ -1159,7 +1159,7 @@ watch(hasContext, (ready) => {
   display: grid;
   gap: 0;
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--pay-surface-2);
+  background: rgb(var(--color-surface));
   color: var(--pay-ink);
   padding: 40px;
 }

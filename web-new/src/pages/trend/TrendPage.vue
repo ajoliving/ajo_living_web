@@ -440,12 +440,12 @@ onMounted(() => {
 /* 1. 頁面容器 */
 .page {
   width: 100%;
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 .trend-page-wrap {
   padding: 24px;
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 2. 頁首 */

@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 
-import type { LoginEmailAction, LoginSelectOption, LoginValidationErrors } from '../login';
+import type { LoginEmailAction, LoginSelectOption, LoginValidationErrors, RegistrationStep } from '../login';
 
 interface LoginFormPanelProps {
   emailAction: LoginEmailAction;
@@ -30,6 +30,9 @@ interface LoginFormPanelProps {
   residenceFloor: string;
   residenceUnit: string;
   idCard: string;
+  agencyLicenseNumber: string;
+  agencyLicenseFile: File | null;
+  agencyContactName: string;
   shouldBindResidence: boolean;
   rememberMe: boolean;
   residenceFloorOptions: LoginSelectOption[];
@@ -40,6 +43,7 @@ interface LoginFormPanelProps {
   footerPrompt: string;
   isAuthenticated: boolean;
   publisherIdentityOptions: LoginSelectOption[];
+  registrationStep: RegistrationStep;
   submitLabel: string;
   validationErrors: LoginValidationErrors;
 }
@@ -61,11 +65,15 @@ const emit = defineEmits<{
   'update:residenceFloor': [value: string];
   'update:residenceUnit': [value: string];
   'update:idCard': [value: string];
+  'update:agencyLicenseNumber': [value: string];
+  'update:agencyLicenseFile': [value: File | null];
+  'update:agencyContactName': [value: string];
   'update:shouldBindResidence': [value: boolean];
   'update:rememberMe': [value: boolean];
   'sign-out': [];
   'submit-login': [];
   'forgot-password': [];
+  'registration-back': [];
   'toggle-email-action': [];
 }>();
 
@@ -79,12 +87,18 @@ const readInputValue = (event: Event): string => (event.target as HTMLInputEleme
 // 2. 讀取勾選輸入值
 const readCheckboxValue = (event: Event): boolean => (event.target as HTMLInputElement).checked;
 
-// 3. 切換密碼顯示狀態
+// 3. 讀取代理牌照證明檔案
+const readAgencyLicenseFile = (event: Event): void => {
+  const input = event.target as HTMLInputElement;
+  emit('update:agencyLicenseFile', input.files?.[0] ?? null);
+};
+
+// 4. 切換密碼顯示狀態
 const togglePasswordVisibility = (): void => {
   showPassword.value = !showPassword.value;
 };
 
-// 4. 切換確認密碼顯示狀態
+// 5. 切換確認密碼顯示狀態
 const toggleConfirmPasswordVisibility = (): void => {
   showConfirmPassword.value = !showConfirmPassword.value;
 };
@@ -104,7 +118,8 @@ const toggleConfirmPasswordVisibility = (): void => {
         @submit.prevent="emit('submit-login')"
       >
         <template v-if="props.emailAction === 'register'">
-          <label class="block form-field--required">
+          <p class="login-registration-step">{{ t('auth.registrationStep', { step: props.registrationStep }) }}</p>
+          <label v-if="props.registrationStep === 1" class="block form-field--required">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.publisherIdentityType') }}</span>
             <div class="group relative">
               <select
@@ -128,7 +143,7 @@ const toggleConfirmPasswordVisibility = (): void => {
             </div>
           </label>
 
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.username }]">
+          <label v-if="props.registrationStep === 2 && props.publisherIdentityType === 'personal'" :class="['block form-field--required', { 'form-field--error': props.validationErrors.username }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.username') }}</span>
             <div class="group relative">
               <input
@@ -151,7 +166,68 @@ const toggleConfirmPasswordVisibility = (): void => {
             <small v-if="props.validationErrors.username" class="form-field-error-message">{{ t(props.validationErrors.username) }}</small>
           </label>
 
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
+          <template v-if="props.registrationStep === 2 && props.publisherIdentityType !== 'personal'">
+            <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.agencyLicenseNumber }]">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.agencyLicenseNumber') }}</span>
+              <div class="group relative">
+                <input
+                  :value="props.agencyLicenseNumber"
+                  class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 pr-12 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                  :placeholder="props.publisherIdentityType === 'individual_agent' ? t('auth.individualAgencyLicensePlaceholder') : t('auth.companyAgencyLicensePlaceholder')"
+                  autocapitalize="characters"
+                  :aria-invalid="Boolean(props.validationErrors.agencyLicenseNumber)"
+                  spellcheck="false"
+                  type="text"
+                  @input="emit('update:agencyLicenseNumber', readInputValue($event))"
+                >
+                <AppIcon name="shield" :size="20" class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-text-muted transition group-focus-within:text-primary" />
+              </div>
+              <small class="login-field-hint">{{ props.publisherIdentityType === 'individual_agent' ? t('auth.individualAgencyLicenseHint') : t('auth.companyAgencyLicenseHint') }}</small>
+              <small v-if="props.validationErrors.agencyLicenseNumber" class="form-field-error-message">{{ t(props.validationErrors.agencyLicenseNumber) }}</small>
+            </label>
+
+            <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.chiName }]">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ props.publisherIdentityType === 'individual_agent' ? t('auth.chiName') : t('auth.companyNameZh') }}</span>
+              <input
+                :value="props.chiName"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="props.publisherIdentityType === 'individual_agent' ? t('auth.chiNamePlaceholder') : t('auth.companyNameZhPlaceholder')"
+                :aria-invalid="Boolean(props.validationErrors.chiName)"
+                type="text"
+                @input="emit('update:chiName', readInputValue($event))"
+              >
+              <small v-if="props.validationErrors.chiName" class="form-field-error-message">{{ t(props.validationErrors.chiName) }}</small>
+            </label>
+
+            <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ props.publisherIdentityType === 'individual_agent' ? t('auth.engName') : t('auth.companyNameEn') }}</span>
+              <input
+                :value="props.engName"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="props.publisherIdentityType === 'individual_agent' ? t('auth.engNamePlaceholder') : t('auth.companyNameEnPlaceholder')"
+                :aria-invalid="Boolean(props.validationErrors.engName)"
+                type="text"
+                @input="emit('update:engName', readInputValue($event))"
+              >
+              <small v-if="props.validationErrors.engName" class="form-field-error-message">{{ t(props.validationErrors.engName) }}</small>
+            </label>
+
+            <label v-if="props.publisherIdentityType === 'agency_company'" :class="['block form-field--required', { 'form-field--error': props.validationErrors.agencyContactName }]">
+              <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.agencyContactName') }}</span>
+              <input
+                :value="props.agencyContactName"
+                class="login-form-input w-full rounded-lg border-none bg-surface-raised px-4 text-text outline-none transition placeholder:text-text-muted/50 focus:ring-1 focus:ring-primary"
+                :placeholder="t('auth.agencyContactNamePlaceholder')"
+                :aria-invalid="Boolean(props.validationErrors.agencyContactName)"
+                autocomplete="name"
+                type="text"
+                @input="emit('update:agencyContactName', readInputValue($event))"
+              >
+              <small v-if="props.validationErrors.agencyContactName" class="form-field-error-message">{{ t(props.validationErrors.agencyContactName) }}</small>
+            </label>
+          </template>
+
+          <label v-if="props.registrationStep === 1" :class="['block form-field--required', { 'form-field--error': props.validationErrors.phone }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">
               {{ t('auth.phone') }}
               <small class="login-field-hint">{{ t('auth.phoneSmsHint') }}</small>
@@ -185,8 +261,8 @@ const toggleConfirmPasswordVisibility = (): void => {
             <small v-if="props.validationErrors.phone" class="form-field-error-message">{{ t(props.validationErrors.phone) }}</small>
           </label>
 
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.email }]">
-            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.email') }}</span>
+          <label v-if="props.registrationStep === 1" :class="['block', { 'form-field--required': props.publisherIdentityType !== 'individual_agent', 'form-field--error': props.validationErrors.email }]">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.email') }} <small v-if="props.publisherIdentityType === 'individual_agent'" class="login-field-hint">{{ t('auth.optionalFieldHint') }}</small></span>
             <div class="group relative">
               <input
                 :value="props.email"
@@ -209,7 +285,7 @@ const toggleConfirmPasswordVisibility = (): void => {
             <small v-if="props.validationErrors.email" class="form-field-error-message">{{ t(props.validationErrors.email) }}</small>
           </label>
 
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
+          <label v-if="props.registrationStep === 2" :class="['block form-field--required', { 'form-field--error': props.validationErrors.password }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.password') }}</span>
             <div class="group relative">
               <input
@@ -233,7 +309,7 @@ const toggleConfirmPasswordVisibility = (): void => {
             <small v-if="props.validationErrors.password" class="form-field-error-message">{{ t(props.validationErrors.password) }}</small>
           </label>
 
-          <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.confirmPassword }]">
+          <label v-if="props.registrationStep === 2" :class="['block form-field--required', { 'form-field--error': props.validationErrors.confirmPassword }]">
             <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ t('auth.confirmPassword') }}</span>
             <div class="group relative">
               <input
@@ -257,7 +333,21 @@ const toggleConfirmPasswordVisibility = (): void => {
             <small v-if="props.validationErrors.confirmPassword" class="form-field-error-message">{{ t(props.validationErrors.confirmPassword) }}</small>
           </label>
 
-          <template v-if="props.publisherIdentityType === 'personal'">
+          <label v-if="props.registrationStep === 2 && props.publisherIdentityType !== 'personal'" :class="['block form-field--required', { 'form-field--error': props.validationErrors.agencyLicenseFile }]">
+            <span class="mb-1.5 block text-sm font-bold uppercase tracking-[0.16em] text-text">{{ props.publisherIdentityType === 'individual_agent' ? t('auth.individualAgencyLicenseUpload') : t('auth.companyAgencyLicenseUpload') }}</span>
+            <input
+              class="login-file-input"
+              accept="image/png,image/jpeg,image/webp"
+              :aria-invalid="Boolean(props.validationErrors.agencyLicenseFile)"
+              type="file"
+              @change="readAgencyLicenseFile"
+            >
+            <small v-if="props.agencyLicenseFile" class="login-file-name">{{ props.agencyLicenseFile.name }}</small>
+            <small v-if="props.validationErrors.agencyLicenseFile" class="form-field-error-message">{{ t(props.validationErrors.agencyLicenseFile) }}</small>
+            <small class="login-field-hint">{{ t('auth.agencyReviewRequired') }}</small>
+          </label>
+
+          <template v-if="props.registrationStep === 2 && props.publisherIdentityType === 'personal'">
             <label class="login-residence-checkbox">
               <input
                 :checked="props.shouldBindResidence"
@@ -266,6 +356,8 @@ const toggleConfirmPasswordVisibility = (): void => {
               >
               <span>{{ t('auth.bindAjoBuilding') }}</span>
             </label>
+            <p class="login-residence-description">{{ t('auth.bindAjoPlatformDescription') }}</p>
+            <p class="login-residence-description">{{ t('auth.missingBuildingHint') }}</p>
 
             <template v-if="props.shouldBindResidence">
               <label :class="['block form-field--required', { 'form-field--error': props.validationErrors.engName }]">
@@ -475,13 +567,27 @@ const toggleConfirmPasswordVisibility = (): void => {
           </button>
         </div>
 
-        <button
-          class="login-submit-button w-full rounded-lg bg-primary text-sm font-bold uppercase tracking-[0.24em] text-primary-contrast shadow-[0_10px_30px_rgba(0,0,0,0.04)] transition hover:bg-text active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          type="submit"
-          :disabled="props.submitting"
+        <div
+          :class="{ 'login-registration-actions': props.emailAction === 'register' && props.registrationStep === 2 }"
         >
-          {{ props.submitLabel }}
-        </button>
+          <button
+            v-if="props.emailAction === 'register' && props.registrationStep === 2"
+            class="login-back-button"
+            type="button"
+            :disabled="props.submitting"
+            @click="emit('registration-back')"
+          >
+            {{ t('auth.registrationBack') }}
+          </button>
+
+          <button
+            class="login-submit-button w-full rounded-lg bg-primary text-sm font-bold uppercase tracking-[0.24em] text-primary-contrast shadow-[0_10px_30px_rgba(0,0,0,0.04)] transition hover:bg-text active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            type="submit"
+            :disabled="props.submitting"
+          >
+            {{ props.submitLabel }}
+          </button>
+        </div>
 
         <div
           v-if="props.isAuthenticated || props.emailAction === 'login' || props.emailAction === 'register'"
@@ -550,6 +656,13 @@ const toggleConfirmPasswordVisibility = (): void => {
   margin-top: clamp(0.55rem, 1.4svh, 0.75rem);
 }
 
+.login-registration-step {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .login-form-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -596,6 +709,33 @@ const toggleConfirmPasswordVisibility = (): void => {
   font-size: 12px;
 }
 
+.login-back-button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 2px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-align: center;
+}
+
+.login-back-button:hover {
+  border-color: rgb(var(--color-text));
+}
+
+.login-registration-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.login-registration-actions .login-submit-button {
+  width: 100%;
+}
+
 .phone-input-row {
   position: relative;
   display: flex;
@@ -630,6 +770,29 @@ const toggleConfirmPasswordVisibility = (): void => {
   width: 16px;
   height: 16px;
   accent-color: rgb(var(--color-primary));
+}
+
+.login-residence-description {
+  margin: -0.25rem 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.login-file-input {
+  width: 100%;
+  border: 1px dashed rgb(var(--color-border));
+  border-radius: 2px;
+  color: rgb(var(--color-text-muted));
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0.55rem 0.7rem;
+}
+
+.login-file-name {
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .login-building-label {
@@ -744,6 +907,10 @@ const toggleConfirmPasswordVisibility = (): void => {
   }
 
   .login-submit-button {
+    min-height: 44px;
+  }
+
+  .login-back-button {
     min-height: 44px;
   }
 

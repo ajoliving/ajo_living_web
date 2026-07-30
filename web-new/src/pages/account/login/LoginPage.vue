@@ -18,11 +18,13 @@ const {
   footerPrompt,
   formState,
   handleForgotPassword,
+  handleRegistrationBack,
   handleSignOut,
   handleSubmit,
   isAuthenticated,
   rememberMe,
   publisherIdentityOptions,
+  registrationStep,
   residenceFloorOptions,
   residenceUnitOptions,
   selectedHero,
@@ -53,6 +55,9 @@ const {
         v-model:residence-floor="formState.residenceFloor"
         v-model:residence-unit="formState.residenceUnit"
         v-model:id-card="formState.idCard"
+        v-model:agency-license-number="formState.agencyLicenseNumber"
+        v-model:agency-license-file="formState.agencyLicenseFile"
+        v-model:agency-contact-name="formState.agencyContactName"
         v-model:should-bind-residence="formState.shouldBindResidence"
         v-model:remember-me="rememberMe"
         :email-action="emailAction"
@@ -67,9 +72,11 @@ const {
         :footer-prompt="footerPrompt"
         :is-authenticated="isAuthenticated"
         :publisher-identity-options="publisherIdentityOptions"
+        :registration-step="registrationStep"
         :submit-label="submitLabel"
         :validation-errors="validationErrors"
         @forgot-password="handleForgotPassword"
+        @registration-back="handleRegistrationBack"
         @sign-out="handleSignOut"
         @submit-login="handleSubmit"
         @toggle-email-action="toggleEmailAction"

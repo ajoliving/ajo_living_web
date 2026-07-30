@@ -7,17 +7,17 @@
 
 /* 1. HTML 設計稿原生變量（直接對齊，供 scoped 樣式使用） */
 :root {
-  --brand: #F05A00;
-  --brand-dark: #C04600;
-  --brand-light: #FFF0E6;
-  --brand-mid: #FDA96A;
+  --brand: #FF6A00;
+  --brand-dark: #D95700;
+  --brand-light: #FFF1E8;
+  --brand-mid: #FFAC70;
   --ink: #1A1A1A;
   --ink-2: #444444;
   --ink-3: #777777;
   --ink-4: #AAAAAA;
   --sur: #FFFFFF;
-  --sur-2: #F6F6F6;
-  --sur-3: #EFEFEF;
+  --sur-2: #FFFFFF;
+  --sur-3: #FFFFFF;
   --bdr: #E4E4E4;
   --bdr-2: #CCCCCC;
   --success: #1A7A3A;
@@ -57,7 +57,7 @@
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-brand: 0 4px 16px rgba(240, 90, 0, 0.25);
+  --shadow-brand: 0 4px 16px rgba(255, 106, 0, 0.22);
 
   --nav-h: 52px;
   --app-safe-top: env(safe-area-inset-top, 0px);
@@ -83,17 +83,17 @@
 /* 2. 專案 rgb() 格式變量（供 Tailwind 與既有元件使用） */
 :root {
   --color-canvas: 255 255 255;
-  --color-page-tint: 246 246 246;
+  --color-page-tint: 255 255 255;
   --color-surface: 255 255 255;
-  --color-surface-muted: 246 246 246;
+  --color-surface-muted: 255 255 255;
   --color-surface-raised: 255 255 255;
   --color-topbar-surface: 255 255 255;
-  --color-toolbar-surface: 246 246 246;
+  --color-toolbar-surface: 255 255 255;
   --color-field-surface: 255 255 255;
   --color-dropdown-surface: 255 255 255;
-  --color-primary: 240 90 0;
+  --color-primary: 255 106 0;
   --color-primary-contrast: 255 255 255;
-  --color-primary-soft: 255 240 230;
+  --color-primary-soft: 255 241 232;
   --color-text: 26 26 26;
   --color-text-muted: 119 119 119;
   --color-border: 228 228 228;
@@ -105,11 +105,11 @@
   --color-ink-2: 68 68 68;
   --color-ink-3: 119 119 119;
   --color-ink-4: 170 170 170;
-  --color-surface-2: 246 246 246;
-  --color-surface-3: 239 239 239;
+  --color-surface-2: 255 255 255;
+  --color-surface-3: 255 255 255;
   --color-border-2: 204 204 204;
-  --color-brand-mid: 253 169 106;
-  --color-brand-dark: 192 70 0;
+  --color-brand-mid: 255 172 112;
+  --color-brand-dark: 217 87 0;
   --color-success-bg: 230 244 236;
   --color-warning-bg: 255 243 220;
   --color-danger-bg: 253 236 234;
@@ -146,7 +146,7 @@
   --border-width-thin: 1px;
   --border-width-strong: 1.5px;
   --border-subtle: 1px solid rgb(228 228 228 / 0.82);
-  --border-strong: 1.5px solid rgb(192 70 0 / 0.22);
+  --border-strong: 1.5px solid rgb(217 87 0 / 0.22);
 }
 
 @media (max-width: 767px) {
@@ -163,62 +163,6 @@
   }
 }
 
-/* 3. 深色模式（嚴格對齊 HTML body.dark） */
-html[data-theme='dark-neutral'] {
-  color-scheme: dark;
-
-  --ink: #F4F6FB;
-  --ink-2: #CBD5E1;
-  --ink-3: #94A3B8;
-  --ink-4: #64748B;
-  --sur: #111827;
-  --sur-2: #0B1120;
-  --sur-3: #1F2937;
-  --bdr: #263244;
-  --bdr-2: #334155;
-  --brand-light: rgba(240, 90, 0, 0.18);
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.34);
-  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.42);
-
-  --color-text: 244 246 251;
-  --color-ink-2: 203 213 225;
-  --color-ink-3: 148 163 184;
-  --color-ink-4: 100 116 139;
-  --color-text-muted: 148 163 184;
-  --color-surface: 17 24 39;
-  --color-surface-2: 11 17 32;
-  --color-surface-3: 31 41 55;
-  --color-surface-muted: 17 24 39;
-  --color-surface-raised: 28 28 28;
-  --color-canvas: 11 17 32;
-  --color-page-tint: 11 17 32;
-  --color-topbar-surface: 17 24 39;
-  --color-toolbar-surface: 17 24 39;
-  --color-field-surface: 17 24 39;
-  --color-dropdown-surface: 17 24 39;
-  --color-border: 38 50 68;
-  --color-border-2: 51 65 85;
-  --color-primary-soft: 72 33 10;
-  --color-brand-mid: 255 178 122;
-  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.28);
-  --shadow-raised: 0 6px 18px rgba(0, 0, 0, 0.34);
-  --shadow-floating: 0 14px 40px rgba(0, 0, 0, 0.42);
-
-  --black: #f0f0f0;
-  --white: #111;
-  --g1: #1e1e1e;
-  --g2: #2a2a2a;
-  --g3: #555;
-  --g4: #888;
-  --g5: #bbb;
-  --accent: #ff6b1a;
-  --accent-light: #2a1800;
-  --accent-dark: #ff8c45;
-}
-
-html[data-theme='default'],
-html[data-theme='html-fidelity'],
-html[data-theme='copper-sun'] {
+html[data-theme='default'] {
   color-scheme: light;
 }

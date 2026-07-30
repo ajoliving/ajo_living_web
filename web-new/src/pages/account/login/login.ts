@@ -11,13 +11,19 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { fetchPosBuildings, fetchPosBuildingUnits } from '@/httpapis/building';
 import { fetchLoginHero } from '@/httpapis/home-content';
+import { createMyAgencyProfile, submitMyAgencyProfile } from '@/httpapis/agency-profiles';
+import { checkRegistrationAvailability } from '@/httpapis/auth';
+import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
+import type { AgencyProfileUpsertPayload } from '@/model/agency-profile';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import type { LoginHeroImageSetting } from '@/model/home-content';
 import type { RegisterEmailAccountPayload } from '@/model/auth';
 import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
+import { buildUploadHeaders } from '@/utils/upload';
 
 export type LoginEmailAction = 'login' | 'register';
+export type RegistrationStep = 1 | 2;
 
 export interface LoginFormState {
   email: string;
@@ -35,6 +41,9 @@ export interface LoginFormState {
   residenceFloor: string;
   residenceUnit: string;
   idCard: string;
+  agencyLicenseNumber: string;
+  agencyLicenseFile: File | null;
+  agencyContactName: string;
   shouldBindResidence: boolean;
 }
 
@@ -62,9 +71,15 @@ export type RegistrationValidationErrorKey =
   | 'auth.invalidPhone'
   | 'auth.registerPasswordTooShort'
   | 'auth.registerPasswordMismatch'
-  | 'auth.residenceBindingRequired';
+  | 'auth.residenceBindingRequired'
+  | 'auth.agencyNameRequired'
+  | 'auth.agencyLicenseInvalid'
+  | 'auth.agencyLicenseFileRequired'
+  | 'auth.agencyLicenseFileInvalid'
+  | 'auth.emailAlreadyRegistered'
+  | 'auth.phoneAlreadyRegistered';
 
-export type LoginFormField = 'email' | 'username' | 'engName' | 'idCard' | 'ismartAccount' | 'password' | 'confirmPassword' | 'phone' | 'residence';
+export type LoginFormField = 'email' | 'username' | 'engName' | 'chiName' | 'idCard' | 'ismartAccount' | 'password' | 'confirmPassword' | 'phone' | 'residence' | 'agencyLicenseNumber' | 'agencyLicenseFile' | 'agencyContactName';
 
 export type LoginValidationErrorKey = RegistrationValidationErrorKey | 'auth.accountRequired' | 'auth.passwordRequired';
 
@@ -106,6 +121,9 @@ const createInitialFormState = (): LoginFormState => ({
   residenceFloor: '',
   residenceUnit: '',
   idCard: '',
+  agencyLicenseNumber: '',
+  agencyLicenseFile: null,
+  agencyContactName: '',
   shouldBindResidence: false,
 });
 
@@ -331,6 +349,33 @@ export const resolveRegistrationValidationErrors = (
   return errors;
 };
 
+// 5.4 取得代理註冊的必要資料校驗結果
+const resolveAgencyRegistrationValidationErrors = (form: LoginFormState): LoginValidationErrors => {
+  const errors: LoginValidationErrors = {};
+  const isIndividual = form.publisherIdentityType === 'individual_agent';
+  const licenseNumber = form.agencyLicenseNumber.trim().toUpperCase();
+  const licensePattern = isIndividual ? /^[ES]-\d{6}$/ : /^C-\d{6}$/;
+
+  if (!licensePattern.test(licenseNumber)) {
+    errors.agencyLicenseNumber = 'auth.agencyLicenseInvalid';
+  }
+  if (!form.agencyLicenseFile) {
+    errors.agencyLicenseFile = 'auth.agencyLicenseFileRequired';
+  } else if (!form.agencyLicenseFile.type.startsWith('image/') || form.agencyLicenseFile.size > 10 * 1024 * 1024) {
+    errors.agencyLicenseFile = 'auth.agencyLicenseFileInvalid';
+  }
+  if (isIndividual) {
+    if (!form.chiName.trim()) errors.chiName = 'auth.agencyNameRequired';
+    if (!isValidEngNameInput(form.engName)) errors.engName = 'auth.registerEnglishNameInvalid';
+  } else {
+    if (!form.chiName.trim()) errors.chiName = 'auth.agencyNameRequired';
+    if (!form.engName.trim()) errors.engName = 'auth.agencyNameRequired';
+    if (!form.agencyContactName.trim()) errors.agencyContactName = 'auth.agencyNameRequired';
+  }
+
+  return errors;
+};
+
 // 5.3 取得統一登入欄位的完整校驗結果
 export const resolveLoginValidationErrors = (
   accountInput: string,
@@ -451,6 +496,7 @@ export const useLoginPage = () => {
   const sessionStore = useSessionStore();
   const formState = reactive(createInitialFormState());
   const emailAction = ref<LoginEmailAction>('login');
+  const registrationStep = ref<RegistrationStep>(1);
   const buildings = ref<PosBuilding[]>([]);
   const buildingUnits = ref<PosBuildingUnit[]>([]);
   const buildingsLoading = ref(false);
@@ -480,6 +526,9 @@ export const useLoginPage = () => {
       formState.residenceFloor,
       formState.residenceUnit,
       formState.idCard,
+      formState.agencyLicenseNumber,
+      formState.agencyLicenseFile,
+      formState.agencyContactName,
     ],
     () => {
       validationErrors.value = {};
@@ -489,6 +538,10 @@ export const useLoginPage = () => {
   const submitLabel = computed(() => {
     if (submitting.value) {
       return t('auth.loading');
+    }
+
+    if (emailAction.value === 'register' && registrationStep.value === 1) {
+      return t('auth.registrationNext');
     }
 
     return emailAction.value === 'register' ? t('auth.registerSubmit') : t('auth.submit');
@@ -707,7 +760,112 @@ export const useLoginPage = () => {
     await router.push(redirect);
   };
 
-  // 26. 執行用戶註冊
+  // 25.1 上傳代理牌照並建立待審代理資料
+  const submitAgencyRegistration = async (): Promise<void> => {
+    const licenseFile = formState.agencyLicenseFile;
+    if (!licenseFile) {
+      throw new Error(t('auth.agencyLicenseFileRequired'));
+    }
+    const isIndividual = formState.publisherIdentityType === 'individual_agent';
+    const purpose = isIndividual ? 'agency_individual_eaa' : 'agency_company_eaa';
+    const { data: presignResponse } = await createUploadPresign({
+      file_name: licenseFile.name,
+      mime_type: licenseFile.type,
+      file_size: licenseFile.size,
+      purpose,
+    });
+    const presign = presignResponse.data;
+    const uploadResponse = await fetch(presign.upload_url, {
+      method: 'PUT',
+      headers: buildUploadHeaders(presign.headers, licenseFile.type),
+      body: licenseFile,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(t('auth.agencyLicenseUploadFailed'));
+    }
+    const { data: uploadResponseData } = await completeUpload({
+      object_key: presign.object_key,
+      upload_token: presign.upload_token,
+      mime_type: licenseFile.type,
+      file_size: licenseFile.size,
+    });
+    const profilePayload: AgencyProfileUpsertPayload = {
+      profile_type: isIndividual ? 'individual' : 'company',
+      name_zh: formState.chiName.trim(),
+      name_en: formState.engName.trim(),
+      address_zh: '',
+      address_en: '',
+      license_number: formState.agencyLicenseNumber.trim().toUpperCase(),
+      is_overseas: false,
+      is_big_four: false,
+      phone_1_country_code: parsePhoneFormInput(formState.phoneCountryCode, formState.phone).phoneCountryCode,
+      phone_1_number: parsePhoneFormInput(formState.phoneCountryCode, formState.phone).phoneNumber,
+      phone_1_whatsapp: false,
+      phone_2_country_code: '',
+      phone_2_number: '',
+      phone_2_whatsapp: false,
+      wechat_id: '',
+      wechat_url: '',
+      signature_zh: '',
+      signature_en: '',
+      default_avatar: isIndividual ? 'male' : '',
+      eaa_license_asset_id: uploadResponseData.data.media_asset_id,
+    };
+    await createMyAgencyProfile(profilePayload);
+    await submitMyAgencyProfile();
+    await sessionStore.loadCurrentUser();
+  };
+
+  // 26. 檢查註冊電郵與手提電話是否可用，通過後才進入完整資料填寫。
+  const handleRegistrationAvailabilityCheck = async (): Promise<void> => {
+    validationErrors.value = {};
+    const email = formState.email.trim();
+    const isIndividualAgent = formState.publisherIdentityType === 'individual_agent';
+    const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
+    if (!isValidParsedPhone({ phoneCountryCode, phoneNumber })) {
+      validationErrors.value.phone = 'auth.invalidPhone';
+    }
+    if ((!isIndividualAgent || email) && !isValidEmailInput(email)) {
+      validationErrors.value.email = 'auth.invalidEmail';
+    }
+    if (Object.keys(validationErrors.value).length > 0) {
+      feedbackStore.pushToast(t('auth.formInvalid'), 'error');
+      return;
+    }
+
+    submitting.value = true;
+    try {
+      const { data: availabilityResponse } = await checkRegistrationAvailability({
+        email: email || undefined,
+        phone_country_code: phoneCountryCode,
+        phone_number: phoneNumber,
+      });
+      if (!availabilityResponse.data.email_available && email) {
+        validationErrors.value.email = 'auth.emailAlreadyRegistered';
+      }
+      if (!availabilityResponse.data.phone_available) {
+        validationErrors.value.phone = 'auth.phoneAlreadyRegistered';
+      }
+      if (Object.keys(validationErrors.value).length > 0) {
+        feedbackStore.pushToast(t('auth.formInvalid'), 'error');
+        return;
+      }
+
+      registrationStep.value = 2;
+    } catch (error) {
+      feedbackStore.pushToast(readErrorMessage(error), 'error');
+    } finally {
+      submitting.value = false;
+    }
+  };
+
+  // 27. 返回註冊資料可用性檢查步驟。
+  const handleRegistrationBack = (): void => {
+    registrationStep.value = 1;
+    validationErrors.value = {};
+  };
+
+  // 28. 執行用戶註冊。
   const handleRegisterSubmit = async (): Promise<void> => {
     validationErrors.value = resolveRegistrationValidationErrors(
       formState.email,
@@ -722,6 +880,15 @@ export const useLoginPage = () => {
       formState.residenceFloor,
       formState.residenceUnit,
     );
+    if (formState.publisherIdentityType === 'individual_agent' && !formState.email.trim()) {
+      delete validationErrors.value.email;
+    }
+    if (formState.publisherIdentityType !== 'personal') {
+      delete validationErrors.value.username;
+    }
+    if (formState.publisherIdentityType !== 'personal') {
+      Object.assign(validationErrors.value, resolveAgencyRegistrationValidationErrors(formState));
+    }
     if (Object.keys(validationErrors.value).length > 0) {
       feedbackStore.pushToast(t('auth.formInvalid'), 'error');
       return;
@@ -731,11 +898,16 @@ export const useLoginPage = () => {
 
     try {
       const { phoneCountryCode, phoneNumber } = parsePhoneFormInput(formState.phoneCountryCode, formState.phone);
+      const isAgencyAccount = formState.publisherIdentityType !== 'personal';
       const registrationPayload: RegisterEmailAccountPayload = {
         email: formState.email.trim(),
         password: formState.password,
-        username: formState.username.trim(),
-        eng_name: formState.shouldBindResidence ? formState.engName.trim() : formState.username.trim(),
+        username: isAgencyAccount ? formState.agencyLicenseNumber.trim().toUpperCase() : formState.username.trim(),
+        eng_name: formState.publisherIdentityType === 'individual_agent'
+          ? formState.engName.trim()
+          : formState.publisherIdentityType === 'agency_company'
+            ? formState.agencyContactName.trim()
+            : formState.shouldBindResidence ? formState.engName.trim() : formState.username.trim(),
         phone_country_code: phoneCountryCode,
         phone_number: phoneNumber,
         account_type: formState.publisherIdentityType,
@@ -755,7 +927,10 @@ export const useLoginPage = () => {
         registrationPayload.residence_unit = formState.residenceUnit.trim();
       }
       await sessionStore.registerEmailAccount(registrationPayload);
-      feedbackStore.pushToast(t('auth.registerSuccess'), 'success');
+      if (isAgencyAccount) {
+        await submitAgencyRegistration();
+      }
+      feedbackStore.pushToast(t(isAgencyAccount ? 'auth.agencyRegisterSuccess' : 'auth.registerSuccess'), 'success');
       await redirectAfterSignIn();
     } catch (error) {
       feedbackStore.pushToast(readErrorMessage(error), 'error');
@@ -764,7 +939,7 @@ export const useLoginPage = () => {
     }
   };
 
-  // 27. 執行統一帳戶登入
+  // 29. 執行統一帳戶登入。
   const handleAccountSubmit = async (): Promise<void> => {
     const accountInput = selectedAccountInput.value;
     validationErrors.value = resolveLoginValidationErrors(accountInput, formState.password);
@@ -786,9 +961,13 @@ export const useLoginPage = () => {
     }
   };
 
-  // 28. 按目前操作提交登入或註冊表單
+  // 30. 按目前操作提交登入或註冊表單。
   const handleSubmit = async (): Promise<void> => {
     if (emailAction.value === 'register') {
+      if (registrationStep.value === 1) {
+        await handleRegistrationAvailabilityCheck();
+        return;
+      }
       await handleRegisterSubmit();
       return;
     }
@@ -796,20 +975,21 @@ export const useLoginPage = () => {
     await handleAccountSubmit();
   };
 
-  // 29. 執行登出
+  // 31. 執行登出。
   const handleSignOut = async (): Promise<void> => {
     await sessionStore.signOut();
     feedbackStore.pushToast(t('auth.signOutSuccess'), 'success');
   };
 
-  // 30. 前往忘記密碼流程
+  // 32. 前往忘記密碼流程。
   const handleForgotPassword = async (): Promise<void> => {
     await router.push('/forgot-password');
   };
 
-  // 31. 切換登入與註冊模式
+  // 33. 切換登入與註冊模式。
   const toggleEmailAction = (): void => {
     emailAction.value = emailAction.value === 'register' ? 'login' : 'register';
+    registrationStep.value = 1;
     formState.otp = '';
     validationErrors.value = {};
   };
@@ -827,11 +1007,13 @@ export const useLoginPage = () => {
     footerPrompt,
     formState,
     handleForgotPassword,
+    handleRegistrationBack,
     handleSignOut,
     handleSubmit,
     isAuthenticated,
     rememberMe,
     publisherIdentityOptions,
+    registrationStep,
     residenceFloorOptions,
     residenceUnitOptions,
     selectedHero,

@@ -33,7 +33,7 @@ import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatDate } from '@/utils/format';
-import { formatAjoPoints } from '@/utils/wallet';
+import { formatAjoPoints, formatWalletTransactionSource } from '@/utils/wallet';
 
 interface RunningAdSession {
   taskId: string;
@@ -809,7 +809,7 @@ watch(
                 :key="transaction.transaction_id"
               >
                 <td>{{ transaction.direction === 'credit' ? t('account.wallet.credit') : t('account.wallet.debit') }}</td>
-                <td>{{ transaction.biz_module }} · {{ transaction.action_type }}</td>
+                <td>{{ formatWalletTransactionSource(transaction, t) }}</td>
                 <td>{{ formatPoints(transaction.amount) }}</td>
                 <td>{{ formatDate(transaction.created_at, preferenceStore.locale) }}</td>
               </tr>

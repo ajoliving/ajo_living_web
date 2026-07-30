@@ -1,4 +1,4 @@
-# iSmart 接口接入 AJO 模块归属建议
+# iSmart 接口接入 AJO 模块归属
 
 ## 结论
 
@@ -13,15 +13,22 @@
 
 ## 接口归属表
 
-| 旧接口 | AJO 归属模块 | 前端入口 | 后端建议位置 | 接入方式 |
+| iSmart 主接口 | AJO 归属模块 | 前端入口 | AJO 会员接口 | 接入方式 |
 | --- | --- | --- | --- | --- |
-| `POST /api/v1/external/building-info/` | 大厦与物业资料 | `web-new` 的大厦页：大厦资料、申请表格 | 新增大厦资料 service，不放进 marketplace；可放在 `building` 语义路由下 | AJO 后端用当前会员绑定的大厦权限读取，再返回稳定结构 |
+| `GET /api/v1/integration/buildings/info/` | 大厦与物业资料 | 大厦页：大厦资料、申请表格 | `GET /api/v1/me/ismart/building-info` | 后端先校验会员大厦可见性，再读取 5 分钟共享缓存；上游读取失败才回退旧 `POST /api/v1/external/building-info/` |
+| `GET /api/v1/integration/buildings/notices/` | 通知与大厦公告 | 大厦页：最新通告 | `GET /api/v1/me/ismart/notices` | 后端使用 `building_id` 查询有效通告；读取失败才回退旧 `POST /api/v1/building-notices/` |
+| `POST /api/v1/integration/buildings/building-flat-owner-binding-requests/` | 账户、住户与成员 | 会员中心：物业绑定 | `POST /api/v1/me/ismart/owner-binding-requests` | 后端注入当前绑定的 iSmart 用户；仅创建 `OwnerReg` 待审批申请，不建立有效物权绑定 |
+| `GET /api/v1/integration/buildings/subaccounts/` | 账户、住户与成员 | 会员中心：授权用户 | `GET /api/v1/me/ismart/subaccounts` | 后端注入当前 iSmart 用户并校验请求单位可见性 |
+| `POST /api/v1/integration/buildings/subaccounts/grant/` | 账户、住户与成员 | 会员中心：授权用户 | `POST /api/v1/me/ismart/subaccounts/grant` | 后端只转发 `unit_id`、`target_user_id` 与可选 `remark`，上游负责业主资格及名额校验 |
+| `POST /api/v1/integration/buildings/subaccounts/revoke/` | 账户、住户与成员 | 会员中心：授权用户 | `POST /api/v1/me/ismart/subaccounts/revoke` | 后端只转发受控身份和单位资料，上游保留撤销历史与最终状态校验 |
 | `Blgfiles.btype=form` | 大厦表格文件 | 大厦页「申请表格」 | 大厦文件读取能力 | 只读展示；文件 URL 需由后端校验可见性后返回 |
 | `Blgfiles.btype=blginfo` | 大厦资料文件 | 大厦页「大厦资料」 | 大厦文件读取能力 | 只读展示；与基础资料可合并返回 |
 | `Blgfiles.btype=floorplan` | 大厦图则/公共文件 | 大厦页「大厦资料」或独立「平面图」区域 | 大厦文件读取能力 | 现接口未返回，若要展示需补独立后端读取 |
 | `Blgfiles.btype=auditreport` | 大厦财务/审计 | 大厦页「大厦财务」 | 支付账务或大厦财务读取能力 | 只面向有权限的业主、租客、职员展示 |
 | `Blgfiles.btype=mfinreport` | 大厦财务报告 | 大厦页「大厦财务」 | 支付账务或大厦财务读取能力 | 与审计报告同权限模型 |
-| `POST /api/v1/external/blg-cs/submit/` | 大厦服务、报修、意见 | 大厦页「意见提供/维修报修」 | 建议独立为大厦服务请求能力，不放入通知或聊天 | AJO 校验会员可见大厦后转发写入 iSmart `BlgComment` |
+| `POST /api/v1/integration/buildings/comments/` | 大厦服务、报修、意见 | 大厦页「意见提供/维修报修」 | `POST /api/v1/me/ismart/building-comments` | AJO 校验会员大厦及单位可见性后创建 iSmart `BuildingServiceCase`；上游返回 404 时才使用旧路径 |
+| `GET /api/v1/integration/buildings/service-cases/` | 大厦服务、报修、意见 | 大厦页「意见提供/维修报修」 | `GET /api/v1/me/ismart/service-cases` | 固定读取当前会员的个案，不缓存动态状态、消息或附件 |
+| `GET /api/v1/integration/buildings/service-cases/<case_id>/` | 大厦服务、报修、意见 | 大厦页「意见提供/维修报修」 | `GET /api/v1/me/ismart/service-cases/:caseId` | 读取当前会员可见的个案详情、消息及附件，不暴露内部讯息 |
 | `POST /api/v1/external/building-access/` | 设备、门禁、安防 | 大厦页「智能门禁」 | 建议新增 `building_access` 或 `device_access` service；不要混入账号权限 `access_service` | 只展示用户有权限的门、二维码状态、近期记录 |
 | `POST /api/v1/external/building-access/open-door/` | 设备、门禁操作 | 大厦页「智能门禁」 | 同门禁 service | 高风险操作，必须由 AJO 后端校验登录态、大厦、单位、门权限并记录审计 |
 | `POST /api/v1/external/building-access/qrcode/` | 设备、门禁二维码 | 大厦页「智能门禁」 | 同门禁 service | 后端取二维码载荷，前端只负责渲染二维码，不持久保存 |
@@ -85,15 +92,20 @@
 
 ### API 形态
 
-建议面向前端提供 AJO 语义接口，而不是复制旧接口路径：
+当前前端使用 AJO 语义接口，而不是复制旧接口路径：
 
 | 能力 | AJO 前端接口建议 |
 | --- | --- |
-| 大厦资料与文件 | `GET /api/v1/me/buildings/:buildingId/profile` |
-| 大厦意见提交 | `POST /api/v1/me/buildings/:buildingId/service-requests` |
-| 门禁摘要 | `GET /api/v1/me/buildings/:buildingId/access` |
-| 远程开门 | `POST /api/v1/me/buildings/:buildingId/access/doors/:doorId/open` |
-| 生成门禁二维码 | `POST /api/v1/me/buildings/:buildingId/access/qrcodes/:recordId` |
+| 大厦资料与文件 | `GET /api/v1/me/ismart/building-info?building_id=` |
+| 大厦通告 | `GET /api/v1/me/ismart/notices?building_id=` |
+| 业主绑定申请 | `POST /api/v1/me/ismart/owner-binding-requests` |
+| 授权用户 | `GET /api/v1/me/ismart/subaccounts?unit_id=`、`POST /api/v1/me/ismart/subaccounts/grant`、`POST /api/v1/me/ismart/subaccounts/revoke` |
+| 大厦意见提交 | `POST /api/v1/me/ismart/building-comments` |
+| 服务个案列表 | `GET /api/v1/me/ismart/service-cases?building_id=&status=` |
+| 服务个案详情 | `GET /api/v1/me/ismart/service-cases/:caseId?building_id=` |
+| 门禁摘要 | `GET /api/v1/me/ismart/building-access?building_id=` |
+| 远程开门 | `POST /api/v1/me/ismart/building-access/open-door` |
+| 生成门禁二维码 | `POST /api/v1/me/ismart/building-access/qrcode` |
 | 物业费账单与支付 | 继续使用现有 `/api/v1/me/payments/pos/*` |
 
 ### 数据所有权
@@ -113,21 +125,21 @@
 
 ## 当前项目对应判断
 
-- 前端 `web-new` 已有大厦页，但目前主要是静态数据，适合作为第一批 iSmart 大厦资料、表格、意见和门禁的 UI 承接位置。
+- 前端 `web-new` 已有大厦页及会员中心，已通过 AJO 会员接口读取大厦资料、通告、财务、门禁、业主绑定与授权用户资料。
 - 后端已有 `UserIsmartAccount`，可以作为 AJO 用户与 iSmart 用户、大厦、单位权限的映射基础。
 - 后端已有 POS building 与 POS payment 能力，支付类接口不需要另建 `ismart payment` 模块。
-- 当前没有独立的大厦资料 service 和门禁 service，应按业务边界新增，而不是把所有旧接口塞进 `pos_payment` 或 `user`。
+- 后端已有受控 iSmart proxy service，按大厦、通知、成员与门禁语义维持接口边界，不把旧接口直接暴露给浏览器。
 
 ## 大厦资料首期数据流
 
 目标：`web-new` 的「我的大厦」页面只显示当前登录用户已绑定、且有权限查看的大厦资料。
 
 1. 用户在 AJO Web 登录后，前端只携带 AJO JWT 调用 AJO 后端。
-2. 前端进入「我的大厦」页面时，请求 AJO 后端的大厦资料接口，例如 `GET /api/v1/me/buildings/:buildingId/profile`。
+2. 前端进入「我的大厦」页面时，请求 `GET /api/v1/me/ismart/building-info?building_id=`；通告、业主绑定与授权用户继续使用同一会员态接口组。
 3. AJO 后端从 JWT 解析当前 AJO `user_id`，不接受前端提交旧系统 `user_id`。
 4. AJO 后端查询 `UserIsmartAccount`，取得绑定的 `IsmartUserID`、`ClientBuildingPermissions` 与 `ClientBuildingFlatUnitsPermissions`。
 5. AJO 后端只允许选择绑定权限内的大厦；如果前端没有传 `buildingId`，可默认取用户绑定的第一个可见大厦。
-6. AJO 后端使用 `ISMART_EXTERNAL_APP_API_BASE_URL` 拼接 `/building-info/`，并以旧系统 `IsmartUserID` 与目标 `building_id` 作为服务端请求上下文。
+6. AJO 后端使用 `ISMART_INTEGRATION_API_BASE_URL` 请求 `/buildings/info/`，并以目标 `building_id` 作为服务端请求上下文；仅在上游读取路径不可用时使用 `ISMART_EXTERNAL_APP_API_BASE_URL` 旧路径回退。
 7. iSmart 返回大厦基础资料、表格文件与大厦资料文件。
 8. AJO 后端将旧字段整理成 AJO 稳定响应结构，过滤掉当前页面暂不展示或无权限展示的内容。
 9. 前端把返回结果渲染到「我的大厦」的大厦资料区域；大厦下拉或切换项只展示用户已绑定的大厦。
@@ -137,5 +149,6 @@
 ```env
 ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
 ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
+ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
 ISMART_EXTERNAL_APP_TIMEOUT=10s
 ```

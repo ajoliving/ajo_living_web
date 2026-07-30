@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
@@ -226,7 +227,7 @@ func (s *PropertyService) PublishProperty(ctx context.Context, channel PropertyC
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionPublish)
 }
 
-// 9. RepublishProperty republishes an expired or hidden property listing.
+// 9. RepublishProperty republishes an eligible property listing.
 func (s *PropertyService) RepublishProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
 	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_publish"); err != nil {
 		return nil, err
@@ -234,7 +235,68 @@ func (s *PropertyService) RepublishProperty(ctx context.Context, channel Propert
 	return s.publishPropertyWithCharge(ctx, channel, ownerUserID, listingPublicID, WalletActionRepublish)
 }
 
-// 10. MarkPropertySold marks a sale listing as sold.
+// 10. RenewPropertySale extends an active property sale listing by one calendar month.
+func (s *PropertyService) RenewPropertySale(ctx context.Context, ownerUserID int64, listingPublicID string) (*PropertyListingDetail, error) {
+	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_publish"); err != nil {
+		return nil, err
+	}
+
+	var returnPublicID string
+	var charge *PointsChargeResponse
+	err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		listing, _, err := s.loadOwnedPropertyListingWithTx(ctx, tx, PropertyChannelSale, ownerUserID, listingPublicID)
+		if err != nil {
+			return err
+		}
+		var lockedListing model.Listing
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", listing.ID).First(&lockedListing).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to lock property listing")
+		}
+		listing = &lockedListing
+		if listing.PublicationStatus != "active" {
+			return errcode.New(errcode.CodeValidationError, "only active property sales can be renewed")
+		}
+		if listing.BusinessStatus == "sold" {
+			return errcode.New(errcode.CodeValidationError, "sold property sales cannot be renewed")
+		}
+		if listing.ExpireAt == nil {
+			return errcode.New(errcode.CodeValidationError, "property sale expiry is required for renewal")
+		}
+
+		chargeResult, err := s.chargePropertyAction(ctx, tx, PropertyChannelSale, listing, WalletActionRenew)
+		if err != nil {
+			return err
+		}
+		charge = chargeResult
+
+		expireAt := listing.ExpireAt.AddDate(0, 1, 0)
+		now := s.runtime.Now()
+		if err := tx.Model(&model.Listing{}).Where("id = ?", listing.ID).Updates(map[string]any{
+			"sort_refreshed_at": now,
+			"expire_at":         expireAt,
+		}).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to renew property sale")
+		}
+		if err := tx.Model(&model.PropertySaleListing{}).Where("listing_id = ?", listing.ID).Update("ad_expires_at", expireAt).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to update property sale ad expiry")
+		}
+
+		returnPublicID = listing.PublicID
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.GetPropertyDetail(ctx, PropertyChannelSale, returnPublicID, &ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	attachPropertyCharge(result, charge)
+	return result, nil
+}
+
+// 11. MarkPropertySold marks a sale listing as sold.
 func (s *PropertyService) MarkPropertySold(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) error {
 	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_manage"); err != nil {
 		return err
@@ -249,7 +311,7 @@ func (s *PropertyService) MarkPropertySold(ctx context.Context, channel Property
 		Update("business_status", "sold").Error
 }
 
-// 11. DeactivateProperty hides a property listing.
+// 12. DeactivateProperty hides a property listing.
 func (s *PropertyService) DeactivateProperty(ctx context.Context, channel PropertyChannel, ownerUserID int64, listingPublicID string) error {
 	if err := s.requireSubaccountPropertyPermission(ctx, s.runtime.DB, ownerUserID, "property_manage"); err != nil {
 		return err
@@ -295,7 +357,6 @@ func (s *PropertyService) ListPublicProperties(ctx context.Context, channel Prop
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
@@ -329,6 +390,9 @@ func (s *PropertyService) ListMyProperties(ctx context.Context, channel Property
 
 	items, err := s.buildPropertySummaries(ctx, channel, rows)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.attachOwnerPropertyCharges(ctx, channel, rows, items); err != nil {
 		return nil, nil, err
 	}
 
@@ -388,6 +452,11 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 	if err != nil {
 		return nil, err
 	}
+	if viewerCanManage {
+		if err := s.attachOwnerPropertyCharges(ctx, channel, rows, summaries); err != nil {
+			return nil, err
+		}
+	}
 	if channel == PropertyChannelSale && len(summaries) > 0 && summaries[0].PropertySale != nil && viewerCanManage {
 		summaries[0].PropertySale.PropertyNo = rows[0].SalePropertyNo
 		summaries[0].PropertySale.UnitName = rows[0].SaleUnitName
@@ -407,11 +476,15 @@ func (s *PropertyService) GetPropertyDetail(ctx context.Context, channel Propert
 	contactSummary := ListingContactSummary{
 		ShowPhone:    contact.ShowPhone,
 		ShowWhatsApp: contact.ShowWhatsApp,
-		ShowChat:     contact.ShowChat,
+		ShowChat:     true,
 		ShowInquiry:  contact.ShowInquiryForm,
 	}
 	if viewerCanManage {
 		contactSummary.ContactAttributes = decodeStringMapBytes(contact.ContactAttributes)
+		contactSummary.EditableContact, err = s.buildPropertyEditableContact(contact)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &PropertyListingDetail{
@@ -431,11 +504,16 @@ func (s *PropertyService) publishPropertyWithCharge(ctx context.Context, channel
 		if err != nil {
 			return err
 		}
+		var lockedListing model.Listing
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", listing.ID).First(&lockedListing).Error; err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to lock property listing")
+		}
+		listing = &lockedListing
 		if action == WalletActionPublish && listing.PublicationStatus != "draft" {
 			return errcode.New(errcode.CodeValidationError, "only draft listings can be published")
 		}
-		if action == WalletActionRepublish && listing.PublicationStatus != "expired" && listing.PublicationStatus != "hidden" {
-			return errcode.New(errcode.CodeValidationError, "only expired or hidden listings can be republished")
+		if action == WalletActionRepublish && !canRepublishPropertyListing(channel, listing.PublicationStatus) {
+			return errcode.New(errcode.CodeValidationError, "only active, expired, or hidden property sales can be republished")
 		}
 		if channel == PropertyChannelSale {
 			publisher, err := s.resolvePropertySalePublisher(ctx, tx, ownerUserID, listing.PublisherIdentityType, "property_publish")
@@ -557,12 +635,19 @@ func (s *PropertyService) chargePropertyAction(ctx context.Context, tx *gorm.DB,
 	}
 	module := string(channel)
 	amount := ListingActionCost(module, action)
-	if channel == PropertyChannelSale && (action == WalletActionPublish || action == WalletActionRepublish) {
+	if channel == PropertyChannelSale && action == WalletActionPublish {
+		draftPointsPaid, err := s.propertyDraftPointsPaid(ctx, tx, listing.ID)
+		if err != nil {
+			return nil, err
+		}
+		amount = propertyPublishPointsDue(amount, draftPointsPaid)
+	}
+	if channel == PropertyChannelSale && (action == WalletActionRepublish || action == WalletActionRenew) {
 		var sale model.PropertySaleListing
 		if err := tx.WithContext(ctx).Where("listing_id = ?", listing.ID).First(&sale).Error; err != nil {
 			return nil, errcode.New(errcode.CodeInternalError, "failed to load property sale listing")
 		}
-		amount = propertyAdPackage(sale.AdPackageCode).PricePoints
+		amount = propertyAdPackage(sale.AdPackageCode).PricePoints / 2
 	}
 	if channel == PropertyChannelServiced && (action == WalletActionPublish || action == WalletActionRepublish) {
 		var serviced model.ServicedApartmentProject
@@ -570,6 +655,9 @@ func (s *PropertyService) chargePropertyAction(ctx context.Context, tx *gorm.DB,
 			return nil, errcode.New(errcode.CodeInternalError, "failed to load serviced apartment listing")
 		}
 		amount = servicedApartmentAdPackage(serviced.AdPackageCode).PricePoints
+	}
+	if amount == 0 {
+		return nil, nil
 	}
 	return s.runtime.WalletService.SpendPointsWithTx(ctx, tx, WalletSpendParams{
 		UserID:         listing.OwnerUserID,
@@ -582,7 +670,15 @@ func (s *PropertyService) chargePropertyAction(ctx context.Context, tx *gorm.DB,
 	})
 }
 
-// 17. attachPropertyCharge attaches wallet charge metadata to a property detail.
+// 17. canRepublishPropertyListing reports whether one channel supports republishing from its current status.
+func canRepublishPropertyListing(channel PropertyChannel, publicationStatus string) bool {
+	if publicationStatus == "expired" || publicationStatus == "hidden" {
+		return true
+	}
+	return channel == PropertyChannelSale && publicationStatus == "active"
+}
+
+// 18. attachPropertyCharge attaches wallet charge metadata to a property detail.
 func attachPropertyCharge(detail *PropertyListingDetail, charge *PointsChargeResponse) {
 	if detail == nil || charge == nil {
 		return
@@ -592,7 +688,72 @@ func attachPropertyCharge(detail *PropertyListingDetail, charge *PointsChargeRes
 	detail.PointsTransactionID = charge.PointsTransactionID
 }
 
-// 18. GrantPropertyContactAccess returns allowed contact payload for logged-in users.
+// 19. propertyDraftPointsPaid returns the immutable draft prepayment total for one sale listing.
+func (s *PropertyService) propertyDraftPointsPaid(ctx context.Context, tx *gorm.DB, listingID int64) (int64, error) {
+	type draftPaymentTotals struct {
+		DraftDebits      int64
+		DraftCorrections int64
+	}
+	var totals draftPaymentTotals
+	if err := tx.WithContext(ctx).Model(&model.WalletTransaction{}).
+		Where("listing_id = ? AND biz_module = ?", listingID, string(PropertyChannelSale)).
+		Select("COALESCE(SUM(CASE WHEN direction = ? AND action_type = ? THEN amount ELSE 0 END), 0) AS draft_debits, COALESCE(SUM(CASE WHEN direction = ? AND action_type = ? THEN amount ELSE 0 END), 0) AS draft_corrections", WalletDirectionDebit, WalletActionSaveDraft, WalletDirectionCredit, WalletActionDraftChargeCorrection).
+		Scan(&totals).Error; err != nil {
+		return 0, errcode.New(errcode.CodeInternalError, "failed to load property draft payment")
+	}
+	return max(totals.DraftDebits-totals.DraftCorrections, 0), nil
+}
+
+// 20. hasPropertyDraftPrepayment reports whether a sale listing has already paid its one-time draft prepayment.
+func (s *PropertyService) hasPropertyDraftPrepayment(ctx context.Context, tx *gorm.DB, listingID int64) (bool, error) {
+	paid, err := s.propertyDraftPointsPaid(ctx, tx, listingID)
+	return paid > 0, err
+}
+
+// 21. propertyPublishPointsDue calculates the remaining publish fee after the draft prepayment credit.
+func propertyPublishPointsDue(total int64, draftPointsPaid int64) int64 {
+	if draftPointsPaid >= total {
+		return 0
+	}
+	return total - draftPointsPaid
+}
+
+// 22. attachOwnerPropertyCharges exposes sale draft prepayment and publish balance only to authorized owner views.
+func (s *PropertyService) attachOwnerPropertyCharges(ctx context.Context, channel PropertyChannel, rows []propertyListingRow, summaries []PropertyListingSummary) error {
+	if channel != PropertyChannelSale || len(rows) == 0 || len(rows) != len(summaries) {
+		return nil
+	}
+	listingIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		listingIDs = append(listingIDs, row.ID)
+	}
+	type draftPaymentRow struct {
+		ListingID int64
+		Paid      int64
+	}
+	var paymentRows []draftPaymentRow
+	if err := s.runtime.DB.WithContext(ctx).Model(&model.WalletTransaction{}).
+		Select("listing_id, COALESCE(SUM(CASE WHEN direction = ? AND action_type = ? THEN amount WHEN direction = ? AND action_type = ? THEN -amount ELSE 0 END), 0) AS paid", WalletDirectionDebit, WalletActionSaveDraft, WalletDirectionCredit, WalletActionDraftChargeCorrection).
+		Where("listing_id IN ? AND biz_module = ?", listingIDs, string(PropertyChannelSale)).
+		Group("listing_id").Scan(&paymentRows).Error; err != nil {
+		return errcode.New(errcode.CodeInternalError, "failed to load property draft payments")
+	}
+	paidByListingID := make(map[int64]int64, len(paymentRows))
+	for _, payment := range paymentRows {
+		paidByListingID[payment.ListingID] = payment.Paid
+	}
+	for index := range summaries {
+		paid := paidByListingID[rows[index].ID]
+		total := PropertySalePublishCost
+		due := propertyPublishPointsDue(total, paid)
+		summaries[index].DraftPointsPaid = &paid
+		summaries[index].PublishPointsTotal = &total
+		summaries[index].PublishPointsDue = &due
+	}
+	return nil
+}
+
+// 22. GrantPropertyContactAccess returns allowed contact payload for logged-in users.
 func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channel PropertyChannel, userID int64, listingPublicID string, requestIP string, userAgent string) (*ContactAccessResult, error) {
 	listing, contact, err := s.loadPropertyListingByPublicID(ctx, channel, listingPublicID)
 	if err != nil {
@@ -621,7 +782,7 @@ func (s *PropertyService) GrantPropertyContactAccess(ctx context.Context, channe
 		"phone_2":      false,
 		"whatsapp":     false,
 		"wechat":       false,
-		"chat":         contact.ShowChat,
+		"chat":         true,
 		"inquiry_form": contact.ShowInquiryForm,
 	}
 	if strings.TrimSpace(contact.ContactNameZH) != "" {

@@ -30,6 +30,9 @@ const createProps = () => ({
   residenceFloor: '',
   residenceUnit: '',
   idCard: '',
+  agencyLicenseNumber: '',
+  agencyLicenseFile: null,
+  agencyContactName: '',
   shouldBindResidence: false,
   rememberMe: true,
   residenceFloorOptions: [],
@@ -40,6 +43,7 @@ const createProps = () => ({
   footerPrompt: '還沒有帳戶？',
   isAuthenticated: false,
   publisherIdentityOptions: [],
+  registrationStep: 1 as const,
   submitLabel: '登入',
   validationErrors: {},
 });
@@ -63,9 +67,10 @@ describe('LoginFormPanel', () => {
       global: { plugins: [i18n] },
     });
 
-    await wrapper.setProps({ emailAction: 'register' });
+    await wrapper.setProps({ emailAction: 'register', registrationStep: 2 });
 
-    expect(wrapper.find('input[type="tel"]').exists()).toBe(true);
+    expect(wrapper.find('input[type="tel"]').exists()).toBe(false);
+    expect(wrapper.find('input[autocomplete="email"]').exists()).toBe(false);
     expect(wrapper.find('input[autocomplete="username"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('綁定大廈');
     expect(wrapper.text()).not.toContain('英文姓名');
@@ -74,5 +79,48 @@ describe('LoginFormPanel', () => {
 
     expect(wrapper.text()).toContain('英文姓名');
     expect(wrapper.text()).toContain('大廈');
+  });
+
+  it('hides first-step account fields and renders equal-width actions on step two', async () => {
+    const wrapper = mount(LoginFormPanel, {
+      props: createProps(),
+      global: { plugins: [i18n] },
+    });
+
+    await wrapper.setProps({ emailAction: 'register', registrationStep: 2, publisherIdentityType: 'agency_company' });
+
+    expect(wrapper.text()).not.toContain('帳戶類型');
+    expect(wrapper.find('input[type="tel"]').exists()).toBe(false);
+    expect(wrapper.find('input[autocomplete="email"]').exists()).toBe(false);
+    expect(wrapper.find('.login-registration-actions').exists()).toBe(true);
+    expect(wrapper.findAll('.login-registration-actions > button')).toHaveLength(2);
+  });
+
+  it('uses licence registration fields for an individual agent', async () => {
+    const wrapper = mount(LoginFormPanel, {
+      props: createProps(),
+      global: { plugins: [i18n] },
+    });
+
+    await wrapper.setProps({ emailAction: 'register', publisherIdentityType: 'individual_agent', registrationStep: 2 });
+
+    expect(wrapper.find('input[autocomplete="username"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('牌照號碼');
+    expect(wrapper.text()).toContain('上載個人牌照');
+    expect(wrapper.text()).toContain('審批通過後方可正常登入及使用');
+  });
+
+  it('keeps the first registration step limited to account type, mobile, and email', async () => {
+    const wrapper = mount(LoginFormPanel, {
+      props: createProps(),
+      global: { plugins: [i18n] },
+    });
+
+    await wrapper.setProps({ emailAction: 'register' });
+
+    expect(wrapper.text()).toContain('註冊步驟 1 / 2');
+    expect(wrapper.find('input[type="tel"]').exists()).toBe(true);
+    expect(wrapper.find('input[autocomplete="username"]').exists()).toBe(false);
+    expect(wrapper.find('input[autocomplete="new-password"]').exists()).toBe(false);
   });
 });

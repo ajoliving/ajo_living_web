@@ -34,6 +34,7 @@ import {
 import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import {
   getPropertySaleFieldProfile,
+  getPropertyDistrictLabel,
   getPropertyOptionLabel,
   propertyAccountPackageOptions,
   propertyAdPackageOptions,
@@ -75,19 +76,22 @@ import type {
   PropertyAddressSuggestion,
   PropertyImagePayload,
   PropertyListingDetailResponse,
+  PropertyListingCardViewModel,
   ServicedApartmentRoomType,
   UpsertPropertySalePayload,
   UpsertServicedApartmentPayload,
 } from '@/model/property';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import AppUnsavedChangesDialog from '@/shared/components/base/AppUnsavedChangesDialog.vue';
+import PropertyListingCard from '@/shared/components/property/PropertyListingCard.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
-import { formatAjoPoints } from '@/utils/wallet';
-import { mergePropertyFeatureTags } from '@/utils/property';
+import { formatAjoPoints, resolveWalletChargeCost, resolveWalletDraftChargeCost } from '@/utils/wallet';
+import { formatPropertySalePrice, mergePropertyFeatureTags } from '@/utils/property';
 
 void propertyApplianceTagOptions;
 void propertyAccountPackageOptions;
@@ -160,6 +164,19 @@ interface PropertyEditorValidationIssue {
   matchLabel: string;
   matchIndex?: number;
   targetSelector?: string;
+  message?: string;
+}
+
+type PropertySaveStage = 'idle' | 'creating' | 'uploading' | 'saving' | 'refreshing' | 'publishing';
+
+interface PropertySaveImageProgress {
+  current: number;
+  total: number;
+}
+
+interface PropertyApiFieldError {
+  field?: string;
+  reason?: string;
 }
 
 type ResidentialBasicTextFieldKey = 'addressText' | 'addressTextEn';
@@ -309,6 +326,7 @@ const listingId = ref(props.listingId || String(route.params.listingId ?? ''));
 const loading = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
+const isActiveSaleRepublishConfirmOpen = ref(false);
 const loadedPublicationStatus = ref('draft');
 const translatingContent = ref(false);
 const isLeavePromptOpen = ref(false);
@@ -324,6 +342,9 @@ const validationAttempted = ref(false);
 const activeAgencyCompany = ref<AgencyProfile | null>(null);
 const isAgencyCompanyLoading = ref(false);
 const hasLoadedAgencyCompany = ref(false);
+const saveStage = ref<PropertySaveStage>('idle');
+const saveImageProgress = ref<PropertySaveImageProgress | null>(null);
+const serverValidationIssues = ref<PropertyEditorValidationIssue[]>([]);
 let resolveLeavePrompt: ((decision: PropertyEditorLeaveDecision) => void) | null = null;
 
 const initialLocationSelection = resolvePropertyLocationSelection(sessionStore.me?.district_code || '');
@@ -451,6 +472,7 @@ const isEditing = computed(() => listingId.value.trim().length > 0);
 const isActiveListingEdit = computed(() =>
   isEditing.value && loadedPublicationStatus.value === 'active',
 );
+const isActiveSaleListingEdit = computed(() => isSale.value && isActiveListingEdit.value);
 const isRepublishListingEdit = computed(() =>
   isEditing.value && ['expired', 'hidden'].includes(loadedPublicationStatus.value),
 );
@@ -924,17 +946,21 @@ const missingRequiredFields = computed<PropertyEditorValidationIssue[]>(() => {
   return issues;
 });
 const canSave = computed(() => missingRequiredFields.value.length === 0);
+const allValidationIssues = computed(() => [
+  ...missingRequiredFields.value,
+  ...serverValidationIssues.value,
+]);
 const activeStepValidationIssues = computed(() =>
   validationAttempted.value
-    ? missingRequiredFields.value.filter((issue) => issue.step === activeEditorStep.value)
+    ? allValidationIssues.value.filter((issue) => issue.step === activeEditorStep.value)
     : [],
 );
 const visibleValidationIssues = computed(() =>
-  validationAttempted.value ? missingRequiredFields.value : [],
+  validationAttempted.value ? allValidationIssues.value : [],
 );
 const validationIssueCountForStep = (step: PropertyEditorStepKey): number =>
   validationAttempted.value
-    ? missingRequiredFields.value.filter((issue) => issue.step === step).length
+    ? allValidationIssues.value.filter((issue) => issue.step === step).length
     : 0;
 
 // 7. 定位驗證欄位並同步錯誤狀態
@@ -993,7 +1019,7 @@ const refreshValidationMarkers = async (focusIssue?: PropertyEditorValidationIss
       return;
     }
     target.classList.add('property-validation-error');
-    target.dataset.propertyValidationMessage = t('property.editor.requiredFieldInline', {
+    target.dataset.propertyValidationMessage = issue.message || t('property.editor.requiredFieldInline', {
       field: issue.label,
     });
     const control = target.querySelector<HTMLElement>('input:not([type="hidden"]), select, textarea, button');
@@ -1016,7 +1042,7 @@ const focusValidationIssue = async (issue: PropertyEditorValidationIssue): Promi
   await refreshValidationMarkers(issue);
 };
 
-watch([missingRequiredFields, activeEditorStep], () => {
+watch([allValidationIssues, activeEditorStep], () => {
   if (validationAttempted.value) {
     void refreshValidationMarkers();
   }
@@ -1055,16 +1081,94 @@ const previewPrice = computed(() => {
 
   return value > 0 ? formatPrice(value, preferenceStore.locale) : t('property.common.pendingPrice');
 });
-const chargeCost = computed(() => selectedAdPackage.value.price_points);
-const draftSaveCost = computed(() =>
-  propertyAdPackageOptions.find((option) => option.value === 'basic')?.price_points ?? 1000,
+const previewFloorLabel = computed(() => {
+  if (!form.floorRaw.trim() && !form.floorZone.trim()) {
+    return '';
+  }
+  const zone = form.floorZone.trim();
+  if (preferenceStore.locale === 'en') {
+    return zone === 'high' ? 'High floor' : zone === 'low' ? 'Low floor' : 'Middle floor';
+  }
+  return zone === 'high' ? '高層' : zone === 'low' ? '低層' : '中層';
+});
+const previewCard = computed<PropertyListingCardViewModel>(() => {
+  const isResidential = form.propertyType === 'residential';
+  const district = getPropertyDistrictLabel(form.districtCode, preferenceStore.locale);
+  const typeOption = propertyListingTypeOptions.find((option) => option.value === form.propertyType);
+  const typeLabel = typeOption ? getPropertyOptionLabel(typeOption, preferenceStore.locale) : '';
+  const priceValue = form.transactionType === 'rent'
+    ? Number(form.monthlyRentHKD)
+    : Number(form.askingPriceHKD) * 10000;
+  const cardPrice = form.priceNegotiable
+    ? t('property.common.negotiable')
+    : priceValue > 0
+      ? form.transactionType === 'sale' && preferenceStore.locale !== 'en'
+        ? formatPropertySalePrice(priceValue)
+        : formatPrice(priceValue, preferenceStore.locale)
+      : t('property.common.pendingPrice');
+  const areaValue = Number(form.usableAreaSqft || form.grossAreaSqft || 0);
+  const rooms = isResidential
+    ? [
+      form.bedroomCount === 0
+        ? preferenceStore.locale === 'en' ? 'Studio' : '開放式間隔'
+        : form.bedroomCount > 0
+          ? preferenceStore.locale === 'en' ? `${form.bedroomCount} bed` : `${form.bedroomCount}房`
+          : '',
+      form.bathroomCount > 0
+        ? preferenceStore.locale === 'en' ? `${form.bathroomCount} bath` : `${form.bathroomCount}浴室`
+        : '',
+    ].filter(Boolean).join(' · ')
+    : '';
+  const direction = form.direction.trim();
+  const unitPrice = areaValue > 0 && priceValue > 0
+    ? t('property.publicList.unitPrice', { price: formatPrice(Math.round(priceValue / areaValue), preferenceStore.locale) })
+    : '';
+  const pills = [
+    ...saleFieldProfile.value.categoryTags,
+    ...saleFieldProfile.value.featureTags,
+  ]
+    .filter((option) => form.featureTags.includes(option.value))
+    .map((option) => getPropertyOptionLabel(option, preferenceStore.locale))
+    .slice(0, 4);
+
+  return {
+    id: 'preview',
+    propertyType: typeLabel,
+    publisherLabel: '',
+    tags: [district, typeLabel].filter(Boolean).map((label, index) => ({ label, dark: index === 1 && form.transactionType === 'rent' })),
+    title: form.title.trim() || pageTitle.value,
+    location: [district, form.estateName.trim()].filter(Boolean).join(' · '),
+    facts: [
+      form.blockName.trim(),
+      previewFloorLabel.value,
+      form.showUnit ? form.unitName.trim() : '',
+      rooms,
+      direction && direction !== 'N/A' ? direction : '',
+    ].filter(Boolean),
+    priceKind: form.transactionType,
+    price: cardPrice,
+    priceUnit: form.transactionType === 'rent' ? t('property.publicList.rentUnit') : '',
+    area: areaValue > 0 ? t('property.publicList.usableArea', { area: areaValue.toLocaleString(preferenceStore.locale) }) : '',
+    areaPrice: unitPrice,
+    pills,
+    favorite: false,
+  };
+});
+const chargeCost = computed(() =>
+  isSale.value ? resolveWalletChargeCost('property_sale') : selectedAdPackage.value.price_points,
 );
+const activeSaleRepublishCost = computed(() => Math.ceil(selectedAdPackage.value.price_points / 2));
+const draftSaveCost = computed(() => resolveWalletDraftChargeCost('property_sale'));
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 const formatAdPackagePrice = (value: number): string =>
   new Intl.NumberFormat(preferenceStore.locale, { maximumFractionDigits: 0 }).format(value);
 const chargeHint = computed(() =>
-  isSale.value
+  isActiveSaleListingEdit.value
+    ? t('property.editor.activeRepublishChargeHint', {
+        cost: formatPoints(activeSaleRepublishCost.value),
+      })
+    : isSale.value
     ? t('property.editor.saleChargeHint', {
         draft: formatPoints(draftSaveCost.value),
         publish: formatPoints(chargeCost.value),
@@ -1072,11 +1176,38 @@ const chargeHint = computed(() =>
       })
     : `${t('property.editor.chargeHint')} ${formatPoints(chargeCost.value)} · ${t('property.editor.walletBalance')} ${formatPoints(sessionStore.me?.ajo_balance ?? 0)}`,
 );
+const draftWalletBalance = computed(() => sessionStore.me?.ajo_balance ?? 0);
+const draftBalanceAfterSave = computed(() => Math.max(0, draftWalletBalance.value - draftSaveCost.value));
+const isDraftSaveBlocked = computed(() =>
+  isSale.value &&
+  !props.staffMode &&
+  !listingId.value &&
+  !isActiveListingEdit.value &&
+  draftWalletBalance.value < draftSaveCost.value,
+);
+const saveStageLabel = computed(() => {
+  if (saveStage.value === 'creating') {
+    return t('property.editor.saveStageCreating');
+  }
+  if (saveStage.value === 'uploading') {
+    return t('property.editor.saveStageUploading', saveImageProgress.value ?? { current: 0, total: 0 });
+  }
+  if (saveStage.value === 'saving') {
+    return t('property.editor.saveStageSaving');
+  }
+  if (saveStage.value === 'refreshing') {
+    return t('property.editor.saveStageRefreshing');
+  }
+  if (saveStage.value === 'publishing') {
+    return t('property.editor.saveStagePublishing');
+  }
+  return '';
+});
 const primaryActionLabel = computed(() => {
-  if (props.staffMode || isActiveListingEdit.value) {
+  if (props.staffMode || (isActiveListingEdit.value && !isSale.value)) {
     return t('property.editor.saveChanges');
   }
-  if (isRepublishListingEdit.value) {
+  if (isActiveSaleListingEdit.value || isRepublishListingEdit.value) {
     return t('property.editor.republishNow');
   }
 
@@ -1200,6 +1331,12 @@ const markCurrentStateSaved = (): void => {
   savedSnapshot.value = currentSnapshot.value;
 };
 
+watch(currentSnapshot, () => {
+  if (serverValidationIssues.value.length > 0) {
+    serverValidationIssues.value = [];
+  }
+});
+
 // 3. 打開離開確認彈窗
 const requestLeaveDecision = (): Promise<PropertyEditorLeaveDecision> => {
   isLeavePromptOpen.value = true;
@@ -1269,7 +1406,71 @@ const readErrorMessage = (error: unknown, fallback: string): string =>
     ? error.response?.data?.message ?? fallback
     : fallback;
 
-// 8.1 將繁體中文樓盤標題與單位介紹翻譯成 English
+// 8.1 將草稿儲存的已知業務錯誤轉為可執行提示
+const readDraftSaveErrorMessage = (error: unknown, fallback: string): string => {
+  if (saveStage.value === 'uploading') {
+    return t('property.editor.uploadError');
+  }
+  if (axios.isAxiosError<{ code?: string }>(error) && error.response?.data?.code === 'POINTS_INSUFFICIENT') {
+    return t('property.editor.draftChargeInsufficient', { cost: formatPoints(draftSaveCost.value) });
+  }
+
+  return readErrorMessage(error, fallback);
+};
+
+// 8.2 將後端欄位校驗定位至編輯器步驟與輸入項
+const applyServerValidationIssues = async (error: unknown): Promise<boolean> => {
+  if (!axios.isAxiosError<{ errors?: PropertyApiFieldError[] }>(error)) {
+    return false;
+  }
+  const errors = error.response?.data?.errors ?? [];
+  if (errors.length === 0) {
+    return false;
+  }
+  const contactStep: PropertyEditorStepKey = isSale.value ? 'contact' : 'details';
+  const fieldMap: Record<string, { step: PropertyEditorStepKey; labelKey: string; targetSelector?: string }> = {
+    title: { step: 'details', labelKey: 'property.editor.titleField' },
+    title_en: { step: 'details', labelKey: 'property.editor.titleEnField' },
+    description: { step: 'details', labelKey: 'property.editor.descriptionField' },
+    description_en: { step: 'details', labelKey: 'property.editor.descriptionEnField' },
+    district_code: { step: 'details', labelKey: 'property.editor.locationSubdistrictField' },
+    address_text: { step: 'details', labelKey: 'property.editor.addressField' },
+    address_text_en: { step: 'details', labelKey: 'property.editor.addressEnField' },
+    estate_name: { step: 'details', labelKey: saleFieldProfile.value.estateLabelKey },
+    asking_price_hkd: { step: 'details', labelKey: 'property.editor.askingPriceField' },
+    monthly_rent_hkd: { step: 'details', labelKey: 'property.editor.monthlyRentField' },
+    property_no: { step: 'details', labelKey: 'property.editor.propertyNoField' },
+    usable_area_sqft: { step: 'details', labelKey: 'property.editor.usableAreaField' },
+    gross_area_sqft: { step: 'details', labelKey: 'property.editor.grossAreaField' },
+    feature_tags: { step: 'details', labelKey: 'property.editor.residentialFeatureGroupField' },
+    contact_method: { step: contactStep, labelKey: 'property.editor.contactMethodField' },
+    contact: { step: contactStep, labelKey: 'property.editor.phoneField' },
+    images: { step: 'details', labelKey: 'property.editor.media', targetSelector: '.property-media-panel' },
+    project_name: { step: 'details', labelKey: 'property.editor.projectNameField' },
+    room_types: { step: 'details', labelKey: 'property.editor.roomTypesSection' },
+  };
+  const issues = errors.map((item) => {
+    const field = String(item.field ?? '').split('.')[0];
+    const config = fieldMap[field] ?? { step: 'details' as PropertyEditorStepKey, labelKey: 'property.editor.requiredFields' };
+    const label = t(config.labelKey);
+    return {
+      step: config.step,
+      label,
+      matchLabel: label,
+      targetSelector: config.targetSelector,
+      message: item.reason?.trim() || label,
+    };
+  });
+  serverValidationIssues.value = issues;
+  validationAttempted.value = true;
+  const firstIssue = issues[0];
+  if (firstIssue) {
+    await focusValidationIssue(firstIssue);
+  }
+  return true;
+};
+
+// 8.3 將繁體中文樓盤標題與單位介紹翻譯成 English
 const translateEnglishContent = async (): Promise<void> => {
   if (!form.title.trim() || !form.description.trim()) {
     feedbackStore.pushToast(t('property.editor.translationSourceRequired'), 'error');
@@ -1430,35 +1631,41 @@ const uploadImage = async (image: PropertyEditorImage, targetListingId: string):
   }
 
   image.uploading = true;
-  const presignResponse = await createUploadPresign({
-    file_name: image.file.name,
-    mime_type: image.file.type,
-    file_size: image.file.size,
-    object_prefix: buildObjectPrefix(targetListingId),
-  });
-  const presign = presignResponse.data.data;
-  const uploadResponse = await fetch(presign.upload_url, {
-    method: 'PUT',
-    headers: buildUploadHeaders(presign.headers, image.file.type),
-    body: image.file,
-  });
-  if (!uploadResponse.ok) {
-    throw new Error(`image upload failed with status ${uploadResponse.status}`);
-  }
+  try {
+    const presignResponse = await createUploadPresign({
+      file_name: image.file.name,
+      mime_type: image.file.type,
+      file_size: image.file.size,
+      object_prefix: buildObjectPrefix(targetListingId),
+    });
+    const presign = presignResponse.data.data;
+    const uploadResponse = await fetch(presign.upload_url, {
+      method: 'PUT',
+      headers: buildUploadHeaders(presign.headers, image.file.type),
+      body: image.file,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(`image upload failed with status ${uploadResponse.status}`);
+    }
 
-  const completeResponse = await completeUpload({
-    object_key: presign.object_key,
-    upload_token: presign.upload_token,
-    mime_type: image.file.type,
-    file_size: image.file.size,
-  });
-  updateImageAsset(image.id, completeResponse.data.data);
+    const completeResponse = await completeUpload({
+      object_key: presign.object_key,
+      upload_token: presign.upload_token,
+      mime_type: image.file.type,
+      file_size: image.file.size,
+    });
+    updateImageAsset(image.id, completeResponse.data.data);
+  } finally {
+    image.uploading = false;
+  }
 };
 
 // 17. 上傳待處理圖片
 const uploadPendingImages = async (targetListingId: string): Promise<void> => {
   const pendingImages = images.value.filter((image) => image.file);
-  for (const image of pendingImages) {
+  for (const [index, image] of pendingImages.entries()) {
+    saveStage.value = 'uploading';
+    saveImageProgress.value = { current: index + 1, total: pendingImages.length };
     await uploadImage(image, targetListingId);
   }
 };
@@ -1802,7 +2009,9 @@ const buildSalePayload = (): UpsertPropertySalePayload => ({
     : 'none',
   lease_start_date: form.transactionType === 'rent' ? form.leaseStartDate.trim() || undefined : undefined,
   rent_included: form.transactionType === 'rent' ? buildRentIncludedText() || undefined : undefined,
-  area_mode: saleFieldProfile.value.requiredArea === 'gross' ? 'gross' : 'usable',
+  area_mode: saleFieldProfile.value.requiredArea === 'gross' || form.usableAreaSqft <= 0
+    ? 'gross'
+    : 'usable',
   usable_area_sqft: resolveSaleUsableArea(),
   gross_area_sqft: form.grossAreaSqft > 0 ? Number(form.grossAreaSqft) : undefined,
   bedroom_count: saleFieldProfile.value.showRooms ? Number(form.bedroomCount) : 0,
@@ -1846,7 +2055,7 @@ const buildSalePayload = (): UpsertPropertySalePayload => ({
     contact_attributes: buildContactAttributes(),
     show_phone: isSaleOwnerPublisher.value && form.contactAttributes.hide_phone_allow_inquiry !== 'yes',
     show_whatsapp: saleWhatsAppPhone.value !== '',
-    show_chat: isAgentPublisher.value,
+    show_chat: true,
     show_inquiry_form: isSaleOwnerPublisher.value && form.contactAttributes.hide_phone_allow_inquiry === 'yes',
   },
 });
@@ -2035,6 +2244,13 @@ const applyDetail = (detail: PropertyListingDetailResponse): void => {
   form.allowPhone = detail.contact_summary.show_phone;
   form.allowWhatsapp = detail.contact_summary.show_whatsapp;
   form.allowChat = detail.contact_summary.show_chat;
+  form.contactNameZh = detail.contact_summary.editable_contact?.contact_name_zh || '';
+  form.contactNameEn = detail.contact_summary.editable_contact?.contact_name_en || '';
+  form.phone = detail.contact_summary.editable_contact?.phone || '';
+  form.phone2 = detail.contact_summary.editable_contact?.phone_2 || '';
+  form.whatsapp = detail.contact_summary.editable_contact?.whatsapp || '';
+  form.wechat = detail.contact_summary.editable_contact?.wechat || '';
+  form.email = detail.contact_summary.editable_contact?.email || '';
   form.contactAttributes = {
     phone_country_code: '+852',
     phone_2_country_code: '+852',
@@ -2205,47 +2421,60 @@ const loadDetail = async (): Promise<void> => {
 
 // 40. 儲存草稿
 const saveDraft = async (options: { chargeDraft?: boolean } = {}): Promise<string> => {
-		if (isSale.value && !props.staffMode && !isSalePublisherAllowed.value) {
+  if (isSale.value && !props.staffMode && !isSalePublisherAllowed.value) {
     feedbackStore.pushToast(t('property.editor.publisherIdentityUnsupported'), 'error');
     activeEditorStep.value = 'category';
     return '';
   }
 
-	saving.value = true;
-	  try {
-	    const wasEditing = Boolean(listingId.value);
-	    const shouldChargeDraft = options.chargeDraft === true && isSale.value && !props.staffMode;
-	    if (!listingId.value) {
+  const shouldChargeDraft = options.chargeDraft === true && isSale.value && !props.staffMode;
+  const walletBalance = sessionStore.me?.ajo_balance;
+  if (!listingId.value && shouldChargeDraft && walletBalance !== undefined && walletBalance < draftSaveCost.value) {
+    feedbackStore.pushToast(
+      t('property.editor.draftChargeInsufficient', { cost: formatPoints(draftSaveCost.value) }),
+      'error',
+    );
+    return '';
+  }
+
+  serverValidationIssues.value = [];
+  saveImageProgress.value = null;
+  saving.value = true;
+  try {
+    const wasEditing = Boolean(listingId.value);
+	  if (!listingId.value) {
       if (props.staffMode) {
         feedbackStore.pushToast(t('property.editor.staffCreateDisabled'), 'error');
         return '';
       }
 
-	      const response = isSale.value
-	        ? shouldChargeDraft
-	          ? await createPropertySale(
-	              { ...buildSalePayload(), images: [] },
-	              { charge_draft: true },
-	            )
-	          : await createPropertySale({ ...buildSalePayload(), images: [] })
-	        : await createServicedApartment({ ...buildServicedPayload(), images: [] });
+	    saveStage.value = 'creating';
+	    const response = isSale.value
+	      ? shouldChargeDraft
+	        ? await createPropertySale(
+	            { ...buildSalePayload(), images: [] },
+	            { charge_draft: true },
+	          )
+	        : await createPropertySale({ ...buildSalePayload(), images: [] })
+	      : await createServicedApartment({ ...buildServicedPayload(), images: [] });
 
       listingId.value = response.data.data.listing_id;
     }
 
     await uploadPendingImages(listingId.value);
+	  saveStage.value = 'saving';
 
     if (isSale.value) {
-	      if (props.staffMode) {
-	        await updateStaffPropertySale(listingId.value, buildSalePayload());
-	      } else if (shouldChargeDraft && wasEditing) {
-	        await updatePropertySale(
-	          listingId.value,
-	          buildSalePayload(),
-	          { charge_draft: true },
-	        );
-	      } else {
-	        await updatePropertySale(listingId.value, buildSalePayload());
+      if (props.staffMode) {
+        await updateStaffPropertySale(listingId.value, buildSalePayload());
+      } else if (shouldChargeDraft && wasEditing) {
+        await updatePropertySale(
+          listingId.value,
+          buildSalePayload(),
+          { charge_draft: true },
+        );
+      } else {
+        await updatePropertySale(listingId.value, buildSalePayload());
       }
     } else {
       if (props.staffMode) {
@@ -2255,7 +2484,12 @@ const saveDraft = async (options: { chargeDraft?: boolean } = {}): Promise<strin
       }
     }
     if (!props.staffMode) {
-      await sessionStore.loadCurrentUser();
+	  saveStage.value = 'refreshing';
+      try {
+        await sessionStore.loadCurrentUser();
+      } catch {
+        // 儲存已完成，錢包資料會在下一次會員資料讀取時更新。
+      }
     }
     markCurrentStateSaved();
 
@@ -2265,14 +2499,33 @@ const saveDraft = async (options: { chargeDraft?: boolean } = {}): Promise<strin
     );
     return listingId.value;
   } catch (error: unknown) {
-    feedbackStore.pushToast(readErrorMessage(error, t('property.editor.saveError')), 'error');
+    await applyServerValidationIssues(error);
+    feedbackStore.pushToast(readDraftSaveErrorMessage(error, t('property.editor.saveError')), 'error');
     return '';
   } finally {
+    saveStage.value = 'idle';
+    saveImageProgress.value = null;
     saving.value = false;
   }
 };
 
-// 41. 儲存並發布
+// 41. 請求儲存並發布
+const requestSaveAndPublish = (): void => {
+  if (isActiveSaleListingEdit.value) {
+    isActiveSaleRepublishConfirmOpen.value = true;
+    return;
+  }
+
+  void saveAndPublish();
+};
+
+// 42. 確認上架中樓盤重新發布
+const confirmActiveSaleRepublish = (): void => {
+  isActiveSaleRepublishConfirmOpen.value = false;
+  void saveAndPublish();
+};
+
+// 43. 儲存並發布
 const saveAndPublish = async (): Promise<void> => {
   if (props.staffMode) {
     const savedListingId = await saveDraft();
@@ -2303,7 +2556,7 @@ const saveAndPublish = async (): Promise<void> => {
       return;
     }
 
-    if (isActiveListingEdit.value) {
+    if (isActiveListingEdit.value && !isSale.value) {
       if (props.embedded) {
         emit('saved', savedListingId);
         return;
@@ -2314,16 +2567,24 @@ const saveAndPublish = async (): Promise<void> => {
       return;
     }
 
-    if (isSale.value && isRepublishListingEdit.value) {
+    if (isSale.value && (isRepublishListingEdit.value || isActiveSaleListingEdit.value)) {
+	  saveStage.value = 'publishing';
       await republishPropertySale(savedListingId);
     } else if (!isSale.value && isRepublishListingEdit.value) {
+	  saveStage.value = 'publishing';
       await republishServicedApartment(savedListingId);
     } else if (isSale.value) {
+	  saveStage.value = 'publishing';
       await publishPropertySale(savedListingId);
     } else {
+	  saveStage.value = 'publishing';
       await publishServicedApartment(savedListingId);
     }
-    await sessionStore.loadCurrentUser();
+    try {
+      await sessionStore.loadCurrentUser();
+    } catch {
+      // 發布已完成，錢包資料會在下一次會員資料讀取時更新。
+    }
 
     feedbackStore.pushToast(t('property.editor.publishSuccess'), 'success');
     if (props.embedded) {
@@ -2334,13 +2595,15 @@ const saveAndPublish = async (): Promise<void> => {
     isProgrammaticNavigation.value = true;
     await router.push(myPath.value);
   } catch (error: unknown) {
+    await applyServerValidationIssues(error);
     feedbackStore.pushToast(readErrorMessage(error, t('property.editor.publishError')), 'error');
   } finally {
+    saveStage.value = 'idle';
     publishing.value = false;
   }
 };
 
-// 42. 儲存並返回列表
+// 44. 儲存並返回列表
 const saveAndReturn = async (): Promise<void> => {
   const savedListingId = await saveDraft({ chargeDraft: true });
   if (savedListingId) {
@@ -2352,6 +2615,11 @@ const saveAndReturn = async (): Promise<void> => {
     isProgrammaticNavigation.value = true;
     await router.push(myPath.value);
   }
+};
+
+// 45. 前往錢包充值後再儲存草稿
+const openWallet = async (): Promise<void> => {
+  await router.push('/account/profile/wallet');
 };
 
 onBeforeRouteLeave(() => confirmLeaveEditor());
@@ -2432,7 +2700,7 @@ onBeforeUnmount(() => {
       <form
         ref="editorFormRef"
         class="property-editor-form"
-        @submit.prevent="saveAndReturn"
+        @submit.prevent="requestSaveAndPublish"
       >
         <section
           v-if="visibleValidationIssues.length > 0"
@@ -2448,7 +2716,7 @@ onBeforeUnmount(() => {
               @click="focusValidationIssue(issue)"
             >
               <span>{{ validationIssueStepLabel(issue) }}</span>
-              {{ issue.label }}
+              {{ issue.message || issue.label }}
             </button>
           </div>
         </section>
@@ -4349,7 +4617,19 @@ onBeforeUnmount(() => {
 
       <aside class="property-editor-side">
         <section class="property-editor-panel">
-          <div class="property-side-summary">
+          <p
+            v-if="isSale"
+            class="property-side-kicker"
+          >{{ t('property.editor.preview') }}</p>
+          <PropertyListingCard
+            v-if="isSale"
+            :card="previewCard"
+            preview
+          />
+          <div
+            v-else
+            class="property-side-summary"
+          >
             <p class="property-side-kicker">{{ t('property.editor.preview') }}</p>
             <h2>{{ (isSale ? form.title : form.projectName) || pageTitle }}</h2>
             <p>{{ (isSale ? resolveSaleSummary() : form.summary) || t('property.editor.requiredFields') }}</p>
@@ -4372,10 +4652,48 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <p
-            v-if="!isActiveListingEdit"
+            v-if="!isActiveListingEdit || isActiveSaleListingEdit"
             class="property-editor-charge"
           >
             {{ chargeHint }}
+          </p>
+          <div
+            v-if="isSale && !props.staffMode && !listingId && !isActiveListingEdit"
+            class="property-draft-balance"
+          >
+            <div>
+              <span>{{ t('property.editor.draftSaveCost') }}</span>
+              <strong>{{ formatPoints(draftSaveCost) }}</strong>
+            </div>
+            <div>
+              <span>{{ t('property.editor.draftBalanceAfterSave') }}</span>
+              <strong :class="{ 'property-draft-balance__value--insufficient': isDraftSaveBlocked }">
+                {{ formatPoints(draftBalanceAfterSave) }}
+              </strong>
+            </div>
+            <p
+              v-if="isDraftSaveBlocked"
+              class="property-draft-balance__warning"
+              role="alert"
+            >
+              {{ t('property.editor.draftChargeInsufficient', { cost: formatPoints(draftSaveCost) }) }}
+            </p>
+            <button
+              v-if="isDraftSaveBlocked"
+              type="button"
+              class="property-draft-balance__action"
+              @click="openWallet"
+            >
+              {{ t('property.editor.goToWallet') }}
+            </button>
+          </div>
+          <p
+            v-if="saving || publishing"
+            class="property-editor-save-stage"
+            role="status"
+            aria-live="polite"
+          >
+            {{ saveStageLabel }}
           </p>
           <div class="property-editor-step-actions">
             <button
@@ -4400,7 +4718,7 @@ onBeforeUnmount(() => {
             v-if="isLastEditorStep && !isActiveListingEdit"
             type="button"
             class="property-editor-action property-editor-action--secondary"
-            :disabled="saving || publishing"
+            :disabled="saving || publishing || isDraftSaveBlocked"
             @click="saveAndReturn"
           >
             {{ saving ? t('common.status.loading') : secondaryActionLabel }}
@@ -4410,7 +4728,7 @@ onBeforeUnmount(() => {
             type="button"
             class="property-editor-action property-editor-action--primary"
             :disabled="saving || publishing"
-            @click="saveAndPublish"
+            @click="requestSaveAndPublish"
           >
             {{ publishing ? t('common.status.loading') : primaryActionLabel }}
           </button>
@@ -4429,6 +4747,17 @@ onBeforeUnmount(() => {
       @save="handleLeavePromptDecision('save')"
       @discard="handleLeavePromptDecision('discard')"
       @stay="handleLeavePromptDecision('stay')"
+    />
+
+    <AppActionConfirmDialog
+      :open="isActiveSaleRepublishConfirmOpen"
+      :title="t('property.editor.confirmRepublishTitle')"
+      :description="t('property.editor.confirmRepublishDescription', { cost: formatPoints(activeSaleRepublishCost) })"
+      :cancel-label="t('property.editor.cancelRepublish')"
+      :confirm-label="t('property.editor.confirmRepublishAction')"
+      :confirming="publishing"
+      @cancel="isActiveSaleRepublishConfirmOpen = false"
+      @confirm="confirmActiveSaleRepublish"
     />
   </main>
 </template>
@@ -4719,6 +5048,63 @@ onBeforeUnmount(() => {
   color: rgb(var(--color-text));
   font-size: 11px;
   font-weight: 600;
+}
+
+.property-draft-balance {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 0.8rem;
+  border-top: 1px solid rgb(var(--color-border) / 0.65);
+  padding-top: 10px;
+}
+
+.property-draft-balance > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+}
+
+.property-draft-balance strong {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.property-draft-balance__warning {
+  margin: 0;
+  color: rgb(185 28 28);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.property-draft-balance__value--insufficient {
+  color: rgb(185 28 28);
+}
+
+.property-draft-balance__action {
+  justify-self: start;
+  min-height: 34px;
+  border: 1px solid rgb(var(--color-primary));
+  border-radius: 4px;
+  background: rgb(var(--color-surface));
+  padding: 6px 10px;
+  color: rgb(var(--color-primary));
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.property-editor-save-stage {
+  margin: 0 0 0.8rem;
+  color: rgb(var(--color-primary));
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .property-editor-grid {

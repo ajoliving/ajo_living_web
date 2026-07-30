@@ -45,9 +45,11 @@ export const useMarketplaceMyListingsPage = () => {
   const preferenceStore = usePreferenceStore();
   const sessionStore = useSessionStore();
   const loading = ref(false);
+  const actionLoading = ref(false);
   const searchQuery = ref('');
   const activeTab = ref<MyListingsTab>('all');
   const items = ref<SecondhandListingSummaryResponse[]>([]);
+  const pendingAction = ref<{ action: MyListingsAction; listingId: string } | null>(null);
   const formatPoints = (value: number): string =>
     formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 
@@ -118,42 +120,59 @@ export const useMarketplaceMyListingsPage = () => {
     listing.publication_status === 'expired' ||
     (listing.publication_status === 'active' && listing.business_status !== 'sold');
 
-  // 1.6 執行帖子狀態操作
-  const runAction = async (action: MyListingsAction, listingId: string): Promise<void> => {
-    if ((action === 'publish' || action === 'republish' || action === 'renew') &&
-      !window.confirm(`${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`)) {
+  const confirmDescription = computed(() => {
+    const action = pendingAction.value?.action;
+    if (!action) {
+      return '';
+    }
+
+    if (action === 'publish' || action === 'republish' || action === 'renew') {
+      return `${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`;
+    }
+
+    return t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate');
+  });
+
+  // 1.6 開啟帖子狀態操作確認
+  const requestAction = (action: MyListingsAction, listingId: string): void => {
+    if (!actionLoading.value) {
+      pendingAction.value = { action, listingId };
+    }
+  };
+
+  // 1.7 執行已確認的帖子狀態操作
+  const confirmAction = async (): Promise<void> => {
+    const target = pendingAction.value;
+    if (!target || actionLoading.value) {
       return;
     }
-    if (
-      (action === 'mark-sold' || action === 'deactivate') &&
-      !window.confirm(t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate'))
-    ) {
-      return;
-    }
+
+    pendingAction.value = null;
+    actionLoading.value = true;
 
     try {
-      if (action === 'publish') {
-        await publishSecondhandListing(listingId);
+      if (target.action === 'publish') {
+        await publishSecondhandListing(target.listingId);
       }
 
-      if (action === 'republish') {
-        await republishSecondhandListing(listingId);
+      if (target.action === 'republish') {
+        await republishSecondhandListing(target.listingId);
       }
 
-      if (action === 'renew') {
-        await renewSecondhandListing(listingId);
+      if (target.action === 'renew') {
+        await renewSecondhandListing(target.listingId);
       }
 
-      if (action === 'mark-sold') {
-        await markSecondhandListingSold(listingId);
+      if (target.action === 'mark-sold') {
+        await markSecondhandListingSold(target.listingId);
       }
 
-      if (action === 'deactivate') {
-        await deactivateSecondhandListing(listingId);
+      if (target.action === 'deactivate') {
+        await deactivateSecondhandListing(target.listingId);
       }
 
       feedbackStore.pushToast(t('marketplace.mine.statusUpdated'), 'success');
-      if (action === 'publish' || action === 'republish' || action === 'renew') {
+      if (target.action === 'publish' || target.action === 'republish' || target.action === 'renew') {
         await sessionStore.loadCurrentUser();
       }
       await loadMyListings();
@@ -164,7 +183,14 @@ export const useMarketplaceMyListingsPage = () => {
           : t('marketplace.mine.updateError'),
         'error',
       );
+    } finally {
+      actionLoading.value = false;
     }
+  };
+
+  // 1.8 關閉帖子狀態操作確認
+  const cancelAction = (): void => {
+    pendingAction.value = null;
   };
 
   // 1.7 導向新增帖子頁
@@ -214,6 +240,10 @@ export const useMarketplaceMyListingsPage = () => {
 
   return {
     activeTab,
+    actionLoading,
+    cancelAction,
+    confirmAction,
+    confirmDescription,
     filteredItems,
     formatDate,
     formatPrice,
@@ -234,7 +264,8 @@ export const useMarketplaceMyListingsPage = () => {
     resolveListingSummary,
     resolveListingTitle,
     resolveListingVisibility,
-    runAction,
+    pendingAction,
+    requestAction,
     searchQuery,
     formatAjoPoints: formatPoints,
     secondhandChargeCost: resolveWalletChargeCost('secondhand'),

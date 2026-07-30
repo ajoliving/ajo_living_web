@@ -285,12 +285,27 @@ export const propertyTypeFilterOptions: PropertyFilterOption[] = [
   { value: 'land', label: '土地' },
 ];
 
-export const propertyPriceRangeFilterOptions: PropertyRangeOption[] = [
+export const propertySalePriceRangeFilterOptions: PropertyRangeOption[] = [
   { value: '', label: '不限' },
   { value: 'under_4m', label: '400萬以下', max: 4_000_000 },
   { value: '4m_8m', label: '400-800萬', min: 4_000_000, max: 8_000_000 },
   { value: '8m_12m', label: '800-1200萬', min: 8_000_000, max: 12_000_000 },
   { value: 'over_20m', label: '2000萬+', min: 20_000_000 },
+];
+
+export const propertyRentPriceRangeFilterOptions: PropertyRangeOption[] = [
+  { value: '', label: '不限' },
+  { value: 'under_5000', label: '5000元以下', max: 5_000 },
+  { value: '5000_10000', label: '5000-10000元', min: 5_000, max: 10_000 },
+  { value: '10000_15000', label: '10000-15000元', min: 10_000, max: 15_000 },
+  { value: '15000_20000', label: '15000-20000元', min: 15_000, max: 20_000 },
+  { value: '20000_40000', label: '20000-40000元', min: 20_000, max: 40_000 },
+  { value: 'over_40000', label: '40000元以上', min: 40_000 },
+];
+
+export const propertyAreaModeFilterOptions: PropertyFilterOption[] = [
+  { value: 'usable', label: '實用面積' },
+  { value: 'gross', label: '建築面積' },
 ];
 
 export const propertyAreaRangeFilterOptions: PropertyRangeOption[] = [
@@ -310,12 +325,14 @@ export const propertyBedroomFilterOptions: PropertyFilterOption[] = [
   { value: '4', label: '4房+' },
 ];
 
-export const propertyRenovationFilterOptions: PropertyFilterOption[] = [
+export const propertyTagFilterOptions: PropertyFilterOption[] = [
   { value: '', label: '全部' },
   { value: 'brand_new', label: '全新' },
+  { value: 'view', label: '有景觀' },
   { value: 'renovated', label: '有裝修' },
-  { value: 'simple', label: '簡潔' },
-  { value: 'special', label: '特色' },
+  { value: 'furnished', label: '連傢俬' },
+  { value: 'exclusive', label: '獨家盤' },
+  { value: 'pet_friendly', label: '可養貓狗' },
 ];
 
 export const propertyPublisherFilterOptions: PropertyFilterOption[] = [

@@ -33,6 +33,7 @@ func registerPropertyRoutes(
 	api.PATCH("/property-sales/:listingId", requireAuth, propertyHandler.UpdatePropertySale)
 	api.POST("/property-sales/:listingId/publish", requireAuth, propertyHandler.PublishPropertySale)
 	api.POST("/property-sales/:listingId/republish", requireAuth, propertyHandler.RepublishPropertySale)
+	api.POST("/property-sales/:listingId/renew", requireAuth, propertyHandler.RenewPropertySale)
 	api.POST("/property-sales/:listingId/mark-sold", requireAuth, propertyHandler.MarkPropertySaleSold)
 	api.POST("/property-sales/:listingId/deactivate", requireAuth, propertyHandler.DeactivatePropertySale)
 	api.POST("/property-sales/:listingId/favorite", requireAuth, propertyHandler.FavoritePropertySale)

@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   fetchPublicBuildings: vi.fn(),
   fetchMemberUnits: vi.fn(),
   fetchICCTV: vi.fn(),
+  fetchServiceCase: vi.fn(),
+  fetchServiceCases: vi.fn(),
+  submitServiceCase: vi.fn(),
   updateMe: vi.fn(),
   session: {
     me: {
@@ -70,8 +73,11 @@ vi.mock('@/httpapis/building', () => ({
   fetchMemberIsmartBuildingAccess: vi.fn(),
   fetchMemberIsmartManagementFees: vi.fn(),
   fetchMemberIsmartOtherFees: vi.fn(),
+  fetchMemberIsmartServiceCase: mocks.fetchServiceCase,
+  fetchMemberIsmartServiceCases: mocks.fetchServiceCases,
   generateMemberIsmartDoorQRCode: vi.fn(),
   openMemberIsmartDoor: vi.fn(),
+  submitMemberIsmartBuildingComment: mocks.submitServiceCase,
 }));
 
 vi.mock('@/httpapis/me', () => ({
@@ -95,6 +101,9 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchPublicBuildings.mockReset();
     mocks.fetchMemberUnits.mockReset();
     mocks.fetchICCTV.mockReset();
+    mocks.fetchServiceCase.mockReset();
+    mocks.fetchServiceCases.mockReset();
+    mocks.submitServiceCase.mockReset();
     mocks.updateMe.mockReset();
     mocks.session.me = {
       display_name: 'Member',
@@ -181,6 +190,11 @@ describe('BuildingPage binding refresh', () => {
       orangepis: [],
       cameras: [],
     });
+    mocks.fetchServiceCases.mockResolvedValue({
+      selected_building_id: '0999900',
+      status_choices: [],
+      cases: [],
+    });
   });
 
   it('loads the newly bound building instead of the stale session building', async () => {
@@ -233,6 +247,73 @@ describe('BuildingPage binding refresh', () => {
     expect(mocks.fetchBuildingNotices).toHaveBeenLastCalledWith('0419900');
     expect(wrapper.get('.building-context-select').get('option[value=""]').text()).toBe('時安大廈 / 01 / B');
     expect(wrapper.text()).toContain('目前物業已更新');
+  });
+
+  it('loads and opens only the current member service cases', async () => {
+    mocks.fetchServiceCases.mockResolvedValue({
+      selected_building_id: '0999900',
+      status_choices: [{ code: 'processing', label: '處理中' }],
+      cases: [{
+        case_id: 'case-1',
+        building_id: '0999900',
+        request_type: 'repair',
+        request_type_label: '維修報修',
+        category_label: '水務',
+        subject: '18樓走廊漏水',
+        status: 'processing',
+        status_label: '處理中',
+        updated_at: '2026-07-30T10:20:30+08:00',
+      }],
+    });
+    mocks.fetchServiceCase.mockResolvedValue({
+      case_id: 'case-1',
+      content: '18樓走廊漏水，需要管理處跟進。',
+      messages: [{ message_id: 'message-1', author_username: '住戶', body: '已提交。' }],
+    });
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const feedbackButton = wrapper.findAll('.work-nav-item')
+      .find((button) => button.text().includes('意見提供/維修報修'));
+    await feedbackButton?.trigger('click');
+    await flushPromises();
+
+    expect(mocks.fetchServiceCases).toHaveBeenCalledWith('0999900', undefined);
+    expect(wrapper.text()).toContain('18樓走廊漏水');
+    await wrapper.get('[data-work-panel="affairs-feedback"] .work-mini-btn').trigger('click');
+    await flushPromises();
+    expect(mocks.fetchServiceCase).toHaveBeenCalledWith('case-1', '0999900');
+    expect(wrapper.text()).toContain('需要管理處跟進');
+  });
+
+  it('defaults both repair classifications to the first available option', async () => {
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const feedbackButton = wrapper.findAll('.work-nav-item')
+      .find((button) => button.text().includes('意見提供/維修報修'));
+    await feedbackButton?.trigger('click');
+    await flushPromises();
+
+    const repairCategory = wrapper.get('#affairs-repair-category');
+    const repairSubcategory = wrapper.get('#affairs-repair-subcategory');
+    expect((repairCategory.element as HTMLSelectElement).value).toBe('electrical');
+    expect((repairSubcategory.element as HTMLSelectElement).value).toBe('corridorLighting');
+
+    await repairCategory.setValue('water');
+    expect((repairSubcategory.element as HTMLSelectElement).value).toBe('freshWater');
+
+    const feedbackEntry = wrapper.findAll('.affairs-entry-card')
+      .find((button) => button.text().includes('意見反映'));
+    await feedbackEntry?.trigger('click');
+    await flushPromises();
+
+    expect((wrapper.get('#affairs-feedback-category').element as HTMLSelectElement).value).toBe('environment');
+    expect((wrapper.get('#affairs-feedback-subcategory').element as HTMLSelectElement).value).toBe('cleaningSuggestion');
   });
 
   it('groups cameras by Orange Pi when devices share a channel name', async () => {

@@ -14,6 +14,7 @@
  * 12. 驗證住宅及服務式住宅缺漏欄位會完整列出、標示並聚焦到具體輸入框。
  * 13. 驗證不同樓盤類型沿用一致的大廈資料順序。
  * 14. 驗證已發布樓盤修改後只保存變更，不重複調用草稿發布接口。
+ * 15. 驗證草稿積分不足可直接進入錢包，並顯示後端欄位校驗。
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -22,8 +23,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createPropertySale,
   createServicedApartment,
+  fetchPropertySaleDetail,
   publishPropertySale,
   publishServicedApartment,
+  republishPropertySale,
   translatePropertyContent,
   updatePropertySale,
 } from '@/httpapis/properties';
@@ -34,6 +37,7 @@ const testMocks = vi.hoisted(() => ({
   pushToast: vi.fn(),
   routerPush: vi.fn(),
   loadCurrentUser: vi.fn(),
+  walletBalance: 5000,
 }));
 
 vi.mock('vue-router', () => ({
@@ -56,6 +60,7 @@ vi.mock('vue-i18n', () => ({
         'property.editor.commercialBuildingNameField': '工商大廈名稱',
         'property.editor.contactNameEnField': '英文名',
         'property.editor.directionField': '座向',
+        'property.editor.draftChargeInsufficient': '錢包餘額不足，儲存草稿需要 {cost}。',
         'property.editor.estateNameField': '大廈名稱',
         'property.editor.bedroomField': '房間數量',
         'property.editor.grossAreaField': '建築面積',
@@ -74,6 +79,11 @@ vi.mock('vue-i18n', () => ({
         'property.editor.publishNow': '儲存並發布',
         'property.editor.publishSuccess': '已發布',
         'property.editor.republishNow': '儲存並重新發布',
+        'property.editor.activeRepublishChargeHint': '重新發布將扣除 {cost}。',
+        'property.editor.confirmRepublishTitle': '確認重新發布',
+        'property.editor.confirmRepublishDescription': '儲存修改後將重新發布樓盤，並扣除 {cost}。',
+        'property.editor.confirmRepublishAction': '重新發布',
+        'property.editor.cancelRepublish': '取消',
         'property.editor.rentModule': '租金',
         'property.editor.residentialModuleA': '物業資料',
         'property.editor.residentialModuleE': '聯絡人',
@@ -104,6 +114,7 @@ vi.mock('vue-i18n', () => ({
         'property.editor.wechatField': 'Wechat ID',
         'property.editor.validationSummaryTitle': '請檢查以下必填欄位（{count}項）',
         'property.editor.requiredFieldInline': '請填寫「{field}」',
+        'property.editor.goToWallet': '前往錢包充值',
       };
 
       return (messages[key] ?? key)
@@ -125,7 +136,7 @@ vi.mock('@/stores/preferences', () => ({
 vi.mock('@/stores/session', () => ({
   useSessionStore: () => ({
     me: {
-      ajo_balance: 5000,
+      ajo_balance: testMocks.walletBalance,
       district_code: '',
       email: '',
     },
@@ -170,6 +181,7 @@ interface EditorTestForm {
   description: string;
   descriptionEn: string;
   districtCode: string;
+  email: string;
   estateName: string;
   featureTags: string[];
   floorRaw: string;
@@ -200,6 +212,7 @@ interface EditorTestForm {
   transactionType: 'sale' | 'rent';
   usableAreaSqft: number;
   wechat: string;
+  whatsapp: string;
 }
 
 interface EditorTestState {
@@ -218,9 +231,11 @@ interface EditorTestState {
 
 const mockedCreatePropertySale = vi.mocked(createPropertySale);
 const mockedCreateServicedApartment = vi.mocked(createServicedApartment);
+const mockedFetchPropertySaleDetail = vi.mocked(fetchPropertySaleDetail);
 const mockedUpdatePropertySale = vi.mocked(updatePropertySale);
 const mockedPublishPropertySale = vi.mocked(publishPropertySale);
 const mockedPublishServicedApartment = vi.mocked(publishServicedApartment);
+const mockedRepublishPropertySale = vi.mocked(republishPropertySale);
 const mockedTranslatePropertyContent = vi.mocked(translatePropertyContent);
 
 // 1. 建立樓盤編輯頁
@@ -317,6 +332,7 @@ const getEditorState = (wrapper: ReturnType<typeof mountEditor>): EditorTestStat
 describe('PropertyEditorPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testMocks.walletBalance = 5000;
     mockedCreatePropertySale.mockResolvedValue({
       data: { data: { listing_id: 'property-1' } },
     } as Awaited<ReturnType<typeof createPropertySale>>);
@@ -326,6 +342,9 @@ describe('PropertyEditorPage', () => {
     mockedPublishPropertySale.mockResolvedValue({
       data: { data: { listing_id: 'property-1', publication_status: 'active' } },
     } as Awaited<ReturnType<typeof publishPropertySale>>);
+    mockedRepublishPropertySale.mockResolvedValue({
+      data: { data: { listing_id: 'property-1', publication_status: 'active' } },
+    } as Awaited<ReturnType<typeof republishPropertySale>>);
     mockedTranslatePropertyContent.mockResolvedValue({
       data: {
         data: {
@@ -371,7 +390,7 @@ describe('PropertyEditorPage', () => {
     expect(wrapper.emitted('published')).toEqual([['property-1']]);
   });
 
-  it('saves changes to an active property without publishing the draft again', async () => {
+  it('republishes an active property after saving changes for half the advertising points', async () => {
     const wrapper = mountEditor('sale', false, 'property-1');
     await flushPromises();
     const state = getEditorState(wrapper);
@@ -383,12 +402,18 @@ describe('PropertyEditorPage', () => {
     await nextTick();
     testMocks.pushToast.mockClear();
 
-    expect(wrapper.find('.property-editor-charge').exists()).toBe(false);
+    expect(wrapper.find('.property-editor-charge').exists()).toBe(true);
     expect(wrapper.text()).not.toContain('保存草稿');
-    const saveChangesButton = wrapper.findAll('button')
-      .find((button) => button.text() === '儲存修改');
-    expect(saveChangesButton).toBeTruthy();
-    await saveChangesButton?.trigger('click');
+    const republishButton = wrapper.findAll('button')
+      .find((button) => button.text() === '儲存並重新發布');
+    expect(republishButton).toBeTruthy();
+    await republishButton?.trigger('click');
+    expect(mockedUpdatePropertySale).not.toHaveBeenCalled();
+
+    const activeEditorState = state as EditorTestState & {
+      confirmActiveSaleRepublish: () => void;
+    };
+    activeEditorState.confirmActiveSaleRepublish();
     await flushPromises();
 
     expect(mockedUpdatePropertySale).toHaveBeenCalledWith(
@@ -398,8 +423,84 @@ describe('PropertyEditorPage', () => {
       }),
     );
     expect(mockedPublishPropertySale).not.toHaveBeenCalled();
-    expect(wrapper.emitted('saved')).toEqual([['property-1']]);
-    expect(testMocks.pushToast).toHaveBeenCalledWith('樓盤修改已儲存', 'success');
+    expect(mockedRepublishPropertySale).toHaveBeenCalledWith('property-1');
+    expect(wrapper.emitted('published')).toEqual([['property-1']]);
+  });
+
+  it('restores editable contact details and saves a prepaid draft with a low wallet balance', async () => {
+    testMocks.walletBalance = 500;
+    mockedFetchPropertySaleDetail.mockResolvedValue({
+      data: {
+        data: {
+          listing_id: 'property-1',
+          display_number: 1,
+          module: 'property_sale',
+          title: '中環住宅放售',
+          summary: '實用住宅單位',
+          description: '實用住宅單位，交通方便。',
+          district_code: 'central',
+          publisher_identity_type: 'owner',
+          publication_status: 'draft',
+          business_status: 'available',
+          updated_at: '2026-07-27T00:00:00Z',
+          contact_summary: {
+            show_phone: true,
+            show_whatsapp: true,
+            show_chat: true,
+            show_inquiry_form: false,
+            contact_attributes: {
+              phone_country_code: '+852',
+              phone_2_country_code: '+86',
+            },
+            editable_contact: {
+              contact_name_zh: '陳先生',
+              contact_name_en: 'Mr Chan',
+              phone: '61234567',
+              phone_2: '62345678',
+              whatsapp: '61234567',
+              wechat: 'ajo-owner',
+              email: 'owner@example.com',
+            },
+          },
+          images: [],
+          property_sale: null,
+          serviced_apartment: null,
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof fetchPropertySaleDetail>>);
+
+    const wrapper = mountEditor('sale', false, 'property-1');
+    await flushPromises();
+    const state = getEditorState(wrapper);
+
+    expect(state.form.contactNameZh).toBe('陳先生');
+    expect(state.form.contactNameEn).toBe('Mr Chan');
+    expect(state.form.phone).toBe('61234567');
+    expect(state.form.phone2).toBe('62345678');
+    expect(state.form.whatsapp).toBe('61234567');
+    expect(state.form.wechat).toBe('ajo-owner');
+    expect(state.form.email).toBe('owner@example.com');
+    expect(state.form.contactAttributes.phone_2_country_code).toBe('+86');
+
+    state.activeEditorStep = 'contact';
+    await nextTick();
+    testMocks.pushToast.mockClear();
+
+    const saveChangesButton = wrapper.findAll('button').find((button) => button.text() === '儲存修改');
+    expect(saveChangesButton).toBeTruthy();
+    expect(saveChangesButton?.attributes('disabled')).toBeUndefined();
+    await saveChangesButton?.trigger('click');
+    await flushPromises();
+
+    expect(mockedUpdatePropertySale).toHaveBeenCalledWith(
+      'property-1',
+      expect.any(Object),
+      { charge_draft: true },
+    );
+    expect(testMocks.pushToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('錢包餘額不足'),
+      'error',
+    );
   });
 
   it('saves an incomplete property sale as a draft without publishing', async () => {
@@ -421,6 +522,50 @@ describe('PropertyEditorPage', () => {
     );
     expect(mockedPublishPropertySale).not.toHaveBeenCalled();
     expect(wrapper.emitted('saved')).toEqual([['property-1']]);
+  });
+
+  it('blocks the first charged draft save with a direct wallet entry when the balance is insufficient', async () => {
+    testMocks.walletBalance = 500;
+    const wrapper = mountEditor();
+    await flushPromises();
+    const state = getEditorState(wrapper);
+    state.activeEditorStep = 'contact';
+    await nextTick();
+
+    const saveDraftButton = wrapper.findAll('button').find((button) => button.text() === '保存草稿');
+    expect(saveDraftButton?.attributes('disabled')).toBeDefined();
+    expect(wrapper.text()).toContain('錢包餘額不足，儲存草稿需要');
+    const walletButton = wrapper.findAll('button').find((button) => button.text() === '前往錢包充值');
+    expect(walletButton).toBeTruthy();
+    await walletButton?.trigger('click');
+
+    expect(testMocks.routerPush).toHaveBeenCalledWith('/account/profile/wallet');
+    expect(mockedCreatePropertySale).not.toHaveBeenCalled();
+  });
+
+  it('shows and locates backend field validation errors after a save failure', async () => {
+    mockedUpdatePropertySale.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        data: {
+          code: 'VALIDATION_ERROR',
+          message: '請檢查表單資料',
+          errors: [{ field: 'title_en', reason: 'English 標題超過可接受長度' }],
+        },
+      },
+    });
+    const wrapper = mountEditor();
+    await flushPromises();
+    const state = getEditorState(wrapper);
+    fillValidSale(state);
+
+    await clickSaveDraft(wrapper);
+
+    expect(wrapper.text()).toContain('English 標題超過可接受長度');
+    expect(state.activeEditorStep).toBe('details');
+    const invalidField = wrapper.find('.property-validation-error');
+    expect(invalidField.text()).toContain('放盤標題(英文)');
+    expect(invalidField.attributes('data-property-validation-message')).toBe('English 標題超過可接受長度');
   });
 
   it('saves separate WhatsApp settings for phone 1 and phone 2', async () => {

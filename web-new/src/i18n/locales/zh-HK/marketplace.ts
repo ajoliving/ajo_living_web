@@ -848,6 +848,8 @@ export default {
     confirmPublishCharge: '發布將扣除',
     confirmRepublishCharge: '重新發布將扣除',
     confirmRenewCharge: '續期將扣除',
+    confirmActionTitle: '確認操作',
+    cancelAction: '取消',
     detailKicker: '發布者視角',
     detailDescription: '查看帖子內容、發布狀態與管理操作。',
     editDetailAction: '修改帖子資料',

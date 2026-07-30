@@ -2,7 +2,7 @@
  * 我的大廈頁。
  * 1. 高保真還原 HTML 設計稿 page-affairs 雙欄布局（左側大廈導航 + 右側面板）。
  * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控八個面板。
- * 3. 意見提供面板包含最近記錄（可展開內容）、入口卡片、引導式四步提交流程。
+ * 3. 意見提供面板使用 iSmart 服務個案 API 提交、讀取及查看處理紀錄。
  * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
 -->
 <script setup lang="ts">
@@ -19,10 +19,13 @@ import {
   fetchMemberIsmartManagementFees,
   fetchMemberIsmartBuildingNotices,
   fetchMemberIsmartOtherFees,
+  fetchMemberIsmartServiceCase,
+  fetchMemberIsmartServiceCases,
   fetchMemberPosBuildings,
   fetchPosBuildings,
   generateMemberIsmartDoorQRCode,
   openMemberIsmartDoor,
+  submitMemberIsmartBuildingComment,
   type ICCTVCameraSummary,
   type IsmartAccessDoor,
   type IsmartAccessRecord,
@@ -34,6 +37,8 @@ import {
   type IsmartManagementFeeTableRow,
   type IsmartOtherFeeRow,
   type IsmartRecentAccessGroup,
+  type IsmartServiceCaseDetailResponse,
+  type IsmartServiceCaseListResponse,
 } from '@/httpapis/building';
 import type { PosBuilding } from '@/model/community';
 import {
@@ -114,6 +119,7 @@ interface BuildingFileRow {
 }
 
 interface FeedbackRecord {
+	caseID: string;
   type: string;
   building: string;
   subject: string;
@@ -121,7 +127,6 @@ interface FeedbackRecord {
   status: 'warn' | 'good' | '';
   statusText: string;
   updatedAt: string;
-  content: string;
 }
 
 interface AccessQRPanel {
@@ -292,15 +297,21 @@ const contextPickerLabel = computed(() => (
 // 4. 意見提供引導式表單狀態
 const affairsMode = ref<AffairsMode>('repair');
 const affairsStep = ref(1);
-const expandedRecord = ref<number | null>(null);
-const selectedFeedbackBuilding = ref('harmony');
+const expandedRecord = ref('');
 const repairCategory = ref('');
 const repairSubcategory = ref('');
 const feedbackCategory = ref('');
 const feedbackSubcategory = ref('');
 const repairContent = ref('');
 const feedbackContent = ref('');
-const mediaFileName = ref('');
+const feedbackLocationText = ref('');
+const serviceCaseLoading = ref(false);
+const serviceCaseSubmitting = ref(false);
+const serviceCaseError = ref('');
+const serviceCaseSubmitError = ref('');
+const serviceCaseStatus = ref('');
+const serviceCaseList = ref<IsmartServiceCaseListResponse | null>(null);
+const serviceCaseDetail = ref<IsmartServiceCaseDetailResponse | null>(null);
 
 // 5. 左側導航項目
 const navItems = computed<NavItem[]>(() => [
@@ -309,7 +320,7 @@ const navItems = computed<NavItem[]>(() => [
   { target: 'affairs-finance', label: t('building.nav.finance') },
   { target: 'affairs-owner-account', label: t('building.nav.ownerAccount') },
   { target: 'affairs-forms', label: t('building.nav.forms') },
-  { target: 'affairs-feedback', label: t('building.nav.feedback'), needsApi: true },
+  { target: 'affairs-feedback', label: t('building.nav.feedback') },
   { target: 'affairs-access', label: t('building.nav.access') },
   { target: 'affairs-icctv', label: t('building.nav.icctv') },
 ]);
@@ -1029,22 +1040,11 @@ const selectedFormOrg = computed(() => organizationName.value);
 const selectedFormBuilding = computed(() => buildingName.value);
 const forms = computed(() => buildingForms.value);
 
-// 10. 意見提供示例資料
-const feedbackBuildingKeys = [
-  'yanYing', 'harmony', 'wahHing269', 'wahHing271', 'rich', 'luck', 'tinFu',
-  'newManLee', 'manKoB', 'siOn', 'tungSing', 'wahYuen', 'wingSumIndustrial2',
-  'hongMukGarden2', 'namCheongCourt', 'tungNam77', 'tungNam75', 'test1', 'leeLoi',
-  'yanMan', 'wingSingCourt', 'yanLee', 'laiLai', 'jadeCinnamon1', 'jadeCinnamon2',
-  'jadeCinnamon3', 'jadeCinnamon4', 'jadeCinnamon5', 'jadeCinnamon6', 'jadeCinnamon7',
-  'jadeCinnamon8', 'jadeCinnamon9', 'jadeCinnamon10', 'jadeCinnamon11',
-];
-const feedbackBuildings = computed<SelectOption[]>(() => feedbackBuildingKeys.map((value) => ({
-  value,
-  label: t(`building.feedback.buildings.${value}`),
-})));
-const selectedFeedbackBuildingLabel = computed(() =>
-  feedbackBuildings.value.find((item) => item.value === selectedFeedbackBuilding.value)?.label
-  || t('building.common.emptySelection'));
+// 10. 意見提供與維修服務個案資料
+const feedbackBuildingID = computed(() => selectedBuildingID.value || ownerUnitContext.value.buildingID);
+const selectedFeedbackBuildingLabel = computed(() => (
+  feedbackBuildingID.value ? noticeBuildingLabel(feedbackBuildingID.value) : t('building.common.emptySelection')
+));
 
 const repairCategoryMap: Record<string, string[]> = {
   electrical: ['corridorLighting', 'lobbyLighting', 'switchFault', 'otherLighting'],
@@ -1062,6 +1062,28 @@ const feedbackCategoryMap: Record<string, string[]> = {
   platform: ['feature', 'issue', 'other'],
   other: ['other'],
 };
+
+// 10.1 初始化目前模式的首個可用分類與次分類。
+const initializeAffairsCategories = (mode: AffairsMode): void => {
+  const categoryMap = mode === 'repair' ? repairCategoryMap : feedbackCategoryMap;
+  const categoryKeys = Object.keys(categoryMap);
+  const currentCategory = mode === 'repair' ? repairCategory.value : feedbackCategory.value;
+  const category = categoryKeys.includes(currentCategory) ? currentCategory : (categoryKeys[0] ?? '');
+  const subcategoryKeys = categoryMap[category] ?? [];
+  const currentSubcategory = mode === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
+  const subcategory = subcategoryKeys.includes(currentSubcategory) ? currentSubcategory : (subcategoryKeys[0] ?? '');
+
+  if (mode === 'repair') {
+    repairCategory.value = category;
+    repairSubcategory.value = subcategory;
+    return;
+  }
+  feedbackCategory.value = category;
+  feedbackSubcategory.value = subcategory;
+};
+
+// 10.2 頁面初始預設為維修分類的第一項。
+initializeAffairsCategories('repair');
 
 const repairCategoryLabel = (category: string): string =>
   category ? t(`building.feedback.categories.repair.${category}.label`) : '';
@@ -1095,48 +1117,25 @@ const feedbackSubcategories = computed<SelectOption[]>(() => {
   }));
 });
 
-const feedbackRecords = computed<FeedbackRecord[]>(() => [
-  {
-    type: t('building.feedback.mode.repair'),
-    building: t('building.feedback.buildings.harmony'),
-    subject: t('building.feedback.records.corridorLighting.subject'),
-    category: repairCategoryLabel('electrical'),
-    status: 'warn',
-    statusText: t('building.feedback.records.processing'),
-    updatedAt: t('building.feedback.records.todayAt', { time: '10:20' }),
-    content: t('building.feedback.records.corridorLighting.content'),
-  },
-  {
-    type: t('building.feedback.mode.repair'),
-    building: t('building.feedback.buildings.harmony'),
-    subject: t('building.feedback.records.entranceLock.subject'),
-    category: repairCategoryLabel('structure'),
-    status: '',
-    statusText: t('building.feedback.records.pending'),
-    updatedAt: t('building.feedback.records.yesterdayAt', { time: '09:30' }),
-    content: t('building.feedback.records.entranceLock.content'),
-  },
-  {
-    type: t('building.feedback.mode.feedback'),
-    building: t('building.feedback.buildings.harmony'),
-    subject: t('building.feedback.records.lobbyCleaning.subject'),
-    category: feedbackCategoryLabel('environment'),
-    status: 'good',
-    statusText: t('building.feedback.records.completed'),
-    updatedAt: t('building.feedback.records.yesterdayAt', { time: '16:45' }),
-    content: t('building.feedback.records.lobbyCleaning.content'),
-  },
-  {
-    type: t('building.feedback.mode.feedback'),
-    building: t('building.feedback.buildings.siOn'),
-    subject: t('building.feedback.records.platformFeature.subject'),
-    category: feedbackCategoryLabel('platform'),
-    status: 'warn',
-    statusText: t('building.feedback.records.processing'),
-    updatedAt: formatLocaleDateValue('2026-06-04'),
-    content: t('building.feedback.records.platformFeature.content'),
-  },
-]);
+const serviceCaseStatusChoices = computed(() => serviceCaseList.value?.status_choices ?? []);
+const feedbackRecords = computed<FeedbackRecord[]>(() => (serviceCaseList.value?.cases ?? []).map((item) => ({
+  caseID: item.case_id,
+  type: item.request_type_label || (item.request_type === 'repair'
+    ? t('building.feedback.mode.repair')
+    : t('building.feedback.mode.feedback')),
+  building: noticeBuildingLabel(String(item.building_id || feedbackBuildingID.value)),
+  subject: textValue(item.subject) || textValue(item.case_no) || item.case_id,
+  category: textValue(item.category_label) || textValue(item.category) || '-',
+  status: item.status === 'completed' ? 'good' : ['processing', 'pending_information'].includes(String(item.status)) ? 'warn' : '',
+  statusText: textValue(item.status_label) || textValue(item.status) || '-',
+  updatedAt: formatLocaleDateValue(item.updated_at || item.created_at),
+})));
+const serviceCaseEmptyText = computed(() => {
+  if (serviceCaseLoading.value) return t('building.feedback.loading');
+  if (serviceCaseError.value) return t('building.feedback.loadError');
+  if (!feedbackBuildingID.value) return t('building.feedback.noBuilding');
+  return t('building.feedback.empty');
+});
 
 // 12. 讀取目前會員綁定大廈資料
 const loadBuildingInfo = async (buildingID = selectedBuildingID.value) => {
@@ -1263,6 +1262,25 @@ const loadBuildingNotices = async (buildingID = selectedNoticeBuildingID.value |
     ismartNoticeProfile.value = null;
   } finally {
     noticeLoading.value = false;
+  }
+};
+
+// 12.4 讀取目前會員的意見與維修服務個案
+const loadBuildingServiceCases = async (buildingID = feedbackBuildingID.value): Promise<void> => {
+  serviceCaseLoading.value = true;
+  serviceCaseError.value = '';
+  try {
+    if (!buildingID) {
+      serviceCaseList.value = null;
+      return;
+    }
+    serviceCaseList.value = await fetchMemberIsmartServiceCases(buildingID, serviceCaseStatus.value || undefined);
+  } catch (error) {
+    console.error(error);
+    serviceCaseList.value = null;
+    serviceCaseError.value = 'building.feedback.loadError';
+  } finally {
+    serviceCaseLoading.value = false;
   }
 };
 
@@ -1458,6 +1476,9 @@ const switchTab = (target: AffairsTab) => {
   if (target === 'affairs-owner-account' && (!ownerUnpaidLoaded.value || !ownerRecordsLoaded.value) && !ownerAccountLoading.value) {
     void loadOwnerAccount();
   }
+  if (target === 'affairs-feedback' && !serviceCaseList.value && !serviceCaseLoading.value) {
+    void loadBuildingServiceCases();
+  }
   if (target === 'affairs-access' && !ismartAccessProfile.value && !accessLoading.value) {
     void loadBuildingAccess();
   }
@@ -1551,53 +1572,103 @@ const generateAccessQRCode = async (door: IsmartAccessDoor) => {
 const setAffairsMode = (mode: AffairsMode) => {
   affairsMode.value = mode;
   affairsStep.value = 1;
+  serviceCaseSubmitError.value = '';
+  initializeAffairsCategories(mode);
 };
 
 // 22. 切換意見提供步驟
 const setAffairsStep = (step: number) => {
   if (step < 1) return;
-  if (step > 4) return;
+  if (step > 3) return;
   affairsStep.value = step;
 };
 
 // 23. 下一步
 const nextAffairsStep = () => {
-  if (affairsStep.value < 4) {
+  const category = affairsMode.value === 'repair' ? repairCategory.value : feedbackCategory.value;
+  const subcategory = affairsMode.value === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
+  const content = affairsMode.value === 'repair' ? repairContent.value : feedbackContent.value;
+  if (affairsStep.value === 1 && (!feedbackBuildingID.value || !category || !subcategory)) {
+    serviceCaseSubmitError.value = 'building.feedback.categoryRequired';
+    return;
+  }
+  if (affairsStep.value === 2 && !content.trim()) {
+    serviceCaseSubmitError.value = 'building.feedback.contentRequired';
+    return;
+  }
+  serviceCaseSubmitError.value = '';
+  if (affairsStep.value < 3) {
     affairsStep.value += 1;
   }
 };
 
 // 24. 展開/收起最近記錄
-const toggleRecord = (index: number) => {
-  expandedRecord.value = expandedRecord.value === index ? null : index;
-};
-
-// 25. 選擇檔案
-const onMediaChange = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  if (!target.files || target.files.length === 0) {
-    mediaFileName.value = '';
+const toggleRecord = async (record: FeedbackRecord): Promise<void> => {
+  if (expandedRecord.value === record.caseID) {
+    expandedRecord.value = '';
+    serviceCaseDetail.value = null;
     return;
   }
-  mediaFileName.value = Array.from(target.files)
-    .map((f) => f.name)
-    .join(', ');
+  serviceCaseError.value = '';
+  try {
+    serviceCaseDetail.value = await fetchMemberIsmartServiceCase(record.caseID, feedbackBuildingID.value || undefined);
+    expandedRecord.value = record.caseID;
+  } catch (error) {
+    console.error(error);
+    serviceCaseDetail.value = null;
+    expandedRecord.value = '';
+    serviceCaseError.value = 'building.feedback.detailLoadError';
+  }
 };
 
-// 26. 提交意見提供
-const submitAffairsFeedback = () => {
-  affairsMode.value = 'repair';
-  affairsStep.value = 1;
-  repairCategory.value = '';
-  repairSubcategory.value = '';
-  feedbackCategory.value = '';
-  feedbackSubcategory.value = '';
-  repairContent.value = '';
-  feedbackContent.value = '';
-  mediaFileName.value = '';
+// 25. 提交意見提供或維修服務個案
+const submitAffairsFeedback = async (): Promise<void> => {
+  const category = affairsMode.value === 'repair' ? repairCategory.value : feedbackCategory.value;
+  const subcategory = affairsMode.value === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
+  const content = affairsMode.value === 'repair' ? repairContent.value.trim() : feedbackContent.value.trim();
+  if (!feedbackBuildingID.value || !category || !subcategory) {
+    serviceCaseSubmitError.value = 'building.feedback.categoryRequired';
+    affairsStep.value = 1;
+    return;
+  }
+  if (!content) {
+    serviceCaseSubmitError.value = 'building.feedback.contentRequired';
+    affairsStep.value = 2;
+    return;
+  }
+
+  serviceCaseSubmitting.value = true;
+  serviceCaseSubmitError.value = '';
+  try {
+    await submitMemberIsmartBuildingComment({
+      building_id: feedbackBuildingID.value,
+      unit_id: ownerUnitContext.value.unitID || undefined,
+      request_type: affairsMode.value,
+      category,
+      subcategory,
+      subject: [reviewCategory.value, reviewSubcategory.value].filter(Boolean).join(' - '),
+      content,
+      location_text: feedbackLocationText.value.trim() || undefined,
+    });
+    affairsStep.value = 1;
+    repairCategory.value = '';
+    repairSubcategory.value = '';
+    feedbackCategory.value = '';
+    feedbackSubcategory.value = '';
+    initializeAffairsCategories(affairsMode.value);
+    repairContent.value = '';
+    feedbackContent.value = '';
+    feedbackLocationText.value = '';
+    await loadBuildingServiceCases(feedbackBuildingID.value);
+  } catch (error) {
+    console.error(error);
+    serviceCaseSubmitError.value = 'building.feedback.submitError';
+  } finally {
+    serviceCaseSubmitting.value = false;
+  }
 };
 
-// 27. 確認提交摘要
+// 26. 確認提交摘要
 const reviewMode = computed(() => (affairsMode.value === 'repair'
   ? t('building.feedback.mode.repair')
   : t('building.feedback.mode.feedback')));
@@ -1618,9 +1689,9 @@ const reviewContent = computed(() =>
     ? repairContent.value || t('building.feedback.review.enterContent')
     : feedbackContent.value || t('building.feedback.review.enterContent'),
 );
-const reviewMedia = computed(() => mediaFileName.value || t('building.feedback.review.noFile'));
+const reviewLocation = computed(() => feedbackLocationText.value || t('building.feedback.review.noLocation'));
 
-// 28. 重新整理通告
+// 27. 重新整理通告
 const refreshNotices = () => {
   void loadBuildingNotices();
 };
@@ -1645,6 +1716,10 @@ const resetBuildingScopedState = (): void => {
   icctvProfile.value = null;
   icctvError.value = '';
   expandedICCTVCameraIDs.value = [];
+  serviceCaseList.value = null;
+  serviceCaseDetail.value = null;
+  serviceCaseError.value = '';
+  expandedRecord.value = '';
 };
 
 // 28.2 保存並套用目前物業
@@ -1661,6 +1736,7 @@ const handleSaveBuildingContext = async (): Promise<void> => {
   ]);
   if (activeTab.value === 'affairs-finance') await loadBuildingFinanceReceivables(buildingID);
   if (activeTab.value === 'affairs-owner-account') await loadOwnerAccount();
+  if (activeTab.value === 'affairs-feedback') await loadBuildingServiceCases(buildingID);
   if (activeTab.value === 'affairs-access') await loadBuildingAccess();
   if (activeTab.value === 'affairs-icctv') await loadICCTV();
 };
@@ -2754,7 +2830,34 @@ onMounted(() => {
             </div>
           </section>
           <section class="work-card">
-            <div class="work-card-title">{{ t('building.feedback.recentRecords') }}</div>
+            <div class="building-section-head">
+              <div class="work-card-title">{{ t('building.feedback.recentRecords') }}</div>
+              <div class="affairs-list-actions">
+                <select
+                  v-model="serviceCaseStatus"
+                  class="affairs-select"
+                  :aria-label="t('building.feedback.statusFilter')"
+                  @change="loadBuildingServiceCases()"
+                >
+                  <option value="">{{ t('building.feedback.allStatuses') }}</option>
+                  <option
+                    v-for="choice in serviceCaseStatusChoices"
+                    :key="choice.code"
+                    :value="choice.code"
+                  >{{ choice.label }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="work-action secondary"
+                  :disabled="serviceCaseLoading"
+                  @click="loadBuildingServiceCases()"
+                >{{ t('building.common.refresh') }}</button>
+              </div>
+            </div>
+            <div
+              v-if="serviceCaseError"
+              class="acct-banner warn"
+            >{{ t(serviceCaseError) }}</div>
             <table class="work-table">
               <thead>
                 <tr>
@@ -2769,8 +2872,8 @@ onMounted(() => {
               </thead>
               <tbody>
               <template
-                v-for="(r, i) in feedbackRecords"
-                :key="`${r.type}-${r.subject}`"
+                v-for="r in feedbackRecords"
+                :key="r.caseID"
               >
                 <tr>
                   <td>{{ r.type }}</td>
@@ -2788,24 +2891,51 @@ onMounted(() => {
                     <button
                       type="button"
                       class="work-mini-btn"
-                      @click="toggleRecord(i)"
+                      @click="toggleRecord(r)"
                     >
                       {{ t('building.feedback.viewContent') }}
                     </button>
                   </td>
                 </tr>
                 <tr
-                  v-show="expandedRecord === i"
+                  v-show="expandedRecord === r.caseID"
                   class="affairs-record-detail"
                 >
                   <td colspan="7">
                     <div class="affairs-record-card">
                       <strong>{{ t('building.common.content') }}</strong>
-                      {{ r.content }}
+                      <span>{{ serviceCaseDetail?.content || '-' }}</span>
+                      <div
+                        v-for="message in serviceCaseDetail?.messages ?? []"
+                        :key="message.message_id || `${message.author_username}-${message.created_at}`"
+                        class="affairs-record-message"
+                      >
+                        <strong>{{ message.author_username || message.author_role || '-' }}</strong>
+                        <span>{{ message.body || '-' }}</span>
+                        <small>{{ formatLocaleDateValue(message.created_at) }}</small>
+                        <template
+                          v-for="attachment in message.attachments ?? []"
+                          :key="String(attachment.id || attachment.file_url)"
+                        >
+                          <a
+                            v-if="attachment.file_url"
+                            class="building-link"
+                            :href="attachment.file_url"
+                            target="_blank"
+                            rel="noopener"
+                          >{{ t('building.feedback.viewAttachment') }}</a>
+                        </template>
+                      </div>
                     </div>
                   </td>
                 </tr>
               </template>
+              <tr v-if="feedbackRecords.length === 0">
+                <td
+                  class="building-empty-row"
+                  colspan="7"
+                >{{ serviceCaseEmptyText }}</td>
+              </tr>
               </tbody>
             </table>
           </section>
@@ -2879,24 +3009,8 @@ onMounted(() => {
             </button>
           </section>
           <section class="work-card affairs-feedback-form">
-            <div class="work-card-title">{{ t('building.feedback.selectBuilding') }}</div>
-            <div class="affairs-field">
-              <label for="affairs-building">{{ t('building.common.building') }}</label>
-              <select
-                id="affairs-building"
-                v-model="selectedFeedbackBuilding"
-                class="affairs-select"
-              >
-                <option value="">{{ t('building.common.emptySelection') }}</option>
-                <option
-                  v-for="b in feedbackBuildings"
-                  :key="b.value"
-                  :value="b.value"
-                >
-                  {{ b.label }}
-                </option>
-              </select>
-            </div>
+            <div class="work-card-title">{{ t('building.feedback.currentProperty') }}</div>
+            <div class="work-card-sub">{{ selectedFeedbackBuildingLabel }}</div>
           </section>
           <section class="work-card affairs-guided-shell">
             <div
@@ -2919,13 +3033,7 @@ onMounted(() => {
                 class="affairs-step-indicator"
                 :class="{ on: affairsStep === 3 }"
               >
-                <b>3</b>{{ t('building.feedback.steps.upload') }}
-              </span>
-              <span
-                class="affairs-step-indicator"
-                :class="{ on: affairsStep === 4 }"
-              >
-                <b>4</b>{{ t('building.feedback.steps.confirm') }}
+                <b>3</b>{{ t('building.feedback.steps.confirm') }}
               </span>
             </div>
 
@@ -2957,6 +3065,7 @@ onMounted(() => {
                     id="affairs-repair-category"
                     v-model="repairCategory"
                     class="affairs-select"
+                    @change="initializeAffairsCategories('repair')"
                   >
                     <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
@@ -2996,6 +3105,7 @@ onMounted(() => {
                     id="affairs-feedback-category"
                     v-model="feedbackCategory"
                     class="affairs-select"
+                    @change="initializeAffairsCategories('feedback')"
                   >
                     <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
@@ -3057,33 +3167,20 @@ onMounted(() => {
                   :placeholder="t('building.feedback.feedbackPlaceholder')"
                 />
               </div>
-            </div>
-
-            <!-- 步驟 3：上載圖片/影片 -->
-            <div
-              v-show="affairsStep === 3"
-              class="affairs-guided-step"
-            >
-              <div class="work-card-title">{{ t('building.feedback.steps.upload') }}</div>
-              <div class="affairs-step-hint">
-                {{ t('building.feedback.uploadHint') }}
-              </div>
-              <div class="affairs-upload-box">
-                <strong>{{ t('building.feedback.uploadTitle') }}</strong>
-                <span>{{ t('building.feedback.uploadDescription') }}</span>
+              <div class="affairs-field">
+                <label for="affairs-location">{{ t('building.feedback.location') }}</label>
                 <input
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  :aria-label="t('building.feedback.uploadTitle')"
-                  @change="onMediaChange"
+                  id="affairs-location"
+                  v-model.trim="feedbackLocationText"
+                  class="affairs-select"
+                  :placeholder="t('building.feedback.locationPlaceholder')"
                 >
               </div>
             </div>
 
-            <!-- 步驟 4：確認提交 -->
+            <!-- 步驟 3：確認提交 -->
             <div
-              v-show="affairsStep === 4"
+              v-show="affairsStep === 3"
               class="affairs-guided-step"
             >
               <div class="work-card-title">{{ t('building.feedback.steps.confirm') }}</div>
@@ -3121,11 +3218,16 @@ onMounted(() => {
                   <strong>{{ reviewContent }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>{{ t('building.feedback.attachment') }}</span>
-                  <strong>{{ reviewMedia }}</strong>
+                  <span>{{ t('building.feedback.location') }}</span>
+                  <strong>{{ reviewLocation }}</strong>
                 </div>
               </div>
             </div>
+
+            <div
+              v-if="serviceCaseSubmitError"
+              class="acct-banner warn"
+            >{{ t(serviceCaseSubmitError) }}</div>
 
             <div class="affairs-guided-actions">
               <button
@@ -3137,7 +3239,7 @@ onMounted(() => {
                 {{ t('building.feedback.previous') }}
               </button>
               <button
-                v-if="affairsStep < 4"
+                v-if="affairsStep < 3"
                 type="button"
                 class="work-action"
                 @click="nextAffairsStep"
@@ -3148,9 +3250,10 @@ onMounted(() => {
                 v-else
                 type="button"
                 class="work-action"
+                :disabled="serviceCaseSubmitting"
                 @click="submitAffairsFeedback"
               >
-                {{ t('building.feedback.submit') }}
+                {{ serviceCaseSubmitting ? t('building.feedback.submitting') : t('building.feedback.submit') }}
               </button>
             </div>
           </section>
@@ -3552,7 +3655,7 @@ onMounted(() => {
 /* 1. 頁面容器與雙欄布局 */
 #page-affairs {
   min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 .work-shell {
@@ -4806,7 +4909,7 @@ onMounted(() => {
 
 .affairs-stepper {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -4937,6 +5040,29 @@ onMounted(() => {
   margin-bottom: 4px;
   color: var(--ink);
   font-size: 13px;
+}
+
+.affairs-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.affairs-list-actions .affairs-select {
+  width: auto;
+  min-width: 130px;
+}
+
+.affairs-record-message {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  border-top: 1px solid var(--sur-3);
+  padding-top: 12px;
+}
+
+.affairs-record-message small {
+  color: var(--ink-3);
 }
 
 /* 14. ICCTV */

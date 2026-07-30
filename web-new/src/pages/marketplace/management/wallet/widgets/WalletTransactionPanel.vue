@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import type { StaffWalletTransactionResponse } from '@/model/wallet';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { formatWalletTransactionSource } from '@/utils/wallet';
 
 defineProps<{
   formatAjoPoints: (value: number) => string;
@@ -95,7 +96,7 @@ const emit = defineEmits<{
             {{ formatAjoPoints(transaction.amount) }}
           </strong>
           <span>{{ transaction.target_user.display_name || transaction.target_user.user_id }}</span>
-          <small>{{ transaction.biz_module }} · {{ transaction.action_type }}</small>
+          <small>{{ formatWalletTransactionSource(transaction, t) }}</small>
         </div>
         <time>{{ formatDate(transaction.created_at) }}</time>
       </article>

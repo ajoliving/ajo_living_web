@@ -70,9 +70,18 @@ func (h *IsmartExternalHandler) SubmitBuildingComment(c *gin.Context) {
 	}
 
 	var request struct {
-		BuildingID  string `json:"building_id"`
-		CommentType string `json:"comment_type"`
-		Comment     string `json:"comment"`
+		BuildingID   string `json:"building_id"`
+		RequestType  string `json:"request_type"`
+		Category     string `json:"category"`
+		Subcategory  string `json:"subcategory"`
+		Subject      string `json:"subject"`
+		Content      string `json:"content"`
+		LocationText string `json:"location_text"`
+		UnitID       string `json:"unit_id"`
+		ContactName  string `json:"contact_name"`
+		ContactPhone string `json:"contact_phone"`
+		CommentType  string `json:"comment_type"`
+		Comment      string `json:"comment"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid building comment payload"))
@@ -80,9 +89,57 @@ func (h *IsmartExternalHandler) SubmitBuildingComment(c *gin.Context) {
 	}
 
 	result, err := h.ismartService.SubmitBuildingComment(c.Request.Context(), user.UserID, service.IsmartBuildingCommentParams{
-		BuildingID:  strings.TrimSpace(request.BuildingID),
-		CommentType: strings.TrimSpace(request.CommentType),
-		Comment:     strings.TrimSpace(request.Comment),
+		BuildingID:   strings.TrimSpace(request.BuildingID),
+		RequestType:  strings.TrimSpace(request.RequestType),
+		Category:     strings.TrimSpace(request.Category),
+		Subcategory:  strings.TrimSpace(request.Subcategory),
+		Subject:      strings.TrimSpace(request.Subject),
+		Content:      strings.TrimSpace(request.Content),
+		LocationText: strings.TrimSpace(request.LocationText),
+		UnitID:       strings.TrimSpace(request.UnitID),
+		ContactName:  strings.TrimSpace(request.ContactName),
+		ContactPhone: strings.TrimSpace(request.ContactPhone),
+		CommentType:  strings.TrimSpace(request.CommentType),
+		Comment:      strings.TrimSpace(request.Comment),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 5.1 ListBuildingServiceCases returns current member-visible service cases.
+func (h *IsmartExternalHandler) ListBuildingServiceCases(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.ismartService.ListBuildingServiceCases(c.Request.Context(), user.UserID, service.IsmartServiceCaseListParams{
+		BuildingID:  strings.TrimSpace(c.Query("building_id")),
+		Status:      strings.TrimSpace(c.Query("status")),
+		RequestType: strings.TrimSpace(c.Query("request_type")),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 5.2 GetBuildingServiceCase returns one service-case detail and message thread.
+func (h *IsmartExternalHandler) GetBuildingServiceCase(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.ismartService.GetBuildingServiceCase(c.Request.Context(), user.UserID, service.IsmartServiceCaseDetailParams{
+		BuildingID: strings.TrimSpace(c.Query("building_id")),
+		CaseID:     strings.TrimSpace(c.Param("caseId")),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)

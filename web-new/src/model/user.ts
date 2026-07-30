@@ -40,14 +40,21 @@ export interface IsmartAccountProfile {
   account_email: string;
   owner_name_en: string;
   owner_name_zh: string;
+  account_name: string;
   identity_number: string;
   legal_entity: string;
+  client_type: string;
   gender: string;
   birth_date: string;
   contact_name: string;
   contact_phone: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  billing_phone: string;
   billing_email: string;
   billing_address: string;
+  billing_address_en: string;
+  billing_address_zh: string;
   properties: IsmartRelatedPropertyProfile[];
 }
 

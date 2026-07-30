@@ -6,12 +6,17 @@
 <script setup lang="ts">
 import ListingStatusBadge from '@/shared/components/marketplace/ListingStatusBadge.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import BaseEmpty from '@/shared/components/feedback/BaseEmpty.vue';
 
 import { useMarketplaceMyListingsPage } from './my-listings';
 
 const {
   activeTab,
+  actionLoading,
+  cancelAction,
+  confirmAction,
+  confirmDescription,
   filteredItems,
   formatDate,
   formatPrice,
@@ -32,7 +37,8 @@ const {
   resolveListingSummary,
   resolveListingTitle,
   resolveListingVisibility,
-  runAction,
+  pendingAction,
+  requestAction,
   searchQuery,
   secondhandChargeCost,
   secondhandRenewChargeCost,
@@ -206,7 +212,7 @@ const {
                       v-if="listing.publication_status === 'draft'"
                       type="button"
                       class="my-action-button my-action-button-primary"
-                      @click="runAction('publish', listing.listing_id)"
+                      @click="requestAction('publish', listing.listing_id)"
                     >
                       {{ t('marketplace.mine.publishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
                     </button>
@@ -215,7 +221,7 @@ const {
                       v-if="listing.publication_status === 'expired'"
                       type="button"
                       class="my-action-button my-action-button-primary"
-                      @click="runAction('republish', listing.listing_id)"
+                      @click="requestAction('republish', listing.listing_id)"
                     >
                       {{ t('marketplace.mine.republishAction') }} · {{ formatAjoPoints(secondhandChargeCost) }}
                     </button>
@@ -224,7 +230,7 @@ const {
                       v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
                       type="button"
                       class="my-action-button my-action-button-primary"
-                      @click="runAction('renew', listing.listing_id)"
+                      @click="requestAction('renew', listing.listing_id)"
                     >
                       {{ t('marketplace.mine.renewAction') }} · {{ formatAjoPoints(secondhandRenewChargeCost) }}
                     </button>
@@ -233,7 +239,7 @@ const {
                       v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
                       type="button"
                       class="my-action-button my-action-button-secondary"
-                      @click="runAction('mark-sold', listing.listing_id)"
+                      @click="requestAction('mark-sold', listing.listing_id)"
                     >
                       {{ t('marketplace.mine.markSoldAction') }}
                     </button>
@@ -242,7 +248,7 @@ const {
                       v-if="listing.publication_status === 'active' && listing.business_status !== 'sold'"
                       type="button"
                       class="my-action-button my-action-button-secondary"
-                      @click="runAction('deactivate', listing.listing_id)"
+                      @click="requestAction('deactivate', listing.listing_id)"
                     >
                       {{ t('marketplace.mine.deactivateAction') }}
                     </button>
@@ -272,6 +278,17 @@ const {
         </button>
       </BaseEmpty>
     </section>
+
+    <AppActionConfirmDialog
+      :open="Boolean(pendingAction)"
+      :title="t('marketplace.mine.confirmActionTitle')"
+      :description="confirmDescription"
+      :cancel-label="t('marketplace.mine.cancelAction')"
+      :confirm-label="pendingAction ? t(`marketplace.mine.${pendingAction.action}Action`) : ''"
+      :confirming="actionLoading"
+      @cancel="cancelAction"
+      @confirm="confirmAction"
+    />
   </main>
 </template>
 

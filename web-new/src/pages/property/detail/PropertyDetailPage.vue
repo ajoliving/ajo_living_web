@@ -245,6 +245,10 @@ const galleryImages = computed<GalleryImage[]>(() => {
   return images.map((image) => ({ id: image.id, background: '#f3f3f3', url: image.url }));
 });
 const selectedImageIndex = ref(0);
+const isGalleryExpanded = ref(false);
+const visibleThumbnailImages = computed(() =>
+  isGalleryExpanded.value ? galleryImages.value.slice(1) : galleryImages.value.slice(1, 4),
+);
 const extraImageCount = computed(() => Math.max(0, galleryImages.value.length - 4));
 
 // 7. 其他樓盤推薦
@@ -276,7 +280,11 @@ const title = computed(() => listing.value
 const communityName = computed(() => listing.value
   ? resolvePropertyCommunityName(listing.value, preferenceStore.locale)
   : '');
-const displayNumber = computed(() => String(listing.value?.display_number || '-'));
+// 6.1 樓盤公開編號
+const displayNumber = computed(() => {
+  const value = listing.value?.display_number;
+  return value ? String(value).padStart(6, '0') : '-';
+});
 const agentListingNumber = computed(() => listing.value?.publisher_identity_type === 'agent'
   ? listing.value.property_sale?.property_no?.trim() || ''
   : '');
@@ -390,12 +398,22 @@ const selectImage = (index: number): void => {
   selectedImageIndex.value = index;
 };
 
-// 9. 跳轉其他樓盤
+// 9. 展開其餘相片
+const expandGallery = (): void => {
+  isGalleryExpanded.value = true;
+};
+
+// 10. 收起其餘相片
+const collapseGallery = (): void => {
+  isGalleryExpanded.value = false;
+};
+
+// 11. 跳轉其他樓盤
 const goSimilar = (id: string): void => {
   void router.push(`/properties/${id}`);
 };
 
-// 10. 跳轉站內聊天
+// 12. 跳轉站內聊天
 const goChat = async (): Promise<void> => {
   if (!listing.value || openingChat.value) {
     return;
@@ -417,7 +435,7 @@ const goChat = async (): Promise<void> => {
   }
 };
 
-// 11. 載入詳情
+// 13. 載入詳情
 const loadDetail = async (): Promise<void> => {
   loading.value = true;
   errorMessage.value = '';
@@ -425,6 +443,7 @@ const loadDetail = async (): Promise<void> => {
     const { data } = await fetchPropertySaleDetail(listingId.value);
     listing.value = data.data;
     selectedImageIndex.value = 0;
+    isGalleryExpanded.value = false;
     const similar = await fetchSimilarPropertySales(listingId.value, { limit: 8 });
     similarItems.value = similar.data.data.items;
   } catch {
@@ -434,7 +453,7 @@ const loadDetail = async (): Promise<void> => {
   }
 };
 
-// 12. 切換收藏
+// 14. 切換收藏
 const toggleFavorite = async (): Promise<void> => {
   if (!listing.value) return;
   if (!readStoredAccessToken()) {
@@ -450,7 +469,7 @@ const toggleFavorite = async (): Promise<void> => {
   listing.value = { ...listing.value, is_favorite: true };
 };
 
-// 13. 讀取聯絡方式
+// 15. 讀取聯絡方式
 const revealContact = async (): Promise<void> => {
   if (!listing.value) return;
   if (!readStoredAccessToken()) {
@@ -466,7 +485,7 @@ const revealContact = async (): Promise<void> => {
   }
 };
 
-// 14. 提交睇樓預約
+// 16. 提交睇樓預約
 const submitAppointment = async (): Promise<void> => {
   if (!listing.value) return;
 
@@ -501,7 +520,7 @@ const submitAppointment = async (): Promise<void> => {
   }
 };
 
-// 15. 格式化港幣
+// 17. 格式化港幣
 const formatHKD = (value: number): string =>
   new Intl.NumberFormat(preferenceStore.locale, {
     style: 'currency',
@@ -509,7 +528,7 @@ const formatHKD = (value: number): string =>
     maximumFractionDigits: 0,
   }).format(value);
 
-// 16. 空資料 fallback
+// 18. 空資料 fallback
 const emptyListing = (): PropertyListingSummaryResponse => ({
   listing_id: '',
   display_number: 0,
@@ -588,7 +607,12 @@ onMounted(() => {
                 </div>
               </div>
               <div class="detail-reference">
-                {{ displayNumber }}
+                <span>{{ t('property.publicDetail.listingNumber') }}</span>
+                <strong>{{ displayNumber }}</strong>
+                <template v-if="agentListingNumber">
+                  <span>{{ t('property.publicDetail.propertyNumber') }}</span>
+                  <strong>{{ agentListingNumber }}</strong>
+                </template>
               </div>
             </div>
             <button
@@ -645,16 +669,9 @@ onMounted(() => {
 
             <section class="detail-section">
               <div class="detail-section-title">{{ t('property.publicDetail.description') }}</div>
-              <p class="body-text">
+              <p class="body-text body-text--multiline">
                 {{ descriptionText }}
               </p>
-              <div
-                v-if="agentListingNumber"
-                class="detail-agent-listing-number"
-              >
-                <span>{{ t('property.publicDetail.agentListingNumber') }}</span>
-                <strong>{{ agentListingNumber }}</strong>
-              </div>
             </section>
 
             <section class="detail-section">
@@ -759,7 +776,7 @@ onMounted(() => {
                 </div>
                 <div class="detail-thumb-row">
                   <div
-                    v-for="(image, index) in galleryImages.slice(1, 4)"
+                    v-for="(image, index) in visibleThumbnailImages"
                     :key="image.id"
                     class="detail-thumb pat"
                     :style="{ background: image.background }"
@@ -771,14 +788,27 @@ onMounted(() => {
                       :alt="title"
                     >
                   </div>
-                  <div
-                    v-if="extraImageCount > 0"
+                  <button
+                    v-if="extraImageCount > 0 && !isGalleryExpanded"
+                    type="button"
                     class="detail-thumb detail-thumb-more pat"
                     :style="{ background: galleryImages[4]?.background || '#f3f3f3' }"
-                    @click="selectImage(4)"
+                    :aria-label="t('property.publicDetail.expandGallery', { count: extraImageCount })"
+                    @click="expandGallery"
                   >
-                    +{{ extraImageCount }}
-                  </div>
+                    <img
+                      v-if="galleryImages[4]?.url"
+                      :src="galleryImages[4].url"
+                      :alt="title"
+                    >
+                    <span class="detail-thumb-more-count">+{{ extraImageCount }}</span>
+                  </button>
+                  <button
+                    v-if="isGalleryExpanded"
+                    type="button"
+                    class="detail-gallery-collapse"
+                    @click="collapseGallery"
+                  >{{ t('property.publicDetail.collapseGallery') }}</button>
                 </div>
               </div>
             </div>
@@ -1055,7 +1085,7 @@ onMounted(() => {
   display: block;
   width: 100%;
   min-height: calc(100svh - var(--nav-h));
-  background: var(--sur-2);
+  background: var(--sur);
 }
 
 /* 1. 容器布局 */
@@ -1070,7 +1100,7 @@ onMounted(() => {
 .detail-main {
   max-width: 100%;
   border-right: 0;
-  background: var(--sur-2);
+  background: var(--sur);
   padding: 0;
   overflow: visible;
 }
@@ -1229,11 +1259,19 @@ onMounted(() => {
 }
 
 .detail-reference {
+  display: grid;
   flex: 0 0 auto;
+  gap: 2px;
   color: var(--ink-3);
   font-size: 12px;
   line-height: 1.65;
   text-align: right;
+}
+
+.detail-reference strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .detail-address {
@@ -1331,20 +1369,6 @@ onMounted(() => {
   color: var(--ink-3);
 }
 
-.detail-agent-listing-number {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 12px;
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
-.detail-agent-listing-number strong {
-  color: var(--ink);
-  font-weight: 700;
-}
-
 /* 10.1 右欄 label-text 小標題（全域樣式，未被 detail-section 覆蓋） */
 .label-text {
   font-size: 9px;
@@ -1376,6 +1400,10 @@ onMounted(() => {
   font-size: 15px;
   line-height: 1.85;
   color: var(--ink-2);
+}
+
+.body-text--multiline {
+  white-space: pre-line;
 }
 
 /* 13. 大廈資料網格 */
@@ -1445,10 +1473,47 @@ onMounted(() => {
   background: #f3f3f3;
 }
 
+.detail-gallery-collapse {
+  min-height: 112px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur);
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.detail-gallery-collapse:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
 .detail-thumb-more {
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
   color: var(--ink);
   font-size: 16px;
   font-weight: 700;
+}
+
+.detail-thumb-more::after {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 48%);
+  content: '';
+}
+
+.detail-thumb-more-count {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
 }
 
 /* 15. 地圖 */
@@ -1834,6 +1899,10 @@ onMounted(() => {
 
   .detail-thumb {
     height: 76px;
+  }
+
+  .detail-gallery-collapse {
+    min-height: 76px;
   }
 
   .detail-price-main {

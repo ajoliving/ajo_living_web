@@ -31,9 +31,18 @@ type IsmartBuildingParams struct {
 
 // 3. IsmartBuildingCommentParams defines building comment submission input.
 type IsmartBuildingCommentParams struct {
-	BuildingID  string
-	CommentType string
-	Comment     string
+	BuildingID   string
+	RequestType  string
+	Category     string
+	Subcategory  string
+	Subject      string
+	Content      string
+	LocationText string
+	UnitID       string
+	ContactName  string
+	ContactPhone string
+	CommentType  string
+	Comment      string
 }
 
 // 4. IsmartDoorOpenParams defines remote door open input.
@@ -83,27 +92,60 @@ func (s *IsmartExternalService) GetBuildingInfo(ctx context.Context, userID int6
 	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
 }
 
-// 9. SubmitBuildingComment proxies building comment submission.
+// 9. SubmitBuildingComment proxies a repair or feedback service case submission.
 func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userID int64, params IsmartBuildingCommentParams) (map[string]any, error) {
 	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
 	if err != nil {
 		return nil, err
 	}
+	requestType := strings.TrimSpace(params.RequestType)
+	if requestType != "" && requestType != "repair" && requestType != "feedback" {
+		return nil, errcode.New(errcode.CodeValidationError, "request type must be repair or feedback")
+	}
+	unitID := strings.TrimSpace(params.UnitID)
+	if unitID != "" && !s.unitVisible(account, unitID) {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
+	}
+	content := strings.TrimSpace(params.Content)
 	commentType := strings.TrimSpace(params.CommentType)
 	comment := strings.TrimSpace(params.Comment)
-	if commentType == "" || comment == "" {
-		return nil, errcode.New(errcode.CodeValidationError, "comment type and content are required")
+	if content == "" {
+		content = comment
+	}
+	if content == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "service case content is required")
 	}
 
 	payload := map[string]any{
-		"user_id":      account.IsmartUserID,
-		"building_id":  buildingID,
-		"comment_type": commentType,
-		"comment":      comment,
+		"user_id":     account.IsmartUserID,
+		"building_id": buildingID,
+		"content":     content,
+	}
+	copyOptionalString(payload, "request_type", requestType)
+	copyOptionalString(payload, "category", params.Category)
+	copyOptionalString(payload, "subcategory", params.Subcategory)
+	copyOptionalString(payload, "subject", params.Subject)
+	copyOptionalString(payload, "location_text", params.LocationText)
+	copyOptionalString(payload, "unit_id", unitID)
+	copyOptionalString(payload, "contact_name", params.ContactName)
+	copyOptionalString(payload, "contact_phone", params.ContactPhone)
+	if requestType == "" && commentType != "" {
+		payload["comment_type"] = commentType
+		payload["comment"] = content
 	}
 	result, err := s.postIntegration(ctx, "/buildings/comments/", payload)
 	if err != nil && ismartFallbackAllowed(err, true) {
-		result, err = s.postExternal(ctx, "/blg-cs/submit/", payload)
+		legacyCommentType := commentType
+		if legacyCommentType == "" {
+			legacyCommentType = "其他事宜"
+		}
+		legacyPayload := map[string]any{
+			"user_id":      account.IsmartUserID,
+			"building_id":  buildingID,
+			"comment_type": legacyCommentType,
+			"comment":      content,
+		}
+		result, err = s.postExternal(ctx, "/blg-cs/submit/", legacyPayload)
 	}
 	if err != nil {
 		return nil, err

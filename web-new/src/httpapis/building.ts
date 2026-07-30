@@ -273,6 +273,80 @@ export interface IsmartBuildingNoticesResponse extends IsmartBuildingOptionRespo
   result?: IsmartBuildingNotice[];
 }
 
+export interface IsmartServiceCaseSubmitPayload {
+  building_id?: string;
+  request_type: 'repair' | 'feedback';
+  category: string;
+  subcategory: string;
+  subject?: string;
+  content: string;
+  location_text?: string;
+  unit_id?: string;
+  contact_name?: string;
+  contact_phone?: string;
+}
+
+export interface IsmartServiceCaseSummary {
+  case_id: string;
+  case_no?: string;
+  building_id?: string;
+  unit_id?: string | null;
+  request_type?: 'repair' | 'feedback';
+  request_type_label?: string;
+  category?: string;
+  category_label?: string;
+  subcategory?: string;
+  subcategory_label?: string;
+  subject?: string;
+  status?: string;
+  status_label?: string;
+  location_text?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface IsmartServiceCaseStatusChoice {
+  code: string;
+  label: string;
+}
+
+export interface IsmartServiceCaseListResponse extends IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  scope?: string;
+  total?: number;
+  returned?: number;
+  status_choices?: IsmartServiceCaseStatusChoice[];
+  cases?: IsmartServiceCaseSummary[];
+  upstream_message?: string;
+}
+
+export interface IsmartServiceCaseAttachment {
+  id?: number | string;
+  file_url?: string;
+  message_id?: string;
+  uploaded_by_id?: number | string;
+  created_at?: string;
+}
+
+export interface IsmartServiceCaseMessage {
+  message_id?: string;
+  author_role?: string;
+  author_username?: string;
+  body?: string;
+  created_at?: string;
+  attachments?: IsmartServiceCaseAttachment[];
+}
+
+export interface IsmartServiceCaseDetailResponse extends IsmartServiceCaseSummary, IsmartBuildingOptionResponse {
+  selected_building_id?: string;
+  content?: string;
+  messages?: IsmartServiceCaseMessage[];
+  attachments?: IsmartServiceCaseAttachment[];
+  upstream_message?: string;
+}
+
 export type IsmartReceivableCellValue = string | number | boolean | null;
 
 export type IsmartReceivableDataStructure = 'table' | 'list' | 'block_dict';
@@ -434,5 +508,39 @@ export const fetchMemberIsmartOtherFees = async (
 export const fetchMemberIsmartBuildingNotices = async (buildingID?: string): Promise<IsmartBuildingNoticesResponse> => {
   const params = buildingID ? { building_id: buildingID } : undefined;
   const { data } = await httpClient.get<ApiResponse<IsmartBuildingNoticesResponse>>('/me/ismart/notices', { params });
+  return data.data;
+};
+
+// 18. 提交目前會員 iSmart 維修或意見服務個案
+export const submitMemberIsmartBuildingComment = async (
+  payload: IsmartServiceCaseSubmitPayload,
+): Promise<IsmartServiceCaseDetailResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartServiceCaseDetailResponse>>('/me/ismart/building-comments', payload);
+  return data.data;
+};
+
+// 19. 取得目前會員 iSmart 服務個案列表
+export const fetchMemberIsmartServiceCases = async (
+  buildingID?: string,
+  status?: string,
+): Promise<IsmartServiceCaseListResponse> => {
+  const params = {
+    ...(buildingID ? { building_id: buildingID } : {}),
+    ...(status ? { status } : {}),
+  };
+  const { data } = await httpClient.get<ApiResponse<IsmartServiceCaseListResponse>>('/me/ismart/service-cases', { params });
+  return data.data;
+};
+
+// 20. 取得目前會員 iSmart 服務個案詳情與訊息紀錄
+export const fetchMemberIsmartServiceCase = async (
+  caseID: string,
+  buildingID?: string,
+): Promise<IsmartServiceCaseDetailResponse> => {
+  const params = buildingID ? { building_id: buildingID } : undefined;
+  const { data } = await httpClient.get<ApiResponse<IsmartServiceCaseDetailResponse>>(
+    `/me/ismart/service-cases/${encodeURIComponent(caseID)}`,
+    { params },
+  );
   return data.data;
 };

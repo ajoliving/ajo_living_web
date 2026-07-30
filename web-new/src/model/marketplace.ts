@@ -44,6 +44,18 @@ export interface ListingContactSummary {
   show_chat: boolean;
   show_inquiry_form: boolean;
   contact_attributes?: Record<string, string>;
+  editable_contact?: ListingEditableContact;
+}
+
+// 4.1 定義僅供發布者或授權管理者編輯時回填的聯絡資料
+export interface ListingEditableContact {
+  contact_name_zh: string;
+  contact_name_en: string;
+  phone: string;
+  phone_2: string;
+  whatsapp: string;
+  wechat: string;
+  email: string;
 }
 
 // 5. 定義帖子列表項回應

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -24,35 +25,36 @@ type UserService struct {
 
 // 2. MeResponse defines the current user response shape.
 type MeResponse struct {
-	PublicID               string                        `json:"public_id"`
-	Email                  string                        `json:"email"`
-	PhoneCountryCode       string                        `json:"phone_country_code"`
-	PhoneNumber            string                        `json:"phone_number"`
-	MemberStatus           string                        `json:"member_status"`
-	MemberType             string                        `json:"member_type"`
-	IsStaff                bool                          `json:"is_staff"`
-	Role                   string                        `json:"role"`
-	Roles                  []string                      `json:"roles"`
-	Permissions            []string                      `json:"permissions"`
-	DisplayName            string                        `json:"display_name"`
-	AvatarURL              string                        `json:"avatar_url"`
-	PublisherIdentity      string                        `json:"publisher_identity_type"`
-	AccountType            string                        `json:"account_type"`
-	DistrictCode           string                        `json:"district_code"`
-	ResidenceFloor         string                        `json:"residence_floor"`
-	ResidenceUnit          string                        `json:"residence_unit"`
-	ResidenceBindingStatus string                        `json:"residence_binding_status"`
-	BoundBuildingIDs       []string                      `json:"bound_building_ids"`
-	BoundFlatUnitIDs       []string                      `json:"bound_flat_unit_ids"`
-	PrimaryCommunity       *CommunityResponse            `json:"primary_community,omitempty"`
-	ProfileCompleted       bool                          `json:"profile_completed"`
-	AJOBalance             int64                         `json:"ajo_balance"`
-	IsmartLinked           bool                          `json:"ismart_linked"`
-	IsmartUsername         string                        `json:"ismart_username"`
-	IsmartBoundPhone       string                        `json:"ismart_bound_phone"`
-	IsmartMsg              *IsmartMessage                `json:"ismart_msg,omitempty"`
-	IsmartRaw              map[string]any                `json:"ismart_raw,omitempty"`
-	IsmartAccount          *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
+	PublicID                string                        `json:"public_id"`
+	Email                   string                        `json:"email"`
+	PhoneCountryCode        string                        `json:"phone_country_code"`
+	PhoneNumber             string                        `json:"phone_number"`
+	MemberStatus            string                        `json:"member_status"`
+	MemberType              string                        `json:"member_type"`
+	IsStaff                 bool                          `json:"is_staff"`
+	Role                    string                        `json:"role"`
+	Roles                   []string                      `json:"roles"`
+	Permissions             []string                      `json:"permissions"`
+	DisplayName             string                        `json:"display_name"`
+	AvatarURL               string                        `json:"avatar_url"`
+	PublisherIdentity       string                        `json:"publisher_identity_type"`
+	AccountType             string                        `json:"account_type"`
+	DistrictCode            string                        `json:"district_code"`
+	ResidenceFloor          string                        `json:"residence_floor"`
+	ResidenceUnit           string                        `json:"residence_unit"`
+	ResidenceBindingStatus  string                        `json:"residence_binding_status"`
+	BoundBuildingIDs        []string                      `json:"bound_building_ids"`
+	BoundFlatUnitIDs        []string                      `json:"bound_flat_unit_ids"`
+	PrimaryCommunity        *CommunityResponse            `json:"primary_community,omitempty"`
+	ProfileCompleted        bool                          `json:"profile_completed"`
+	AJOBalance              int64                         `json:"ajo_balance"`
+	IsmartLinked            bool                          `json:"ismart_linked"`
+	IsmartUsername          string                        `json:"ismart_username"`
+	IsmartBoundPhone        string                        `json:"ismart_bound_phone"`
+	IsmartMsg               *IsmartMessage                `json:"ismart_msg,omitempty"`
+	IsmartRaw               map[string]any                `json:"ismart_raw,omitempty"`
+	IsmartAccount           *IsmartAccountProfileResponse `json:"ismart_account_profile,omitempty"`
+	IsmartProfileSyncStatus string                        `json:"ismart_profile_sync_status"`
 }
 
 // 3. CommunityResponse defines a lightweight community payload.
@@ -73,20 +75,27 @@ type IsmartRelatedPropertyResponse struct {
 
 // 5. IsmartAccountProfileResponse defines read-only legacy iSmart account data.
 type IsmartAccountProfileResponse struct {
-	AccountCode    string                          `json:"account_code"`
-	AccountPhone   string                          `json:"account_phone"`
-	AccountEmail   string                          `json:"account_email"`
-	OwnerNameEN    string                          `json:"owner_name_en"`
-	OwnerNameZH    string                          `json:"owner_name_zh"`
-	IdentityNumber string                          `json:"identity_number"`
-	LegalEntity    string                          `json:"legal_entity"`
-	Gender         string                          `json:"gender"`
-	BirthDate      string                          `json:"birth_date"`
-	ContactName    string                          `json:"contact_name"`
-	ContactPhone   string                          `json:"contact_phone"`
-	BillingEmail   string                          `json:"billing_email"`
-	BillingAddress string                          `json:"billing_address"`
-	Properties     []IsmartRelatedPropertyResponse `json:"properties"`
+	AccountCode           string                          `json:"account_code"`
+	AccountPhone          string                          `json:"account_phone"`
+	AccountEmail          string                          `json:"account_email"`
+	OwnerNameEN           string                          `json:"owner_name_en"`
+	OwnerNameZH           string                          `json:"owner_name_zh"`
+	AccountName           string                          `json:"account_name"`
+	IdentityNumber        string                          `json:"identity_number"`
+	LegalEntity           string                          `json:"legal_entity"`
+	ClientType            string                          `json:"client_type"`
+	Gender                string                          `json:"gender"`
+	BirthDate             string                          `json:"birth_date"`
+	ContactName           string                          `json:"contact_name"`
+	ContactPhone          string                          `json:"contact_phone"`
+	EmergencyContactName  string                          `json:"emergency_contact_name"`
+	EmergencyContactPhone string                          `json:"emergency_contact_phone"`
+	BillingPhone          string                          `json:"billing_phone"`
+	BillingEmail          string                          `json:"billing_email"`
+	BillingAddress        string                          `json:"billing_address"`
+	BillingAddressEN      string                          `json:"billing_address_en"`
+	BillingAddressZH      string                          `json:"billing_address_zh"`
+	Properties            []IsmartRelatedPropertyResponse `json:"properties"`
 }
 
 // 4. UpdateProfileParams defines profile update input.
@@ -138,6 +147,21 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 	}
 
 	ismartMsg := NewAuthService(s.runtime).loadIsmartMessage(ctx, user.ID)
+	ismartProfileSyncStatus := "not_linked"
+	if ismartMsg != nil {
+		ismartProfileSyncStatus = "cached"
+		if s.runtime.Config != nil && strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL) != "" {
+			refreshContext, cancel := context.WithTimeout(ctx, 3*time.Second)
+			err := NewIsmartExternalService(s.runtime).RefreshClientProfile(refreshContext, user.ID)
+			cancel()
+			if err == nil {
+				ismartProfileSyncStatus = "synced"
+				ismartMsg = NewAuthService(s.runtime).loadIsmartMessage(ctx, user.ID)
+			} else if s.runtime.Logger != nil {
+				s.runtime.Logger.Warn("ismart client profile refresh failed", "user_id", user.ID, "error", err)
+			}
+		}
+	}
 	accountType := normalizeAccountType(profile.AccountType)
 	publisherIdentity := derivedPublisherIdentity(accountType)
 	permissions := access.Permissions
@@ -148,31 +172,32 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		}
 	}
 	response := &MeResponse{
-		PublicID:               user.PublicID,
-		Email:                  s.userEmail(ctx, user.ID),
-		PhoneCountryCode:       user.PhoneCountryCode,
-		PhoneNumber:            user.PhoneNumber,
-		MemberStatus:           user.MemberStatus,
-		MemberType:             normalizeMemberType(user.MemberType),
-		IsStaff:                access.IsStaff,
-		Role:                   resolveUserRole(user.MemberType, access.IsStaff),
-		Roles:                  access.RoleCodes,
-		Permissions:            permissions,
-		DisplayName:            profile.DisplayName,
-		AvatarURL:              s.avatarURL(ctx, profile.AvatarAssetID),
-		PublisherIdentity:      publisherIdentity,
-		AccountType:            accountType,
-		DistrictCode:           profile.DistrictCode,
-		ResidenceFloor:         profile.ResidenceFloor,
-		ResidenceUnit:          profile.ResidenceUnit,
-		ResidenceBindingStatus: profile.ResidenceBindingStatus,
-		BoundBuildingIDs:       s.profileBoundBuildings(&profile, ismartMsg),
-		BoundFlatUnitIDs:       s.profileBoundFlatUnits(&profile, ismartMsg),
-		ProfileCompleted:       isProfileCompleted(&profile),
-		IsmartLinked:           ismartMsg != nil,
-		IsmartMsg:              ismartMsg,
-		IsmartRaw:              NewAuthService(s.runtime).loadIsmartRaw(ctx, user.ID),
-		IsmartAccount:          s.loadIsmartAccountProfile(ctx, user.ID),
+		PublicID:                user.PublicID,
+		Email:                   s.userEmail(ctx, user.ID),
+		PhoneCountryCode:        user.PhoneCountryCode,
+		PhoneNumber:             user.PhoneNumber,
+		MemberStatus:            user.MemberStatus,
+		MemberType:              normalizeMemberType(user.MemberType),
+		IsStaff:                 access.IsStaff,
+		Role:                    resolveUserRole(user.MemberType, access.IsStaff),
+		Roles:                   access.RoleCodes,
+		Permissions:             permissions,
+		DisplayName:             profile.DisplayName,
+		AvatarURL:               s.avatarURL(ctx, profile.AvatarAssetID),
+		PublisherIdentity:       publisherIdentity,
+		AccountType:             accountType,
+		DistrictCode:            profile.DistrictCode,
+		ResidenceFloor:          profile.ResidenceFloor,
+		ResidenceUnit:           profile.ResidenceUnit,
+		ResidenceBindingStatus:  profile.ResidenceBindingStatus,
+		BoundBuildingIDs:        s.profileBoundBuildings(&profile, ismartMsg),
+		BoundFlatUnitIDs:        s.profileBoundFlatUnits(&profile, ismartMsg),
+		ProfileCompleted:        isProfileCompleted(&profile),
+		IsmartLinked:            ismartMsg != nil,
+		IsmartMsg:               ismartMsg,
+		IsmartRaw:               NewAuthService(s.runtime).loadIsmartRaw(ctx, user.ID),
+		IsmartAccount:           s.loadIsmartAccountProfile(ctx, user.ID),
+		IsmartProfileSyncStatus: ismartProfileSyncStatus,
 	}
 	if ismartMsg != nil {
 		response.IsmartUsername = ismartMsg.Username
@@ -692,20 +717,27 @@ func (s *UserService) loadIsmartAccountProfile(ctx context.Context, userID int64
 	}
 
 	return &IsmartAccountProfileResponse{
-		AccountCode:    firstLegacyText(raw, account.Username, "account_code", "account_no", "account_number", "username", "memberno"),
-		AccountPhone:   firstLegacyText(raw, account.Phone, "account_phone", "memberphone", "phone", "tel"),
-		AccountEmail:   firstLegacyText(raw, account.Email, "account_email", "memberemail", "email", "billing_email"),
-		OwnerNameEN:    firstLegacyText(raw, "", "owner_name_en", "memberengname", "eng_name", "english_name"),
-		OwnerNameZH:    firstLegacyText(raw, "", "owner_name_zh", "memberchiname", "chi_name", "chinese_name"),
-		IdentityNumber: firstLegacyText(raw, "", "identity_number", "memberid", "id_number", "hkid"),
-		LegalEntity:    firstLegacyText(raw, "", "legal_entity", "member_legalentity", "legalentity"),
-		Gender:         firstLegacyText(raw, "", "gender", "membergender"),
-		BirthDate:      firstLegacyText(raw, "", "birth_date", "birthday", "date_of_birth", "dob"),
-		ContactName:    firstLegacyText(raw, "", "contact_name", "contact_person", "contactperson"),
-		ContactPhone:   firstLegacyText(raw, account.Phone, "contact_phone", "contact_tel", "contactphone"),
-		BillingEmail:   firstLegacyText(raw, account.Email, "billing_email", "bill_email", "memberemail"),
-		BillingAddress: firstLegacyText(raw, "", "billing_address", "bill_address", "address"),
-		Properties:     properties,
+		AccountCode:           firstLegacyText(raw, account.Username, "account_code", "cli_id", "account_no", "account_number", "username", "memberno"),
+		AccountPhone:          firstLegacyText(raw, account.Phone, "account_phone", "memberphone", "phone", "tel"),
+		AccountEmail:          firstLegacyText(raw, account.Email, "account_email", "memberemail", "email", "billing_email"),
+		OwnerNameEN:           firstLegacyText(raw, "", "owner_name_en", "cli_name", "memberengname", "eng_name", "english_name"),
+		OwnerNameZH:           firstLegacyText(raw, "", "owner_name_zh", "cli_chi_name", "memberchiname", "chi_name", "chinese_name"),
+		AccountName:           firstLegacyText(raw, "", "account_name", "cli_acname"),
+		IdentityNumber:        firstLegacyText(raw, "", "identity_number", "cli_id_card", "memberid", "id_number", "hkid"),
+		LegalEntity:           firstLegacyText(raw, "", "legal_entity", "cli_legalentity", "member_legalentity", "legalentity"),
+		ClientType:            firstLegacyText(raw, "", "client_type", "cli_type"),
+		Gender:                firstLegacyText(raw, "", "gender", "cli_sex", "membergender"),
+		BirthDate:             firstLegacyText(raw, "", "birth_date", "cli_birthday", "birthday", "date_of_birth", "dob"),
+		ContactName:           firstLegacyText(raw, "", "contact_name", "cli_contact_person", "contact_person", "contactperson"),
+		ContactPhone:          firstLegacyText(raw, account.Phone, "contact_phone", "cli_tel", "contact_tel", "contactphone"),
+		EmergencyContactName:  firstLegacyText(raw, "", "emergency_contact_name", "cli_urgent_contact_person"),
+		EmergencyContactPhone: firstLegacyText(raw, "", "emergency_contact_phone", "cli_tel2"),
+		BillingPhone:          firstLegacyText(raw, account.Phone, "billing_phone", "cli_tel"),
+		BillingEmail:          firstLegacyText(raw, account.Email, "billing_email", "cli_email", "bill_email", "memberemail"),
+		BillingAddress:        firstLegacyText(raw, "", "billing_address", "cli_addr", "cli_chiadd", "bill_address", "address"),
+		BillingAddressEN:      firstLegacyText(raw, "", "billing_address_en", "cli_addr"),
+		BillingAddressZH:      firstLegacyText(raw, "", "billing_address_zh", "cli_chiadd"),
+		Properties:            properties,
 	}
 }
 

@@ -32,17 +32,19 @@ const (
 	WalletSourceOperatorGrant = "operator_grant"
 	WalletSourceRecharge      = "recharge_payment"
 	WalletSourcePOSPayment    = "pos_payment"
+	WalletSourceListingRefund = "listing_refund"
 
-	WalletActionSaveDraft = "save_draft"
-	WalletActionPublish   = "publish"
-	WalletActionEdit      = "edit"
-	WalletActionRepublish = "republish"
-	WalletActionRenew     = "renew"
-	WalletActionAvatar    = "avatar_update"
-	WalletActionAdReward  = "ad_reward"
-	WalletActionContact   = "contact_access"
-	WalletActionRecharge  = "recharge"
-	WalletActionPOSReward = "pos_payment_reward"
+	WalletActionSaveDraft             = "save_draft"
+	WalletActionPublish               = "publish"
+	WalletActionEdit                  = "edit"
+	WalletActionRepublish             = "republish"
+	WalletActionRenew                 = "renew"
+	WalletActionAvatar                = "avatar_update"
+	WalletActionAdReward              = "ad_reward"
+	WalletActionContact               = "contact_access"
+	WalletActionRecharge              = "recharge"
+	WalletActionPOSReward             = "pos_payment_reward"
+	WalletActionDraftChargeCorrection = "draft_charge_correction"
 
 	RewardClaimStatusStarted = "started"
 	RewardClaimStatusClaimed = "claimed"
@@ -50,6 +52,8 @@ const (
 
 	WalletDailyAdRewardLimit = int64(1000)
 	WalletRechargePointRate  = int64(100)
+	PropertySalePublishCost  = int64(1000)
+	PropertySaleDraftCost    = int64(600)
 )
 
 // 1. WalletService handles AJO Point account and reward ad workflows.
@@ -190,6 +194,7 @@ type WalletCreditParams struct {
 	SourceType     string
 	BizModule      string
 	ActionType     string
+	ListingID      *int64
 	RewardAdID     *int64
 	ClaimID        *int64
 	OperatorUserID *int64
@@ -213,7 +218,10 @@ func ListingActionCost(module string, action string) int64 {
 			return 100
 		}
 	case "property_sale":
-		return 1000
+		if strings.TrimSpace(action) == WalletActionSaveDraft {
+			return PropertySaleDraftCost
+		}
+		return PropertySalePublishCost
 	case "serviced_apartment":
 		return 800
 	default:
@@ -233,7 +241,7 @@ func shouldChargeListingEdit(listing *model.Listing) bool {
 func WalletChargeRules() []WalletChargeRuleResponse {
 	return []WalletChargeRuleResponse{
 		{BizModule: "secondhand", Label: "二手交易", Publish: 100, DraftSave: 50, Edit: 100, Republish: 100, Renew: 50},
-		{BizModule: "property_sale", Label: "樓盤放售", Publish: 1000, DraftSave: 1000, Edit: 1000, Republish: 1000},
+		{BizModule: "property_sale", Label: "樓盤放售", Publish: PropertySalePublishCost, DraftSave: PropertySaleDraftCost, Edit: PropertySalePublishCost, Republish: PropertySalePublishCost},
 		{BizModule: "serviced_apartment", Label: "服務式住宅", Publish: 800, Edit: 800, Republish: 800},
 	}
 }
@@ -393,6 +401,7 @@ func (s *WalletService) CreditPointsWithTx(ctx context.Context, tx *gorm.DB, par
 		SourceType:     strings.TrimSpace(params.SourceType),
 		BizModule:      strings.TrimSpace(params.BizModule),
 		ActionType:     strings.TrimSpace(params.ActionType),
+		ListingID:      params.ListingID,
 		RewardAdID:     params.RewardAdID,
 		ClaimID:        params.ClaimID,
 		OperatorUserID: params.OperatorUserID,

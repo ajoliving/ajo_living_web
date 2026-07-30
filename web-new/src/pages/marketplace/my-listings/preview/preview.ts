@@ -42,6 +42,7 @@ export const useMarketplaceMyListingPreviewPage = () => {
   const loading = ref(false);
   const actionLoading = ref(false);
   const listing = ref<SecondhandListingDetailResponse | null>(null);
+  const pendingAction = ref<MyListingDetailAction | null>(null);
   const listingId = computed(() => String(route.params.listingId ?? ''));
   const coverImage = computed(() => listing.value ? resolveListingCoverImage(listing.value) : undefined);
   const listingPrice = computed(() => {
@@ -123,24 +124,34 @@ export const useMarketplaceMyListingPreviewPage = () => {
     await router.push(`/marketplace/listing/${listingId.value}`);
   };
 
-  // 1.4 執行帖子狀態操作
-  const runAction = async (action: MyListingDetailAction): Promise<void> => {
-    if (!listingId.value || actionLoading.value) {
+  const confirmDescription = computed(() => {
+    const action = pendingAction.value;
+    if (!action) {
+      return '';
+    }
+
+    if (action === 'publish' || action === 'republish' || action === 'renew') {
+      return `${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`;
+    }
+
+    return t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate');
+  });
+
+  // 1.4 開啟帖子狀態操作確認
+  const requestAction = (action: MyListingDetailAction): void => {
+    if (listingId.value && !actionLoading.value) {
+      pendingAction.value = action;
+    }
+  };
+
+  // 1.5 執行已確認的帖子狀態操作
+  const confirmAction = async (): Promise<void> => {
+    const action = pendingAction.value;
+    if (!listingId.value || !action || actionLoading.value) {
       return;
     }
 
-    if ((action === 'publish' || action === 'republish' || action === 'renew') &&
-      !window.confirm(`${t(resolveChargeConfirmKey(action))} ${formatPoints(resolveActionChargeCost(action))}`)) {
-      return;
-    }
-
-    if (
-      (action === 'mark-sold' || action === 'deactivate') &&
-      !window.confirm(t(action === 'mark-sold' ? 'marketplace.mine.confirmSold' : 'marketplace.mine.confirmDeactivate'))
-    ) {
-      return;
-    }
-
+    pendingAction.value = null;
     actionLoading.value = true;
 
     try {
@@ -181,7 +192,12 @@ export const useMarketplaceMyListingPreviewPage = () => {
     }
   };
 
-  // 1.5 輸出扣費確認文案 key
+  // 1.6 關閉帖子狀態操作確認
+  const cancelAction = (): void => {
+    pendingAction.value = null;
+  };
+
+  // 1.7 輸出扣費確認文案 key
   const resolveChargeConfirmKey = (action: MyListingDetailAction): string => {
     if (action === 'publish') {
       return 'marketplace.mine.confirmPublishCharge';
@@ -192,7 +208,7 @@ export const useMarketplaceMyListingPreviewPage = () => {
     return 'marketplace.mine.confirmRenewCharge';
   };
 
-  // 1.6 輸出指定動作扣費
+  // 1.8 輸出指定動作扣費
   const resolveActionChargeCost = (action: MyListingDetailAction): number =>
     action === 'renew' ? secondhandRenewChargeCost : secondhandChargeCost;
 
@@ -202,12 +218,15 @@ export const useMarketplaceMyListingPreviewPage = () => {
 
   return {
     actionLoading,
+    cancelAction,
     canDeactivate,
     canMarkSold,
     canPublish,
     canRepublish,
     canRenew,
     categoryLabel,
+    confirmAction,
+    confirmDescription,
     coverImage,
     districtLabel,
     listing,
@@ -217,7 +236,8 @@ export const useMarketplaceMyListingPreviewPage = () => {
     openEditor,
     openPublicDetail,
     publishedAt,
-    runAction,
+    pendingAction,
+    requestAction,
     secondhandChargeCost,
     secondhandRenewChargeCost,
     formatAjoPoints: formatPoints,

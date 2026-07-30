@@ -2,7 +2,7 @@
  * 全域頂部導航。
  * 1. 嚴格對齊 HTML 設計稿 chrome.html 的 .nav 結構與樣式。
  * 2. 按登入態輸出公開入口、會員入口與通知中心鈴鐺。
- * 3. 整合主題、語系切換按鈕與登入入口。
+ * 3. 整合語系切換按鈕與登入入口。
  * 4. 保留 mobile 側邊抽屜與底部主入口。
 -->
 <script setup lang="ts">
@@ -13,7 +13,6 @@ import { useI18n } from 'vue-i18n';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
-import { type AppThemeName } from '@/utils/theme';
 
 interface NavigationItem {
   key: string;
@@ -38,10 +37,6 @@ const mobileDrawerOpen = computed({
   },
 });
 const accountPath = computed(() => (sessionStore.isAuthenticated ? '/profile' : '/login'));
-const isDarkTheme = computed(() => preferenceStore.theme === 'dark-neutral');
-const themeToggleAriaLabel = computed(() =>
-  isDarkTheme.value ? t('common.action.switchToLight') : t('common.action.switchToDark'),
-);
 const localeToggleLabel = computed(() =>
   preferenceStore.locale === 'zh-HK'
     ? t('common.locale.enShort')
@@ -129,32 +124,26 @@ const isNotificationActive = computed(() =>
   route.path.startsWith('/notifications') || route.path === '/account/notifications',
 );
 
-// 6. 切換主題：亮色 html-fidelity ↔ 深色 dark-neutral
-const handleThemeToggle = (): void => {
-  const nextTheme: AppThemeName = isDarkTheme.value ? 'html-fidelity' : 'dark-neutral';
-  preferenceStore.setTheme(nextTheme);
-};
-
-// 7. 切換繁中與 English 語系
+// 6. 切換繁中與 English 語系
 const handleLocaleToggle = (): void => {
   const nextLocale: AppLocale = preferenceStore.locale === 'zh-HK' ? 'en' : 'zh-HK';
   preferenceStore.setLocale(nextLocale);
 };
 
-// 8. 執行帳戶入口操作
+// 7. 執行帳戶入口操作
 const handleAccountAction = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await router.push(accountPath.value);
 };
 
-// 9. 執行登出
+// 8. 執行登出
 const handleSignOut = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await sessionStore.signOut();
   await router.push('/login');
 };
 
-// 10. 路由切換時收起 mobile 導航
+// 9. 路由切換時收起 mobile 導航
 watch(
   () => route.fullPath,
   () => {
@@ -235,19 +224,6 @@ watch(
     </div>
     <button
       type="button"
-      class="theme-toggle"
-      :aria-label="themeToggleAriaLabel"
-      @click="handleThemeToggle"
-    >
-      <span class="theme-toggle__icon theme-toggle__moon">
-        <svg viewBox="0 0 24 24"><path d="M21 14.2A8.6 8.6 0 0 1 9.8 3a7.4 7.4 0 1 0 11.2 11.2Z"></path></svg>
-      </span>
-      <span class="theme-toggle__icon theme-toggle__sun">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"></path></svg>
-      </span>
-    </button>
-    <button
-      type="button"
       class="locale-toggle"
       :aria-label="t('common.action.switchLanguage')"
       @click="handleLocaleToggle"
@@ -309,16 +285,11 @@ watch(
             </RouterLink>
           </nav>
 
-          <div class="mobile-menu-footer">
+          <div
+            v-if="sessionStore.isAuthenticated"
+            class="mobile-menu-footer"
+          >
             <button
-              type="button"
-              class="mobile-menu-theme"
-              @click="handleThemeToggle"
-            >
-              {{ isDarkTheme ? t('common.action.switchToLight') : t('common.action.switchToDark') }}
-            </button>
-            <button
-              v-if="sessionStore.isAuthenticated"
               type="button"
               class="mobile-menu-signout"
               @click="handleSignOut"
@@ -355,7 +326,7 @@ watch(
 <style scoped>
 /*
  * 樣式嚴格對齊 HTML 設計稿 .nav / .nav-logo / .nav-links / .nl / .nav-bell /
- * .nav-r / .nav-login / .theme-toggle / .locale-toggle / .hamburger / .mobile-menu /
+ * .nav-r / .nav-login / .locale-toggle / .hamburger / .mobile-menu /
  * .mobile-menu-panel /
  * .mobile-menu-header / .mobile-menu-logo / .mobile-close / .mobile-menu-body /
  * .mnl / .mobile-menu-footer / .bottom-nav / .bnav-item / .bnav-icon /
@@ -522,73 +493,6 @@ watch(
   transform: translateY(-1px);
 }
 
-html[data-theme='dark-neutral'] .nav-login--icon {
-  background: transparent;
-  color: #E5E7EB;
-}
-
-html[data-theme='dark-neutral'] .nav-login--icon:hover {
-  background: transparent;
-  color: var(--brand);
-}
-
-/* 主題切換按鈕 */
-.theme-toggle {
-  position: relative;
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-  box-shadow: none;
-  transition: color 0.18s ease, transform 0.18s ease;
-}
-
-.theme-toggle:hover {
-  color: var(--brand);
-  transform: translateY(-1px);
-}
-
-.theme-toggle__icon {
-  display: block;
-  width: 21px;
-  height: 21px;
-}
-
-.theme-toggle__icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  stroke: currentColor;
-  stroke-width: 2.15;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-}
-
-.theme-toggle__sun {
-  display: none;
-}
-
-html[data-theme='dark-neutral'] .theme-toggle {
-  background: transparent;
-  border: 0;
-  color: #E5E7EB;
-}
-
-html[data-theme='dark-neutral'] .theme-toggle__moon {
-  display: none;
-}
-
-html[data-theme='dark-neutral'] .theme-toggle__sun {
-  display: block;
-}
-
 /* 語系切換按鈕 */
 .locale-toggle {
   display: inline-flex;
@@ -725,7 +629,6 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
   padding: 16px 20px;
 }
 
-.mobile-menu-theme,
 .mobile-menu-signout {
   height: 40px;
   border: 1px solid var(--bdr);
@@ -829,7 +732,6 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     padding-bottom: 0;
   }
 
-  .theme-toggle,
   .locale-toggle,
   .mobile-login,
   .hamburger {
@@ -837,11 +739,8 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     height: 44px;
   }
 
-  .theme-toggle {
-    margin-left: auto;
-  }
-
   .locale-toggle {
+    margin-left: auto;
     border: none;
     background: transparent;
     border-radius: 999px;
@@ -864,18 +763,6 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
 
   .mobile-login:hover {
     color: var(--brand-dark);
-  }
-
-  html[data-theme='dark-neutral'] .locale-toggle {
-    color: #E5E7EB;
-  }
-
-  html[data-theme='dark-neutral'] .locale-toggle:hover {
-    color: var(--brand);
-  }
-
-  html[data-theme='dark-neutral'] .mobile-login:hover {
-    color: var(--brand-mid);
   }
 
   .hamburger {
@@ -979,7 +866,6 @@ html[data-theme='dark-neutral'] .theme-toggle__sun {
     padding: 14px 16px;
   }
 
-  .mobile-menu-theme,
   .mobile-menu-signout {
     height: 46px;
   }
