@@ -8,6 +8,7 @@
 import axios from 'axios';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 
 import {
   createAgencySubaccount,
@@ -60,6 +61,7 @@ type AgencyProfileField =
 type AgencySubaccountField = 'display_name' | 'phone_country_code' | 'phone_number' | 'email' | 'password' | 'permissions';
 
 const { t } = useI18n();
+const router = useRouter();
 const feedbackStore = useFeedbackStore();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
@@ -74,6 +76,7 @@ const assets = reactive<Partial<Record<AssetField, AgencyAsset>>>({});
 const subaccounts = ref<AgencySubaccount[]>([]);
 const showSubaccountForm = ref(false);
 const subaccountSaving = ref(false);
+const isSigningOut = ref(false);
 const savedPayloadSnapshot = ref('');
 const profileFieldErrors = reactive<Record<AgencyProfileField, string>>({
   name_zh: '',
@@ -174,17 +177,32 @@ const canSubmit = computed(() => canSubmitAgencyProfile(
 ));
 const statusLabel = computed(() => t(`account.agencyCompany.status.${status.value}`));
 
-// 4. 清除代理資料指定欄位錯誤
+// 4. 讓受限審核頁仍可安全結束目前登入
+const handleSignOut = async (): Promise<void> => {
+  if (isSigningOut.value) {
+    return;
+  }
+
+  isSigningOut.value = true;
+  try {
+    await sessionStore.signOut();
+    await router.push('/login');
+  } finally {
+    isSigningOut.value = false;
+  }
+};
+
+// 5. 清除代理資料指定欄位錯誤
 const clearProfileFieldError = (field: AgencyProfileField): void => {
   profileFieldErrors[field] = '';
 };
 
-// 5. 清除子帳戶指定欄位錯誤
+// 6. 清除子帳戶指定欄位錯誤
 const clearSubaccountFieldError = (field: AgencySubaccountField): void => {
   subaccountFieldErrors[field] = '';
 };
 
-// 6. 處理條件必填欄位狀態
+// 7. 處理條件必填欄位狀態
 const handleOverseasChange = (): void => {
   clearProfileFieldError('license_number');
   clearProfileFieldError('eaa_license_asset_id');
@@ -193,7 +211,7 @@ const handleDefaultAvatarChange = (): void => {
   clearProfileFieldError('avatar_asset_id');
 };
 
-// 7. 檢查電話及可選電郵格式
+// 8. 檢查電話及可選電郵格式
 const isValidPhone = (countryCode: string, phoneNumber: string): boolean =>
   /^\+\d{1,7}$/.test(countryCode.trim()) && /^\d{4,32}$/.test(phoneNumber.trim());
 const isValidOptionalEmail = (email: string): boolean => {
@@ -201,7 +219,7 @@ const isValidOptionalEmail = (email: string): boolean => {
   return value === '' || (value.includes('@') && value.includes('.') && value.length <= 255);
 };
 
-// 8. 顯示第一個欄位校驗原因
+// 9. 顯示第一個欄位校驗原因
 const showFirstFieldError = (errors: Record<string, string>): void => {
   const message = Object.values(errors).find((value) => value !== '');
   if (message) {
@@ -209,14 +227,14 @@ const showFirstFieldError = (errors: Record<string, string>): void => {
   }
 };
 
-// 9. 設定必填欄位錯誤
+// 10. 設定必填欄位錯誤
 const setProfileRequiredError = (field: AgencyProfileField, labelKey: string, value: string): void => {
   profileFieldErrors[field] = value.trim() === ''
     ? t('account.agencyCompany.fieldRequired', { field: t(labelKey) })
     : '';
 };
 
-// 10. 校驗提交審核所需資料
+// 11. 校驗提交審核所需資料
 const validateProfileForReview = (): boolean => {
   Object.keys(profileFieldErrors).forEach((field) => {
     profileFieldErrors[field as AgencyProfileField] = '';
@@ -251,7 +269,7 @@ const validateProfileForReview = (): boolean => {
   return Object.values(profileFieldErrors).every((value) => value === '');
 };
 
-// 11. 校驗公司子帳戶資料
+// 12. 校驗公司子帳戶資料
 const validateSubaccount = (): boolean => {
   Object.keys(subaccountFieldErrors).forEach((field) => {
     subaccountFieldErrors[field as AgencySubaccountField] = '';
@@ -277,7 +295,7 @@ const validateSubaccount = (): boolean => {
   return Object.values(subaccountFieldErrors).every((value) => value === '');
 };
 
-// 12. 建立符合後端統一欄位的儲存請求
+// 13. 建立符合後端統一欄位的儲存請求
 const buildPayload = (): AgencyProfileUpsertPayload => ({
   profile_type: profileType.value, name_zh: form.name_zh.trim(), name_en: form.name_en.trim(),
   address_zh: profileType.value === 'company' ? form.address_zh.trim() : '',
@@ -293,7 +311,7 @@ const buildPayload = (): AgencyProfileUpsertPayload => ({
   ...buildAgencyProfileAssetPayload(profileType.value, form.default_avatar, form),
 });
 
-// 13. 儲存草稿
+// 14. 儲存草稿
 const saveDraft = async (): Promise<boolean> => {
   if (!canEdit.value) {
     feedbackStore.pushToast(t('account.agencyCompany.rateLimited'), 'error');
@@ -319,7 +337,7 @@ const saveDraft = async (): Promise<boolean> => {
   }
 };
 
-// 14. 提交人工審核
+// 15. 提交人工審核
 const submitReview = async (): Promise<void> => {
   if (!validateProfileForReview()) {
     showFirstFieldError(profileFieldErrors);
@@ -342,7 +360,7 @@ const submitReview = async (): Promise<void> => {
   }
 };
 
-// 15. 上傳指定用途圖片
+// 16. 上傳指定用途圖片
 const uploadAsset = async (event: Event, field: AssetField): Promise<void> => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -395,7 +413,7 @@ const uploadAsset = async (event: Event, field: AssetField): Promise<void> => {
   }
 };
 
-// 16. 移除尚未提交的媒體欄位
+// 17. 移除尚未提交的媒體欄位
 const removeAsset = (field: AssetField): void => {
   delete assets[field];
   if (field === 'avatar') form.avatar_asset_id = '';
@@ -406,7 +424,7 @@ const removeAsset = (field: AssetField): void => {
   if (field === 'business_registration') form.business_registration_asset_id = '';
 };
 
-// 17. 建立公司子帳戶
+// 18. 建立公司子帳戶
 const addSubaccount = async (): Promise<void> => {
   if (!validateSubaccount()) {
     showFirstFieldError(subaccountFieldErrors);
@@ -428,7 +446,7 @@ const addSubaccount = async (): Promise<void> => {
   }
 };
 
-// 18. 更新或移除公司子帳戶
+// 19. 更新或移除公司子帳戶
 const setSubaccountStatus = async (item: AgencySubaccount, nextStatus: AgencySubaccountStatus): Promise<void> => {
   const { data } = await updateAgencySubaccountStatus(item.public_id, nextStatus);
   Object.assign(item, data.data);
@@ -458,7 +476,20 @@ onMounted(loadProfile);
           <span>{{ t('account.agencyCompany.reviewNotice') }}</span>
         </div>
       </div>
-      <span class="status-pill" :class="`status-pill--${status}`">{{ statusLabel }}</span>
+      <div class="agency-profile-actions">
+        <button
+          type="button"
+          class="agency-profile-signout"
+          :disabled="isSigningOut"
+          :aria-label="t('common.action.signOut')"
+          :title="t('common.action.signOut')"
+          @click="handleSignOut"
+        >
+          <AppIcon name="logout" :size="17" />
+          <span>{{ t('common.action.signOutShort') }}</span>
+        </button>
+        <span class="status-pill" :class="`status-pill--${status}`">{{ statusLabel }}</span>
+      </div>
     </header>
 
     <div v-if="isLoading" class="agency-panel">{{ t('common.status.loading') }}</div>
@@ -893,6 +924,39 @@ onMounted(loadProfile);
   width: 100%;
 }
 
+.agency-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agency-profile-signout {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 4px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.agency-profile-signout span {
+  display: inline;
+  margin: 0;
+  color: inherit;
+  line-height: 1;
+}
+
+.agency-profile-signout:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 @media (max-width: 767px) {
   .agency-profile-header {
     align-items: flex-start;
@@ -909,6 +973,11 @@ onMounted(loadProfile);
 
   .agency-profile-header .status-pill {
     align-self: flex-start;
+  }
+
+  .agency-profile-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .agency-profile-form fieldset,

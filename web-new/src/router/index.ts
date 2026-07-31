@@ -24,10 +24,16 @@ export const resolveAgencyAccountRedirect = (
   accountType: string,
   memberStatus: string,
   targetPath: string,
+  targetRequiresAuth: boolean,
 ): string | null => {
   const agencyProfilePath = '/account/profile/agency-profile';
   const isAgencyOwner = ['individual_agent', 'agency_company'].includes(accountType);
-  if (isAgencyOwner && ['pending_profile', 'pending_review', 'rejected'].includes(memberStatus) && targetPath !== agencyProfilePath) {
+  if (
+    isAgencyOwner
+    && targetRequiresAuth
+    && ['pending_profile', 'pending_review', 'rejected'].includes(memberStatus)
+    && targetPath !== agencyProfilePath
+  ) {
     return agencyProfilePath;
   }
   if (targetPath === agencyProfilePath && !isAgencyOwner) {
@@ -72,7 +78,12 @@ router.beforeEach(async (to) => {
   }
 
   const agencyRedirect = sessionStore.isAuthenticated
-    ? resolveAgencyAccountRedirect(sessionStore.me?.account_type ?? '', sessionStore.me?.member_status ?? '', to.path)
+    ? resolveAgencyAccountRedirect(
+      sessionStore.me?.account_type ?? '',
+      sessionStore.me?.member_status ?? '',
+      to.path,
+      Boolean(to.meta.requiresAuth),
+    )
     : null;
   if (agencyRedirect) {
     return { path: agencyRedirect };
@@ -85,6 +96,7 @@ router.beforeEach(async (to) => {
   if (to.path === '/login' && sessionStore.isAuthenticated) {
     const restrictedRedirect = resolveAgencyAccountRedirect(
       sessionStore.me?.account_type ?? '', sessionStore.me?.member_status ?? '', '/',
+      true,
     );
     if (restrictedRedirect) {
       return { path: restrictedRedirect };

@@ -37,6 +37,7 @@ import type {
 } from '@/model/property';
 import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { useDialogBackdropClose } from '@/shared/composables/useDialogBackdropClose';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -338,7 +339,14 @@ const requestCloseEditor = (): void => {
   void propertyEditorDialog.value?.requestCloseEditor();
 };
 
-// 9.1 同步彈窗步驟狀態
+// 9.1 只在完整點擊遮罩時請求關閉編輯器
+const {
+  handleBackdropPointerCancel: handleEditorBackdropPointerCancel,
+  handleBackdropPointerDown: handleEditorBackdropPointerDown,
+  handleBackdropPointerUp: handleEditorBackdropPointerUp,
+} = useDialogBackdropClose(requestCloseEditor);
+
+// 9.2 同步彈窗步驟狀態
 const handleEditorStepChange = (payload: PropertyEditorDialogStepPayload): void => {
   editorStepIndex.value = payload.activeIndex;
   editorStepTotal.value = payload.total;
@@ -757,7 +765,9 @@ onMounted(() => {
           role="dialog"
           aria-modal="true"
           :aria-label="editorDialogTitle"
-          @click.self="requestCloseEditor"
+          @pointercancel="handleEditorBackdropPointerCancel"
+          @pointerdown="handleEditorBackdropPointerDown"
+          @pointerup="handleEditorBackdropPointerUp"
         >
           <section class="property-editor-dialog__panel">
             <header class="property-editor-dialog__header">

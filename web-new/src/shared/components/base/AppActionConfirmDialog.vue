@@ -4,6 +4,8 @@
  * 2. 提供取消、確認與處理中狀態。
  -->
 <script setup lang="ts">
+import { useDialogBackdropClose } from '@/shared/composables/useDialogBackdropClose';
+
 interface AppActionConfirmDialogProps {
   open: boolean;
   title: string;
@@ -21,6 +23,13 @@ const emit = defineEmits<{
   (event: 'cancel'): void;
   (event: 'confirm'): void;
 }>();
+
+// 1. 只在完整點擊遮罩時取消操作
+const {
+  handleBackdropPointerCancel,
+  handleBackdropPointerDown,
+  handleBackdropPointerUp,
+} = useDialogBackdropClose(() => emit('cancel'));
 </script>
 
 <template>
@@ -32,7 +41,9 @@ const emit = defineEmits<{
         role="alertdialog"
         aria-modal="true"
         :aria-label="props.title"
-        @click.self="emit('cancel')"
+        @pointercancel="handleBackdropPointerCancel"
+        @pointerdown="handleBackdropPointerDown"
+        @pointerup="handleBackdropPointerUp"
       >
         <div class="action-confirm-dialog__panel">
           <div class="action-confirm-dialog__header">

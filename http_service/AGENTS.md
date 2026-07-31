@@ -151,6 +151,7 @@ router -> handler -> service -> model/database
 - 樓盤放售只有會員明確儲存草稿時才提交 `charge_draft=true`，首次建立或更新與 600 AJO Points 預扣必須在同一交易完成；正式發布總費為 1,000，後端按同一樓盤既有草稿扣款抵扣差額，舊草稿超額預付不得再扣款。正式發布前的內部暫存不得帶此標記，同一草稿後續保存不得重複扣費。
 - 歷史樓盤草稿重複扣費不得修改或刪除既有錢包流水；只可對指定且仍為草稿的 `property_sale` 建立帶 `listing_id`、穩定幂等鍵與 `draft_charge_correction` 動作的退款流水。草稿抵扣金額必須以草稿扣款減去該更正退款計算，確保淨預付為 600、發布待付為 400。
 - 樓盤放售的發布者身份必須由 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生，不信任前端請求值；`publisher_identity_type` 僅作舊接口兼容欄位。
+- 樓盤公開列表與公開詳情必須同時返回 `floor_raw` 實際樓層及 `floor_zone` 公開樓層；電話、內部備註及其他私密資料仍按既有權限限制返回。
 - 個人帳戶固定以業主發布；個人代理、代理公司及其有效子帳戶只有在相關資料批准後才能以代理身份發布。
 - 公司子帳戶的樓盤建立、發布、重新發布與既有樓盤管理必須分別校驗 `property_publish`、`property_manage`；代理證件不得透過公開 CDN URL 返回。
 - 已批准代理資料修訂必須在審核交易內刷新該代理及其公司子帳戶全部未刪除樓盤的公開聯絡快照；待審或拒絕不得修改現有快照。
@@ -266,5 +267,6 @@ go test ./...
 2026-07-16: 增加 Redis 共用快取依賴，iSmart 大廈資料預設快取 5 分鐘並在快取讀取前完成會員可見範圍校驗。
 2026-07-24: 固定有效樓盤放售與服務式住宅可建立或復用站內訊息會話，不受舊聯絡快照聊天開關限制。
 2026-07-30: 固定代理註冊使用牌照號碼作為登入名稱，個人代理電郵可選填，註冊頁提交的牌照資料經 Staff 批准後才將帳戶啟用為 `active`。
+2026-07-31: 固定樓盤公開列表與公開詳情同時返回實際樓層及公開樓層，其他私密欄位維持既有權限邊界。
 
 [PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.

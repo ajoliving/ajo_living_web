@@ -1,13 +1,19 @@
 /*
  * 物業展示工具測試。
  * 1. 驗證公開卡片只顯示一次位置資料。
- * 2. 驗證未指定座向不會顯示 N/A。
+ * 2. 驗證卡片資料列顯示有效實際樓層與公開樓層並移除座向。
  * 3. 驗證住宅分類優先顯示於特色標籤。
+ * 4. 驗證繁中卡片按可靠資料並列屋苑 English 名稱。
  */
 import { describe, expect, it } from 'vitest';
 
 import type { PropertyListingSummaryResponse } from '@/model/property';
-import { resolvePropertyListingFacts, resolvePropertyTagLabels } from './property';
+import {
+  formatPropertyUnit,
+  resolvePropertyCardCommunityName,
+  resolvePropertyListingFacts,
+  resolvePropertyTagLabels,
+} from './property';
 
 const listing = {
   listing_id: 'property-preview',
@@ -20,10 +26,21 @@ const listing = {
   publication_status: 'draft',
   business_status: 'available',
   updated_at: '2026-07-30T00:00:00Z',
+  community: {
+    public_id: 'community-1',
+    community_type: 'estate',
+    name_zh: '美寧中心',
+    name_en: 'Merlin Centre',
+    district_code: 'sham_shui_po',
+    address_text: '長沙灣順寧道',
+  },
   property_sale: {
     property_type: 'residential',
+    estate_name: '美寧中心',
     block_name: 'Block D',
-    floor_level: '中層',
+    floor_level: '25/F',
+    floor_raw: '25',
+    floor_zone: 'middle',
     unit_name: '3',
     show_unit: true,
     bedroom_count: 1,
@@ -33,14 +50,52 @@ const listing = {
 } as PropertyListingSummaryResponse;
 
 describe('resolvePropertyListingFacts', () => {
-  // 1. 使用公開位置、房間及浴室資料建立單一中間資訊列
-  it('does not duplicate the public location or show N/A direction', () => {
+  // 1. 使用座數、實際／公開樓層及單位建立公開資訊列
+  it('keeps the requested property location facts', () => {
     expect(resolvePropertyListingFacts(listing, 'zh-HK')).toEqual([
       'Block D',
-      '中層',
-      '3',
-      '1房 · 1浴室',
+      '25/F / 中層',
+      '3單位',
     ]);
+    expect(resolvePropertyListingFacts(listing, 'en')).toEqual([
+      'Block D',
+      '25/F / Middle floor',
+      'Unit 3',
+    ]);
+  });
+
+  // 2. 單獨的樓層單位字母不當作有效實際樓層
+  it('ignores a standalone floor suffix', () => {
+    const listingWithInvalidRawFloor = {
+      ...listing,
+      property_sale: { ...listing.property_sale, floor_raw: 'F' },
+    } as PropertyListingSummaryResponse;
+
+    expect(resolvePropertyListingFacts(listingWithInvalidRawFloor, 'zh-HK')).toEqual([
+      'Block D',
+      '中層',
+      '3單位',
+    ]);
+  });
+
+  // 2. 繁中卡片並列匹配屋苑的 English 名稱
+  it('combines matching Chinese and English estate names', () => {
+    expect(resolvePropertyCardCommunityName(listing, 'zh-HK')).toBe('美寧中心 Merlin Centre');
+    expect(resolvePropertyCardCommunityName(listing, 'en')).toBe('Merlin Centre');
+
+    const differentEstate = {
+      ...listing,
+      property_sale: { ...listing.property_sale, estate_name: '其他屋苑' },
+    } as PropertyListingSummaryResponse;
+    expect(resolvePropertyCardCommunityName(differentEstate, 'zh-HK')).toBe('其他屋苑');
+  });
+
+  // 3. 單位名稱按語系補足可讀標籤
+  it('formats unit names for Chinese and English cards', () => {
+    expect(formatPropertyUnit('3', 'zh-HK')).toBe('3單位');
+    expect(formatPropertyUnit('09 室', 'zh-HK')).toBe('09 室');
+    expect(formatPropertyUnit('3', 'en')).toBe('Unit 3');
+    expect(formatPropertyUnit('Flat 3', 'en')).toBe('Flat 3');
   });
 });
 

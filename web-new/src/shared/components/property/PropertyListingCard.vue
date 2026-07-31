@@ -68,7 +68,16 @@ const handleFavorite = (): void => {
       />
     </div>
     <div class="property-listing-card__body">
-      <div class="property-listing-card__tags">
+      <h3>{{ card.title }}</h3>
+      <p class="property-listing-card__location">{{ card.location }}</p>
+      <p
+        v-if="card.facts.length > 0"
+        class="property-listing-card__facts"
+      >{{ card.facts.join(' · ') }}</p>
+      <div
+        v-if="card.tags.length > 0"
+        class="property-listing-card__tags"
+      >
         <span
           v-for="tag in card.tags"
           :key="`${tag.label}-${tag.dark ? 'dark' : 'light'}`"
@@ -76,12 +85,6 @@ const handleFavorite = (): void => {
           class="property-listing-card__tag"
         >{{ tag.label }}</span>
       </div>
-      <h3>{{ card.title }}</h3>
-      <p class="property-listing-card__location">{{ card.location }}</p>
-      <p
-        v-if="card.facts.length > 0"
-        class="property-listing-card__facts"
-      >{{ card.facts.join(' · ') }}</p>
       <div class="property-listing-card__price">
         <span :class="card.priceKind">{{ card.priceKind === 'sale' ? t('property.publicList.sale') : t('property.publicList.rent') }}</span>
         {{ card.price }}<small v-if="card.priceUnit">{{ card.priceUnit }}</small>
@@ -157,8 +160,11 @@ const handleFavorite = (): void => {
   grid-column: 1;
   grid-row: 1 / span 2;
   align-items: center;
+  align-self: center;
   justify-content: center;
+  height: 246px;
   min-height: 0;
+  overflow: hidden;
   background: var(--sur-2);
   color: var(--ink-3);
 }
@@ -378,7 +384,7 @@ const handleFavorite = (): void => {
   }
 
   .property-listing-card__media {
-    min-height: 180px;
+    height: 180px;
   }
 
   .property-listing-card__body {

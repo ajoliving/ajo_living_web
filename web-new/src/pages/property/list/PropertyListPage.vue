@@ -22,6 +22,7 @@ import {
   propertyRentPriceRangeFilterOptions,
   propertyPublisherFilterOptions,
   propertyRegionFilterOptions,
+  propertyRenovationFilterOptions,
   propertySalePriceRangeFilterOptions,
   propertyTagFilterOptions,
   propertyTransactionTypeFilterOptions,
@@ -40,6 +41,7 @@ import PropertyListingCard from '@/shared/components/property/PropertyListingCar
 import { usePreferenceStore } from '@/stores/preferences';
 import {
   resolvePropertyArea,
+  resolvePropertyCardCommunityName,
   resolvePropertyCommunityName,
   resolvePropertyCoverImage,
   resolvePropertyDistrict,
@@ -111,6 +113,7 @@ const activeFilterValues = reactive<Record<string, string>>({
   area_mode: 'usable',
   area: '',
   bedroom: '',
+  renovation: '',
   tag: '',
   publisher: '',
 });
@@ -172,6 +175,12 @@ const filterGroups = computed<FilterGroup[]>(() => [
     activeValue: activeFilterValues.bedroom,
   },
   {
+    key: 'renovation',
+    title: t('property.publicList.filterTitles.renovation'),
+    options: translateFilterOptions('renovation', propertyRenovationFilterOptions),
+    activeValue: activeFilterValues.renovation,
+  },
+  {
     key: 'tag',
     title: t('property.publicList.filterTitles.tag'),
     options: translateFilterOptions('tag', propertyTagFilterOptions),
@@ -188,7 +197,7 @@ const activeFilterCount = computed(() =>
   filterGroups.value.filter((group) => Boolean(group.activeValue)).length,
 );
 const mobileQuickFilterGroups = computed<FilterGroup[]>(() =>
-  ['region', 'property_type', 'area_mode', 'bedroom', 'tag']
+  ['region', 'property_type', 'bedroom', 'renovation']
     .map((key) => filterGroups.value.find((group) => group.key === key))
     .filter((group): group is FilterGroup => Boolean(group)),
 );
@@ -268,6 +277,7 @@ const buildListParams = (): PropertyListParams => {
   const areaMode = activeValue('area_mode');
   const area = propertyAreaRangeFilterOptions.find((item) => item.value === activeValue('area'));
   const bedroom = activeValue('bedroom');
+  const renovation = activeValue('renovation');
   const tag = activeValue('tag');
   const publisher = activeValue('publisher');
 
@@ -280,6 +290,7 @@ const buildListParams = (): PropertyListParams => {
   if (area?.min) params.min_area_sqft = area.min;
   if (area?.max) params.max_area_sqft = area.max;
   if (bedroom) params.bedroom_count = Number(bedroom);
+  if (renovation) params.renovation_type = renovation;
   if (tag) params.feature_tags = tag;
   if (publisher) params.publisher_identity_type = publisher;
 
@@ -384,7 +395,7 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
     : '';
   const cover = resolvePropertyCoverImage(listing);
   const district = resolvePropertyDistrict(listing, preferenceStore.locale);
-  const community = resolvePropertyCommunityName(listing, preferenceStore.locale);
+  const community = resolvePropertyCardCommunityName(listing, preferenceStore.locale);
   const isAgent = listing.publisher_identity_type === 'agent';
   const typeLabel = resolvePropertyTypeLabel(listing, preferenceStore.locale);
   const publisherLabel = isAgent
@@ -396,7 +407,7 @@ const toPropertyCard = (listing: PropertyListingSummaryResponse): PropertyCard =
     propertyType: typeLabel,
     publisherLabel,
     imageUrl: cover?.url,
-    tags: [{ label: district }, { label: typeLabel, dark: priceKind === 'rent' }],
+    tags: [{ label: typeLabel, dark: priceKind === 'rent' }],
     title: resolvePropertyTitle(listing, preferenceStore.locale),
     location: `${district} · ${community}`,
     facts: resolvePropertyListingFacts(listing, preferenceStore.locale),

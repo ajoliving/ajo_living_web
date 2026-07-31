@@ -38,17 +38,22 @@ describe('router locale titles', () => {
 });
 
 describe('agency account access', () => {
-  it('keeps unapproved agents on the agency profile page', () => {
-    expect(resolveAgencyAccountRedirect('individual_agent', 'pending_review', '/account/properties/sale'))
+  it('keeps unapproved agents out of protected member operations', () => {
+    expect(resolveAgencyAccountRedirect('individual_agent', 'pending_review', '/account/properties/sale', true))
       .toBe('/account/profile/agency-profile');
-    expect(resolveAgencyAccountRedirect('agency_company', 'rejected', '/login'))
+    expect(resolveAgencyAccountRedirect('agency_company', 'rejected', '/login', true))
       .toBe('/account/profile/agency-profile');
   });
 
+  it('allows unapproved agents to browse public pages', () => {
+    expect(resolveAgencyAccountRedirect('individual_agent', 'pending_review', '/', false)).toBeNull();
+    expect(resolveAgencyAccountRedirect('agency_company', 'rejected', '/properties', false)).toBeNull();
+  });
+
   it('keeps personal and company subaccounts out of the editable agency profile page', () => {
-    expect(resolveAgencyAccountRedirect('personal', 'active', '/account/profile/agency-profile'))
+    expect(resolveAgencyAccountRedirect('personal', 'active', '/account/profile/agency-profile', true))
       .toBe('/account/profile');
-    expect(resolveAgencyAccountRedirect('agency_company_subaccount', 'active', '/account/profile/agency-profile'))
+    expect(resolveAgencyAccountRedirect('agency_company_subaccount', 'active', '/account/profile/agency-profile', true))
       .toBe('/account/profile');
   });
 });

@@ -108,6 +108,36 @@ func TestAuthServiceChecksRegistrationAvailability(t *testing.T) {
 	}
 }
 
+// 2.3 TestAuthServiceChecksIsmartRegistrationAvailability verifies iSmart contact conflicts block the AJO precheck.
+func TestAuthServiceChecksIsmartRegistrationAvailability(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v1/integration/auth/check-contact/" {
+			t.Fatalf("unexpected iSmart path: %s", request.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode iSmart contact request: %v", err)
+		}
+		if payload["email"] != "used-by-ismart@example.com" || payload["phone"] != "+85261110017" {
+			t.Fatalf("unexpected iSmart contact payload: %#v", payload)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"success","data":{"email_available":false,"phone_available":true}}`))
+	}))
+	defer server.Close()
+
+	runtimeValue := newAuthTestRuntime(t, &config.Config{IsmartIntegrationAPIBaseURL: server.URL + "/api/v1/integration"})
+	availability, err := NewAuthService(runtimeValue).CheckRegistrationAvailability(context.Background(), RegistrationAvailabilityParams{
+		Email: "used-by-ismart@example.com", PhoneCountryCode: "+852", PhoneNumber: "61110017",
+	})
+	if err != nil {
+		t.Fatalf("check iSmart availability: %v", err)
+	}
+	if availability.EmailAvailable || !availability.PhoneAvailable {
+		t.Fatalf("expected iSmart email conflict only: %#v", availability)
+	}
+}
+
 // 3. TestAuthServiceRegistersAndLinksIsmartAccount verifies registration uses the direct iSmart API and saves its identity.
 func TestAuthServiceRegistersAndLinksIsmartAccount(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {

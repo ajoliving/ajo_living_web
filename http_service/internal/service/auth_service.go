@@ -93,7 +93,7 @@ type RegistrationAvailabilityParams struct {
 	PhoneNumber      string
 }
 
-// 6.2 RegistrationAvailabilityResult reports whether each submitted registration identity is free locally.
+// 6.2 RegistrationAvailabilityResult reports whether each submitted registration identity is free in AJO and iSmart.
 type RegistrationAvailabilityResult struct {
 	EmailAvailable bool `json:"email_available"`
 	PhoneAvailable bool `json:"phone_available"`
@@ -498,7 +498,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 21.1 CheckRegistrationAvailability checks local email and phone availability before registration.
+// 21.1 CheckRegistrationAvailability checks AJO and iSmart email and phone availability before registration.
 func (s *AuthService) CheckRegistrationAvailability(ctx context.Context, params RegistrationAvailabilityParams) (*RegistrationAvailabilityResult, error) {
 	email := normalizeEmail(params.Email)
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
@@ -522,6 +522,17 @@ func (s *AuthService) CheckRegistrationAvailability(ctx context.Context, params 
 		return nil, errcode.New(errcode.CodeInternalError, "failed to validate registration phone")
 	}
 	result.PhoneAvailable = count == 0
+	if s.runtime.Config != nil && strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL) != "" {
+		ismartAvailability, err := NewIsmartExternalService(s.runtime).CheckRegistrationContact(ctx, IsmartRegistrationContactParams{
+			Email: email,
+			Phone: phoneCountryCode + phoneNumber,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result.EmailAvailable = result.EmailAvailable && ismartAvailability.EmailAvailable
+		result.PhoneAvailable = result.PhoneAvailable && ismartAvailability.PhoneAvailable
+	}
 
 	return result, nil
 }

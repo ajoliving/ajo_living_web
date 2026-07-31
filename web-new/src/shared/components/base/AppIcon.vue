@@ -26,6 +26,7 @@ type IconName =
   | 'location'
   | 'lock'
   | 'login'
+  | 'logout'
   | 'menu'
   | 'message'
   | 'palette'
@@ -77,6 +78,7 @@ const iconMap: Record<IconName, string> = {
   location: 'M12 21s6-5.63 6-11a6 6 0 1 0-12 0c0 5.37 6 11 6 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
   lock: 'M7 11V8a5 5 0 0 1 10 0v3 M6 11h12v9H6z',
   login: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4 M10 17l5-5-5-5 M15 12H3',
+  logout: 'M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4 M14 17l5-5-5-5 M19 12H7',
   menu: 'M4 7h16 M4 12h16 M4 17h16',
   message:
     'M4 5h16v10H8l-4 4z',

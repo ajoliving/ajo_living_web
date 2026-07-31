@@ -91,7 +91,12 @@ import { useSessionStore } from '@/stores/session';
 import { formatPrice } from '@/utils/format';
 import { buildUploadHeaders } from '@/utils/upload';
 import { formatAjoPoints, resolveWalletChargeCost, resolveWalletDraftChargeCost } from '@/utils/wallet';
-import { formatPropertySalePrice, mergePropertyFeatureTags } from '@/utils/property';
+import {
+  formatPropertyFloor,
+  formatPropertySalePrice,
+  formatPropertyUnit,
+  mergePropertyFeatureTags,
+} from '@/utils/property';
 
 void propertyApplianceTagOptions;
 void propertyAccountPackageOptions;
@@ -802,6 +807,16 @@ const saleFloorReady = computed(() =>
   form.floorRaw.trim() !== '' ||
   form.floorLevel.trim() !== '',
 );
+// 公開樓層選項，與後端 floor_zone 欄位保持一致。
+const floorZoneOptions = computed(() => [
+  { value: 'low', label: t('property.editor.floorZoneLow') },
+  { value: 'middle', label: t('property.editor.floorZoneMiddle') },
+  { value: 'high', label: t('property.editor.floorZoneHigh') },
+]);
+const saleFloorZoneReady = computed(() =>
+  (!form.floorRaw.trim() && !form.floorLevel.trim()) ||
+  form.floorZone.trim() !== '',
+);
 const salePropertyNoReady = computed(() =>
   !saleRequiresPropertyNo.value ||
   form.propertyNo.trim() !== '',
@@ -883,6 +898,7 @@ const missingRequiredFields = computed<PropertyEditorValidationIssue[]>(() => {
       'details',
       'property.editor.actualFloorField',
     );
+    addIssue(!saleFloorZoneReady.value, 'details', 'property.editor.floorZoneField');
     addIssue(!salePropertyNoReady.value, 'details', 'property.editor.propertyNoField');
     addIssue(!saleCategoryReady.value, 'details', saleFieldProfile.value.categoryLabelKey);
 
@@ -1082,17 +1098,14 @@ const previewPrice = computed(() => {
   return value > 0 ? formatPrice(value, preferenceStore.locale) : t('property.common.pendingPrice');
 });
 const previewFloorLabel = computed(() => {
-  if (!form.floorRaw.trim() && !form.floorZone.trim()) {
-    return '';
-  }
-  const zone = form.floorZone.trim();
-  if (preferenceStore.locale === 'en') {
-    return zone === 'high' ? 'High floor' : zone === 'low' ? 'Low floor' : 'Middle floor';
-  }
-  return zone === 'high' ? '高層' : zone === 'low' ? '低層' : '中層';
+  return formatPropertyFloor(
+    form.floorRaw,
+    form.floorZone,
+    form.floorLevel,
+    preferenceStore.locale,
+  );
 });
 const previewCard = computed<PropertyListingCardViewModel>(() => {
-  const isResidential = form.propertyType === 'residential';
   const district = getPropertyDistrictLabel(form.districtCode, preferenceStore.locale);
   const typeOption = propertyListingTypeOptions.find((option) => option.value === form.propertyType);
   const typeLabel = typeOption ? getPropertyOptionLabel(typeOption, preferenceStore.locale) : '';
@@ -1107,19 +1120,6 @@ const previewCard = computed<PropertyListingCardViewModel>(() => {
         : formatPrice(priceValue, preferenceStore.locale)
       : t('property.common.pendingPrice');
   const areaValue = Number(form.usableAreaSqft || form.grossAreaSqft || 0);
-  const rooms = isResidential
-    ? [
-      form.bedroomCount === 0
-        ? preferenceStore.locale === 'en' ? 'Studio' : '開放式間隔'
-        : form.bedroomCount > 0
-          ? preferenceStore.locale === 'en' ? `${form.bedroomCount} bed` : `${form.bedroomCount}房`
-          : '',
-      form.bathroomCount > 0
-        ? preferenceStore.locale === 'en' ? `${form.bathroomCount} bath` : `${form.bathroomCount}浴室`
-        : '',
-    ].filter(Boolean).join(' · ')
-    : '';
-  const direction = form.direction.trim();
   const unitPrice = areaValue > 0 && priceValue > 0
     ? t('property.publicList.unitPrice', { price: formatPrice(Math.round(priceValue / areaValue), preferenceStore.locale) })
     : '';
@@ -1141,9 +1141,7 @@ const previewCard = computed<PropertyListingCardViewModel>(() => {
     facts: [
       form.blockName.trim(),
       previewFloorLabel.value,
-      form.showUnit ? form.unitName.trim() : '',
-      rooms,
-      direction && direction !== 'N/A' ? direction : '',
+      form.showUnit ? formatPropertyUnit(form.unitName, preferenceStore.locale) : '',
     ].filter(Boolean),
     priceKind: form.transactionType,
     price: cardPrice,
@@ -3151,6 +3149,19 @@ onBeforeUnmount(() => {
                 <span>{{ t('property.editor.actualFloorField') }}</span>
                 <input v-model="form.floorRaw" />
               </label>
+              <label :class="['property-input', { 'property-input--required': form.floorRaw.trim() !== '' }]">
+                <span>{{ t('property.editor.floorZoneField') }}</span>
+                <select v-model="form.floorZone">
+                  <option value="">{{ t('property.editor.notSpecified') }}</option>
+                  <option
+                    v-for="option in floorZoneOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
               <div class="property-input property-input--with-tools">
                 <div class="property-input-label-row">
                   <span>{{ t('property.editor.unitNameField') }}</span>
@@ -3641,6 +3652,22 @@ onBeforeUnmount(() => {
               >
                 <span>{{ t('property.editor.actualFloorField') }}</span>
                 <input v-model="form.floorRaw" />
+              </label>
+              <label
+                v-if="saleFieldProfile.showFloor"
+                :class="['property-input', { 'property-input--required': form.floorRaw.trim() !== '' }]"
+              >
+                <span>{{ t('property.editor.floorZoneField') }}</span>
+                <select v-model="form.floorZone">
+                  <option value="">{{ t('property.editor.notSpecified') }}</option>
+                  <option
+                    v-for="option in floorZoneOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
               </label>
               <div
                 v-if="saleFieldProfile.showUnitFields"
@@ -5332,7 +5359,7 @@ onBeforeUnmount(() => {
   }
 
   .property-floor-unit-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

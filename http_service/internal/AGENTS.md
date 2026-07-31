@@ -31,6 +31,7 @@ utils/: 無業務狀態的通用工具。
 - 代理 EAA 牌照及商業登記證以 private ACL 上傳，會員本人與管理審核只能取得短時 OSS 簽名下載地址；不得以公開 CDN URL 返回證件。
 - 樓盤標題及單位介紹翻譯歸入 property service；handler 只綁定輸入，service 負責長度校驗、DeepL 請求與上游錯誤隔離，router 負責會員鑑權及限流。
 - 樓盤聯絡解鎖由 property service 按 `contact_attributes` 的電話1與電話2區號及 WhatsApp 狀態分別生成 URL；電話2缺少獨立區號時兼容使用電話1區號。不得向公開列表暴露原始電話，只有受控解鎖回應可返回電話或聯絡入口。
+- 樓盤公開摘要由 property service 同時映射 `floor_raw` 實際樓層及 `floor_zone` 公開樓層，公開列表與詳情共用此契約；聯絡資料與 `private_note` 不得因此放寬。
 - 樓盤草稿收費由 handler 映射 `charge_draft=true`，property service 在同一交易內首次保存資料並預扣 600 AJO Points；發布總費 1,000，由 service 查詢同一 `listing_id` 的草稿扣款流水後只收取未付差額。舊草稿超額預付不再扣款，未帶標記的發布前暫存及已預付草稿的後續保存不得收取草稿費。
 - 歷史草稿重複扣費只可由受限維護流程對指定、未發布的 `property_sale` 以 `listing_refund` / `draft_charge_correction` 新增退款流水；不得改寫原扣款。後續草稿抵扣查詢必須扣除該專用退款，維持淨預付 600 與發布待付 400。
 - AJO 註冊建立 iSmart 帳戶時，註冊值只可補足 iSmart 回應缺失的受控會員資料快照；快照不得保存密碼，後續 POS 基礎登入回應不得覆蓋既有完整資料。若需返回上游原始業務欄位，使用獨立 `ismart_raw`，遞迴排除密碼、token、secret、authorization、憑證及 session 欄位，不與固定 `ismart_msg` 摘要混用。
@@ -65,5 +66,6 @@ utils/: 無業務狀態的通用工具。
 2026-07-28: 固定樓盤草稿預付流水作為發布差額抵扣依據，發布交易鎖定樓盤並兼容歷史超額草稿扣款。
 2026-07-28: 記錄舊版草稿重複扣費的不可變退款流水、淨預付查詢與受限維護命令邊界。
 2026-07-30: 記錄代理註冊即上載牌照、建立待審版本及 Staff 批准後啟用帳戶的 API 契約；個人代理可不提供電郵。
+2026-07-31: 記錄樓盤公開摘要同時返回實際樓層與公開樓層，並保留聯絡資料及內部備註的私密邊界。
 
 [PROTOCOL]: When adding, moving, renaming, or changing backend internal ownership, update this map, check parent `../AGENTS.md`, and update `../../docs/PROMPT_INDEX.md` when API documentation prompts or model-facing contracts changed.

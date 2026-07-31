@@ -4,6 +4,8 @@
  * 2. 使用穩定面板承載跨頁面離開提示。
 -->
 <script setup lang="ts">
+import { useDialogBackdropClose } from '@/shared/composables/useDialogBackdropClose';
+
 interface AppUnsavedChangesDialogProps {
   open: boolean;
   title: string;
@@ -23,6 +25,13 @@ const emit = defineEmits<{
   (event: 'discard'): void;
   (event: 'stay'): void;
 }>();
+
+// 1. 只在完整點擊遮罩時留在編輯頁
+const {
+  handleBackdropPointerCancel,
+  handleBackdropPointerDown,
+  handleBackdropPointerUp,
+} = useDialogBackdropClose(() => emit('stay'));
 </script>
 
 <template>
@@ -34,7 +43,9 @@ const emit = defineEmits<{
         role="dialog"
         aria-modal="true"
         :aria-label="props.title"
-        @click.self="emit('stay')"
+        @pointercancel="handleBackdropPointerCancel"
+        @pointerdown="handleBackdropPointerDown"
+        @pointerup="handleBackdropPointerUp"
       >
         <div class="unsaved-dialog__panel">
           <div class="unsaved-dialog__header">

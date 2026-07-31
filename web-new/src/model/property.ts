@@ -35,6 +35,7 @@ export interface PropertyListParams {
   transaction_type?: PropertyTransactionType;
   property_type?: string;
   rental_type?: string;
+  renovation_type?: string;
   area_mode?: PropertyAreaMode;
   min_price_hkd?: number;
   max_price_hkd?: number;

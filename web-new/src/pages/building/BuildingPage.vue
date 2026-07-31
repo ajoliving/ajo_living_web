@@ -158,7 +158,6 @@ interface OwnerPaymentRecordRow {
   key: string;
   receiptID: string;
   paymentID: string;
-  inputTime: string;
   tranTime: string;
   unit: string;
   item: string;
@@ -262,7 +261,7 @@ const ownerRecordsDateSearched = ref(false);
 const ownerPaymentRecords = ref<POSIntegrationPaymentTransaction[]>([]);
 const ownerRecordFromDate = ref(currentMonthStart());
 const ownerRecordToDate = ref(currentDateValue());
-const ownerRecordDateType = ref<'input_date' | 'tran_date'>('input_date');
+const ownerRecordItemType = ref('');
 const accessLoading = ref(false);
 const accessError = ref('');
 const accessMessage = ref('');
@@ -364,10 +363,7 @@ const noticeBuildingLabel = (buildingID: string): string => {
   if (!id) return t('building.notices.noBuildingSelected');
   const name = resolveIndexedBuildingName(id)
     || (id === selectedBuildingID.value && buildingName.value !== '-' ? buildingName.value : '');
-  if (name) {
-    return t('building.notices.buildingWithId', { building: name, id });
-  }
-  return t('building.common.buildingCodeLabel', { id });
+  return name || t('building.notices.noBuildingSelected');
 };
 
 const currentNoticeBuildingText = computed(() => {
@@ -449,7 +445,13 @@ const documentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): B
 };
 
 const reportDocumentRows = (...groups: Array<IsmartBuildingDocument[] | undefined>): BuildingFileRow[] =>
-  fileRows(sortReportDocuments(firstDocumentGroup(...groups)));
+  sortReportDocuments(firstDocumentGroup(...groups)).map((item, index) => ({
+    key: String(item.id ?? `${item.title ?? 'report'}-${index}`),
+    title: textValue(item.title),
+    date: formatLocaleDateValue(item.created_date || item.file_date),
+    month: formatLocaleMonthValue(item.file_month),
+    url: String(item.file_url ?? '').trim(),
+  }));
 
 const normalizeMapEmbedURL = (value: string | null | undefined): string => {
   const raw = String(value ?? '').trim();
@@ -501,7 +503,6 @@ const buildingName = computed(() => {
     : '';
   return textValue(upstreamName || resolveIndexedBuildingName(buildingID) || profileName);
 });
-const organizationName = computed(() => textValue(currentBuildingInfo.value.owners_corporation_name));
 const buildingForms = computed(() => fileRows(ismartBuildingProfile.value?.documents?.forms));
 const buildingInfoFiles = computed(() => fileRows(ismartBuildingProfile.value?.documents?.building_info_files));
 const floorPlans = computed(() => documentRows(
@@ -522,26 +523,18 @@ const auditReports = computed(() => reportDocumentRows(
 ));
 const buildingMapURL = computed(() => String(currentBuildingInfo.value.google_map_url ?? '').trim());
 const buildingMapEmbedURL = computed(() => normalizeMapEmbedURL(currentBuildingInfo.value.google_map_url));
-const buildingFileCount = computed(() => buildingForms.value.length + buildingInfoFiles.value.length + floorPlans.value.length);
-const financeDocumentCount = computed(() => financialReports.value.length + auditReports.value.length);
-const buildingStatusText = computed(() => {
-  if (buildingInfoLoading.value) return t('building.profile.status.loading');
-  if (buildingInfoError.value) return t('building.profile.status.loadFailed');
-  return ismartBuildingProfile.value
-    ? t('building.profile.status.hasData')
-    : t('building.profile.status.noData');
+
+// 7.1 由落成年份計算目前樓齡
+const buildingAge = computed(() => {
+  const yearBuilt = Number.parseInt(String(currentBuildingInfo.value.year_built ?? ''), 10);
+  const currentYear = new Date().getFullYear();
+  if (!Number.isInteger(yearBuilt) || yearBuilt <= 0 || yearBuilt > currentYear) return '-';
+  return t('building.profile.fields.buildingAgeValue', { count: currentYear - yearBuilt });
 });
-const buildingStatusDetail = computed(() => {
-  if (buildingInfoLoading.value) return t('building.profile.status.loadingDetail');
-  if (buildingInfoError.value) return translateMessage(buildingInfoError.value);
-  return ismartBuildingProfile.value
-    ? t('building.profile.status.syncedDetail')
-    : t('building.profile.status.noDataDetail');
-});
-const buildingStatusClass = computed(() => (buildingInfoError.value ? 'warn' : 'good'));
 
 const buildingFields = computed<BuildingField[]>(() => [
   { label: t('building.profile.fields.yearBuilt'), value: textValue(currentBuildingInfo.value.year_built) },
+  { label: t('building.profile.fields.buildingAge'), value: buildingAge.value },
   { label: t('building.profile.fields.totalFloors'), value: textValue(currentBuildingInfo.value.total_floor) },
   { label: t('building.profile.fields.totalUnits'), value: textValue(currentBuildingInfo.value.total_unit) },
   { label: t('building.profile.fields.totalCarparks'), value: textValue(currentBuildingInfo.value.total_carpark) },
@@ -552,32 +545,6 @@ const buildingFields = computed<BuildingField[]>(() => [
   { label: t('building.profile.fields.managementCompanyEmail'), value: textValue(currentBuildingInfo.value.management_company_email) },
   { label: t('building.profile.fields.managementCompanyFax'), value: textValue(currentBuildingInfo.value.management_company_fax) },
   { label: t('building.profile.fields.homeAffairsPhone'), value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
-  {
-    label: t('building.profile.fields.dataSource'),
-    value: ismartBuildingProfile.value ? t('building.profile.fields.dataSourceValue') : '-',
-  },
-]);
-
-const managementOverviewFields = computed<BuildingField[]>(() => [
-  { label: t('building.profile.fields.buildingName'), value: buildingName.value },
-  { label: t('building.profile.fields.buildingId'), value: textValue(currentBuilding.value.building_id || selectedBuildingID.value) },
-  { label: t('building.profile.fields.buildingType'), value: textValue(currentBuilding.value.building_type) },
-  { label: t('building.profile.fields.area'), value: textValue(currentBuilding.value.area) },
-  { label: t('building.profile.fields.district'), value: textValue(currentBuilding.value.district) },
-  { label: t('building.profile.fields.street'), value: textValue(currentBuilding.value.street) },
-  { label: t('building.profile.fields.streetNumber'), value: textValue(currentBuilding.value.street_no) },
-  { label: t('building.profile.fields.block'), value: textValue(currentBuilding.value.block || currentBuilding.value.court) },
-  { label: t('building.profile.fields.ownersCorporation'), value: textValue(currentBuildingInfo.value.owners_corporation_name) },
-  { label: t('building.profile.fields.managementOfficePhone'), value: textValue(currentBuildingInfo.value.management_office_phone) },
-  { label: t('building.profile.fields.managementCompany'), value: textValue(currentBuildingInfo.value.management_company_name) },
-  { label: t('building.profile.fields.managementCompanyPhone'), value: textValue(currentBuildingInfo.value.management_company_phone) },
-  { label: t('building.profile.fields.managementCompanyEmail'), value: textValue(currentBuildingInfo.value.management_company_email) },
-  { label: t('building.profile.fields.managementCompanyFax'), value: textValue(currentBuildingInfo.value.management_company_fax) },
-  { label: t('building.profile.fields.homeAffairsPhone'), value: textValue(currentBuildingInfo.value.home_affairs_department_phone) },
-  {
-    label: t('building.profile.fields.documentTotal'),
-    value: t('building.common.fileCount', { count: formatLocaleNumber(financeDocumentCount.value) }),
-  },
 ]);
 
 const financeLoading = computed(() => buildingInfoLoading.value || financeReceivableLoading.value);
@@ -691,23 +658,8 @@ const buildingDocCards = computed<BuildingDocCard[]>(() => [
 ]);
 
 // 7.1 智能門禁資料
-const accessBuildingName = computed(() => textValue(
-  ismartAccessProfile.value?.building?.buildname_chi
-  || ismartAccessProfile.value?.building?.buildname
-  || buildingName.value,
-));
 const accessDoors = computed<IsmartAccessDoor[]>(() => ismartAccessProfile.value?.doors ?? []);
 const accessRecordGroups = computed<IsmartRecentAccessGroup[]>(() => ismartAccessProfile.value?.recent_records ?? []);
-const accessAllowedDoorCount = computed(() => accessDoors.value.filter((door) => door.has_permission).length);
-const accessQRCodeDoorCount = computed(() => accessDoors.value.filter((door) => door.is_qrcode_enabled && door.qrcode?.record_id).length);
-const accessStatusText = computed(() => {
-  if (accessLoading.value) return t('building.access.status.loading');
-  if (accessError.value) return t('building.access.status.loadFailed');
-  return ismartAccessProfile.value
-    ? t('building.access.status.connected')
-    : t('building.access.status.notLoaded');
-});
-const accessStatusClass = computed(() => (accessError.value ? 'warn' : 'good'));
 
 // 7.2 取得門禁顯示值
 const accessDoorID = (door: IsmartAccessDoor): string => String(door.door_id ?? '').trim();
@@ -718,6 +670,10 @@ const accessDoorTitle = (door: IsmartAccessDoor): string => {
   return textValue(door.title || (doorID
     ? t('building.access.defaultDoorName', { id: doorID })
     : t('building.access.unnamedDoor')));
+};
+const accessCameraText = (door: IsmartAccessDoor): string => {
+  const title = String(door.camera?.title ?? '').trim();
+  return title || t('building.access.cameraNotUpgraded');
 };
 const accessDoorPasswordVisible = (door: IsmartAccessDoor): boolean => visiblePasswordDoorIDs.value.includes(accessDoorID(door));
 const accessDoorPasswordText = (door: IsmartAccessDoor): string => {
@@ -764,38 +720,9 @@ const accessRecentRows = computed<AccessRecordRow[]>(() =>
 // 7.3 視像監控資料
 const icctvCameras = computed<ICCTVCameraSummary[]>(() => icctvProfile.value?.cameras ?? []);
 const icctvOrangePis = computed(() => icctvProfile.value?.orangepis ?? []);
-const icctvCameraGroups = computed(() => {
-  const groupedDeviceIDs = new Set<number>();
-  const groups = icctvOrangePis.value.map((orangepi) => {
-    groupedDeviceIDs.add(orangepi.orangepi_id);
-    return {
-      id: orangepi.orangepi_id,
-      name: String(orangepi.orangepi_name ?? '').trim(),
-      isActive: orangepi.is_active,
-      cameras: icctvCameras.value.filter((camera) => camera.orangepi_id === orangepi.orangepi_id),
-    };
-  });
-  const ungroupedCameras = icctvCameras.value.filter((camera) => !groupedDeviceIDs.has(camera.orangepi_id));
-  if (ungroupedCameras.length > 0) {
-    groups.push({
-      id: ungroupedCameras[0].orangepi_id,
-      name: String(ungroupedCameras[0].orangepi_name ?? '').trim(),
-      isActive: ungroupedCameras.some((camera) => camera.is_active),
-      cameras: ungroupedCameras,
-    });
-  }
-  return groups;
-});
-const icctvBuildingTitle = computed(() => {
-  const parts = [
-    memberBoundCommunityName.value,
-    String(sessionStore.me?.residence_floor ?? '').trim(),
-    String(sessionStore.me?.residence_unit ?? '').trim(),
-  ].filter(Boolean);
-  if (parts.length > 0) return parts.join(' / ');
-
-  return buildingName.value;
-});
+const icctvBuildingTitle = computed(() => noticeBuildingLabel(
+  icctvProfile.value?.selected_building_id || selectedBuildingID.value,
+) || buildingName.value);
 const icctvEnabled = computed(() => icctvOrangePis.value.some((item) => item.is_active));
 const icctvStatusText = computed(() => {
   if (icctvLoading.value) return t('building.icctv.statusText.loading');
@@ -810,12 +737,6 @@ const icctvCameraName = (camera: ICCTVCameraSummary, index: number): string => {
 
   const match = String(camera.channel ?? '').match(/^channel(\d+)$/i);
   return t('building.icctv.cameraName', { number: match?.[1] ?? formatLocaleNumber(index + 1) });
-};
-const icctvOrangePiLabel = (orangepi: { id: number; name: string }): string => {
-  const name = orangepi.name.trim();
-  return name
-    ? `${t('building.icctv.device')} #${orangepi.id} · ${name}`
-    : `${t('building.icctv.device')} #${orangepi.id}`;
 };
 const icctvCameraStatusText = (camera: ICCTVCameraSummary): string => (camera.is_active && camera.url
   ? t('building.icctv.available')
@@ -924,6 +845,27 @@ const ownerBoundUnitLabel = computed(() => {
     context.unit,
   ].filter(Boolean).join(' / ');
 });
+
+// 8.2 將 POS 單位編碼轉成正式樓層及單位名稱
+const ownerUnitDisplay = (value: unknown, floorValue: unknown = '', unitValue: unknown = ''): string => {
+  const floor = String(floorValue ?? '').trim();
+  const unit = String(unitValue ?? '').trim();
+  if (floor || unit) return [floor, unit].filter(Boolean).join('/');
+
+  const unitID = ownerDigitsOnly(value);
+  const option = contextPropertyOptions.value.find((item) => ownerDigitsOnly(item.value) === unitID);
+  if (option) {
+    const optionFloor = option.floor.startsWith('__') ? '' : option.floor;
+    return [optionFloor, option.unit].filter(Boolean).join('/') || '-';
+  }
+
+  const context = ownerUnitContext.value;
+  if (unitID && ownerDigitsOnly(context.unitID) === unitID) {
+    return [context.floor, context.unit].filter(Boolean).join('/') || '-';
+  }
+  return '-';
+};
+
 const ownerAccountLoading = computed(() => ownerUnpaidLoading.value || ownerRecordsLoading.value);
 const ownerUnpaidTotal = computed(() =>
   ownerUnpaidInvoices.value.reduce((sum, item) => sum + ownerAmountValue(item.net_amount), 0),
@@ -1004,15 +946,15 @@ const ownerPaymentRecordRows = computed<OwnerPaymentRecordRow[]>(() =>
       const detailRow = detail ?? {};
       const floor = readOwnerPaymentText(detailRow, ['floor']);
       const unit = readOwnerPaymentText(detailRow, ['unit', 'unit_name']);
+      const unitID = readOwnerPaymentText(detailRow, ['flat_code', 'unit_id', 'unitID']);
       const paymentID = ownerTextValue(record.payment_id);
       const receiptID = ownerTextValue(record.receipt_id);
       return {
         key: `${paymentID}-${receiptID}-${recordIndex}-${detailIndex}`,
         receiptID,
         paymentID,
-        inputTime: formatLocaleDateValue(record.input_time),
         tranTime: formatLocaleDateValue(record.tran_time),
-        unit: [floor, unit].filter(Boolean).join(' / ') || ownerBoundUnitLabel.value,
+        unit: ownerUnitDisplay(unitID, floor, unit),
         item: ownerTextValue(readOwnerPaymentText(detailRow, ['item_id', 'item_name', 'name'])),
         term: ownerTextValue(readOwnerPaymentText(detailRow, ['term', 'trs_to', 'period'])),
         amount: ownerAmountValue(detail?.trs_val ?? record.trs_val),
@@ -1024,20 +966,28 @@ const ownerPaymentRecordRows = computed<OwnerPaymentRecordRow[]>(() =>
     });
   }),
 );
-const ownerPaymentRecordTotal = computed(() =>
-  ownerPaymentRecordRows.value.reduce((sum, row) => sum + row.amount, 0),
-);
+const ownerRecordItemOptions = computed(() => Array.from(new Set(
+  ownerPaymentRecordRows.value
+    .map((row) => row.item)
+    .filter((item) => item && item !== '-'),
+)));
+const filteredOwnerPaymentRecordRows = computed(() => (
+  ownerRecordItemType.value
+    ? ownerPaymentRecordRows.value.filter((row) => row.item === ownerRecordItemType.value)
+    : ownerPaymentRecordRows.value
+));
 const ownerRecordsEmptyText = computed(() => {
   if (ownerRecordsLoading.value) return t('building.ownerAccount.recordsLoading');
   if (ownerRecordsError.value) return translateMessage(ownerRecordsError.value);
   if (!ownerHasBoundUnit.value) return t('building.ownerAccount.saveBoundUnitFirst');
+  if (ownerRecordItemType.value && ownerPaymentRecordRows.value.length > 0) {
+    return t('building.ownerAccount.recordsFilterEmpty');
+  }
   if (ownerRecordsDateSearched.value) return t('building.ownerAccount.recordsDateEmpty');
   return t('building.ownerAccount.recordsEmpty');
 });
 
 // 9. 申請表格 mock 資料
-const selectedFormOrg = computed(() => organizationName.value);
-const selectedFormBuilding = computed(() => buildingName.value);
 const forms = computed(() => buildingForms.value);
 
 // 10. 意見提供與維修服務個案資料
@@ -1322,8 +1272,8 @@ const loadOwnerPaymentRecords = async () => {
       return;
     }
 
-    const result = await fetchPOSIntegrationTransactionsByUnit(ownerBoundUnitIDs.value);
-    ownerPaymentRecords.value = result.payment_objs ?? [];
+    const result = await fetchPOSIntegrationTransactionsByUnit([ownerUnitContext.value.unitID]);
+    ownerPaymentRecords.value = filterOwnerTransactionsForBoundUnit(result.payment_objs ?? []);
     ownerRecordsLoaded.value = true;
   } catch (error) {
     console.error(error);
@@ -1363,9 +1313,9 @@ const searchOwnerPaymentRecordsByDate = async () => {
       building_id: ownerUnitContext.value.buildingID,
       from_date: ownerRecordFromDate.value,
       to_date: ownerRecordToDate.value,
-      date_type: ownerRecordDateType.value,
+      date_type: 'tran_date',
       pay_method: 'all',
-    }, ownerBoundUnitIDs.value);
+    }, [ownerUnitContext.value.unitID]);
     ownerPaymentRecords.value = filterOwnerTransactionsForBoundUnit(result.payment_objs ?? []);
     ownerRecordsDateSearched.value = true;
     ownerRecordsLoaded.value = true;
@@ -1415,6 +1365,7 @@ const refreshOwnerAccount = () => {
 const resetOwnerPaymentRecordSearch = () => {
   ownerRecordFromDate.value = currentMonthStart();
   ownerRecordToDate.value = currentDateValue();
+  ownerRecordItemType.value = '';
   void loadOwnerPaymentRecords();
 };
 
@@ -1509,7 +1460,7 @@ const toggleAccessPassword = (door: IsmartAccessDoor) => {
 const openAccessDoor = async (door: IsmartAccessDoor) => {
   const doorID = accessDoorID(door);
   const doorNumber = accessDoorNumber(door);
-  if (!door.has_permission || doorNumber <= 0) return;
+  if (doorNumber <= 0) return;
   if (!window.confirm(t('building.access.confirmOpen', { door: accessDoorTitle(door) }))) return;
 
   openingDoorID.value = doorID;
@@ -1710,6 +1661,7 @@ const resetBuildingScopedState = (): void => {
   ownerRecordsLoaded.value = false;
   ownerUnpaidError.value = '';
   ownerRecordsError.value = '';
+  ownerRecordItemType.value = '';
   ismartAccessProfile.value = null;
   accessError.value = '';
   accessQRPanel.value = null;
@@ -1898,7 +1850,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.notices.kicker') }}</div>
               <h2 class="work-title">{{ t('building.notices.title') }}</h2>
             </div>
           </section>
@@ -1972,7 +1923,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.profile.kicker') }}</div>
               <h2 class="work-title">{{ t('building.profile.title') }}</h2>
               <p class="work-desc">{{ t('building.profile.description') }}</p>
             </div>
@@ -1984,41 +1934,6 @@ onMounted(() => {
             >
               {{ t('building.common.refresh') }}
             </button>
-          </section>
-          <section class="building-summary-grid">
-            <div class="work-card">
-              <div class="work-card-title">{{ t('building.profile.organization') }}</div>
-              <div class="work-card-sub">{{ organizationName }}</div>
-            </div>
-            <div class="work-card">
-              <div class="work-card-title">{{ t('building.profile.currentBuilding') }}</div>
-              <div class="work-stat-label">{{ buildingName }}</div>
-              <div class="work-stat">{{ formatLocaleNumber(buildingFileCount) }}</div>
-              <div class="work-stat-label">{{ t('building.profile.basicDocumentCount') }}</div>
-            </div>
-            <div class="work-card">
-              <div class="work-card-title">{{ t('building.profile.dataStatus') }}</div>
-              <div class="work-row">
-                <div>
-                  <strong>{{ buildingStatusText }}</strong>
-                  <span>{{ buildingStatusDetail }}</span>
-                </div>
-                <span
-                  class="work-chip"
-                  :class="buildingStatusClass"
-                >
-                  {{ buildingInfoLoading
-                    ? t('building.common.loading')
-                    : buildingInfoError
-                      ? t('building.common.abnormal')
-                      : t('building.common.normal') }}
-                </span>
-              </div>
-            </div>
-            <div class="work-card">
-              <div class="work-card-title">{{ t('building.profile.building') }}</div>
-              <div class="work-card-sub">{{ buildingName }}</div>
-            </div>
           </section>
           <section class="work-card">
             <div class="work-card-title">{{ t('building.profile.basicFields') }}</div>
@@ -2237,7 +2152,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.finance.kicker') }}</div>
               <h2 class="work-title">{{ t('building.finance.title') }}</h2>
               <p class="work-desc">{{ t('building.finance.description') }}</p>
             </div>
@@ -2278,33 +2192,12 @@ onMounted(() => {
               </button>
             </div>
             <div class="acct-body">
-              <!-- 管理處總覽 -->
+              <!-- 管理費總覽 -->
               <div
                 v-show="financeSubTab === 'management-overview'"
                 class="acct-subpanel"
                 :class="{ on: financeSubTab === 'management-overview' }"
               >
-                <div class="acct-note">{{ t('building.finance.syncNote') }}</div>
-                <div
-                  v-if="buildingInfoError"
-                  class="acct-banner warn"
-                >
-                  {{ translateMessage(buildingInfoError) }}
-                </div>
-                <div class="acct-toolbar">
-                  <div class="work-card-title acct-toolbar-title">{{ t('building.finance.tabs.overview') }}</div>
-                  <div class="acct-total">{{ buildingName }}</div>
-                </div>
-                <div class="building-field-grid">
-                  <div
-                    v-for="f in managementOverviewFields"
-                    :key="f.label"
-                    class="building-field"
-                  >
-                    <span>{{ f.label }}</span>
-                    <strong>{{ f.value }}</strong>
-                  </div>
-                </div>
                 <div
                   v-if="financeReceivableError"
                   class="acct-banner warn"
@@ -2434,7 +2327,7 @@ onMounted(() => {
                   <thead>
                     <tr>
                       <th>{{ t('building.common.title') }}</th>
-                      <th>{{ t('building.common.date') }}</th>
+                      <th>{{ t('building.finance.uploadDate') }}</th>
                       <th>{{ t('building.common.month') }}</th>
                       <th>{{ t('building.common.download') }}</th>
                     </tr>
@@ -2499,7 +2392,7 @@ onMounted(() => {
                   <thead>
                     <tr>
                       <th>{{ t('building.common.title') }}</th>
-                      <th>{{ t('building.common.date') }}</th>
+                      <th>{{ t('building.finance.uploadDate') }}</th>
                       <th>{{ t('building.common.month') }}</th>
                       <th>{{ t('building.common.download') }}</th>
                     </tr>
@@ -2548,7 +2441,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.ownerAccount.kicker') }}</div>
               <h2 class="work-title">{{ t('building.ownerAccount.title') }}</h2>
               <p class="work-desc">{{ t('building.ownerAccount.description') }}</p>
             </div>
@@ -2620,7 +2512,7 @@ onMounted(() => {
                         :key="ownerUnpaidInvoiceKey(invoice, invoiceIndex)"
                       >
                         <td>{{ ownerTextValue(invoice.invoice_no) }}</td>
-                        <td>{{ ownerTextValue(invoice.flat_code) }}</td>
+                        <td>{{ ownerUnitDisplay(invoice.flat_code) }}</td>
                         <td>{{ ownerTextValue(invoice.item_id) }}</td>
                         <td>{{ ownerTextValue(invoice.trs_to) }}</td>
                         <td>{{ formatLocaleDateValue(invoice.bill_dt) }}</td>
@@ -2666,11 +2558,23 @@ onMounted(() => {
                       type="date"
                     >
                   </label>
-                  <label class="acct-filter-field">
-                    <span>{{ t('building.ownerAccount.dateType') }}</span>
-                    <select v-model="ownerRecordDateType">
-                      <option value="input_date">{{ t('building.ownerAccount.inputDate') }}</option>
-                      <option value="tran_date">{{ t('building.ownerAccount.transactionDate') }}</option>
+                  <label
+                    class="acct-filter-field"
+                    for="owner-record-item-filter"
+                  >
+                    <span>{{ t('building.ownerAccount.itemType') }}</span>
+                    <select
+                      id="owner-record-item-filter"
+                      v-model="ownerRecordItemType"
+                    >
+                      <option value="">{{ t('building.ownerAccount.allItems') }}</option>
+                      <option
+                        v-for="item in ownerRecordItemOptions"
+                        :key="item"
+                        :value="item"
+                      >
+                        {{ item }}
+                      </option>
                     </select>
                   </label>
                   <button
@@ -2697,9 +2601,6 @@ onMounted(() => {
                 </div>
                 <div class="acct-toolbar">
                   <div class="work-card-title acct-toolbar-title">{{ t('building.ownerAccount.recordsTab') }}</div>
-                  <div class="acct-total">
-                    {{ t('building.common.total', { amount: formatOwnerHKD(ownerPaymentRecordTotal) }) }}
-                  </div>
                 </div>
                 <div class="acct-table-wrap">
                   <table class="acct-table owner-record-table">
@@ -2707,12 +2608,11 @@ onMounted(() => {
                       <tr>
                         <th>{{ t('building.ownerAccount.receiptNumber') }}</th>
                         <th>{{ t('building.ownerAccount.paymentNumber') }}</th>
-                        <th>{{ t('building.ownerAccount.inputTime') }}</th>
                         <th>{{ t('building.ownerAccount.transactionTime') }}</th>
                         <th>{{ t('building.common.unit') }}</th>
                         <th>{{ t('building.common.item') }}</th>
                         <th>{{ t('building.common.term') }}</th>
-                        <th>{{ t('building.common.amount') }}</th>
+                        <th>{{ t('building.ownerAccount.paidAmount') }}</th>
                         <th>{{ t('building.ownerAccount.paymentMethod') }}</th>
                         <th>{{ t('building.common.status') }}</th>
                         <th>{{ t('building.common.remark') }}</th>
@@ -2720,12 +2620,11 @@ onMounted(() => {
                     </thead>
                     <tbody>
                       <tr
-                        v-for="row in ownerPaymentRecordRows"
+                        v-for="row in filteredOwnerPaymentRecordRows"
                         :key="row.key"
                       >
                         <td>{{ row.receiptID }}</td>
                         <td>{{ row.paymentID }}</td>
-                        <td>{{ row.inputTime }}</td>
                         <td>{{ row.tranTime }}</td>
                         <td>{{ row.unit }}</td>
                         <td>{{ row.item }}</td>
@@ -2735,10 +2634,10 @@ onMounted(() => {
                         <td :class="row.statusClass">{{ row.status }}</td>
                         <td>{{ row.remark }}</td>
                       </tr>
-                      <tr v-if="ownerPaymentRecordRows.length === 0">
+                      <tr v-if="filteredOwnerPaymentRecordRows.length === 0">
                         <td
                           class="building-empty-row"
-                          colspan="11"
+                          colspan="10"
                         >
                           {{ ownerRecordsEmptyText }}
                         </td>
@@ -2760,21 +2659,7 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.forms.kicker') }}</div>
               <h2 class="work-title">{{ t('building.forms.title') }}</h2>
-              <p class="work-desc">{{ t('building.forms.description') }}</p>
-            </div>
-          </section>
-          <section class="notice-admin-grid">
-            <div class="notice-admin-card">
-              <h3>{{ t('building.forms.organization') }}</h3>
-              <div class="notice-admin-label">{{ t('building.forms.currentOrganization') }}</div>
-              <div class="notice-select building-readonly-select">{{ selectedFormOrg }}</div>
-            </div>
-            <div class="notice-admin-card">
-              <h3>{{ t('building.forms.building') }}</h3>
-              <div class="notice-admin-label">{{ t('building.forms.currentBuilding') }}</div>
-              <div class="notice-select building-readonly-select">{{ selectedFormBuilding }}</div>
             </div>
           </section>
           <section class="work-card">
@@ -2824,7 +2709,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.feedback.kicker') }}</div>
               <h2 class="work-title">{{ t('building.feedback.title') }}</h2>
               <p class="work-desc">{{ t('building.feedback.description') }}</p>
             </div>
@@ -3009,7 +2893,7 @@ onMounted(() => {
             </button>
           </section>
           <section class="work-card affairs-feedback-form">
-            <div class="work-card-title">{{ t('building.feedback.currentProperty') }}</div>
+            <div class="work-card-title">{{ t('building.feedback.boundBuilding') }}</div>
             <div class="work-card-sub">{{ selectedFeedbackBuildingLabel }}</div>
           </section>
           <section class="work-card affairs-guided-shell">
@@ -3268,7 +3152,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.access.kicker') }}</div>
               <h2 class="work-title">{{ t('building.access.title') }}</h2>
               <p class="work-desc">{{ t('building.access.description') }}</p>
             </div>
@@ -3280,34 +3163,6 @@ onMounted(() => {
             >
               {{ accessLoading ? t('building.common.loading') : t('building.common.refresh') }}
             </button>
-          </section>
-
-          <section class="access-summary-grid">
-            <div class="access-summary-card">
-              <div class="work-card-title">{{ t('building.access.currentBuilding') }}</div>
-              <div class="access-stat-value">{{ accessBuildingName }}</div>
-              <div class="work-stat-label">{{ t('building.access.boundDataHint') }}</div>
-            </div>
-            <div class="access-summary-card">
-              <div class="work-card-title">{{ t('building.access.doorCount') }}</div>
-              <div class="work-stat">{{ formatLocaleNumber(accessDoors.length) }}</div>
-              <div class="work-stat-label">{{ t('building.access.visibleDoors') }}</div>
-            </div>
-            <div class="access-summary-card">
-              <div class="work-card-title">{{ t('building.access.allowedDoors') }}</div>
-              <div class="work-stat">{{ formatLocaleNumber(accessAllowedDoorCount) }}</div>
-              <div class="work-stat-label">{{ t('building.access.authorizedDoors') }}</div>
-            </div>
-            <div class="access-summary-card">
-              <div class="work-card-title">{{ t('building.access.dataStatus') }}</div>
-              <span
-                class="work-chip"
-                :class="accessStatusClass"
-              >{{ accessStatusText }}</span>
-              <div class="work-stat-label">
-                {{ t('building.access.qrDoorCount', { count: formatLocaleNumber(accessQRCodeDoorCount) }) }}
-              </div>
-            </div>
           </section>
 
           <div
@@ -3348,10 +3203,7 @@ onMounted(() => {
                 <thead>
                   <tr>
                     <th>{{ t('building.access.door') }}</th>
-                    <th>{{ t('building.access.doorNumber') }}</th>
-                    <th>{{ t('building.access.building') }}</th>
                     <th>{{ t('building.access.camera') }}</th>
-                    <th>{{ t('building.access.permission') }}</th>
                     <th>{{ t('building.access.password') }}</th>
                     <th>{{ t('building.access.validPeriod') }}</th>
                     <th>{{ t('building.common.action') }}</th>
@@ -3365,16 +3217,7 @@ onMounted(() => {
                     <td class="access-door-title-cell">
                       <strong>{{ accessDoorTitle(door) }}</strong>
                       <span>{{ textValue(door.serial) }}</span>
-                    </td>
-                    <td>{{ textValue(door.door_no) }}</td>
-                    <td>{{ textValue(door.building_id) }}</td>
-                    <td>{{ textValue(door.camera?.title) }}</td>
-                    <td>
                       <div class="access-table-tags">
-                        <span
-                          class="work-chip"
-                          :class="door.has_permission ? 'good' : 'warn'"
-                        >{{ door.has_permission ? t('building.access.canOpen') : t('building.access.unauthorized') }}</span>
                         <span
                           v-if="door.is_public"
                           class="work-chip brand"
@@ -3385,6 +3228,7 @@ onMounted(() => {
                         >{{ t('building.access.qrCode') }}</span>
                       </div>
                     </td>
+                    <td>{{ accessCameraText(door) }}</td>
                     <td>{{ accessDoorPasswordText(door) }}</td>
                     <td class="access-door-period-cell">
                       <div>
@@ -3401,7 +3245,7 @@ onMounted(() => {
                         <button
                           type="button"
                           class="work-mini-btn primary"
-                          :disabled="!door.has_permission || openingDoorID === accessDoorID(door)"
+                          :disabled="openingDoorID === accessDoorID(door)"
                           @click="openAccessDoor(door)"
                         >
                           {{ openingDoorID === accessDoorID(door)
@@ -3516,7 +3360,6 @@ onMounted(() => {
         >
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('building.icctv.kicker') }}</div>
               <h2 class="work-title">{{ t('building.icctv.title') }}</h2>
               <p class="work-desc">{{ t('building.icctv.description') }}</p>
             </div>
@@ -3554,29 +3397,9 @@ onMounted(() => {
                 </thead>
                 <tbody>
                   <template
-                    v-for="orangepi in icctvCameraGroups"
-                    :key="orangepi.id"
+                    v-for="(camera, index) in icctvCameras"
+                    :key="camera.id"
                   >
-                    <tr class="icctv-device-row">
-                      <td colspan="3">
-                        <div class="icctv-device-head">
-                          <div>
-                            <strong>{{ icctvOrangePiLabel(orangepi) }}</strong>
-                            <span>{{ t('building.icctv.deviceCameraCount', { count: formatLocaleNumber(orangepi.cameras.length) }) }}</span>
-                          </div>
-                          <span
-                            class="icctv-table-status"
-                            :class="orangepi.isActive ? 'on' : 'off'"
-                          >
-                            {{ orangepi.isActive ? t('building.icctv.available') : t('building.icctv.unavailable') }}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                    <template
-                      v-for="(camera, index) in orangepi.cameras"
-                      :key="camera.id"
-                    >
                     <tr :class="{ expanded: isICCTVCameraExpanded(camera.id) }">
                       <td>
                         <div class="icctv-camera-title">{{ icctvCameraName(camera, index) }}</div>
@@ -3628,9 +3451,8 @@ onMounted(() => {
                         </div>
                       </td>
                     </tr>
-                    </template>
                   </template>
-                  <tr v-if="icctvCameraGroups.length === 0">
+                  <tr v-if="icctvCameras.length === 0">
                     <td
                       class="building-empty-row"
                       colspan="3"
@@ -3844,14 +3666,6 @@ onMounted(() => {
   padding: 0 0 10px;
 }
 
-.work-kicker {
-  margin-bottom: 4px;
-  color: var(--ink-3);
-  font-size: 9px;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-}
-
 .work-title {
   margin: 0;
   color: var(--ink);
@@ -4057,61 +3871,6 @@ onMounted(() => {
   opacity: 1;
 }
 
-/* 8. Notice admin */
-.notice-admin-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.notice-admin-card {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 14px;
-}
-
-.notice-admin-card h3 {
-  margin: 0 0 10px;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.notice-admin-label {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.notice-select {
-  width: 100%;
-  height: 36px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 0 10px;
-}
-
-.notice-select:disabled {
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
-
-.building-readonly-select {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .notice-current {
   display: flex;
   align-items: center;
@@ -4164,12 +3923,6 @@ onMounted(() => {
 }
 
 /* 9. Building profile */
-.building-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
 .building-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4315,28 +4068,6 @@ onMounted(() => {
 }
 
 /* 10. 智能門禁 */
-.access-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.access-summary-card {
-  min-width: 0;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 14px;
-}
-
-.access-stat-value {
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
 .access-banner {
   border: 1px solid var(--success);
   border-radius: 8px;
@@ -4380,37 +4111,28 @@ onMounted(() => {
 }
 
 .access-door-table {
-  min-width: 1040px;
+  min-width: 820px;
   table-layout: fixed;
 }
 
 .access-door-table th:nth-child(1) {
-  width: 180px;
+  width: 190px;
 }
 
 .access-door-table th:nth-child(2) {
-  width: 74px;
-}
-
-.access-door-table th:nth-child(3),
-.access-door-table th:nth-child(4) {
   width: 110px;
 }
 
+.access-door-table th:nth-child(3) {
+  width: 110px;
+}
+
+.access-door-table th:nth-child(4) {
+  width: 220px;
+}
+
 .access-door-table th:nth-child(5) {
-  width: 160px;
-}
-
-.access-door-table th:nth-child(6) {
-  width: 96px;
-}
-
-.access-door-table th:nth-child(7) {
-  width: 210px;
-}
-
-.access-door-table th:nth-child(8) {
-  width: 160px;
+  width: 170px;
 }
 
 .access-door-title-cell strong {
@@ -4422,7 +4144,7 @@ onMounted(() => {
   overflow-wrap: anywhere;
 }
 
-.access-door-title-cell span {
+.access-door-title-cell > span {
   display: block;
   margin-top: 3px;
   color: var(--ink-3);
@@ -4436,6 +4158,10 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.access-door-title-cell .access-table-tags {
+  margin-top: 8px;
 }
 
 .access-door-period-cell {
@@ -4717,7 +4443,7 @@ onMounted(() => {
 }
 
 .owner-record-table {
-  min-width: 1280px;
+  min-width: 1120px;
 }
 
 .finance-management-table {
@@ -5159,41 +4885,6 @@ onMounted(() => {
   background: var(--brand-light);
 }
 
-.icctv-device-row td {
-  background: var(--sur-2);
-  padding: 0;
-}
-
-.icctv-device-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-}
-
-.icctv-device-head > div {
-  min-width: 0;
-}
-
-.icctv-device-head strong,
-.icctv-device-head span {
-  display: block;
-}
-
-.icctv-device-head strong {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.icctv-device-head > div > span {
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .icctv-camera-title {
   color: var(--ink);
   font-size: 13px;
@@ -5273,9 +4964,7 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .building-summary-grid,
   .building-doc-grid,
-  .access-summary-grid,
   .finance-summary-grid,
   .building-field-grid {
     grid-template-columns: 1fr;
@@ -5324,21 +5013,58 @@ onMounted(() => {
     align-self: flex-start;
   }
 
-  .access-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
   .icctv-profile-head {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .icctv-inline-viewer iframe {
-    height: 360px;
+  .icctv-table-wrap {
+    overflow-x: visible;
   }
 
-  .notice-admin-grid {
-    grid-template-columns: 1fr;
+  .icctv-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .icctv-table th:nth-child(1),
+  .icctv-table td:nth-child(1) {
+    width: 42%;
+  }
+
+  .icctv-table th:nth-child(2),
+  .icctv-table td:nth-child(2) {
+    display: none;
+  }
+
+  .icctv-table th:nth-child(3),
+  .icctv-table td:nth-child(3) {
+    width: 58%;
+  }
+
+  .icctv-table th,
+  .icctv-table td {
+    padding: 10px 8px;
+  }
+
+  .icctv-row-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .icctv-row-actions .work-mini-btn {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .icctv-expanded-row td,
+  .icctv-table .building-empty-row {
+    display: table-cell;
+    width: auto;
+  }
+
+  .icctv-inline-viewer iframe {
+    height: 360px;
   }
 
   .acct-search {

@@ -176,8 +176,8 @@ export const resolvePropertyLocationFacts = (
 
   const facts = [
     sale.block_name?.trim(),
-    sale.floor_level?.trim(),
-    sale.show_unit ? sale.unit_name?.trim() : '',
+    formatPropertyFloor(sale.floor_raw ?? '', sale.floor_zone ?? '', sale.floor_level ?? '', locale),
+    sale.show_unit ? formatPropertyUnit(sale.unit_name ?? '', locale) : '',
   ].filter((value): value is string => Boolean(value));
 
   if (facts.length > 0) {
@@ -188,6 +188,53 @@ export const resolvePropertyLocationFacts = (
     ? sale.address_text_en?.trim() || sale.public_location_text?.trim()
     : sale.public_location_text?.trim();
   return fallback ? [fallback] : [];
+};
+
+// 12.1 格式化公開樓盤單位名稱
+export const formatPropertyUnit = (unitName: string, locale: AppLocale = 'zh-HK'): string => {
+  const value = unitName.trim();
+  if (!value) {
+    return '';
+  }
+
+  if (locale === 'en') {
+    return /^(unit|flat|room)\b/i.test(value) ? value : `Unit ${value}`;
+  }
+
+  return /(單位|单位|室)$/.test(value) ? value : `${value}單位`;
+};
+
+// 12.2 格式化實際樓層與公開樓層
+export const formatPropertyFloor = (
+  floorRaw: string,
+  floorZone: string,
+  floorLevel: string,
+  locale: AppLocale = 'zh-HK',
+): string => {
+  const rawValue = floorRaw.trim();
+  const actualFloor = /^(?:f|\/f)$/i.test(rawValue)
+    ? ''
+    : /^\d+$/.test(rawValue) ? `${rawValue}/F` : rawValue;
+  const zone = floorZone.trim();
+  const labels = locale === 'en'
+    ? { low: 'Low floor', middle: 'Middle floor', high: 'High floor' }
+    : { low: '低層', middle: '中層', high: '高層' };
+  const value = floorLevel.trim();
+  const publicFloor = zone === 'low' || zone === 'middle' || zone === 'high'
+    ? labels[zone]
+    : locale !== 'en'
+      ? value
+      : value === '低層'
+        ? labels.low
+        : value === '中層'
+          ? labels.middle
+          : value === '高層'
+            ? labels.high
+            : value;
+
+  return [actualFloor, publicFloor]
+    .filter((item, index, items) => Boolean(item) && items.indexOf(item) === index)
+    .join(' / ');
 };
 
 // 13. 取得物業房間摘要
@@ -225,18 +272,12 @@ export const resolvePropertyRooms = (
     : '-';
 };
 
-// 14. 取得樓盤卡片中間資料
+// 14. 取得樓盤卡片位置資料
 export const resolvePropertyListingFacts = (
   listing: PropertyListingSummaryResponse,
   locale: AppLocale = 'zh-HK',
 ): string[] => {
-  const sale = listing.property_sale;
-  const direction = sale?.direction?.trim();
-  return [
-    ...resolvePropertyLocationFacts(listing, locale),
-    resolvePropertyRooms(listing, locale),
-    direction && direction !== 'N/A' ? direction : '',
-  ].filter(Boolean);
+  return resolvePropertyLocationFacts(listing, locale);
 };
 
 // 15. 取得地區標籤
@@ -315,6 +356,32 @@ export const resolvePropertyCommunityName = (
   }
 
   return humanizeCodeLabel(listing.district_code);
+};
+
+// 17.1 取得樓盤卡片屋苑名稱，繁中介面在資料匹配時並列 English 名稱
+export const resolvePropertyCardCommunityName = (
+  listing: PropertyListingSummaryResponse,
+  locale: AppLocale = 'zh-HK',
+): string => {
+  const primaryName = resolvePropertyCommunityName(listing, locale).trim();
+  if (!primaryName || locale === 'en') {
+    return primaryName;
+  }
+
+  if (listing.serviced_apartment) {
+    const englishName = listing.serviced_apartment.project_name_en?.trim() ?? '';
+    return englishName && !primaryName.toLocaleLowerCase().includes(englishName.toLocaleLowerCase())
+      ? `${primaryName} ${englishName}`
+      : primaryName;
+  }
+
+  const estateName = listing.property_sale?.estate_name?.trim() ?? '';
+  const communityNameZh = listing.community?.name_zh.trim() ?? '';
+  const englishName = listing.community?.name_en.trim() ?? '';
+  const matchesCommunity = !estateName || (communityNameZh !== '' && estateName === communityNameZh);
+  return matchesCommunity && englishName && !primaryName.toLocaleLowerCase().includes(englishName.toLocaleLowerCase())
+    ? `${primaryName} ${englishName}`
+    : primaryName;
 };
 
 // 18. 取得狀態標籤

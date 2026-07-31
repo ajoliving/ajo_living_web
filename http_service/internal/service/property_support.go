@@ -1368,6 +1368,7 @@ func (s *PropertyService) toPropertySummary(channel PropertyChannel, item proper
 			LivingRoomCount:      item.SaleLivingRoomCount,
 			BathroomCount:        item.SaleBathroomCount,
 			FloorLevel:           item.SaleFloorLevel,
+			FloorRaw:             item.SaleFloorRaw,
 			FloorZone:            item.SaleFloorZone,
 			FloorDisplayRange:    item.SaleFloorDisplayRange,
 			TotalFloors:          item.SaleTotalFloors,

@@ -325,6 +325,14 @@ export const propertyBedroomFilterOptions: PropertyFilterOption[] = [
   { value: '4', label: '4房+' },
 ];
 
+export const propertyRenovationFilterOptions: PropertyFilterOption[] = [
+  { value: '', label: '全部' },
+  { value: 'brand_new', label: '全新' },
+  { value: 'renovated', label: '有裝修' },
+  { value: 'simple', label: '簡約裝修' },
+  { value: 'special', label: '特色裝修' },
+];
+
 export const propertyTagFilterOptions: PropertyFilterOption[] = [
   { value: '', label: '全部' },
   { value: 'brand_new', label: '全新' },

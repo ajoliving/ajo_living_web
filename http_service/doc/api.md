@@ -50,7 +50,7 @@ go run ./http_service/cmd/server
 | 5 | /api/v1/auth/otp/verify | POST | 驗證 OTP 並登入 | 無 |
 | 34 | /api/v1/auth/email/otp/request | POST | 申請 Email 登入驗證碼 | 無 |
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
-| 48.1 | /api/v1/auth/registration/availability | POST | 檢查註冊電郵及手提電話是否可用 | 無 |
+| 48.1 | /api/v1/auth/registration/availability | POST | 檢查 AJO 與 iSmart 的註冊電郵及手提電話是否可用 | 無 |
 | 49 | /api/v1/auth/email/register | POST | 建立電郵與手機密碼帳戶 | 無 |
 | 49.1 | /api/v1/auth/login | POST | 自動識別手提電話、電郵、本地用戶名稱或 iSmart username 並登入 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
@@ -576,7 +576,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 ---
 
 ### 48.1 /api/v1/auth/registration/availability [POST]
-- **簡介**: 註冊提交前檢查本地 AJO 帳戶的電郵及手提電話是否已被使用。個人代理未填電郵時可省略 `email`，回應的 `email_available` 固定為 `true`。
+- **簡介**: 註冊提交前同時檢查本地 AJO 與 iSmart 帳戶的電郵及手提電話是否已被使用。任一系統已使用即回應不可用；個人代理未填電郵時可省略 `email`。
 - **請求參數**
 ```json
 {
@@ -596,7 +596,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
   }
 }
 ```
-- **說明**: 此為註冊前提示；`/api/v1/auth/email/register` 仍會在寫入時再次驗證，避免並發註冊造成重複帳戶。
+- **說明**: 此為註冊前提示；`/api/v1/auth/email/register` 仍會在寫入時再次驗證，避免並發註冊或 iSmart 寫入造成重複帳戶。
 
 ---
 
@@ -3549,11 +3549,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 - **歷史草稿扣費更正**: 既有錢包流水不可修改或刪除。僅限仍為草稿的指定放售樓盤，可使用 `go run ./cmd/reconcile-property-draft-charge -listing-id <listing_id>` 預覽；確認後加上 `-apply` 以新增一筆 `property_sale · draft_charge_correction` 退款流水。命令使用穩定幂等鍵，重複執行不重複退款；草稿抵扣會以原草稿扣款減去更正退款計算。
 - **欄位錯誤規則**: 樓盤校驗失敗時，回應使用既有 `errors` 陣列返回穩定欄位名與可讀原因，例如 `{"field":"images","reason":"發布前至少需要一張相片"}`。前端應以 `field` 定位相應輸入項，訪客不會取得任何聯絡原文。
 - **發布者身份規則**: 會員建立、更新、發布或重新發布樓盤時，後端按 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生身份並忽略請求中的 `publisher_identity_type`；發布及重新發布會重新寫入當時有效的代理公開快照。
-- **樓層規則**: `floor_raw` 保存會員輸入的實際樓層，`floor_zone` 保存對外顯示的 `low`、`middle` 或 `high`；公開回應不洩露 `floor_raw`。
+- **樓層規則**: `floor_raw` 保存會員輸入的實際樓層，`floor_zone` 保存 `low`、`middle` 或 `high` 公開樓層；公開列表及詳情同時返回兩個欄位供卡片顯示。
 - **發布規則**: 正式發布時必須提交完整欄位，包括 `title_en`、`description_en`、`address_text_en`，其長度分別不超過 100、2000、既有地址欄位限制；`title` 不超過 40，`description` 不超過 1000。`estate_name` 適用於住宅、車位、工商與店鋪，土地 `property_type=land` 可留空，但仍需 `property_no`、`address_text`、放售或放租價格、建築面積、土地分類標籤、有效聯絡資料及至少一張已完成登記的圖片。建立草稿、圖片登記與 `publish` 為連續但獨立的請求；直接儲存並發布收取完整 1,000 AJO Points，已支付草稿預付款則只收取未付差額。會員自己的草稿列表與詳情會返回 `draft_points_paid`、`publish_points_total`、`publish_points_due`；即使未付差額為 `0`，`publish_points_due` 仍會明確返回 `0`，供確認框顯示實際應扣積分。
 - **價格顯示規則**: `price_reference_only=true` 時前端會在顯示價格後加 `起`；`price_negotiable=true` 時前端不顯示實際金額，只顯示 `面議`。放售使用 `asking_price_hkd`，放租使用 `monthly_rent_hkd`，服務式住宅使用最低周租或月租。
 - **聯絡資料規則**: 業主可在 `contact.contact_attributes` 以 `phone_whatsapp_enabled=yes` 與 `phone_2_whatsapp_enabled=yes` 分別標記電話1及電話2可使用 WhatsApp，並以 `phone_country_code` 與 `phone_2_country_code` 分別保存兩個電話區號。聯絡方式解鎖成功後，`contact_payload.phone_whatsapp_url` 與 `contact_payload.phone_2_whatsapp_url` 分別返回兩個號碼的 WhatsApp 入口，`whatsapp_url` 保留為舊版單一入口兼容欄位；舊資料缺少 `phone_2_country_code` 時，電話2會兼容使用 `phone_country_code`。`wechat` 欄位在前端顯示為 `Wechat ID`。
-- **公開回應規則**: `display_number` 為平台穩定的數字樓盤序號，供公開頁、列表、相似樓盤與會員列表統一顯示；`listing_id` 仍為 UUID 路由及操作識別，不作前台顯示。公開代理盤會返回代理實際填寫的 `property_no`，供前台在物業描述下方顯示「代理盤編號」；與內部 `listing_id` 相同的歷史回退值不會公開。業主本人或可管理該樓盤的代理查看詳情時，仍可取得完整 `property_no`。`floor_raw` 同樣只在業主本人查看自己的樓盤詳情時返回；訪客與非業主只會看到 `floor_zone`、`floor_level`、`floor_display_range`、`public_location_text`。同一授權範圍內，詳情的 `contact_summary.editable_contact` 才會返回已解密的姓名、電話、WhatsApp、Wechat 與 Email，供編輯頁回填；公開訪客及其他會員不會取得此欄位。
+- **公開回應規則**: `display_number` 為平台穩定的數字樓盤序號，供公開頁、列表、相似樓盤與會員列表統一顯示；`listing_id` 仍為 UUID 路由及操作識別，不作前台顯示。公開代理盤會返回代理實際填寫的 `property_no`，供前台在物業描述下方顯示「代理盤編號」；與內部 `listing_id` 相同的歷史回退值不會公開。業主本人或可管理該樓盤的代理查看詳情時，仍可取得完整 `property_no`。樓盤公開列表及詳情均返回 `floor_raw`、`floor_zone`、`floor_level`、`floor_display_range` 與 `public_location_text`；聯絡原文與 `private_note` 仍只限具管理權限的會員取得。同一授權範圍內，詳情的 `contact_summary.editable_contact` 才會返回已解密的姓名、電話、WhatsApp、Wechat 與 Email，供編輯頁回填；公開訪客及其他會員不會取得此欄位。
 - **廣告套餐**: `basic` 權重 0 / 600 / 30 天；`featured` 權重 1 / 800 / 30 天；`premium` 權重 2 / 1500 / 30 天。
 - **會員狀態操作與收費**: `publish` 僅支援草稿。已上架樓盤的 `PATCH` 只保存修改，不扣積分；頁面隨後以 `republish` 完成重新發布。樓盤放售 `republish` 支援已上架、已下架或已過期樓盤，會刷新有效期並按目前廣告套餐扣除原發布積分一半，錢包流水 `action_type=republish`。`renew` 不接收請求參數，只支援未成交的已上架樓盤，會從現有 `expire_at` 延後一個自然月、同步 `ad_expires_at`，並按目前廣告套餐扣除原發布積分一半，錢包流水 `action_type=renew`。`deactivate` 會將樓盤設為已下架。
 - **內容翻譯**: `POST /api/v1/property-sales/translation` 接受繁體中文 `title` 與 `description`，返回 `title_en` 與 `description_en`。接口需要會員登入，並按會員限制為每 10 分鐘 20 次。後端以 `TRANSLATION_PROVIDER=deepl`、`DEEPL_API_BASE_URL`、`DEEPL_AUTH_KEY`、`TRANSLATION_REQUEST_TIMEOUT` 配置 DeepL；未配置時返回統一服務錯誤，不會把供應商錯誤內容寫入樓盤欄位。

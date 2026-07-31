@@ -15,6 +15,7 @@
  * 13. 驗證不同樓盤類型沿用一致的大廈資料順序。
  * 14. 驗證已發布樓盤修改後只保存變更，不重複調用草稿發布接口。
  * 15. 驗證草稿積分不足可直接進入錢包，並顯示後端欄位校驗。
+ * 16. 驗證內容修改後關閉嵌入式編輯器必須先確認。
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -62,6 +63,10 @@ vi.mock('vue-i18n', () => ({
         'property.editor.directionField': '座向',
         'property.editor.draftChargeInsufficient': '錢包餘額不足，儲存草稿需要 {cost}。',
         'property.editor.estateNameField': '大廈名稱',
+        'property.editor.floorZoneField': '公開樓層',
+        'property.editor.floorZoneHigh': '高層',
+        'property.editor.floorZoneLow': '低層',
+        'property.editor.floorZoneMiddle': '中層',
         'property.editor.bedroomField': '房間數量',
         'property.editor.grossAreaField': '建築面積',
         'property.editor.kitchenTypeField': '廚房類型',
@@ -144,6 +149,12 @@ vi.mock('@/stores/session', () => ({
   }),
 }));
 
+vi.mock('@/httpapis/agency-profiles', () => ({
+  fetchMyAgencyProfile: vi.fn().mockResolvedValue({
+    data: { data: { active_profile: null } },
+  }),
+}));
+
 vi.mock('@/httpapis/properties', () => ({
   createPropertySale: vi.fn(),
   createServicedApartment: vi.fn(),
@@ -219,6 +230,7 @@ interface EditorTestState {
   activeEditorStep: string;
   editorSteps: Array<{ key: string; label: string }>;
   form: EditorTestForm;
+  hasUnsavedChanges: boolean;
   images: Array<{
     id: string;
     isCover: boolean;
@@ -388,6 +400,32 @@ describe('PropertyEditorPage', () => {
     );
     expect(mockedPublishPropertySale).toHaveBeenCalledWith('property-1');
     expect(wrapper.emitted('published')).toEqual([['property-1']]);
+  });
+
+  it('asks for confirmation before closing an editor with unsaved changes', async () => {
+    const wrapper = mountEditor();
+    await flushPromises();
+    const state = getEditorState(wrapper);
+    state.activeEditorStep = 'details';
+    await nextTick();
+    const titleInput = wrapper.find('.property-editor-grid input');
+    expect(titleInput.exists()).toBe(true);
+    await titleInput.setValue('尚未儲存的樓盤標題');
+    await nextTick();
+    expect(state.hasUnsavedChanges).toBe(true);
+
+    const closeRequest = (wrapper.vm as unknown as {
+      requestCloseEditor: () => Promise<void>;
+    }).requestCloseEditor();
+    await nextTick();
+
+    const leaveDialog = wrapper.findComponent({ name: 'AppUnsavedChangesDialog' });
+    expect(leaveDialog.props('open')).toBe(true);
+    expect(wrapper.emitted('cancel')).toBeUndefined();
+
+    leaveDialog.vm.$emit('discard');
+    await closeRequest;
+    expect(wrapper.emitted('cancel')).toHaveLength(1);
   });
 
   it('republishes an active property after saving changes for half the advertising points', async () => {
@@ -849,6 +887,7 @@ describe('PropertyEditorPage', () => {
     const buildingAgeIndex = detailsText.indexOf('樓齡');
     const blockIndex = detailsText.indexOf('座數');
     const actualFloorIndex = detailsText.indexOf('實際樓層');
+    const floorZoneIndex = detailsText.indexOf('公開樓層');
     const unitIndex = detailsText.indexOf('單位');
     const directionIndex = detailsText.indexOf('座向');
     const managementFeeIndex = detailsText.indexOf('管理費');
@@ -865,7 +904,8 @@ describe('PropertyEditorPage', () => {
     expect(buildingAgeIndex).toBeGreaterThan(usableAreaIndex);
     expect(blockIndex).toBeGreaterThan(buildingAgeIndex);
     expect(actualFloorIndex).toBeGreaterThan(blockIndex);
-    expect(unitIndex).toBeGreaterThan(actualFloorIndex);
+    expect(floorZoneIndex).toBeGreaterThan(actualFloorIndex);
+    expect(unitIndex).toBeGreaterThan(floorZoneIndex);
     expect(directionIndex).toBeGreaterThan(unitIndex);
     expect(managementFeeIndex).toBeGreaterThan(directionIndex);
     expect(detailsText.match(/座向/g)).toHaveLength(1);
@@ -873,7 +913,9 @@ describe('PropertyEditorPage', () => {
     expect(detailsText).not.toContain('新落成樓盤');
     expect(detailsText).not.toContain('顯示樓層');
     expect(wrapper.find('.property-floor-unit-fields').exists()).toBe(true);
-    expect(wrapper.findAll('.property-floor-unit-fields > .property-input')).toHaveLength(2);
+    expect(wrapper.findAll('.property-floor-unit-fields > .property-input')).toHaveLength(3);
+    expect(wrapper.find('.property-floor-unit-fields select').findAll('option').map((option) => option.attributes('value')))
+      .toEqual(['', 'low', 'middle', 'high']);
     expect(propertyPanel).toBeTruthy();
     expect(propertyFields[propertyFields.length - 1]?.text()).toContain('管理費');
   });
@@ -887,15 +929,15 @@ describe('PropertyEditorPage', () => {
     const cases = [
       {
         type: 'car_park',
-        labels: ['區域', '地區', '分區', '大廈名稱', '街名及門牌', '街名及門牌(英文)', '樓齡', '座數 / 大廈', '實際樓層', '單位', '管理費'],
+        labels: ['區域', '地區', '分區', '大廈名稱', '街名及門牌', '街名及門牌(英文)', '樓齡', '座數 / 大廈', '實際樓層', '公開樓層', '單位', '管理費'],
       },
       {
         type: 'industrial',
-        labels: ['區域', '地區', '分區', '工商大廈名稱', '街名及門牌', '街名及門牌(英文)', '建築面積', '實用面積', '樓齡', '座數 / 大廈', '實際樓層', '單位', '座向', '管理費'],
+        labels: ['區域', '地區', '分區', '工商大廈名稱', '街名及門牌', '街名及門牌(英文)', '建築面積', '實用面積', '樓齡', '座數 / 大廈', '實際樓層', '公開樓層', '單位', '座向', '管理費'],
       },
       {
         type: 'shop',
-        labels: ['區域', '地區', '分區', '工商大廈名稱', '街名及門牌', '街名及門牌(英文)', '建築面積', '實用面積', '樓齡', '座數 / 大廈', '實際樓層', '單位', '管理費'],
+        labels: ['區域', '地區', '分區', '工商大廈名稱', '街名及門牌', '街名及門牌(英文)', '建築面積', '實用面積', '樓齡', '座數 / 大廈', '實際樓層', '公開樓層', '單位', '管理費'],
       },
       {
         type: 'land',

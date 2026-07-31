@@ -320,6 +320,9 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if publicDetail.ContactSummary.EditableContact != nil {
 		t.Fatalf("public detail exposed editable contact: %#v", publicDetail.ContactSummary.EditableContact)
 	}
+	if publicDetail.PropertySale == nil || publicDetail.PropertySale.FloorRaw != "25" || publicDetail.PropertySale.FloorZone != "high" {
+		t.Fatalf("public detail should expose actual and public floor values: %#v", publicDetail.PropertySale)
+	}
 
 	items, pagination, err := propertyService.ListPublicProperties(context.Background(), PropertyChannelSale, PropertyListFilters{Page: 1, PageSize: 10})
 	if err != nil {
@@ -332,8 +335,11 @@ func TestCreateAndPublishPropertySaleListing(t *testing.T) {
 	if publicSale == nil {
 		t.Fatal("expected public sale payload")
 	}
-	if publicSale.UnitName != "" || publicSale.FloorRaw != "" || publicSale.PrivateNote != "" {
+	if publicSale.UnitName != "" || publicSale.PrivateNote != "" {
 		t.Fatalf("public payload leaked private fields: %#v", publicSale)
+	}
+	if publicSale.FloorRaw != "25" || publicSale.FloorZone != "high" {
+		t.Fatalf("public payload should expose actual and public floor values: %#v", publicSale)
 	}
 	if !publicSale.PriceReferenceOnly || publicSale.PriceNegotiable {
 		t.Fatalf("unexpected public price flags: %#v", publicSale)

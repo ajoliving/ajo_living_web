@@ -13,6 +13,7 @@ import {
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import PropertyEditorPage from '@/pages/property/editor/PropertyEditorPage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import { useDialogBackdropClose } from '@/shared/composables/useDialogBackdropClose';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate } from '@/utils/format';
 import { resolvePropertyPriceText, resolvePropertyPublisherRole, resolvePropertyStatus } from '@/utils/property';
@@ -78,6 +79,13 @@ const closeEditor = (): void => {
 const requestCloseEditor = (): void => {
   void propertyEditorDialog.value?.requestCloseEditor();
 };
+
+// 6.1 只在完整點擊遮罩時請求關閉編輯器
+const {
+  handleBackdropPointerCancel,
+  handleBackdropPointerDown,
+  handleBackdropPointerUp,
+} = useDialogBackdropClose(requestCloseEditor);
 
 // 7. 完成管理編輯後刷新列表
 const handleEditorDone = async (): Promise<void> => {
@@ -234,7 +242,9 @@ const handleEditorDone = async (): Promise<void> => {
           role="dialog"
           aria-modal="true"
           :aria-label="t('property.editor.editMode')"
-          @click.self="requestCloseEditor"
+          @pointercancel="handleBackdropPointerCancel"
+          @pointerdown="handleBackdropPointerDown"
+          @pointerup="handleBackdropPointerUp"
         >
           <section class="management-dialog-panel management-dialog-panel--editor">
             <header class="management-dialog-header">

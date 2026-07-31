@@ -18,10 +18,15 @@ const mocks = vi.hoisted(() => ({
   fetchMemberBuildings: vi.fn(),
   fetchPublicBuildings: vi.fn(),
   fetchMemberUnits: vi.fn(),
+  fetchBuildingAccess: vi.fn(),
+  openDoor: vi.fn(),
   fetchICCTV: vi.fn(),
   fetchServiceCase: vi.fn(),
   fetchServiceCases: vi.fn(),
   submitServiceCase: vi.fn(),
+  fetchUnpaidInvoices: vi.fn(),
+  fetchTransactionsByUnit: vi.fn(),
+  fetchTransactionsByDate: vi.fn(),
   updateMe: vi.fn(),
   session: {
     me: {
@@ -70,13 +75,13 @@ vi.mock('@/httpapis/building', () => ({
   fetchMemberPosBuildingUnits: mocks.fetchMemberUnits,
   fetchPosBuildings: mocks.fetchPublicBuildings,
   fetchMemberICCTVPublicCameras: mocks.fetchICCTV,
-  fetchMemberIsmartBuildingAccess: vi.fn(),
+  fetchMemberIsmartBuildingAccess: mocks.fetchBuildingAccess,
   fetchMemberIsmartManagementFees: vi.fn(),
   fetchMemberIsmartOtherFees: vi.fn(),
   fetchMemberIsmartServiceCase: mocks.fetchServiceCase,
   fetchMemberIsmartServiceCases: mocks.fetchServiceCases,
   generateMemberIsmartDoorQRCode: vi.fn(),
-  openMemberIsmartDoor: vi.fn(),
+  openMemberIsmartDoor: mocks.openDoor,
   submitMemberIsmartBuildingComment: mocks.submitServiceCase,
 }));
 
@@ -85,9 +90,9 @@ vi.mock('@/httpapis/me', () => ({
 }));
 
 vi.mock('@/httpapis/payments', () => ({
-  fetchPOSIntegrationTransactionsByDate: vi.fn(),
-  fetchPOSIntegrationTransactionsByUnit: vi.fn(),
-  fetchPOSIntegrationUnpaidInvoices: vi.fn(),
+  fetchPOSIntegrationTransactionsByDate: mocks.fetchTransactionsByDate,
+  fetchPOSIntegrationTransactionsByUnit: mocks.fetchTransactionsByUnit,
+  fetchPOSIntegrationUnpaidInvoices: mocks.fetchUnpaidInvoices,
 }));
 
 describe('BuildingPage binding refresh', () => {
@@ -100,10 +105,15 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchMemberBuildings.mockReset();
     mocks.fetchPublicBuildings.mockReset();
     mocks.fetchMemberUnits.mockReset();
+    mocks.fetchBuildingAccess.mockReset();
+    mocks.openDoor.mockReset();
     mocks.fetchICCTV.mockReset();
     mocks.fetchServiceCase.mockReset();
     mocks.fetchServiceCases.mockReset();
     mocks.submitServiceCase.mockReset();
+    mocks.fetchUnpaidInvoices.mockReset();
+    mocks.fetchTransactionsByUnit.mockReset();
+    mocks.fetchTransactionsByDate.mockReset();
     mocks.updateMe.mockReset();
     mocks.session.me = {
       display_name: 'Member',
@@ -190,11 +200,41 @@ describe('BuildingPage binding refresh', () => {
       orangepis: [],
       cameras: [],
     });
+    mocks.fetchBuildingAccess.mockResolvedValue({
+      selected_building_id: '0999900',
+      building_options: ['0999900'],
+      doors: [],
+      recent_records: [],
+    });
+    mocks.openDoor.mockResolvedValue({ is_success: true });
     mocks.fetchServiceCases.mockResolvedValue({
       selected_building_id: '0999900',
       status_choices: [],
       cases: [],
     });
+    mocks.fetchUnpaidInvoices.mockResolvedValue([{
+      invoice_no: 'INV-001',
+      flat_code: '09999000012',
+      item_id: 'MANAGEMENT_FEE',
+      net_amount: 1200,
+    }]);
+    const paymentRecords = {
+      payment_objs: [{
+        input_time: '2026-02-11 02:52:34',
+        tran_time: '2026-02-11 02:52:23',
+        payment_id: 'payment-001',
+        receipt_id: '20132560',
+        pay_type: 'POS_CHEQUE',
+        status: 'void',
+        payment_detail_objs: [
+          { floor: 'G', unit: 'B', item_id: '管理費', term: '2024/09', trs_val: 5 },
+          { floor: 'G', unit: 'B', item_id: '清潔費', term: '2024/09', trs_val: 3 },
+          { floor: 'G', unit: 'I', item_id: '管理費', term: '2024/09', trs_val: 5 },
+        ],
+      }],
+    };
+    mocks.fetchTransactionsByUnit.mockResolvedValue(paymentRecords);
+    mocks.fetchTransactionsByDate.mockResolvedValue(paymentRecords);
   });
 
   it('loads the newly bound building instead of the stale session building', async () => {
@@ -207,6 +247,51 @@ describe('BuildingPage binding refresh', () => {
     expect(mocks.fetchBuildingInfo).toHaveBeenCalledWith('0999900');
     expect(mocks.fetchBuildingNotices).toHaveBeenCalledWith('0999900');
     expect(wrapper.text()).toContain('測試1大廈');
+  });
+
+  it('shows the simplified notice and building profile content', async () => {
+    mocks.fetchBuildingInfo.mockResolvedValue({
+      selected_building_id: '0999900',
+      building_options: ['0999900'],
+      building: { building_id: '0999900', buildname_chi: '測試1大廈' },
+      building_info: { year_built: 1977, total_floor: 2 },
+      documents: {
+        financial_reports: [{
+          id: 1,
+          title: '六月財務報表',
+          file_date: '2026-06-01',
+          created_date: '2026-06-14',
+          file_month: '2026-06-01',
+        }],
+      },
+    });
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('.notice-current span').text()).toBe('目前顯示：測試1大廈');
+    expect(wrapper.findAll('.work-kicker')).toHaveLength(0);
+    expect(wrapper.find('.building-summary-grid').exists()).toBe(false);
+
+    const fields = wrapper.findAll('[data-work-panel="affairs-building"] .building-field');
+    expect(fields[0]?.text()).toContain('落成年份1977');
+    expect(fields[1]?.text()).toContain(`樓齡${new Date().getFullYear() - 1977} 年`);
+    expect(fields.some((field) => field.text().includes('資料來源'))).toBe(false);
+    expect(wrapper.find('[data-work-panel="affairs-finance"] .building-field-grid').exists()).toBe(false);
+
+    const formsPanel = wrapper.get('[data-work-panel="affairs-forms"]');
+    expect(formsPanel.find('.work-desc').exists()).toBe(false);
+    expect(formsPanel.find('.notice-admin-grid').exists()).toBe(false);
+
+    const financialPanel = wrapper.findAll('[data-work-panel="affairs-finance"] .acct-subpanel')[1];
+    const uploadDate = new Intl.DateTimeFormat('zh-HK', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(2026, 5, 14));
+    expect(financialPanel?.findAll('th').map((header) => header.text())).toContain('上載日期');
+    expect(financialPanel?.findAll('.building-file-meta-cell')[0]?.text()).toBe(uploadDate);
   });
 
   it('fills every authorized property option with the official POS name and unit', async () => {
@@ -224,6 +309,55 @@ describe('BuildingPage binding refresh', () => {
     expect(wrapper.find('.building-context-sidebar-current').exists()).toBe(false);
     expect(wrapper.find('.building-context-layer').exists()).toBe(false);
     expect(wrapper.find('.building-context-save').exists()).toBe(false);
+  });
+
+  it('shows formal owner-account copy and resolves unit codes through the POS directory', async () => {
+    await mocks.loadCurrentUser();
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const ownerAccountButton = wrapper.findAll('.work-nav-item')
+      .find((button) => button.text().includes('業戶帳目'));
+    await ownerAccountButton?.trigger('click');
+    await flushPromises();
+
+    const panel = wrapper.get('[data-work-panel="affairs-owner-account"]');
+    expect(panel.get('.work-desc').text()).toBe('查看未繳賬單及繳費記錄。');
+    expect(panel.get('.acct-note').text()).toMatch(/^目前顯示單位：/);
+    expect(panel.findAll('.owner-account-table th')[0]?.text()).toBe('號單編碼');
+    expect(panel.findAll('.owner-account-table tbody td')[1]?.text()).toBe('G/B');
+    expect(panel.text()).not.toContain('09999000012');
+
+    const recordHeaders = panel.findAll('.owner-record-table th').map((header) => header.text());
+    const recordRows = panel.findAll('.owner-record-table tbody tr');
+    expect(recordHeaders).toContain('收據編號');
+    expect(recordHeaders).not.toContain('輸入時間');
+    expect(recordHeaders).toContain('繳付金額');
+    expect(recordRows).toHaveLength(2);
+    expect(recordRows[0]?.text()).toContain('G/B');
+    expect(recordRows[0]?.text()).not.toContain('G/I');
+    expect(panel.findAll('.acct-toolbar .acct-total')).toHaveLength(1);
+    expect(mocks.fetchTransactionsByUnit).toHaveBeenCalledWith(['09999000012']);
+
+    const itemFilter = panel.get('#owner-record-item-filter');
+    expect(itemFilter.findAll('option').map((option) => option.text())).toEqual([
+      '全部項目',
+      '管理費',
+      '清潔費',
+    ]);
+    await itemFilter.setValue('管理費');
+    expect(panel.findAll('.owner-record-table tbody tr')).toHaveLength(1);
+    expect(panel.get('.owner-record-table tbody tr').text()).toContain('管理費');
+    expect(panel.get('.owner-record-table tbody tr').text()).not.toContain('清潔費');
+
+    await panel.get('.acct-filter-row').trigger('submit');
+    await flushPromises();
+    expect(mocks.fetchTransactionsByDate).toHaveBeenCalledWith(
+      expect.objectContaining({ date_type: 'tran_date' }),
+      ['09999000012'],
+    );
   });
 
   it('switches one complete authorized unit and reloads notices and building data together', async () => {
@@ -281,6 +415,12 @@ describe('BuildingPage binding refresh', () => {
     await flushPromises();
 
     expect(mocks.fetchServiceCases).toHaveBeenCalledWith('0999900', undefined);
+    const feedbackPanel = wrapper.get('[data-work-panel="affairs-feedback"]');
+    expect(feedbackPanel.get('.work-desc').text()).toBe('一鍵提交意見反映和維修報修事項，直達管理處跟進');
+    expect(feedbackPanel.text()).toContain('提交記錄');
+    expect(feedbackPanel.get('.affairs-feedback-form .work-card-title').text()).toBe('已綁定大廈');
+    expect(feedbackPanel.get('.affairs-feedback-form .work-card-sub').text()).toBe('測試1大廈');
+    expect(feedbackPanel.find('.affairs-feedback-form select').exists()).toBe(false);
     expect(wrapper.text()).toContain('18樓走廊漏水');
     await wrapper.get('[data-work-panel="affairs-feedback"] .work-mini-btn').trigger('click');
     await flushPromises();
@@ -316,7 +456,49 @@ describe('BuildingPage binding refresh', () => {
     expect((wrapper.get('#affairs-feedback-subcategory').element as HTMLSelectElement).value).toBe('cleaningSuggestion');
   });
 
-  it('groups cameras by Orange Pi when devices share a channel name', async () => {
+  it('lets the open-door API make the final permission decision', async () => {
+    mocks.fetchBuildingAccess.mockResolvedValue({
+      selected_building_id: '0999900',
+      building_options: ['0999900'],
+      doors: [{
+        door_id: 8,
+        title: '地下大堂門',
+        door_no: 2,
+        building_id: '0999900',
+        has_permission: false,
+        is_public: true,
+        camera: null,
+      }],
+      recent_records: [],
+    });
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const accessButton = wrapper.findAll('.work-nav-item')
+      .find((button) => button.text().includes('智能門禁'));
+    await accessButton?.trigger('click');
+    await flushPromises();
+
+    const accessPanel = wrapper.get('[data-work-panel="affairs-access"]');
+    expect(accessPanel.get('.work-desc').text()).toBe('遙距開門、查看公用密碼、生成私人密碼、專屬二維碼及查看開門記錄。');
+    expect(accessPanel.find('.access-summary-grid').exists()).toBe(false);
+    expect(accessPanel.get('.access-door-table thead').text()).not.toContain('門號');
+    expect(accessPanel.get('.access-door-table thead').text()).not.toContain('所屬大廈');
+    expect(accessPanel.get('.access-door-table thead').text()).not.toContain('遙距開門權限');
+    expect(accessPanel.get('.access-door-table tbody').text()).toContain('未升級');
+    const openButton = accessPanel.get('.access-table-actions .work-mini-btn.primary');
+    expect(openButton.attributes('disabled')).toBeUndefined();
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await openButton.trigger('click');
+    await flushPromises();
+    expect(mocks.openDoor).toHaveBeenCalledWith({ building_id: '0999900', door_id: 8 });
+    confirm.mockRestore();
+  });
+
+  it('shows building cameras without exposing iCCTV device names', async () => {
     mocks.fetchICCTV.mockResolvedValue({
       selected_building_id: '0999900',
       building_options: ['0999900'],
@@ -356,8 +538,16 @@ describe('BuildingPage binding refresh', () => {
     await flushPromises();
 
     expect(mocks.fetchICCTV).toHaveBeenCalledWith('0999900');
-    expect(wrapper.text()).toContain('Orange Pi 裝置 #3 · 青島香橙派');
-    expect(wrapper.text()).toContain('Orange Pi 裝置 #7 · 192.168.72.174');
-    expect(wrapper.text()).toContain('香工後門');
+    const icctvPanel = wrapper.get('[data-work-panel="affairs-icctv"]');
+    expect(icctvPanel.get('.work-desc').text()).toBe('隨時隨地查看已支援的大廈鏡頭實時影像。');
+    expect(icctvPanel.get('.icctv-profile-head h3').text()).toBe('測試1大廈');
+    expect(icctvPanel.get('.icctv-profile-head p').text()).toBe('目前顯示的大廈鏡頭');
+    expect(icctvPanel.text()).not.toContain('ICCTV');
+    expect(icctvPanel.text()).not.toContain('Orange Pi');
+    expect(icctvPanel.text()).not.toContain('青島香橙派');
+    expect(icctvPanel.text()).not.toContain('192.168.72.174');
+    expect(icctvPanel.text()).toContain('channel1');
+    expect(icctvPanel.text()).toContain('香工後門');
+    expect(icctvPanel.text()).toContain('新窗口顯示');
   });
 });
