@@ -160,3 +160,4 @@ No direct prompt regression test currently guards prompt wording or localization
 2026-08-12: Recorded building resident authorization ownership, invitation activation, and runtime remote-door or notice permission enforcement.
 2026-08-12: Recorded the selectable frontend theme contract with persistent semantic brand colors and unchanged white business surfaces or status colors.
 2026-08-12: Recorded test deployment defaults: production external providers are inherited while the test database, cache, JWT, and encryption key remain independent; only product-designated interfaces are isolated.
+2026-08-12: Recorded testing release `20260812193000-theme-auth-c376124`, including live theme and resident-authorization assets, successful iSmart notice/building and authorization API checks, and controlled restoration of previously stripped external credentials under the independent test encryption key.

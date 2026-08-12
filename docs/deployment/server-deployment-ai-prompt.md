@@ -797,6 +797,7 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"go
 - 測試資料庫、Redis、`JWT_SECRET` 與 `ENCRYPTION_KEY` 保持獨立；正常發布不得重建測試資料庫。
 - 外部服務配置每次從生產 `/home/admin/ajoliving/server/.env` 重新繼承，只有產品明確指定的接口才隔離。測試操作可產生真實短信、郵件、OSS、支付、POS、iSmart 或其他上游副作用。
 - 正常發布執行 `./deploy-ajoliving-test.sh`；只有明確重建測試庫時才使用 `INITIALIZE_DB=1 INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST ./deploy-ajoliving-test.sh`。
+- 2026-08-12 已發布 `20260812193000-theme-auth-c376124`：主題色、住戶授權及邀請啟用頁已上線；iSmart 通告、大廈列表與住戶授權權限接口均驗證為 `200`。此前被清空的 iSmart 與舊系統加密憑據已在測試庫備份後恢復，並轉換為測試環境加密密鑰。
 
 ---
 
