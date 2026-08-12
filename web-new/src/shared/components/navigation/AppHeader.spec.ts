@@ -4,7 +4,8 @@
  * 2. 驗證登入後底部導覽切換至會員中心。
  * 3. 驗證手機抽屜按登入狀態顯示登入或通知入口。
  * 4. 驗證抽屜遮罩點擊可關閉。
- * 5. 驗證共用導航文案全部經由 i18n 資源輸出。
+ * 5. 驗證主題選單提供六十組主題色並可套用選定色彩。
+ * 6. 驗證共用導航文案全部經由 i18n 資源輸出。
  */
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -39,6 +40,9 @@ vi.mock('vue-i18n', () => ({
         'common.action.close': '關閉',
         'common.action.signOut': '登出',
         'common.action.switchLanguage': '切換語系',
+        'common.theme.selector': '選擇主題色',
+        'common.theme.orangeGroup': '橙色漸進',
+        'common.theme.otherGroup': '其他主題',
         'common.locale.zhHkShort': '繁中',
         'common.locale.enShort': 'EN',
         'nav.account': '帳戶',
@@ -175,7 +179,7 @@ describe('AppHeader mobile navigation', () => {
     const localeToggle = wrapper.find('.locale-toggle');
 
     expect(hamburgerIndex).toBeLessThan(logoIndex);
-    expect(wrapper.find('.theme-toggle').exists()).toBe(false);
+    expect(wrapper.find('.theme-toggle').exists()).toBe(true);
     expect(wrapper.find('.hamburger').attributes('aria-label')).toBe('選單');
     expect(localeToggle.attributes('aria-label')).toBe('切換語系');
     expect(localeToggle.text()).toBe('EN');
@@ -184,6 +188,20 @@ describe('AppHeader mobile navigation', () => {
 
     expect(preferenceStore.locale).toBe('en');
     expect(localeToggle.text()).toBe('繁中');
+  });
+
+  it('opens sixty theme choices and applies the selected theme', async () => {
+    const preferenceStore = usePreferenceStore();
+    const wrapper = mountHeader();
+
+    await wrapper.find('.theme-toggle').trigger('click');
+
+    expect(wrapper.findAll('.theme-swatch')).toHaveLength(60);
+    await wrapper.findAll('.theme-swatch')[50]?.trigger('click');
+
+    expect(preferenceStore.theme).toBe('jade');
+    expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('13 139 100');
+    expect(wrapper.find('.theme-menu').exists()).toBe(false);
   });
 
   it('closes the mobile drawer when the backdrop is tapped', async () => {

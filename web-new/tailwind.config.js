@@ -24,6 +24,7 @@ export default {
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
         'primary-contrast': 'rgb(var(--color-primary-contrast) / <alpha-value>)',
         'primary-soft': 'rgb(var(--color-primary-soft) / <alpha-value>)',
+        'primary-hover': 'rgb(var(--color-brand-dark) / <alpha-value>)',
         'brand-mid': 'rgb(var(--color-brand-mid) / <alpha-value>)',
         'brand-dark': 'rgb(var(--color-brand-dark) / <alpha-value>)',
         text: 'rgb(var(--color-text) / <alpha-value>)',

@@ -51,6 +51,7 @@
 
 ## 現有部署資產與整合現況
 - 目前多個舊業務部署在 `skylinedances.com` 子域名下，其中 `ajoliving.skylinedances.com` 為 AJO Web，`ajoliving.server.skylinedances.com` 為 AJO 後端。
+- `test.ajoliving.skylinedances.com` 為 AJO 公開測試環境，外部服務預設沿用生產配置，只有產品明確指定的接口才隔離；測試資料庫、Redis、JWT 與加密密鑰保持獨立。
 - POS 相關部署包括 `easy.payment.skylinedances.com`、`pos.web.skylinedances.com`、`pos.ismart.skylinedances.com`，未來接入 AJO 時應歸入支付、賬單或物業費查詢。
 - iBoard 相關部署包括 `iboard.skylinedances.com` 與 `iboard.service.skylinedances.com`，未來接入 AJO 時應歸入大廈通告或通知內容。
 - iCCTV 相關部署包括 `icctv.skylinedances.com` 與 `icctv.service.skylinedances.com`，未來接入 AJO 時應歸入設備、監控或安防查看。
@@ -197,5 +198,6 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 2026-07-28: 補充樓盤草稿預付積分抵扣正式發布費用的統一收費與會員確認契約。
 2026-07-28: 補充歷史樓盤草稿重複扣費以不可變退款流水更正，以及錢包來源必須本地化顯示的契約。
 2026-07-30: 補充個人與公司代理於註冊頁完成牌照上載及待審資料提交，牌照號碼作為登入用戶名稱，僅審核通過後啟用正常帳戶權限。
+2026-08-12: 測試環境改為預設沿用生產外部服務配置，只有產品明確指定的接口才另行隔離。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

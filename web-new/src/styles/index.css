@@ -68,6 +68,14 @@
     -webkit-tap-highlight-color: rgb(var(--color-primary) / 0.12);
   }
 
+  :where(input, select, textarea) {
+    caret-color: rgb(var(--color-primary));
+  }
+
+  :where(input[type='checkbox'], input[type='radio'], input[type='range']) {
+    accent-color: rgb(var(--color-primary));
+  }
+
   ::selection {
     background-color: rgb(var(--color-primary) / 0.82);
     color: #ffffff;
@@ -95,7 +103,7 @@
   }
 
   .app-button-primary {
-    @apply border-primary bg-primary text-primary-contrast hover:bg-primary/90;
+    @apply border-primary bg-primary text-primary-contrast shadow-[var(--shadow-brand)] hover:border-primary-hover hover:bg-primary-hover;
   }
 
   .app-button-secondary {
@@ -172,7 +180,7 @@
   }
 
   .app-segmented-item-active {
-    @apply bg-surface text-text shadow-soft;
+    @apply bg-primary-soft text-primary shadow-soft;
   }
 
   .app-avatar {

@@ -13,6 +13,7 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - AJO Redis 與 PostgreSQL 由同一份伺服器 Docker Compose 管理，只綁定應用伺服器 `127.0.0.1`；Redis 只保存可重建快取，不配置持久化 volume。
 - POS 大廈與單位共用目錄使用 Redis 快取 5 分鐘；部署環境以 `POS_DIRECTORY_CACHE_TTL` 控制，會員權限、綁定、目前物業及 relay token 不得進入共用快取。
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
+- AJO 測試站使用獨立資料庫、Redis、JWT 與加密密鑰；外部服務配置每次從生產 `.env` 重新繼承，只有產品明確指定的接口才隔離。
 
 ## 變更日誌
 2026-07-08: 建立部署 prompt 目錄記憶，固定部署前讀取與驗證邊界。
@@ -25,5 +26,6 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 2026-07-17: 明確 `icctv_orangepi_auth_service` 為已部署 OrangePi 設備端保護項目，未獲明確授權不得修改或重新部署。
 2026-07-17: 記錄 release `20260717115200-3302` 以 `BACKUP_DB=0` 發布統一帳戶登入，並通過桌面、手機、路由、服務及 HTTPS 驗收。
 2026-07-21: 記錄 Client Ticket Board 的 Docker Compose、SQLite volume、AJO Living OSS `tickets/` 前綴、frpc `:20046`、ACME DNS HTTPS 與續期重載設定。
+2026-08-12: 增加 AJO 測試站部署腳本；測試資料與身份密鑰保持獨立，外部服務預設沿用生產配置。
 
 [PROTOCOL]: When changing deployment prompts or server-operation instructions, update this map, `../PROMPT_INDEX.md`, and verify whether root `../AGENTS.md` deployment references need updating.

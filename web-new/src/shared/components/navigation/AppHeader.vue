@@ -2,17 +2,18 @@
  * 全域頂部導航。
  * 1. 嚴格對齊 HTML 設計稿 chrome.html 的 .nav 結構與樣式。
  * 2. 按登入態輸出公開入口、會員入口與通知中心鈴鐺。
- * 3. 整合語系切換按鈕與登入入口。
+ * 3. 整合主題、語系切換按鈕與登入入口。
  * 4. 保留 mobile 側邊抽屜與底部主入口。
 -->
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
+import { THEME_OPTIONS, type AppThemeName } from '@/utils/theme';
 
 interface NavigationItem {
   key: string;
@@ -29,6 +30,17 @@ const router = useRouter();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
+const themeMenuOpen = ref(false);
+const orangeThemeGroups = [
+  { key: 'flame', labelKey: 'common.theme.orangeGroupFlame' },
+  { key: 'classic', labelKey: 'common.theme.orangeGroupClassic' },
+  { key: 'solar', labelKey: 'common.theme.orangeGroupSolar' },
+  { key: 'peach', labelKey: 'common.theme.orangeGroupPeach' },
+].map((group) => ({
+  ...group,
+  options: THEME_OPTIONS.filter((option) => option.group === 'orange' && option.orangeTone === group.key),
+}));
+const otherThemeOptions = THEME_OPTIONS.filter((option) => option.group === 'other');
 
 const mobileDrawerOpen = computed({
   get: () => preferenceStore.mobile_menu_open,
@@ -130,24 +142,31 @@ const handleLocaleToggle = (): void => {
   preferenceStore.setLocale(nextLocale);
 };
 
-// 7. 執行帳戶入口操作
+// 7. 套用選定主題並收起選單
+const handleThemeChange = (theme: AppThemeName): void => {
+  preferenceStore.setTheme(theme);
+  themeMenuOpen.value = false;
+};
+
+// 8. 執行帳戶入口操作
 const handleAccountAction = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await router.push(accountPath.value);
 };
 
-// 8. 執行登出
+// 9. 執行登出
 const handleSignOut = async (): Promise<void> => {
   mobileDrawerOpen.value = false;
   await sessionStore.signOut();
   await router.push('/login');
 };
 
-// 9. 路由切換時收起 mobile 導航
+// 10. 路由切換時收起 mobile 導航與主題選單
 watch(
   () => route.fullPath,
   () => {
     mobileDrawerOpen.value = false;
+    themeMenuOpen.value = false;
   },
 );
 </script>
@@ -205,6 +224,72 @@ watch(
 
     <!-- 右側區域 -->
     <div class="nav-r">
+      <div class="theme-picker">
+        <button
+          type="button"
+          class="theme-toggle"
+          :aria-label="t('common.theme.selector')"
+          :title="t('common.theme.selector')"
+          :aria-expanded="themeMenuOpen"
+          @click="themeMenuOpen = !themeMenuOpen"
+        >
+          <AppIcon
+            name="palette"
+            :size="18"
+            :stroke-width="1.9"
+          />
+        </button>
+        <div
+          v-if="themeMenuOpen"
+          class="theme-menu"
+          role="menu"
+          :aria-label="t('common.theme.selector')"
+        >
+          <p class="theme-menu-title">{{ t('common.theme.orangeGroup') }}</p>
+          <div
+            v-for="group in orangeThemeGroups"
+            :key="group.key"
+            class="theme-group"
+          >
+            <p class="theme-group-title">{{ t(group.labelKey) }}</p>
+            <div class="theme-grid">
+              <button
+                v-for="theme in group.options"
+                :key="theme.value"
+                type="button"
+                class="theme-swatch"
+                :class="{ 'theme-swatch--active': preferenceStore.theme === theme.value }"
+                :style="{ '--theme-swatch': theme.primary }"
+                :aria-label="t(theme.labelKey)"
+                :title="t(theme.labelKey)"
+                :aria-pressed="preferenceStore.theme === theme.value"
+                role="menuitemradio"
+                @click="handleThemeChange(theme.value)"
+              >
+                <span></span>
+              </button>
+            </div>
+          </div>
+          <p class="theme-menu-title">{{ t('common.theme.otherGroup') }}</p>
+          <div class="theme-grid">
+            <button
+              v-for="theme in otherThemeOptions"
+              :key="theme.value"
+              type="button"
+              class="theme-swatch"
+              :class="{ 'theme-swatch--active': preferenceStore.theme === theme.value }"
+              :style="{ '--theme-swatch': theme.primary }"
+              :aria-label="t(theme.labelKey)"
+              :title="t(theme.labelKey)"
+              :aria-pressed="preferenceStore.theme === theme.value"
+              role="menuitemradio"
+              @click="handleThemeChange(theme.value)"
+            >
+              <span></span>
+            </button>
+          </div>
+        </div>
+      </div>
       <button
         type="button"
         class="nav-login"
@@ -443,6 +528,100 @@ watch(
   font-size: 11px;
   color: var(--ink-3);
   flex-shrink: 0;
+}
+
+.theme-picker {
+  position: relative;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  color: var(--brand);
+}
+
+.theme-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 248px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r-md);
+  background: var(--sur);
+  box-shadow: var(--shadow-md);
+  padding: 14px;
+}
+
+.theme-menu-title {
+  margin: 0 0 8px;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.theme-menu-title + .theme-grid {
+  margin-bottom: 14px;
+}
+
+.theme-group {
+  margin-bottom: 10px;
+}
+
+.theme-group-title {
+  margin: 0 0 6px;
+  color: var(--ink-4);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
+}
+
+.theme-swatch {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.theme-swatch span {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--theme-swatch);
+}
+
+.theme-swatch:hover span {
+  transform: scale(1.12);
+}
+
+.theme-swatch--active {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .nav-r span {

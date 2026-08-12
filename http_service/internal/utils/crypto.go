@@ -58,6 +58,9 @@ func DecryptString(secret string, value string) (string, error) {
 	}
 
 	nonceSize := aead.NonceSize()
+	if len(payload) < nonceSize+aead.Overhead() {
+		return "", fmt.Errorf("invalid encrypted payload")
+	}
 	nonce, ciphertext := payload[:nonceSize], payload[nonceSize:]
 	plain, err := aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {

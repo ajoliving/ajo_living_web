@@ -1,25 +1,25 @@
 /*
  * 設計 Token CSS 變量。
- * 1. 嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的 :root 變數。
+ * 1. 定義白天主題的鮮橙品牌色階與冷白表面層級。
  * 2. 同時保留專案原有的 rgb() 格式變數供 Tailwind 與元件使用。
- * 3. 深色模式對齊 HTML body.dark。
+ * 3. 統一按鈕、選中、焦點、陰影與互動回饋的全域色彩。
  */
 
-/* 1. HTML 設計稿原生變量（直接對齊，供 scoped 樣式使用） */
+/* 1. 相容既有 scoped 樣式的品牌與表面變量 */
 :root {
-  --brand: #FF6A00;
-  --brand-dark: #D95700;
-  --brand-light: #FFF1E8;
-  --brand-mid: #FFAC70;
+  --brand: #FF5A00;
+  --brand-dark: #D94700;
+  --brand-light: #FFF0E6;
+  --brand-mid: #FF9A5C;
   --ink: #1A1A1A;
   --ink-2: #444444;
   --ink-3: #777777;
   --ink-4: #AAAAAA;
   --sur: #FFFFFF;
-  --sur-2: #FFFFFF;
-  --sur-3: #FFFFFF;
-  --bdr: #E4E4E4;
-  --bdr-2: #CCCCCC;
+  --sur-2: #F7F8FA;
+  --sur-3: #EEF1F4;
+  --bdr: #DFE3E8;
+  --bdr-2: #C8CDD3;
   --success: #1A7A3A;
   --success-bg: #E6F4EC;
   --error: #C0392B;
@@ -54,10 +54,10 @@
   --text-2xl: 32px;
   --text-3xl: 44px;
 
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-brand: 0 4px 16px rgba(255, 106, 0, 0.22);
+  --shadow-sm: 0 1px 4px rgba(17, 24, 39, 0.06);
+  --shadow-md: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --shadow-lg: 0 18px 48px rgba(17, 24, 39, 0.12);
+  --shadow-brand: 0 8px 24px rgba(255, 90, 0, 0.24);
 
   --nav-h: 52px;
   --app-safe-top: env(safe-area-inset-top, 0px);
@@ -83,21 +83,21 @@
 /* 2. 專案 rgb() 格式變量（供 Tailwind 與既有元件使用） */
 :root {
   --color-canvas: 255 255 255;
-  --color-page-tint: 255 255 255;
+  --color-page-tint: 247 248 250;
   --color-surface: 255 255 255;
-  --color-surface-muted: 255 255 255;
+  --color-surface-muted: 247 248 250;
   --color-surface-raised: 255 255 255;
   --color-topbar-surface: 255 255 255;
-  --color-toolbar-surface: 255 255 255;
+  --color-toolbar-surface: 247 248 250;
   --color-field-surface: 255 255 255;
   --color-dropdown-surface: 255 255 255;
-  --color-primary: 255 106 0;
+  --color-primary: 255 90 0;
   --color-primary-contrast: 255 255 255;
-  --color-primary-soft: 255 241 232;
+  --color-primary-soft: 255 240 230;
   --color-text: 26 26 26;
-  --color-text-muted: 119 119 119;
-  --color-border: 228 228 228;
-  --color-border-strong: 192 70 0;
+  --color-text-muted: 102 102 102;
+  --color-border: 223 227 232;
+  --color-border-strong: 217 71 0;
   --color-success: 26 122 58;
   --color-warning: 224 123 0;
   --color-danger: 192 57 43;
@@ -105,11 +105,11 @@
   --color-ink-2: 68 68 68;
   --color-ink-3: 119 119 119;
   --color-ink-4: 170 170 170;
-  --color-surface-2: 255 255 255;
-  --color-surface-3: 255 255 255;
-  --color-border-2: 204 204 204;
-  --color-brand-mid: 255 172 112;
-  --color-brand-dark: 217 87 0;
+  --color-surface-2: 247 248 250;
+  --color-surface-3: 238 241 244;
+  --color-border-2: 200 205 211;
+  --color-brand-mid: 255 154 92;
+  --color-brand-dark: 217 71 0;
   --color-success-bg: 230 244 236;
   --color-warning-bg: 255 243 220;
   --color-danger-bg: 253 236 234;
@@ -121,9 +121,9 @@
   --radius-2xl: 16px;
   --radius-pill: 999px;
 
-  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.06);
-  --shadow-raised: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-soft: 0 1px 4px rgba(17, 24, 39, 0.06);
+  --shadow-raised: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --shadow-floating: 0 18px 48px rgba(17, 24, 39, 0.12);
 
   --space-shell: clamp(1rem, 2vw, 1.5rem);
   --space-section: clamp(4rem, 8vw, 6rem);
@@ -145,8 +145,8 @@
 
   --border-width-thin: 1px;
   --border-width-strong: 1.5px;
-  --border-subtle: 1px solid rgb(228 228 228 / 0.82);
-  --border-strong: 1.5px solid rgb(217 87 0 / 0.22);
+  --border-subtle: 1px solid rgb(223 227 232 / 0.88);
+  --border-strong: 1.5px solid rgb(217 71 0 / 0.24);
 }
 
 @media (max-width: 767px) {

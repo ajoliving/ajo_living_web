@@ -790,6 +790,16 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"go
 
 ---
 
+## AJO 公開測試環境
+
+- 公開入口：`https://test.ajoliving.skylinedances.com`，前端與 `/api/v1` 使用同源路由。
+- 應用伺服器使用 `/home/admin/ajoliving-test`、Supervisor `ajoliving_test_server`、本機端口 `20047/20048`、PostgreSQL `45433` 及 Redis `6383`。
+- 測試資料庫、Redis、`JWT_SECRET` 與 `ENCRYPTION_KEY` 保持獨立；正常發布不得重建測試資料庫。
+- 外部服務配置每次從生產 `/home/admin/ajoliving/server/.env` 重新繼承，只有產品明確指定的接口才隔離。測試操作可產生真實短信、郵件、OSS、支付、POS、iSmart 或其他上游副作用。
+- 正常發布執行 `./deploy-ajoliving-test.sh`；只有明確重建測試庫時才使用 `INITIALIZE_DB=1 INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST ./deploy-ajoliving-test.sh`。
+
+---
+
 ## 十二、Client Ticket Board 固定配置（已落地）
 
 ### 1. 应用服务器 47.239.117.108

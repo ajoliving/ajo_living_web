@@ -158,3 +158,5 @@ No direct prompt regression test currently guards prompt wording or localization
 2026-07-31: Recorded remote-open authorization as an operation-API decision; the frontend no longer displays or blocks on the inconsistent summary `has_permission` field.
 2026-07-31: Recorded the CCTV view as building-and-camera-only presentation without iCCTV or Orange Pi identity, with mobile actions visible without horizontal scrolling.
 2026-08-12: Recorded building resident authorization ownership, invitation activation, and runtime remote-door or notice permission enforcement.
+2026-08-12: Recorded the selectable frontend theme contract with persistent semantic brand colors and unchanged white business surfaces or status colors.
+2026-08-12: Recorded test deployment defaults: production external providers are inherited while the test database, cache, JWT, and encryption key remain independent; only product-designated interfaces are isolated.

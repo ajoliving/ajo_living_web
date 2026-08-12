@@ -59,6 +59,6 @@ export const currentUserProfile: UserProfile = {
   phone: '+852 6123 4567',
   email: 'member@ajoliving.hk',
   preferred_locale: 'zh-HK',
-  preferred_theme: 'default',
+  preferred_theme: 'orange-05',
   primary_community: currentCommunity,
 };

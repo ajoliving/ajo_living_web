@@ -5,6 +5,7 @@
  * 3. 與真實登入、會員中心 API 保持一致命名方向。
  */
 import type { Community, MetaCommunity } from '@/model/community';
+import type { AppThemeName } from '@/utils/theme';
 
 // 1. 定義公開會員摘要
 export interface UserSummary {
@@ -20,7 +21,7 @@ export interface UserProfile extends UserSummary {
   phone: string;
   email: string;
   preferred_locale: 'zh-HK' | 'en';
-  preferred_theme: 'default' | 'html-fidelity' | 'copper-sun' | 'dark-neutral';
+  preferred_theme: AppThemeName;
   primary_community: Community;
 }
 

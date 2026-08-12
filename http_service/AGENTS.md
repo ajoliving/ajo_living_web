@@ -156,6 +156,7 @@ router -> handler -> service -> model/database
 - 公司子帳戶的樓盤建立、發布、重新發布與既有樓盤管理必須分別校驗 `property_publish`、`property_manage`；代理證件不得透過公開 CDN URL 返回。
 - 已批准代理資料修訂必須在審核交易內刷新該代理及其公司子帳戶全部未刪除樓盤的公開聯絡快照；待審或拒絕不得修改現有快照。
 - 樓盤聯絡資料以 `phone_country_code` 與 `phone_2_country_code` 分別保存兩個電話區號，並以 `phone_whatsapp_enabled` 與 `phone_2_whatsapp_enabled` 分別保存 WhatsApp 狀態；解鎖聯絡資料時分別生成兩個受控 URL，舊資料的電話2區號回退至 `phone_country_code`，並保留舊 `whatsapp_url` 兼容入口。
+- 測試環境預設沿用生產外部服務配置，不按服務或讀寫類型自動隔離；只有產品明確指定的接口才使用獨立地址或停用。測試資料庫、Redis、JWT 與加密密鑰維持獨立。
 
 ## Middleware 規範
 - middleware 僅處理認證、鑑權、上下文透傳、限流、快取、審計等通用能力。
@@ -268,5 +269,6 @@ go test ./...
 2026-07-24: 固定有效樓盤放售與服務式住宅可建立或復用站內訊息會話，不受舊聯絡快照聊天開關限制。
 2026-07-30: 固定代理註冊使用牌照號碼作為登入名稱，個人代理電郵可選填，註冊頁提交的牌照資料經 Staff 批准後才將帳戶啟用為 `active`。
 2026-07-31: 固定樓盤公開列表與公開詳情同時返回實際樓層及公開樓層，其他私密欄位維持既有權限邊界。
+2026-08-12: 測試環境改為預設沿用生產外部服務配置，只有產品明確指定的接口才另行隔離。
 
 [PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.
