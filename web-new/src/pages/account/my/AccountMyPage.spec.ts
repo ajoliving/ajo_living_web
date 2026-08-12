@@ -1,6 +1,6 @@
 /*
  * 會員中心資料載入回歸測試。
- * 1. 驗證帳號管理初始頁不預載授權副戶及物業綁定資料。
+ * 1. 驗證帳號管理初始頁不預載物業綁定資料。
  * 2. 驗證首次切換面板才載入對應資料。
  * 3. 驗證相同大廈的會員單位請求在頁面生命週期內只執行一次。
  */
@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   fetchMemberUnits: vi.fn(),
   fetchPublicBuildings: vi.fn(),
   fetchPublicUnits: vi.fn(),
-  fetchSubaccounts: vi.fn(),
   loadCurrentUser: vi.fn(),
   pushToast: vi.fn(),
   routerPush: vi.fn(),
@@ -85,13 +84,10 @@ vi.mock('@/stores/feedback', () => ({
 }));
 
 vi.mock('@/httpapis/building', () => ({
-  fetchMemberIsmartSubaccounts: mocks.fetchSubaccounts,
   fetchMemberPosBuildings: mocks.fetchMemberBuildings,
   fetchMemberPosBuildingUnits: mocks.fetchMemberUnits,
   fetchPosBuildings: mocks.fetchPublicBuildings,
   fetchPosBuildingUnits: mocks.fetchPublicUnits,
-  grantMemberIsmartSubaccount: vi.fn(),
-  revokeMemberIsmartSubaccount: vi.fn(),
   submitMemberIsmartOwnerBindingRequest: vi.fn(),
 }));
 
@@ -134,7 +130,6 @@ describe('AccountMyPage lazy data loading', () => {
     mocks.fetchMemberUnits.mockReset();
     mocks.fetchPublicBuildings.mockReset();
     mocks.fetchPublicUnits.mockReset();
-    mocks.fetchSubaccounts.mockReset();
     mocks.loadCurrentUser.mockReset();
     mocks.pushToast.mockReset();
     mocks.routerPush.mockReset();
@@ -150,27 +145,22 @@ describe('AccountMyPage lazy data loading', () => {
     mocks.fetchPublicUnits.mockResolvedValue([
       { unit_id: '09999000401', floor: '04', unit: 'G' },
     ]);
-    mocks.fetchSubaccounts.mockResolvedValue({ items: [] });
     mocks.routerPush.mockResolvedValue(undefined);
   });
 
   it('loads only account data initially and reuses the current building unit response', async () => {
-    await mountAccountPage();
+    const wrapper = await mountAccountPage();
 
     expect(mocks.fetchMemberBuildings).toHaveBeenCalledTimes(1);
     expect(mocks.fetchMemberUnits).toHaveBeenCalledTimes(1);
     expect(mocks.fetchMemberUnits).toHaveBeenCalledWith('0999900');
     expect(mocks.fetchPublicBuildings).not.toHaveBeenCalled();
     expect(mocks.fetchPublicUnits).not.toHaveBeenCalled();
-    expect(mocks.fetchSubaccounts).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain(i18n.global.t('account.center.nav.subaccounts'));
   });
 
-  it('loads subaccounts and owner-binding directories only after their panels are opened', async () => {
+  it('loads owner-binding directories only after the property-binding panel is opened', async () => {
     const wrapper = await mountAccountPage();
-
-    await clickPanel(wrapper, i18n.global.t('account.center.nav.subaccounts'));
-    expect(mocks.fetchSubaccounts).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchPublicBuildings).not.toHaveBeenCalled();
 
     await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
     expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
@@ -188,6 +178,5 @@ describe('AccountMyPage lazy data loading', () => {
 
     expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
     expect(mocks.fetchPublicUnits).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchSubaccounts).not.toHaveBeenCalled();
   });
 });

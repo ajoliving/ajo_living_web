@@ -234,6 +234,25 @@ export interface IsmartSubaccountMutationResponse extends IsmartBuildingOptionRe
   upstream_message?: string;
 }
 
+export interface BuildingAuthorizationRow {
+  authorization_id: string;
+  building_id: string;
+  phone_country_code?: string;
+  phone_number?: string;
+  email?: string;
+  permissions?: string[];
+  status?: string;
+  grantee_user_id?: number | null;
+}
+
+export interface BuildingAuthorizationPayload {
+  building_id: string;
+  phone_country_code?: string;
+  phone_number: string;
+  email: string;
+  permissions: string[];
+}
+
 export interface ICCTVOrangePiSummary {
   orangepi_id: number;
   orangepi_name: string;
@@ -431,6 +450,28 @@ export const revokeMemberIsmartSubaccount = async (
 ): Promise<IsmartSubaccountMutationResponse> => {
   const { data } = await httpClient.post<ApiResponse<IsmartSubaccountMutationResponse>>('/me/ismart/subaccounts/revoke', payload);
   return data.data;
+};
+
+// 9.1 取得目前大廈的本地住戶授權
+export const fetchBuildingAuthorizations = async (buildingID: string): Promise<BuildingAuthorizationRow[]> => {
+  const { data } = await httpClient.get<ApiResponse<{ items?: BuildingAuthorizationRow[] }>>('/me/building-authorizations', { params: { building_id: buildingID } });
+  return data.data.items ?? [];
+};
+
+// 9.2 建立本地住戶授權
+export const createBuildingAuthorization = async (payload: BuildingAuthorizationPayload): Promise<BuildingAuthorizationRow> => {
+  const { data } = await httpClient.post<ApiResponse<BuildingAuthorizationRow>>('/me/building-authorizations', payload);
+  return data.data;
+};
+
+// 9.3 撤銷本地住戶授權
+export const revokeBuildingAuthorization = async (authorizationID: string): Promise<void> => {
+  await httpClient.delete(`/me/building-authorizations/${encodeURIComponent(authorizationID)}`);
+};
+
+// 9.4 接受受邀住戶並設定登入資料
+export const acceptBuildingAuthorization = async (payload: { token: string; username: string; password: string }): Promise<void> => {
+  await httpClient.post('/auth/building-authorizations/accept', payload);
 };
 
 // 10. 取得目前會員 iSmart 大廈資料

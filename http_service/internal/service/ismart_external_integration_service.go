@@ -181,7 +181,7 @@ func (s *IsmartExternalService) ListOtherFees(ctx context.Context, userID int64,
 
 // 14. ListBuildingNotices returns visible building notices.
 func (s *IsmartExternalService) ListBuildingNotices(ctx context.Context, userID int64, params IsmartBuildingParams) (map[string]any, error) {
-	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	account, buildingID, buildingOptions, err := s.resolveAuthorizedBuildingAccess(ctx, userID, params.BuildingID, BuildingPermissionBuildingNotices)
 	if err != nil {
 		return nil, err
 	}

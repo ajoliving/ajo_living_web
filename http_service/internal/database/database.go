@@ -50,6 +50,7 @@ func Migrate(db *gorm.DB) error {
 		&model.UserCredential{},
 		&model.UserProfile{},
 		&model.UserIsmartAccount{},
+		&model.BuildingAuthorization{},
 		&model.Community{},
 		&model.Role{},
 		&model.Permission{},

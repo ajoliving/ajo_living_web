@@ -96,6 +96,7 @@ func main() {
 	posBuildingService := service.NewPOSBuildingService(runtime)
 	posPaymentService := service.NewPOSPaymentService(runtime, posBuildingService)
 	ismartExternalService := service.NewIsmartExternalService(runtime)
+	buildingAuthorizationService := service.NewBuildingAuthorizationService(runtime)
 	securityICCTVService := service.NewSecurityICCTVService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
 	propertyService := service.NewPropertyService(runtime)
@@ -124,26 +125,27 @@ func main() {
 	}
 
 	engine := router.New(&router.Dependencies{
-		Config:                  cfg,
-		Logger:                  logg,
-		AuthService:             authService,
-		UserService:             userService,
-		StaffService:            staffService,
-		UploadService:           uploadService,
-		HomeContentService:      homeContentService,
-		POSBuildingService:      posBuildingService,
-		POSPaymentService:       posPaymentService,
-		IsmartExternalService:   ismartExternalService,
-		SecurityICCTVService:    securityICCTVService,
-		WalletService:           walletService,
-		SecondhandService:       secondhandService,
-		PropertyService:         propertyService,
-		AgencyCompanyService:    agencyCompanyService,
-		ChatService:             chatService,
-		OrderService:            orderService,
-		NotificationService:     notificationService,
-		SupermarketOfferService: supermarketOfferService,
-		MarketTrendService:      marketTrendService,
+		Config:                       cfg,
+		Logger:                       logg,
+		AuthService:                  authService,
+		UserService:                  userService,
+		StaffService:                 staffService,
+		UploadService:                uploadService,
+		HomeContentService:           homeContentService,
+		POSBuildingService:           posBuildingService,
+		POSPaymentService:            posPaymentService,
+		IsmartExternalService:        ismartExternalService,
+		BuildingAuthorizationService: buildingAuthorizationService,
+		SecurityICCTVService:         securityICCTVService,
+		WalletService:                walletService,
+		SecondhandService:            secondhandService,
+		PropertyService:              propertyService,
+		AgencyCompanyService:         agencyCompanyService,
+		ChatService:                  chatService,
+		OrderService:                 orderService,
+		NotificationService:          notificationService,
+		SupermarketOfferService:      supermarketOfferService,
+		MarketTrendService:           marketTrendService,
 	})
 
 	server := &http.Server{

@@ -1,6 +1,6 @@
 <!--
  * 會員中心頁。
- * 1. 承載左側模組導覽與右側內容面板，支援帳號管理、授權副戶、物業綁定、AJO 錢包、我的樓盤、我的住宅、我的家具與我的收藏等面板切換。
+ * 1. 承載左側模組導覽與右側內容面板，支援帳號管理、物業綁定、AJO 錢包、我的樓盤、我的住宅、我的家具與我的收藏等面板切換。
  * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
@@ -10,25 +10,21 @@
  * 會員中心頁邏輯。
  * 1. 面板索引型別與導覽項目定義。
  * 2. 當前面板狀態與切換方法。
- * 3. 帳號管理、授權副戶、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
+ * 3. 帳號管理、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
  * 4. 退出登入後返回登入頁。
  */
-import axios from 'axios';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
+import axios from 'axios';
 import { isIntegrationBusinessAuthError } from '@/httpapis';
 import {
-  fetchMemberIsmartSubaccounts,
   fetchMemberPosBuildings,
   fetchMemberPosBuildingUnits,
   fetchPosBuildings,
   fetchPosBuildingUnits,
-  grantMemberIsmartSubaccount,
-  revokeMemberIsmartSubaccount,
   submitMemberIsmartOwnerBindingRequest,
-  type IsmartSubaccountRow,
 } from '@/httpapis/building';
 import { updateMe } from '@/httpapis/me';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
@@ -50,7 +46,6 @@ const sessionStore = useSessionStore();
 type PanelKey =
   | 'profile-account'
   | 'profile-agency-company'
-  | 'profile-subaccounts'
   | 'profile-property-binding'
   | 'profile-wallet'
   | 'profile-chat'
@@ -72,7 +67,6 @@ const navItems = computed<Array<{ key: PanelKey; label: string; needsApi?: boole
   ...(['individual_agent', 'agency_company'].includes(sessionStore.me?.account_type ?? '')
     ? [{ key: 'profile-agency-company' as PanelKey, label: t('account.center.nav.agencyCompany') }]
     : []),
-  { key: 'profile-subaccounts', label: t('account.center.nav.subaccounts') },
   { key: 'profile-property-binding', label: t('account.center.nav.propertyBinding') },
   { key: 'profile-wallet', label: t('account.center.nav.wallet') },
   { key: 'profile-chat', label: t('account.center.nav.messages') },
@@ -173,6 +167,13 @@ const displayText = (value: unknown, fallback = unsetText.value): string => {
 };
 
 const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
+
+// 7. 讀取 API 錯誤訊息
+const readAccountApiErrorMessage = (error: unknown, fallback: string): string =>
+  axios.isAxiosError<{ message?: string }>(error)
+    ? error.response?.data?.message ?? fallback
+    : fallback;
+
 const accountDisplayName = computed(() => displayText(sessionStore.me?.display_name, sessionStore.currentUser.display_name));
 const accountAvatarText = computed(() => accountDisplayName.value.trim().slice(0, 1).toUpperCase() || 'A');
 const memberPhoneText = computed(() => {
@@ -813,6 +814,12 @@ const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
   { label: t('account.center.account.billingAddressChinese'), value: displayText(ismartProfile.value?.billing_address_zh) },
 ]);
 
+/*
+ * 授權副戶操作已遷移至「我的大廈」。
+ * 1. 授權必須綁定目前選中的完整單位。
+ * 2. 會員中心不再保留跨單位的副戶管理入口。
+ */
+/*
 interface SubaccountDisplayRow {
   key: string;
   relationInfoID: string;
@@ -1095,6 +1102,7 @@ const handleRevokeSubaccount = async (group: SubaccountGroup, row: SubaccountDis
     revokingSubaccountKey.value = '';
   }
 };
+*/
 
 interface BindingStatusItem {
   key: string;
@@ -1458,10 +1466,6 @@ const openFurnitureCreate = () => {
 
 // 13. 按目前面板首次載入非帳號管理資料
 const ensureActivePanelLoaded = async (): Promise<void> => {
-  if (activePanel.value === 'profile-subaccounts' && !subaccountsLoaded.value && !subaccountsLoading.value) {
-    await loadSubaccountGroups();
-    return;
-  }
   if (activePanel.value === 'profile-property-binding') {
     await ensureOwnerBindingLoaded();
   }
@@ -1707,7 +1711,8 @@ watch(activePanel, () => {
           <RouterView v-if="activePanel === 'profile-agency-company'" />
         </div>
 
-        <!-- 2.3 授權副戶 -->
+        <!-- 2.3 授權副戶已遷移至「我的大廈」。 -->
+        <!--
         <div v-show="activePanel === 'profile-subaccounts'" class="work-panel on" data-work-panel="profile-subaccounts">
           <section class="work-hero">
             <div>
@@ -1827,6 +1832,7 @@ watch(activePanel, () => {
           </section>
         </div>
 
+        -->
         <!-- 2.3 物業綁定 -->
         <div v-show="activePanel === 'profile-property-binding'" class="work-panel on" data-work-panel="profile-property-binding">
           <section class="work-hero">

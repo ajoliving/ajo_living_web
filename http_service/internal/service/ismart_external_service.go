@@ -8,6 +8,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -66,15 +67,30 @@ func NewIsmartExternalService(runtime *Runtime) *IsmartExternalService {
 // 7. ListBuildings returns iSmart buildings visible to the current AJO member.
 func (s *IsmartExternalService) ListBuildings(ctx context.Context, userID int64) (map[string]any, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
-	if err != nil {
+	if err == nil {
+		buildings := normalizeStringSlice(append(s.visibleBuildingIDs(account), s.grantedBuildingIDs(ctx, userID)...))
+		return map[string]any{
+			"building_options": buildings,
+			"is_staff":         account.IsStaff,
+		}, nil
+	}
+	grantedBuildings, grantErr := NewBuildingAuthorizationService(s.runtime).GrantedBuildingIDs(ctx, userID)
+	if grantErr != nil || len(grantedBuildings) == 0 {
 		return nil, err
 	}
-
-	buildings := s.visibleBuildingIDs(account)
 	return map[string]any{
-		"building_options": buildings,
-		"is_staff":         account.IsStaff,
+		"building_options": grantedBuildings,
+		"is_staff":         false,
 	}, nil
+}
+
+// 7.1 grantedBuildingIDs returns local delegated buildings without breaking old schemas.
+func (s *IsmartExternalService) grantedBuildingIDs(ctx context.Context, userID int64) []string {
+	buildingIDs, err := NewBuildingAuthorizationService(s.runtime).GrantedBuildingIDs(ctx, userID)
+	if err != nil {
+		return []string{}
+	}
+	return buildingIDs
 }
 
 // 8. GetBuildingInfo proxies the merged building info and form files API.
@@ -178,7 +194,7 @@ func (s *IsmartExternalService) GetBuildingAccess(ctx context.Context, userID in
 
 // 11. OpenDoor proxies remote door open.
 func (s *IsmartExternalService) OpenDoor(ctx context.Context, userID int64, params IsmartDoorOpenParams) (map[string]any, error) {
-	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	account, buildingID, buildingOptions, err := s.resolveAuthorizedBuildingAccess(ctx, userID, params.BuildingID, BuildingPermissionRemoteDoorOpen)
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +216,51 @@ func (s *IsmartExternalService) OpenDoor(ctx context.Context, userID int64, para
 	}
 
 	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
+}
+
+// 12.1 resolveAuthorizedBuildingAccess resolves owner access or a local grantee delegation.
+func (s *IsmartExternalService) resolveAuthorizedBuildingAccess(ctx context.Context, userID int64, requestedBuildingID string, permission string) (*model.UserIsmartAccount, string, []string, error) {
+	var grant model.BuildingAuthorization
+	query := s.runtime.DB.WithContext(ctx).Where("grantee_user_id = ? AND status = ?", userID, BuildingAuthorizationStatusActive)
+	if strings.TrimSpace(requestedBuildingID) != "" {
+		query = query.Where("building_id = ?", strings.TrimSpace(requestedBuildingID))
+	}
+	grantErr := query.Order("created_at desc").First(&grant).Error
+	if grantErr == nil {
+		var permissions []string
+		if err := json.Unmarshal(grant.Permissions, &permissions); err != nil {
+			return nil, "", nil, errcode.New(errcode.CodeInternalError, "failed to load building authorization")
+		}
+		if !containsString(permissions, permission) {
+			return nil, "", nil, errcode.New(errcode.CodeAuthForbidden, "building feature is not authorized")
+		}
+		ownerAccount, err := s.loadIsmartAccount(ctx, grant.OwnerUserID)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		buildingID, buildingOptions, err := s.selectVisibleBuilding(ctx, ownerAccount, grant.BuildingID)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		return ownerAccount, buildingID, buildingOptions, nil
+	}
+	_, accountErr := s.loadIsmartAccount(ctx, userID)
+	if grantErr != nil && isBuildingAuthorizationTableMissing(grantErr) && accountErr == nil {
+		return s.resolveBuildingAccess(ctx, userID, requestedBuildingID)
+	}
+	if grantErr != nil && !errors.Is(grantErr, gorm.ErrRecordNotFound) {
+		return nil, "", nil, errcode.New(errcode.CodeInternalError, "failed to load building authorization")
+	}
+	if accountErr == nil {
+		return s.resolveBuildingAccess(ctx, userID, requestedBuildingID)
+	}
+	return nil, "", nil, accountErr
+}
+
+// 12.2 isBuildingAuthorizationTableMissing keeps older schemas and rolling deployments compatible.
+func isBuildingAuthorizationTableMissing(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "no such table") || strings.Contains(message, "does not exist")
 }
 
 // 12. GenerateQRCode proxies door QR payload generation.

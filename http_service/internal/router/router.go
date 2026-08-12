@@ -19,26 +19,27 @@ import (
 
 // 1. Dependencies groups objects required to build the router.
 type Dependencies struct {
-	Config                  *config.Config
-	Logger                  *slog.Logger
-	AuthService             *service.AuthService
-	UserService             *service.UserService
-	StaffService            *service.StaffService
-	UploadService           *service.UploadService
-	HomeContentService      *service.HomeContentService
-	POSBuildingService      *service.POSBuildingService
-	POSPaymentService       *service.POSPaymentService
-	IsmartExternalService   *service.IsmartExternalService
-	SecurityICCTVService    *service.SecurityICCTVService
-	WalletService           *service.WalletService
-	SecondhandService       *service.SecondhandService
-	PropertyService         *service.PropertyService
-	AgencyCompanyService    *service.AgencyCompanyService
-	ChatService             *service.ChatService
-	OrderService            *service.OrderService
-	NotificationService     *service.NotificationService
-	SupermarketOfferService *service.SupermarketOfferService
-	MarketTrendService      *service.MarketTrendService
+	Config                       *config.Config
+	Logger                       *slog.Logger
+	AuthService                  *service.AuthService
+	UserService                  *service.UserService
+	StaffService                 *service.StaffService
+	UploadService                *service.UploadService
+	HomeContentService           *service.HomeContentService
+	POSBuildingService           *service.POSBuildingService
+	POSPaymentService            *service.POSPaymentService
+	IsmartExternalService        *service.IsmartExternalService
+	BuildingAuthorizationService *service.BuildingAuthorizationService
+	SecurityICCTVService         *service.SecurityICCTVService
+	WalletService                *service.WalletService
+	SecondhandService            *service.SecondhandService
+	PropertyService              *service.PropertyService
+	AgencyCompanyService         *service.AgencyCompanyService
+	ChatService                  *service.ChatService
+	OrderService                 *service.OrderService
+	NotificationService          *service.NotificationService
+	SupermarketOfferService      *service.SupermarketOfferService
+	MarketTrendService           *service.MarketTrendService
 }
 
 // 2. New builds and returns the gin engine.
@@ -64,6 +65,7 @@ func New(deps *Dependencies) *gin.Engine {
 	posBuildingHandler := handler.NewPOSBuildingHandler(deps.POSBuildingService, deps.POSPaymentService)
 	posPaymentHandler := handler.NewPOSPaymentHandler(deps.POSPaymentService)
 	ismartHandler := handler.NewIsmartExternalHandler(deps.IsmartExternalService)
+	buildingAuthorizationHandler := handler.NewBuildingAuthorizationHandler(deps.BuildingAuthorizationService)
 	securityICCTVHandler := handler.NewSecurityICCTVHandler(deps.SecurityICCTVService)
 	walletHandler := handler.NewWalletHandler(deps.WalletService)
 	staffWalletHandler := handler.NewStaffWalletHandler(deps.WalletService)
@@ -86,6 +88,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerAgencyCompanyMemberRoutes(api, agencyCompanyHandler, requireAuth)
 	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireActive)
 	registerIsmartRoutes(api, ismartHandler, requireActive)
+	registerBuildingAuthorizationRoutes(api, buildingAuthorizationHandler, requireAuth)
 	registerSecurityRoutes(api, securityICCTVHandler, requireActive)
 	registerWalletRoutes(api, walletHandler, requireActive)
 	registerUploadRoutes(api, uploadHandler, requireAuth)

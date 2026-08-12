@@ -1285,6 +1285,15 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 - **業主綁定**: `POST /api/v1/me/ismart/owner-binding-requests`。請求使用 `building_id`、`ownedflat` 陣列，並可選 `cli_role`、`ownernote`、`is_receive_email`、`reg_tel`、`reg_email`、`cli_name`、`cli_id_card`、`cli_tel`。成功只代表 iSmart 已建立 `OwnerReg` 待審申請，不會建立有效 AJO 物業綁定。
 - **授權用戶**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`；新增和撤銷分別使用 `POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke`，請求為 `unit_id`、`target_user_id` 及可選 `remark`。單位必須屬於目前會員可見範圍；是否為已批准業主、每單位名額、重複關係與撤銷狀態仍由 iSmart 最終校驗。
 - **安全邊界**: 瀏覽器不得提交 iSmart `user_id`。AJO 後端從目前 JWT 與 `UserIsmartAccount` 注入上游身份，並維持 AJO 穩定回應結構。
+
+### 8D. 大廈住戶授權 [會員]
+
+- `GET /api/v1/me/building-authorizations/permissions`：取得可授權功能，目前為 `remote_door_open` 及 `building_notices`。
+- `GET /api/v1/me/building-authorizations?building_id=<building_id>`：取得目前主戶於指定大廈建立的授權。
+- `POST /api/v1/me/building-authorizations`：提交 `building_id`、`phone_country_code`、`phone_number`、`email` 及 `permissions`。電話與電郵已屬同一帳戶時立即生效；均未註冊時建立待啟用帳戶並發送 72 小時一次性電郵連結。
+- `DELETE /api/v1/me/building-authorizations/{authorizationId}`：撤銷指定授權並即時停止相關功能。
+- `POST /api/v1/auth/building-authorizations/accept`：受邀住戶以 `token`、`username`、`password` 啟用帳戶。
+- 遙距開門及大廈通告由實際操作 API 校驗授權；副戶只可使用指定大廈及已勾選功能。
 - **服務個案提交**: `POST /api/v1/me/ismart/building-comments` 使用 `building_id`、`request_type`（`repair` 或 `feedback`）、`category`、`subcategory`、`content`，並可選 `subject`、`location_text`、`unit_id`、`contact_name`、`contact_phone`。`unit_id` 非空時必須屬於目前會員可見單位。舊 `comment_type` 與 `comment` 請求仍兼容；AJO 優先把完整分類提交到 `POST /api/v1/integration/buildings/comments/`，僅在上游回傳 404 時回退舊寫入接口。
 - **服務個案查詢**: `GET /api/v1/me/ismart/service-cases?building_id=&status=&request_type=` 固定查詢目前會員本人個案；`GET /api/v1/me/ismart/service-cases/{caseId}?building_id=` 返回個案內容、非內部訊息與附件。兩者使用 iSmart `GET /api/v1/integration/buildings/service-cases/` 主路徑，不設舊接口回退，也不快取動態處理狀態或訊息紀錄。
 

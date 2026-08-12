@@ -8,6 +8,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import i18n from '@/i18n';
 import { accountRoutes } from '@/router/routes/account';
 import { buildingRoutes } from '@/router/routes/building';
+import { buildingAuthorizationRoutes } from '@/router/routes/building-authorizations';
 import { channelRoutes } from '@/router/routes/channels';
 import { firstRoutes } from '@/router/routes/first';
 import { homeRoutes } from '@/router/routes/home';
@@ -48,6 +49,7 @@ const router = createRouter({
   routes: [
     ...homeRoutes,
     ...buildingRoutes,
+    ...buildingAuthorizationRoutes,
     ...firstRoutes,
     ...channelRoutes,
     ...trendRoutes,

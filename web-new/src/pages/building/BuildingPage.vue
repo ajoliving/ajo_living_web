@@ -18,6 +18,9 @@ import {
   fetchMemberIsmartBuildingInfo,
   fetchMemberIsmartManagementFees,
   fetchMemberIsmartBuildingNotices,
+  fetchBuildingAuthorizations,
+  createBuildingAuthorization,
+  revokeBuildingAuthorization,
   fetchMemberIsmartOtherFees,
   fetchMemberIsmartServiceCase,
   fetchMemberIsmartServiceCases,
@@ -39,6 +42,7 @@ import {
   type IsmartRecentAccessGroup,
   type IsmartServiceCaseDetailResponse,
   type IsmartServiceCaseListResponse,
+  type BuildingAuthorizationRow,
 } from '@/httpapis/building';
 import type { PosBuilding } from '@/model/community';
 import {
@@ -71,7 +75,8 @@ type AffairsTab =
   | 'affairs-forms'
   | 'affairs-feedback'
   | 'affairs-access'
-  | 'affairs-icctv';
+  | 'affairs-icctv'
+  | 'affairs-resident-authorizations';
 
 type AffairsMode = 'repair' | 'feedback';
 type FinanceSubTab = 'management-overview' | 'financial-reports' | 'audit-reports';
@@ -274,6 +279,32 @@ const icctvLoading = ref(false);
 const icctvError = ref('');
 const icctvProfile = ref<Awaited<ReturnType<typeof fetchMemberICCTVPublicCameras>> | null>(null);
 const expandedICCTVCameraIDs = ref<string[]>([]);
+const residentAuthorizationLoading = ref(false);
+const residentAuthorizationError = ref('');
+const residentAuthorizations = ref<BuildingAuthorizationRow[]>([]);
+const residentAuthorizationPhoneCountryCode = ref('+852');
+const residentAuthorizationPhone = ref('');
+const residentAuthorizationEmail = ref('');
+const residentAuthorizationPermissions = ref<string[]>(['remote_door_open', 'building_notices']);
+const residentAuthorizationSubmitting = ref(false);
+const revokingResidentAuthorization = ref('');
+const authorizationOptions = computed(() => [
+  { value: 'remote_door_open', label: t('building.authorizations.permissions.remoteDoorOpen') },
+  { value: 'building_notices', label: t('building.authorizations.permissions.buildingNotices') },
+]);
+const authorizationPermissionLabel = (value: string): string => {
+  const keyMap: Record<string, string> = {
+    remote_door_open: 'remoteDoorOpen',
+    building_notices: 'buildingNotices',
+  };
+  return t(`building.authorizations.permissions.${keyMap[value] ?? value}`);
+};
+
+// 3.1 顯示目前授權狀態
+const authorizationStatusLabel = (status: string | undefined): string =>
+  status === 'active'
+    ? t('building.authorizations.status.active')
+    : t('building.authorizations.status.pending');
 const contextPickerUnitID = ref('');
 const {
   selectedUnitID: contextUnitID,
@@ -321,6 +352,7 @@ const navItems = computed<NavItem[]>(() => [
   { target: 'affairs-forms', label: t('building.nav.forms') },
   { target: 'affairs-feedback', label: t('building.nav.feedback') },
   { target: 'affairs-access', label: t('building.nav.access') },
+  { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations') },
   { target: 'affairs-icctv', label: t('building.nav.icctv') },
 ]);
 
@@ -1411,8 +1443,71 @@ const loadICCTV = async () => {
   }
 };
 
+// 15.1 讀取目前單位授權住戶
+const loadResidentAuthorizations = async (): Promise<void> => {
+  residentAuthorizationLoading.value = true;
+  residentAuthorizationError.value = '';
+  try {
+    residentAuthorizations.value = selectedBuildingID.value ? await fetchBuildingAuthorizations(selectedBuildingID.value) : [];
+  } catch (error) {
+    console.error(error);
+    residentAuthorizations.value = [];
+    residentAuthorizationError.value = 'building.authorizations.loadError';
+  } finally {
+    residentAuthorizationLoading.value = false;
+  }
+};
+
+// 15.2 提交電話及電郵授權
+const submitResidentAuthorization = async (): Promise<void> => {
+  const phone = residentAuthorizationPhone.value.trim();
+  const email = residentAuthorizationEmail.value.trim();
+  if (!selectedBuildingID.value || !phone || !email || residentAuthorizationPermissions.value.length === 0) {
+    residentAuthorizationError.value = 'building.authorizations.validation';
+    return;
+  }
+  residentAuthorizationSubmitting.value = true;
+  residentAuthorizationError.value = '';
+  try {
+    await createBuildingAuthorization({
+      building_id: selectedBuildingID.value,
+      phone_country_code: residentAuthorizationPhoneCountryCode.value,
+      phone_number: phone,
+      email,
+      permissions: residentAuthorizationPermissions.value,
+    });
+    residentAuthorizationPhone.value = '';
+    residentAuthorizationEmail.value = '';
+    residentAuthorizationPermissions.value = ['remote_door_open', 'building_notices'];
+    await loadResidentAuthorizations();
+  } catch (error) {
+    console.error(error);
+    residentAuthorizationError.value = 'building.authorizations.submitError';
+  } finally {
+    residentAuthorizationSubmitting.value = false;
+  }
+};
+
+// 15.3 撤銷一項住戶授權
+const revokeResidentAuthorization = async (row: BuildingAuthorizationRow): Promise<void> => {
+  if (!row.authorization_id || !window.confirm(t('building.authorizations.revokeConfirm'))) return;
+  revokingResidentAuthorization.value = row.authorization_id;
+  try {
+    await revokeBuildingAuthorization(row.authorization_id);
+    await loadResidentAuthorizations();
+  } catch (error) {
+    console.error(error);
+    residentAuthorizationError.value = 'building.authorizations.submitError';
+  } finally {
+    revokingResidentAuthorization.value = '';
+  }
+};
+
 // 16. 切換主面板
 const switchTab = (target: AffairsTab) => {
+  if (target === 'affairs-resident-authorizations' && !residentAuthorizationLoading.value) {
+    void loadResidentAuthorizations();
+  }
   activeTab.value = target;
   if (target === 'affairs-notices' && !ismartNoticeProfile.value && !noticeLoading.value) {
     void loadBuildingNotices();
@@ -1672,6 +1767,8 @@ const resetBuildingScopedState = (): void => {
   serviceCaseDetail.value = null;
   serviceCaseError.value = '';
   expandedRecord.value = '';
+  residentAuthorizations.value = [];
+  residentAuthorizationError.value = '';
 };
 
 // 28.2 保存並套用目前物業
@@ -3306,6 +3403,135 @@ onMounted(() => {
                     <strong>{{ formatLocaleDateValue(accessQRPanel.expiresAt) }}</strong>
                   </div>
                 </div>
+        <!-- 住戶授權 -->
+        <div
+          v-show="activeTab === 'affairs-resident-authorizations'"
+          class="work-panel"
+          :class="{ on: activeTab === 'affairs-resident-authorizations' }"
+          data-work-panel="affairs-resident-authorizations"
+        >
+          <section class="work-hero">
+            <div>
+              <h2 class="work-title">{{ t('building.authorizations.title') }}</h2>
+              <p class="work-desc">{{ t('building.authorizations.description') }}</p>
+            </div>
+            <button
+              type="button"
+              class="work-action authorization-refresh-action"
+              :disabled="residentAuthorizationLoading"
+              @click="loadResidentAuthorizations"
+            >
+              <AppIcon name="reload" :size="15" />
+              <span>{{ residentAuthorizationLoading ? t('building.common.loading') : t('building.common.refresh') }}</span>
+            </button>
+          </section>
+
+          <form class="work-card authorization-form-card" @submit.prevent="submitResidentAuthorization">
+            <div class="authorization-form-body">
+              <div class="authorization-form-grid">
+                <div class="authorization-form-section">
+                  <div class="authorization-section-kicker">
+                    <AppIcon name="user" :size="15" />
+                    <span>{{ t('building.authorizations.contact') }}</span>
+                  </div>
+                  <div class="authorization-field-stack">
+                    <label class="authorization-field">
+                      <span>{{ t('building.authorizations.phone') }}</span>
+                      <div class="authorization-phone-row">
+                        <select v-model="residentAuthorizationPhoneCountryCode" class="authorization-form-control authorization-country-select" autocomplete="tel-country-code">
+                          <option value="+852">+852</option>
+                          <option value="+86">+86</option>
+                        </select>
+                        <div class="authorization-input-shell">
+                          <input v-model="residentAuthorizationPhone" type="tel" inputmode="tel" autocomplete="tel" :placeholder="t('building.authorizations.phonePlaceholder')">
+                          <AppIcon name="phone" :size="18" />
+                        </div>
+                      </div>
+                    </label>
+                    <label class="authorization-field">
+                      <span>{{ t('building.authorizations.email') }}</span>
+                      <div class="authorization-input-shell">
+                        <input v-model="residentAuthorizationEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" :placeholder="t('building.authorizations.emailPlaceholder')">
+                        <AppIcon name="inbox" :size="18" />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <div class="authorization-form-section authorization-permission-section">
+                  <div class="authorization-section-kicker">
+                    <AppIcon name="shield" :size="15" />
+                    <span>{{ t('building.authorizations.permissionTitle') }}</span>
+                  </div>
+                  <div class="authorization-permission-grid">
+                    <label v-for="option in authorizationOptions" :key="option.value" class="authorization-permission-option">
+                      <input v-model="residentAuthorizationPermissions" type="checkbox" :value="option.value">
+                      <span class="authorization-permission-mark"><AppIcon :name="option.value === 'remote_door_open' ? 'building' : 'bell'" :size="16" /></span>
+                      <span class="authorization-permission-copy">
+                        <strong>{{ option.label }}</strong>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-if="residentAuthorizationError" class="authorization-error" aria-live="polite">
+              {{ t(residentAuthorizationError) }}
+            </p>
+            <div class="authorization-form-actions">
+              <span class="authorization-action-hint">{{ t('building.authorizations.permissionHint') }}</span>
+              <button type="submit" class="work-action" :disabled="residentAuthorizationSubmitting">
+                <AppIcon name="send" :size="15" />
+                <span>{{ residentAuthorizationSubmitting ? t('building.authorizations.submitting') : t('building.authorizations.submit') }}</span>
+              </button>
+            </div>
+          </form>
+
+          <section class="work-card authorization-list-card">
+            <div class="authorization-list-heading">
+              <div>
+                <div class="work-card-title">{{ t('building.authorizations.listTitle') }}</div>
+                <p>{{ t('building.authorizations.description') }}</p>
+              </div>
+              <span class="authorization-count-chip">{{ residentAuthorizations.length }}</span>
+            </div>
+            <div v-if="residentAuthorizationLoading" class="authorization-empty-state">
+              {{ t('building.common.loading') }}
+            </div>
+            <div v-else-if="residentAuthorizations.length === 0" class="authorization-empty-state">
+              <AppIcon name="user" :size="22" />
+              <strong>{{ t('building.authorizations.empty') }}</strong>
+            </div>
+            <div v-else class="authorization-record-list">
+              <div v-for="row in residentAuthorizations" :key="row.authorization_id" class="authorization-record">
+                <div class="authorization-record-person">
+                  <span class="authorization-record-avatar"><AppIcon name="user" :size="16" /></span>
+                  <div>
+                    <strong>{{ row.grantee_user_id ? t('building.authorizations.authorizedUser') : t('building.authorizations.pendingUser') }}</strong>
+                    <span class="authorization-status" :class="row.status">{{ authorizationStatusLabel(row.status) }}</span>
+                  </div>
+                </div>
+                <div class="authorization-record-contact">
+                  <span v-if="row.phone_number"><AppIcon name="phone" :size="14" />{{ [row.phone_country_code, row.phone_number].filter(Boolean).join(' ') }}</span>
+                  <span v-if="row.email"><AppIcon name="inbox" :size="14" />{{ row.email }}</span>
+                </div>
+                <div class="authorization-record-permissions">
+                  <span v-for="permission in row.permissions ?? []" :key="permission" class="authorization-permission-chip">{{ authorizationPermissionLabel(permission) }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="authorization-revoke-button"
+                  :disabled="revokingResidentAuthorization === row.authorization_id"
+                  :aria-label="t('building.authorizations.revoke')"
+                  @click="revokeResidentAuthorization(row)"
+                >
+                  <AppIcon name="close" :size="16" />
+                  <span>{{ revokingResidentAuthorization === row.authorization_id ? t('building.authorizations.revoking') : t('building.authorizations.revoke') }}</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
               </div>
             </div>
           </section>
@@ -4966,7 +5192,13 @@ onMounted(() => {
 
   .building-doc-grid,
   .finance-summary-grid,
-  .building-field-grid {
+  .building-field-grid,
+  .authorization-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .authorization-field-stack,
+  .authorization-permission-grid {
     grid-template-columns: 1fr;
   }
 
@@ -5023,6 +5255,428 @@ onMounted(() => {
   }
 
   .icctv-table {
+/* 15.1 住戶授權 */
+.authorization-form-card {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.authorization-refresh-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.authorization-list-heading p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.authorization-form-body {
+  padding: 0;
+}
+
+.authorization-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.authorization-form-control,
+.authorization-input-shell {
+  height: 42px;
+  box-sizing: border-box;
+  border: 1px solid var(--bdr);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--ink);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.authorization-form-control {
+  outline: 0;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.authorization-country-select {
+  width: 94px;
+  flex: 0 0 94px;
+  cursor: pointer;
+}
+
+.authorization-input-shell {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.authorization-input-shell input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.authorization-input-shell input::placeholder {
+  color: var(--ink-4);
+}
+
+.authorization-input-shell .app-icon {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  color: var(--ink-4);
+  transition: color 160ms ease;
+}
+
+.authorization-form-control:focus,
+.authorization-input-shell:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
+.authorization-input-shell:focus-within .app-icon {
+  color: var(--brand);
+}
+
+.authorization-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.authorization-form-section {
+  display: grid;
+  grid-template-columns: 142px minmax(0, 1fr);
+  align-content: start;
+  gap: 20px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.authorization-form-section + .authorization-form-section {
+  border-top: 1px solid var(--sur-3);
+  background: color-mix(in srgb, var(--sur-2) 62%, #fff);
+}
+
+.authorization-section-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.authorization-section-kicker .app-icon {
+  color: var(--ink-3);
+}
+
+.authorization-field-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.authorization-field {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.authorization-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.authorization-permission-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.authorization-permission-option:has(input:checked) {
+  border-color: var(--brand);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.authorization-permission-option input {
+  grid-column: 3;
+  grid-row: 1;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.authorization-permission-mark {
+  grid-column: 1;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  background: var(--sur-2);
+  color: var(--ink-3);
+}
+
+.authorization-permission-option:has(input:checked) .authorization-permission-mark {
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.authorization-permission-copy {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.authorization-permission-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.authorization-status {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.authorization-status.active {
+  color: var(--success);
+}
+
+.authorization-status.pending {
+  color: var(--warning);
+}
+
+.authorization-error {
+  margin: 14px 18px 0;
+  border-left: 3px solid var(--danger);
+  padding: 8px 10px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.authorization-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  border-top: 1px solid var(--sur-3);
+  padding: 14px 18px;
+}
+
+.authorization-form-actions .work-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 122px;
+}
+
+.authorization-action-hint {
+  margin-right: auto;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.authorization-list-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.authorization-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sur-3);
+  padding: 16px 18px;
+}
+
+.authorization-list-heading .work-card-title {
+  margin: 0;
+}
+
+.authorization-count-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--bdr);
+  border-radius: 5px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.authorization-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 112px;
+  padding: 24px;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.authorization-empty-state .app-icon {
+  color: var(--ink-4);
+}
+
+.authorization-empty-state strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.authorization-record-list {
+  display: grid;
+}
+
+.authorization-record {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) minmax(200px, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  border-top: 1px solid var(--sur-3);
+  padding: 14px 18px;
+}
+
+.authorization-record:first-child {
+  border-top: 0;
+}
+
+.authorization-record-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.authorization-record-person strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.authorization-record-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--sur-2);
+  color: var(--ink-3);
+}
+
+.authorization-record-contact {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.authorization-record-contact span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authorization-record-contact .app-icon {
+  flex: 0 0 auto;
+  color: var(--ink-4);
+}
+
+.authorization-record-permissions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.authorization-permission-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 4px;
+  padding: 0 8px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.authorization-revoke-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 5px;
+  padding: 7px 8px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.authorization-revoke-button:hover {
+  background: var(--danger-bg);
+}
+
+.authorization-revoke-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
     width: 100%;
     min-width: 0;
   }
@@ -5050,6 +5704,47 @@ onMounted(() => {
   .icctv-row-actions {
     align-items: stretch;
     flex-direction: column;
+  .authorization-form-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .authorization-section-kicker {
+    min-height: auto;
+  }
+
+  .authorization-record {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .authorization-record-contact,
+  .authorization-record-permissions {
+    grid-column: 1 / -1;
+  }
+
+  .authorization-revoke-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .authorization-form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .authorization-form-actions .work-action {
+    width: 100%;
+  }
+
+  .authorization-action-hint {
+    margin-right: 0;
+  }
+
+  .authorization-form-control,
+  .authorization-input-shell input {
+    font-size: 16px;
+  }
+
   }
 
   .icctv-row-actions .work-mini-btn {

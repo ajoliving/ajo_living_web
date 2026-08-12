@@ -40,6 +40,7 @@ utils/: 無業務狀態的通用工具。
 - iSmart 大廈資料與文件中繼資料可按 `building_id` 使用 Redis 共用快取 5 分鐘；`resolveBuildingAccess` 必須先於快取讀取執行，`building_options`、Staff 狀態及其他會員欄位只可在回應階段即時組裝，不得寫入共用快取。Redis 故障時直接回源 iSmart。
 - 會員 POS 大廈列表必須為每個可見 `building_id` 返回一條記錄；會員 relay 只返回部分大廈時，以 AJO 公共 POS 目錄補齊正式名稱，公共目錄仍缺失時才保留 ID 回退記錄。
 - POS 大廈與單位目錄可使用 Redis 共用快取 5 分鐘；會員接口必須先即時讀取本地 profile 與 iSmart 權限並完成大廈可見性校驗，再讀取共用目錄及過濾單位。快取不得保存 relay token、會員權限、綁定狀態或目前物業，Redis 或公共目錄失敗時可回退會員 relay。
+- 大廈住戶授權以本地 `building_authorizations` 保存電話、電郵、受邀帳戶及功能範圍；未註冊受邀者使用一次性電郵連結設定帳戶，已註冊帳戶即時生效。遙距開門及通告讀取必須在實際操作 API 按大廈及功能範圍校驗。
 - 部署與環境操作不在 `internal/` 內新增 prompt，統一回到 `docs/deployment/`。
 
 ## 變更日誌
@@ -67,5 +68,6 @@ utils/: 無業務狀態的通用工具。
 2026-07-28: 記錄舊版草稿重複扣費的不可變退款流水、淨預付查詢與受限維護命令邊界。
 2026-07-30: 記錄代理註冊即上載牌照、建立待審版本及 Staff 批准後啟用帳戶的 API 契約；個人代理可不提供電郵。
 2026-07-31: 記錄樓盤公開摘要同時返回實際樓層與公開樓層，並保留聯絡資料及內部備註的私密邊界。
+2026-08-12: 固定大廈住戶授權的本地帳戶邀請、功能範圍及實際操作 API 鑑權契約。
 
 [PROTOCOL]: When adding, moving, renaming, or changing backend internal ownership, update this map, check parent `../AGENTS.md`, and update `../../docs/PROMPT_INDEX.md` when API documentation prompts or model-facing contracts changed.
