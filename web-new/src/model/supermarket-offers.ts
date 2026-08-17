@@ -39,6 +39,7 @@ export interface SupermarketProduct {
   code: string;
   name: string;
   brand: string;
+  subtitle?: string;
   image_url?: string;
   imageUrl?: string;
   category1: string;

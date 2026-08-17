@@ -54,6 +54,7 @@ func registerPublicRoutes(
 	api.GET("/supermarket-offers/summary", supermarketOfferHandler.Summary)
 	api.GET("/supermarket-offers/search", supermarketOfferHandler.Search)
 	api.GET("/supermarket-offers/products/:code", optionalAuth, supermarketOfferHandler.ProductDetail)
+	api.POST("/supermarket-offers/image-reports", supermarketOfferHandler.CreateImageReport)
 
 	// 1.7 Public market trend routes.
 	api.GET("/market-trends/rent", marketTrendHandler.RentTrend)

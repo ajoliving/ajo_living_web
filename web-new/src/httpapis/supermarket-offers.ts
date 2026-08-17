@@ -30,28 +30,35 @@ export const fetchSupermarketProductDetail = (code: string, days = 90) =>
     params: { days },
   });
 
-// 4. 取得目前會員收藏
+// 4. 提交商品圖片問題
+export const reportSupermarketProductImage = (productCode: string) =>
+  httpClient.post<ApiResponse<{ productCode: string; created: boolean }>>(
+    '/supermarket-offers/image-reports',
+    { productCode },
+  );
+
+// 5. 取得目前會員收藏
 export const fetchSupermarketFavorites = (params: { page?: number; pageSize?: number } = {}) =>
   httpClient.get<ApiResponse<{ items: SupermarketProduct[]; pagination: PaginationMeta }>>(
     '/me/supermarket-offers/favorites',
     { params },
   );
 
-// 5. 新增目前會員收藏
+// 6. 新增目前會員收藏
 export const addSupermarketFavorite = (productCode: string) =>
   httpClient.post<ApiResponse<SupermarketProduct>>('/me/supermarket-offers/favorites', { productCode });
 
-// 6. 移除目前會員收藏
+// 7. 移除目前會員收藏
 export const removeSupermarketFavorite = (productCode: string) =>
   httpClient.delete<ApiResponse<{ productCode: string; isFavorite: boolean }>>(
     `/me/supermarket-offers/favorites/${encodeURIComponent(productCode)}`,
   );
 
-// 7. 取得目前會員價格提示
+// 8. 取得目前會員價格提示
 export const fetchSupermarketPriceAlerts = () =>
   httpClient.get<ApiResponse<{ items: SupermarketPriceAlert[] }>>('/me/supermarket-offers/price-alerts');
 
-// 8. 建立或覆蓋目前會員價格提示
+// 9. 建立或覆蓋目前會員價格提示
 export const saveSupermarketPriceAlert = (payload: {
   productCode: string;
   targetPrice?: number;
@@ -60,7 +67,7 @@ export const saveSupermarketPriceAlert = (payload: {
   enabled: boolean;
 }) => httpClient.post<ApiResponse<SupermarketPriceAlert>>('/me/supermarket-offers/price-alerts', payload);
 
-// 9. 更新目前會員價格提示
+// 10. 更新目前會員價格提示
 export const updateSupermarketPriceAlert = (
   id: number,
   payload: {
@@ -71,6 +78,6 @@ export const updateSupermarketPriceAlert = (
   },
 ) => httpClient.patch<ApiResponse<SupermarketPriceAlert>>(`/me/supermarket-offers/price-alerts/${id}`, payload);
 
-// 10. 刪除目前會員價格提示
+// 11. 刪除目前會員價格提示
 export const deleteSupermarketPriceAlert = (id: number) =>
   httpClient.delete<ApiResponse<{ id: number; deleted: boolean }>>(`/me/supermarket-offers/price-alerts/${id}`);

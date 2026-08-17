@@ -134,29 +134,38 @@ export const supermarketStorePrices = (
   product: SupermarketProduct,
   locale: AppLocale = 'zh-HK',
 ): SupermarketStorePrice[] => {
-  if (product.storePrices && product.storePrices.length > 0) {
-    return [...product.storePrices].sort((a, b) => {
-      if (a.effectiveUnitPrice === b.effectiveUnitPrice) {
-        return displaySupermarketStore(a.store, locale).localeCompare(displaySupermarketStore(b.store, locale), locale);
-      }
-      return a.effectiveUnitPrice - b.effectiveUnitPrice;
-    });
-  }
-
   const stores = product.stores && product.stores.length > 0 ? product.stores : [product.bestStore || ''];
-  const prices = stores.filter(Boolean).map((store) => ({
-    store,
-    listPrice: store === product.bestStore ? Number(product.listPrice ?? 0) : Number(product.maxPrice ?? product.listPrice ?? 0),
-    effectiveUnitPrice:
-      store === product.bestStore
-        ? Number(product.effectiveUnitPrice ?? product.bestEffectiveUnitPrice ?? product.minPrice ?? 0)
-        : Number(product.maxPrice ?? product.listPrice ?? 0),
-    offer: store === product.bestStore ? product.bestOffer ?? '' : '',
-    parseStatus: store === product.bestStore ? product.parseStatus ?? '' : 'none',
-    snapshotDate: '',
-  }));
+  const pricesByStore = new Map<string, SupermarketStorePrice>();
+  (product.storePrices ?? []).forEach((price) => {
+    const storeCode = normalizeSupermarketStoreCode(price.store);
+    if (storeCode) {
+      pricesByStore.set(storeCode, price);
+    }
+  });
 
-  return prices.length > 0 ? prices : [supermarketFallbackStorePrice(product)];
+  stores.filter(Boolean).forEach((store) => {
+    const storeCode = normalizeSupermarketStoreCode(store);
+    if (pricesByStore.has(storeCode)) {
+      return;
+    }
+    pricesByStore.set(storeCode, {
+      store,
+      listPrice: store === product.bestStore ? Number(product.listPrice ?? 0) : Number(product.maxPrice ?? product.listPrice ?? 0),
+      effectiveUnitPrice:
+        store === product.bestStore
+          ? Number(product.effectiveUnitPrice ?? product.bestEffectiveUnitPrice ?? product.minPrice ?? 0)
+          : Number(product.maxPrice ?? product.listPrice ?? 0),
+      offer: store === product.bestStore ? product.bestOffer ?? '' : '',
+      parseStatus: store === product.bestStore ? product.parseStatus ?? '' : 'none',
+      snapshotDate: '',
+    });
+  });
+
+  const prices = [...pricesByStore.values()];
+
+  return prices.length > 0
+    ? supermarketCurrentStorePrices(prices, locale)
+    : [supermarketFallbackStorePrice(product)];
 };
 
 // 10. 取得目前商店價格排序
@@ -233,3 +242,30 @@ export const supermarketOfferTexts = (
   }
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 };
+
+// 17. 判斷純減價或原價貨品標籤。
+export const supermarketIsSimpleOffer = (value: string): boolean => {
+  const normalized = value.trim().toLocaleLowerCase();
+  return normalized.includes('純減價')
+    || normalized.includes('原價貨品')
+    || normalized.includes('pure discount')
+    || normalized.includes('regular price');
+};
+
+// 18. 移除沒有實際資訊的價格說明文字。
+export const supermarketOfferDisplayText = (value: string): string => value
+  .split(/[\r\n|]+/)
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .filter((item) => {
+    const normalized = item.toLocaleLowerCase();
+    return !normalized.includes('純減價')
+      && !normalized.includes('原價貨品')
+      && !normalized.includes('沒有額外條款')
+      && !normalized.includes('目前售價')
+      && !normalized.includes('pure discount')
+      && !normalized.includes('regular price')
+      && !normalized.includes('no additional terms')
+      && !normalized.includes('current price');
+  })
+  .join(' / ');

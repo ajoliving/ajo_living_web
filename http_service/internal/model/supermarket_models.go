@@ -2,7 +2,8 @@
  * Supermarket offer member models.
  * 1. Store AJO-owned favorites for good-price products.
  * 2. Store AJO-owned price alert rules and sent alert events.
- * 3. Keep product price data owned by the deployed good-price service.
+ * 3. Store deduplicated product image issue reports.
+ * 4. Keep product price data owned by the deployed good-price service.
  */
 package model
 
@@ -49,4 +50,11 @@ type SupermarketPriceAlertEvent struct {
 	CreatedAt    time.Time              `json:"created_at"`
 	Rule         *SupermarketPriceAlert `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
 	User         *User                  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// 4. SupermarketImageReport stores one global image issue report per product.
+type SupermarketImageReport struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	ProductCode string `gorm:"type:varchar(64);not null;uniqueIndex:uk_supermarket_image_report_product" json:"product_code"`
+	TimestampModel
 }

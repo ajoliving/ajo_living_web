@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
   addSupermarketFavorite,
@@ -31,18 +31,14 @@ import {
   displaySupermarketStore,
   formatSupermarketDate,
   formatSupermarketHKPrice,
+  supermarketCategoryText,
   supermarketOfferTexts,
-  supermarketPriceDiscountRate,
+  supermarketOfferDisplayText,
   supermarketPrimaryPrice,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
 
 type ViewMode = 'grid' | 'table';
-
-interface HeroStat {
-  value: string;
-  label: string;
-}
 
 interface FilterPill {
   label: string;
@@ -63,6 +59,7 @@ interface PageButton {
 }
 
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const pageSize = 20;
@@ -108,25 +105,7 @@ const canExpandSearchSuggestions = computed(() =>
   !suggestionsExpanded.value && searchSuggestions.value.length > 6,
 );
 
-// 2. 建立 Hero 統計資料
-const heroStats = computed<HeroStat[]>(() => {
-  const stats = summary.value?.stats;
-  const discountSource = summary.value?.bestDiscounts?.length
-    ? summary.value.bestDiscounts
-    : summary.value?.offers ?? [];
-  const maxDiscount = discountSource.reduce((result, product) => {
-    const rate = supermarketPriceDiscountRate(supermarketPrimaryPrice(product, preferenceStore.locale));
-    return Math.max(result, rate);
-  }, 0);
-
-  return [
-    { value: formatInteger(stats?.offers), label: t('offers.list.activeOffers') },
-    { value: formatInteger(stats?.stores), label: t('offers.list.chainStores') },
-    { value: maxDiscount > 0 ? `-${maxDiscount.toFixed(0)}%` : '-', label: t('offers.list.highestDiscount') },
-  ];
-});
-
-// 3. 建立分類篩選項
+// 2. 建立分類篩選項
 const categoryPills = computed<FilterPill[]>(() => [
   { label: t('offers.list.all'), value: '' },
   ...valueCountPills(
@@ -481,7 +460,19 @@ const selectPage = (page: PageButton): void => {
 
 // 34. 開啟商品詳情
 const openDetail = (product: SupermarketProduct): void => {
-  void router.push({ path: `/supermarket-offers/products/${encodeURIComponent(product.code)}` });
+  void router.push({
+    path: `/supermarket-offers/products/${encodeURIComponent(product.code)}`,
+    query: {
+      return: 'supermarket-offers',
+      q: searchQuery.value || undefined,
+      category: activeCategory.value || undefined,
+      store: activeStore.value || undefined,
+      brand: activeBrand.value || undefined,
+      sort: activeSort.value || undefined,
+      page: currentPage.value > 1 ? String(currentPage.value) : undefined,
+      view: viewMode.value !== 'grid' ? viewMode.value : undefined,
+    },
+  });
 };
 
 // 35. 前往登入
@@ -540,9 +531,38 @@ const productPrimaryPrice = (product: SupermarketProduct) =>
 
 // 44. 取得商品優惠文字
 const productOfferTexts = (product: SupermarketProduct): string[] =>
-  supermarketOfferTexts(product, preferenceStore.locale);
+  supermarketOfferTexts(product, preferenceStore.locale)
+    .map((value) => supermarketOfferDisplayText(value))
+    .filter(Boolean);
+
+// 45. 組合品牌與審核後商品名稱
+const productDisplayTitle = (product: SupermarketProduct): string =>
+  [product.brand, product.name]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(' ');
+
+// 46. 顯示商品完整分類。
+const productCategoryText = (product: SupermarketProduct): string =>
+  supermarketCategoryText(product);
+
+// 35. 還原由商品詳情頁帶回的搜尋條件。
+const restoreSearchState = (): void => {
+  const query = route.query;
+  searchQuery.value = typeof query.q === 'string' ? query.q : '';
+  activeCategory.value = typeof query.category === 'string' ? query.category : '';
+  activeStore.value = typeof query.store === 'string' ? query.store : '';
+  activeBrand.value = typeof query.brand === 'string' ? query.brand : '';
+  activeSort.value = typeof query.sort === 'string' && sortOptions.value.some((item) => item.value === query.sort)
+    ? query.sort
+    : 'discount';
+  viewMode.value = query.view === 'table' ? 'table' : 'grid';
+  const page = typeof query.page === 'string' ? Number(query.page) : 1;
+  currentPage.value = Number.isInteger(page) && page > 0 ? page : 1;
+};
 
 onMounted(() => {
+  restoreSearchState();
   void loadSummary();
   void loadSearch();
 });
@@ -687,27 +707,11 @@ onBeforeUnmount(() => {
       </footer>
     </aside>
 
-    <!-- 1. 暗色 HERO -->
+    <!-- 1. 超市情報標題 -->
     <section class="gp-hero">
       <div class="gp-hero-left">
-        <div class="gp-hero-label">{{ t('offers.list.heroEyebrow') }}</div>
         <div class="gp-hero-title">{{ t('offers.list.heroTitle') }}</div>
         <div class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</div>
-      </div>
-      <div class="gp-hero-right">
-        <template
-          v-for="(stat, index) in heroStats"
-          :key="stat.label"
-        >
-          <div class="gp-hstat">
-            <span class="gp-hnum">{{ summaryLoading ? '-' : stat.value }}</span>
-            <span class="gp-hlabel">{{ stat.label }}</span>
-          </div>
-          <div
-            v-if="index < heroStats.length - 1"
-            class="gp-hdiv"
-          />
-        </template>
       </div>
     </section>
 
@@ -743,8 +747,11 @@ onBeforeUnmount(() => {
               class="gp-search-suggestion"
               @mousedown.prevent="selectSearchSuggestion(product)"
             >
-              <span class="gp-search-suggestion-name">{{ product.name }}</span>
-              <span class="gp-search-suggestion-brand">{{ product.brand || t('offers.list.noBrand') }}</span>
+              <span class="gp-search-suggestion-name">{{ productDisplayTitle(product) }}</span>
+              <span
+                v-if="product.subtitle"
+                class="gp-search-suggestion-brand"
+              >{{ product.subtitle }}</span>
             </button>
             <button
               v-if="canExpandSearchSuggestions"
@@ -996,7 +1003,7 @@ onBeforeUnmount(() => {
             <img
               v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
               :src="product.image_url || product.imageUrl"
-              :alt="product.name"
+              :alt="productDisplayTitle(product)"
               @error="handleProductImageError(product.code)"
             >
             <div
@@ -1006,11 +1013,23 @@ onBeforeUnmount(() => {
           </div>
           <div class="gp-card-body">
             <div class="gp-card-heading">
-              <div>
-                <div class="gp-card-name">{{ product.name }}</div>
-                <div class="gp-card-brand">{{ product.brand || t('offers.list.noBrand') }}</div>
+              <div class="gp-card-title-row">
+                <div class="gp-card-name">{{ product.name || productDisplayTitle(product) }}</div>
+                <span
+                  v-if="product.brand"
+                  class="gp-card-brand-chip"
+                >{{ product.brand }}</span>
               </div>
-              <div class="gp-card-badge">-{{ supermarketPriceDiscountRate(productPrimaryPrice(product)).toFixed(0) }}%</div>
+              <div>
+                <div
+                  v-if="product.subtitle"
+                  class="gp-card-subtitle"
+                >{{ product.subtitle }}</div>
+                <div
+                  v-if="productCategoryText(product)"
+                  class="gp-card-category"
+                >{{ productCategoryText(product) }}</div>
+              </div>
             </div>
             <div class="gp-card-prices">
               <div
@@ -1020,11 +1039,14 @@ onBeforeUnmount(() => {
               >
                 <div>
                   <strong>{{ formatStore(price.store) }}</strong>
-                  <small>{{ price.offer || productOfferTexts(product).join(' / ') || '-' }}</small>
+                  <small>{{ supermarketOfferDisplayText(price.offer) || productOfferTexts(product).join(' / ') || '-' }}</small>
                 </div>
                 <div>
                   <b>{{ formatOfferPrice(price.effectiveUnitPrice) }}</b>
-                  <span>{{ t('offers.list.originalPrice', { price: formatOfferPrice(price.listPrice) }) }}</span>
+                  <span
+                    v-if="price.listPrice > price.effectiveUnitPrice"
+                    class="gp-price-row-original"
+                  >{{ t('offers.list.originalPrice', { price: formatOfferPrice(price.listPrice) }) }}</span>
                 </div>
               </div>
             </div>
@@ -1055,8 +1077,8 @@ onBeforeUnmount(() => {
               @click="openDetail(product)"
             >
               <td>
-                <strong>{{ product.name }}</strong>
-                <span>{{ product.brand || formatCategory(product.category1 || '') }}</span>
+                <strong>{{ productDisplayTitle(product) }}</strong>
+                <span>{{ product.subtitle || formatCategory(product.category1 || '') }}</span>
               </td>
               <td>{{ formatStore(productPrimaryPrice(product).store) }}</td>
               <td>{{ productOfferTexts(product).join(' / ') || '-' }}</td>
@@ -1117,19 +1139,19 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-/* 2. 暗色 HERO */
+/* 2. 超市情報標題 */
 .gp-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 164px;
+  min-height: 132px;
   max-width: 1440px;
   margin: 0 auto;
   padding: 34px 38px;
   border-bottom: 3px solid var(--accent);
-  background: #1a1a1a;
-  color: #fff;
+  background: #fff;
+  color: var(--brand);
 }
 
 .gp-hero-left {
@@ -1142,18 +1164,18 @@ onBeforeUnmount(() => {
 }
 
 .gp-hero-title {
-  margin-top: 8px;
+  margin-top: 0;
   font-family: var(--font-serif);
   font-size: 34px;
   font-weight: 400;
   line-height: 1.12;
-  color: #fff;
+  color: var(--brand);
 }
 
 .gp-hero-sub {
   margin-top: 8px;
   max-width: 480px;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--brand);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1466,13 +1488,16 @@ onBeforeUnmount(() => {
 /* 5. 卡片網格 */
 .gp-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 14px;
 }
 
 .gp-card {
   position: relative;
-  min-height: 420px;
+  display: flex;
+  min-height: 430px;
+  flex-direction: column;
   margin: 0;
   border: 1px solid var(--bdr);
   border-radius: 3px;
@@ -1483,8 +1508,9 @@ onBeforeUnmount(() => {
 }
 
 .gp-card:hover {
+  z-index: 5;
   border-color: var(--accent);
-  box-shadow: none;
+  box-shadow: 0 12px 28px rgb(32 48 61 / 0.16);
 }
 
 .gp-card-img {
@@ -1492,12 +1518,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 140px;
-  padding: 14px;
+  height: 146px;
+  min-height: 146px;
+  padding: 10px 18px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--bdr);
   background: rgb(var(--color-surface));
   overflow: hidden;
+  transition: height 0.22s ease, min-height 0.22s ease;
 }
 
 .gp-card-img img {
@@ -1507,6 +1535,25 @@ onBeforeUnmount(() => {
   max-height: 100%;
   object-fit: contain;
   display: block;
+  position: relative;
+  z-index: 3;
+  pointer-events: none;
+  transition: transform 0.22s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gp-card-img img {
+    transform-origin: center center;
+  }
+
+  .gp-card:hover .gp-card-img {
+    height: 260px;
+    min-height: 260px;
+  }
+
+  .gp-card:hover .gp-card-img img {
+    transform: scale(1.15);
+  }
 }
 
 .gp-card-img-ph {
@@ -1540,12 +1587,14 @@ onBeforeUnmount(() => {
 }
 
 .gp-card-body {
+  min-width: 0;
+  flex: 1;
   padding: 14px;
 }
 
 .gp-card-heading {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   padding-right: 0;
 }
 
@@ -1561,37 +1610,51 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
+.gp-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+}
+
 .gp-card-name {
+  display: -webkit-box;
+  min-width: 0;
+  flex: 1 1 180px;
   margin: 0;
   color: var(--ink);
   font-size: 15px;
   font-weight: 700;
-  line-height: 1.28;
+  line-height: 1.38;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.gp-card-brand {
+.gp-card-subtitle {
+  margin-top: 6px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.gp-card-category {
   margin-top: 4px;
   color: var(--ink-3);
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.gp-card-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: auto;
+.gp-card-brand-chip {
   display: inline-flex;
-  width: auto;
-  max-width: max-content;
-  align-items: center;
-  border-radius: 2px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 5px 7px;
-  white-space: nowrap;
+  margin: 0;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 3px 7px;
 }
 
 .gp-card-prices {
@@ -1616,7 +1679,7 @@ onBeforeUnmount(() => {
 
 .gp-price-row strong {
   display: block;
-  color: var(--ink);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1631,19 +1694,21 @@ onBeforeUnmount(() => {
 
 .gp-price-row b {
   display: block;
-  color: var(--ink);
+  color: var(--accent);
   font-size: 14px;
+  font-weight: 800;
   text-align: right;
   white-space: nowrap;
 }
 
-.gp-price-row span {
+.gp-price-row-original {
   display: block;
   margin-top: 3px;
-  color: var(--accent);
+  color: var(--ink-3);
   font-size: 11px;
+  line-height: 1.2;
   text-align: right;
-  text-decoration: none;
+  text-decoration: line-through;
   white-space: nowrap;
 }
 
@@ -1913,11 +1978,10 @@ onBeforeUnmount(() => {
   }
 
   .gp-card {
-    min-height: 0;
+    min-height: 430px;
   }
 
   .gp-card-img {
-    height: 126px;
     padding: 10px;
   }
 

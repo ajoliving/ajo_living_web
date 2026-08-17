@@ -2,7 +2,8 @@
  * Supermarket offer business service.
  * 1. Proxy public good-price summary, search, and product detail data.
  * 2. Store AJO member favorites without using the good-price account system.
- * 3. Attach member favorite and alert state to product detail responses.
+ * 3. Store global product image issue reports without using the good-price account system.
+ * 4. Attach member favorite and alert state to product detail responses.
  */
 package service
 
@@ -217,7 +218,26 @@ func (s *SupermarketOfferService) RemoveFavorite(ctx context.Context, userID int
 	return nil
 }
 
-// 7. isFavorite checks whether a product is saved by the user.
+// 7. CreateImageReport saves a globally deduplicated supermarket product image issue report.
+func (s *SupermarketOfferService) CreateImageReport(ctx context.Context, productCode string) (map[string]any, error) {
+	productCode = strings.ToUpper(strings.TrimSpace(productCode))
+	if productCode == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "product code is required")
+	}
+	if len(productCode) > 64 {
+		return nil, errcode.New(errcode.CodeValidationError, "product code is too long")
+	}
+
+	report := model.SupermarketImageReport{ProductCode: productCode}
+	result := s.runtime.DB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&report)
+	if result.Error != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to save supermarket image report")
+	}
+
+	return map[string]any{"productCode": productCode, "created": result.RowsAffected > 0}, nil
+}
+
+// 8. isFavorite checks whether a product is saved by the user.
 func (s *SupermarketOfferService) isFavorite(ctx context.Context, userID int64, productCode string) (bool, error) {
 	var count int64
 	err := s.runtime.DB.WithContext(ctx).Model(&model.SupermarketFavorite{}).
@@ -226,7 +246,7 @@ func (s *SupermarketOfferService) isFavorite(ctx context.Context, userID int64, 
 	return count > 0, err
 }
 
-// 8. fallbackFavoriteProduct returns a minimal product payload when good-price detail is temporarily unavailable.
+// 9. fallbackFavoriteProduct returns a minimal product payload when good-price detail is temporarily unavailable.
 func fallbackFavoriteProduct(favorite model.SupermarketFavorite, baseURL string) map[string]any {
 	imageURL := buildMediaURL(baseURL, supermarketImageObjectKey(favorite.ProductCode))
 	return map[string]any{

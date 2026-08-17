@@ -231,7 +231,26 @@ func (h *SupermarketOfferHandler) DeletePriceAlert(c *gin.Context) {
 	errcode.Success(c, gin.H{"id": supermarketAlertID(c), "deleted": true})
 }
 
-// 13. supermarketPagination reads both AJO and good-price pagination query names.
+// 13. CreateImageReport saves one public supermarket product image issue report.
+func (h *SupermarketOfferHandler) CreateImageReport(c *gin.Context) {
+	var req struct {
+		ProductCode string `json:"productCode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid image report payload"))
+		return
+	}
+
+	result, err := h.supermarketService.CreateImageReport(c.Request.Context(), req.ProductCode)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 14. supermarketPagination reads both AJO and good-price pagination query names.
 func supermarketPagination(c *gin.Context) (int, int) {
 	page, _ := strconv.Atoi(strings.TrimSpace(c.DefaultQuery("page", "1")))
 	pageSizeRaw := c.Query("pageSize")
@@ -245,7 +264,7 @@ func supermarketPagination(c *gin.Context) (int, int) {
 	return page, pageSize
 }
 
-// 14. supermarketAlertID reads the route alert id.
+// 15. supermarketAlertID reads the route alert id.
 func supermarketAlertID(c *gin.Context) int64 {
 	value, _ := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
 	return value

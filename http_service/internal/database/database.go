@@ -88,6 +88,7 @@ func Migrate(db *gorm.DB) error {
 		&model.SupermarketFavorite{},
 		&model.SupermarketPriceAlert{},
 		&model.SupermarketPriceAlertEvent{},
+		&model.SupermarketImageReport{},
 	); err != nil {
 		return err
 	}
