@@ -36,8 +36,9 @@
 | `svavo.smart.databoard.service.skylinedances.com` | 47.239.117.108 | :20037 | Go + Supervisor | 独立 |
 | `intercom.skylinedances.com` | 47.239.117.108 | :20040 | nginx 靜態 + `/api/` 反代 | 獨立 |
 | `intercom.api.skylinedances.com` | 47.83.21.100 | 待補齊 frpc | gateway nginx SSL 已配置 | 獨立 |
-| `ajoliving.skylinedances.com` | 47.239.117.108 | :20041 | nginx 静态 | 待申请 |
-| `ajoliving.server.skylinedances.com` | 47.239.117.108 | :20042 | Go + Supervisor | 待申请 |
+| `ajoliving.skylinedances.com` | 47.239.117.108 | :20041 | nginx 静态 | SAN(含 ajoliving.server) |
+| `ajoliving.server.skylinedances.com` | 47.239.117.108 | :20042 | Go + Supervisor | 同上 |
+| `test.ajoliving.skylinedances.com` | 47.239.117.108 | :20047 → `/api/` :20048 | nginx 靜態 + Go + Supervisor | 獨立（ACME DNS） |
 | `good.price.skylinedances.com` | 47.239.117.108 | :20045 → `/api/` :20044 | nginx 静态 + `/api/` 反代 | 独立 |
 | `ticket.skylinedances.com` | 47.239.117.108 | :20046 | Docker Compose（前端 + API + SQLite） | 独立（ACME DNS） |
 
@@ -434,6 +435,8 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 20046 | 47.239.117.108 | Client Ticket Board 前端 + `/api/` | 127.0.0.1 |
 | 20044 | 47.239.117.108 | good-price 后端 API | 127.0.0.1 |
 | 20045 | 47.239.117.108 | good-price 前端 nginx | 127.0.0.1 |
+| 20047 | 47.239.117.108 | ajoliving 測試前端 nginx + `/api/` | 127.0.0.1 |
+| 20048 | 47.239.117.108 | ajoliving 測試後端 API | 不經 frpc 或 UFW 公開 |
 | 9002 | 47.239.117.108 | iboard 前端 | 0.0.0.0 |
 | 10031 | 47.239.117.108 | iboard 后端 | 0.0.0.0 |
 | 32001 | 47.239.117.108 | icctv 后端 | 0.0.0.0 |
@@ -445,7 +448,9 @@ curl -s -o /dev/null -w "%{http_code}" https://my-project.skylinedances.com/
 | 3312 | 47.239.117.108 | MySQL(icctv) | 127.0.0.1 |
 | 6381 | 47.239.117.108 | Redis(iboard) | 127.0.0.1 |
 | 6382 | 47.239.117.108 | ajoliving Redis(Docker) | 127.0.0.1 |
+| 6383 | 47.239.117.108 | ajoliving 測試 Redis(Docker) | 127.0.0.1 |
 | 45432 | 47.239.117.108 | ajoliving PostgreSQL(Docker) | 127.0.0.1 |
+| 45433 | 47.239.117.108 | ajoliving 測試 PostgreSQL(Docker) | 127.0.0.1 |
 | 55432 | 47.239.117.108 | good-price PostgreSQL(Docker) | 127.0.0.1 |
 
 ---
@@ -588,6 +593,30 @@ cd /Users/yangliu/Documents/Code/ajoliving_web
 - 會以 Docker Compose 啟動 `ajoliving_redis`，只綁定 `127.0.0.1:6382`；Redis 僅保存可重建快取，不配置持久化 volume。
 - 每次部署的话，我想你能先ssh然后能将服务的配置搞懂后再部署，部署的话尽量奥卡姆剃刀原理，不要添加到了无关的服务或者文件啥的，要简单些尽量
 
+2026-08-05 已部署 release `20260804171519-contact-final`：
+
+- 公開樓盤詳情已分離發布者身份與逐樓盤聯絡資料，業主帳戶姓名及代理帳戶 WeChat 不再作為樓盤聯絡資料；站內訊息仍連接發布者帳戶。
+- 發布前建立 PostgreSQL 備份，保留生產 `.env`，未修改 FRP、SSL 或 OSS CORS。
+- 前端、API HTTPS、Supervisor、PostgreSQL、Redis 及真實公開樓盤頁均通過驗收；公開業主盤未解鎖時不再顯示帳戶姓名。
+
+2026-08-07 已部署 release `20260807082205-94112`：
+
+- 測試與生產已同步發布目前工作區版本，會員從「我的樓盤」編輯既有樓盤時沿用原有放盤類別、廣告等級、樓盤、圖片及逐樓盤聯絡資料。
+- 發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20260807082205-94112.dump`；保留生產 `.env`，未恢復資料庫，未修改 FRP、SSL 或 OSS CORS。
+- 生產前端、API、Supervisor、PostgreSQL、Redis 及真實公開樓盤列表均通過驗收；測試站與隔離服務在生產發布後維持正常。
+
+2026-08-07 已部署 release `20260807083705-3047`：
+
+- 樓盤主詳情與相似樓盤推薦改為獨立失敗邊界，相似樓盤讀取失敗不再遮蔽已成功讀取的主樓盤資料。
+- 發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20260807083705-3047.dump`；保留生產 `.env`，未恢復資料庫，未修改網絡、SSL 或 OSS CORS。
+- 生產與測試的樓盤頁及同源 API 均返回 `200`；Supervisor、PostgreSQL、Redis 與真實瀏覽器樓盤詳情驗收通過。
+
+2026-08-10 已部署測試 release `20260810042405-test-48684` 與生產 release `20260810043333-53744`：
+
+- Good Price 已回填獨立商品副標題，AJO 商品卡片統一顯示「品牌 + 商品名稱」及獨立副標題。
+- 測試與生產同源 API、桌面及移動端卡片、Supervisor、PostgreSQL、Redis 與 HTTPS 均通過驗收。
+- 生產發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20260810043333-53744.dump`；保留生產 `.env`，未恢復資料庫，未修改 FRP、SSL 或 OSS CORS。
+
 ### 4.1 iSmart integration 環境變數
 
 AJO 後端同時保留舊 external app API 與新 integration API，生產 `.env` 至少保持以下設定：
@@ -596,6 +625,7 @@ AJO 後端同時保留舊 external app API 與新 integration API，生產 `.env
 ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
 ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
 ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
+ISMART_SERVICE_CASE_API_BASE_URL=https://clouddev.ismart.ajoliving.com/api/v1/integration
 REDIS_ENABLED=true
 REDIS_ADDR=127.0.0.1:6382
 REDIS_PASSWORD=
@@ -604,7 +634,7 @@ ISMART_BUILDING_CACHE_TTL=5m
 POS_DIRECTORY_CACHE_TTL=5m
 ```
 
-`/api/v1/me/ismart/...` 會員態接口優先使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
+`/api/v1/me/ismart/building-comments` 與 `/api/v1/me/ismart/service-cases...` 暫時只使用 `ISMART_SERVICE_CASE_API_BASE_URL` 測試環境，失敗時不得回退生產接口。其餘 `/api/v1/me/ismart/...` 會員態接口繼續使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，已記錄的讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
 
 POS 大廈與單位目錄只快取共用唯讀資料，分別使用 `ajo:pos:buildings:v1` 與 `ajo:pos:building-units:v1:<building_id>`；會員權限、綁定狀態、目前物業及 relay token 不得寫入 Redis。會員接口必須先即時校驗本地可見範圍，再讀取共用目錄並過濾；Redis 故障時回源 POS。
 
@@ -691,18 +721,112 @@ curl -I https://ajoliving.skylinedances.com/
 curl -I https://ajoliving.server.skylinedances.com/api/v1/health
 ```
 
-### 6. 后续 SSL 配置
+### 6. SSL 現況
 
-待网关 47.83.21.100 申请证书后，新增两个 nginx HTTPS 反代站点：
+- 生產前端及 API 使用 `/etc/letsencrypt/live/ajoliving.skylinedances.com/` 的同一張 SAN 證書，涵蓋 `ajoliving.skylinedances.com` 與 `ajoliving.server.skylinedances.com`。
+- 2026-08-05 驗證證書有效期至 2026-11-02，兩個生產 HTTPS 入口均正常。
+- 測試域名使用 AliDNS DNS 驗證簽發的獨立 ECC 證書，不需要停止 `frps`。
+
+### 7. 測試環境固定配置（已落地）
+
+測試環境只使用 `test.ajoliving.skylinedances.com`。瀏覽器以同源 `/api/v1` 訪問測試後端，不建立獨立測試 API 域名，不把 `20048` 加入 frpc 或 UFW 公開入口。
+
+應用伺服器配置：
+
+- 專案目錄：`/home/admin/ajoliving-test`
+- 後端 Supervisor：`ajoliving_test_server`
+- 後端端口：`20048`
+- 前端 nginx 站點：`/etc/nginx/sites-available/ajoliving_test_web`
+- 前端端口：`127.0.0.1:20047`
+- PostgreSQL 容器：`ajoliving_test_postgres`
+- PostgreSQL 資料庫及端口：`ajoliving_test`、`127.0.0.1:45433`
+- PostgreSQL volume：`ajoliving_test_ajoliving_test_postgres_data`
+- Redis 容器及端口：`ajoliving_test_redis`、`127.0.0.1:6383`
+- Compose project：`ajoliving_test`
+- frpc proxy：`ajoliving-test-web`
+
+網關配置：
+
+- DNS：`test.ajoliving.skylinedances.com -> 47.83.21.100`
+- HTTPS nginx：`/etc/nginx/sites-available/ajoliving_test_ssl.conf`
+- ACME 證書來源：`/home/admin/.acme.sh/test.ajoliving.skylinedances.com_ecc/`
+- nginx 安裝證書：`/home/admin/ajoliving-test/cert/`
+- 證書有效期：2026-08-05 至 2026-11-03，續期後由 acme.sh reload nginx
+- 公網訪問不設 IP 白名單、Cookie gate 或 Basic Auth，普通測試網址可直接訪問。
+- 網關持續回應 `X-Robots-Tag: noindex, nofollow`；該 header 只阻止搜尋引擎收錄，不構成存取控制。
+- 測試站如需重新改為私有訪問，必須同步更新本節、網關 nginx、根級與部署級 `AGENTS.md` 及 `docs/PROMPT_INDEX.md`。
+
+資料隔離與外部服務配置：
+
+- 首次資料由生產 PostgreSQL 邏輯快照以 `pg_dump -Fc` 建立，再 restore 至獨立測試資料庫；不得複製或共用生產 Docker volume。
+- restore 後的本地 password hash 保留供測試登入；外部服務憑據由測試發布時從生產 `.env` 重新繼承。
+- 測試環境使用獨立 `JWT_SECRET` 與 `ENCRYPTION_KEY`。
+- restore 後保留的樓盤聯絡密文必須由 `rekey-encrypted-data` 在同一交易內以生產密鑰讀取並改用測試 `ENCRYPTION_KEY` 保存；工具不輸出密鑰或明文，已使用測試密鑰的值保持不變，無法識別的歷史測試密文保持原值。
+- `APP_ENV=testing`；測試站目前公開訪問，測試操作會按生產外部服務配置執行真實 OTP、郵件、OSS、支付、POS、iSmart 及其他上游請求。
+- 測試部署預設不按服務或讀寫類型隔離外部接口；只有產品明確指定的接口才可改用 mock、不可用地址或獨立測試地址。
+- 每次部署先保留測試 `JWT_SECRET` 與 `ENCRYPTION_KEY`，再從生產 `.env` 重新載入外部服務配置，最後覆蓋測試資料庫、Redis、公開域名及回調 URL。
+
+部署命令：
 
 ```bash
-# 申请证书（需停 frps）
-ssh admin@47.83.21.100 "sudo supervisorctl stop frps"
-ssh admin@47.83.21.100 "sudo certbot certonly --standalone -d ajoliving.skylinedances.com -d ajoliving.server.skylinedances.com"
-ssh admin@47.83.21.100 "sudo supervisorctl start frps"
+# 正常更新測試前後端，保留測試資料庫
+./deploy-ajoliving-test.sh
 
-# 创建 nginx HTTPS 反代（参考 SVAVO 或通用场景 V-5）
+# 首次建立或明確重建測試資料庫
+INITIALIZE_DB=1 \
+INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
+./deploy-ajoliving-test.sh
 ```
+
+`SKIP_BUILD=1` 只可用於同一次已驗證建置後的傳輸重試，不得作為一般發布方式。後端二進制使用 legacy SCP 傳輸，避免目前網絡環境的 SFTP 固定窗口停滯。
+
+測試網址可在任何瀏覽器直接開啟，不需要入口密鑰或 Cookie。網關不再保留 `/__test_access` 路由及 `gateway-access.env`。
+
+2026-08-05 已部署 release `20260805042109-test-87911`：
+
+- 生產快照已恢復至測試庫，使用者與樓盤記錄數和快照一致，外部登入密文清理結果為零筆殘留。
+- 前端、同源 API、Supervisor、PostgreSQL、Redis、FRP、AliDNS、HTTPS 及 `noindex` 均通過驗收。
+- 真實瀏覽器已確認 Vue 應用正常掛載、`zh-HK` 語系生效且沒有 console warning 或 error。
+- 生產前端、API、Supervisor、PostgreSQL 與 Redis 在測試部署後仍維持正常。
+
+2026-08-07 已部署 release `20260807081910-test-92331`：
+
+- 使用目前工作區重新建置測試前後端，保留既有測試資料庫，未重新匯入生產快照。
+- 測試前端、同源 API、Supervisor、PostgreSQL、Redis、HTTPS 與 `noindex` 均通過驗收。
+- 支付、POS 外部寫入、郵件、OSS 寫入、到期 ticker 及 Good Price 通知維持關閉，生產服務在測試發布後正常。
+
+2026-08-07 已部署 release `20260807083354-test-1100`：
+
+- 發布樓盤詳情容錯修正，保留既有測試資料庫及外部副作用隔離設定。
+- 測試樓盤頁、同源 API、Supervisor、PostgreSQL、Redis 與真實瀏覽器樓盤詳情驗收通過。
+- 生產 release `20260807083705-3047` 隨後同步發布相同修正。
+
+2026-08-07 已修復測試快照密文不相容：
+
+- 修復前先建立 `/home/admin/ajoliving-test/db/backups/ajoliving_test_before_rekey_202608070918.dump`，未修改生產資料庫。
+- 將目標樓盤的有效生產聯絡密文只讀同步至測試庫，再使用測試獨立密鑰重加密；帶原測試 Bearer Token 的樓盤詳情請求由 `500` 恢復為 `200` 並返回 `editable_contact`。
+- `deploy-ajoliving-test.sh` 在日後顯式重建測試資料庫時自動執行同一重加密流程，正常保留資料的測試發布不改動現有密文。
+
+驗收命令：
+
+```bash
+# 不帶 Cookie 直接訪問時應返回 200
+curl -I https://test.ajoliving.skylinedances.com/
+
+# 驗證同源 API
+curl -I https://test.ajoliving.skylinedances.com/api/v1/health
+
+ssh admin@47.239.117.108 \
+  "sudo supervisorctl status ajoliving_test_server frpc"
+ssh admin@47.239.117.108 \
+  "sudo docker ps --filter name=ajoliving_test"
+ssh admin@47.239.117.108 \
+  "sudo docker exec ajoliving_test_redis redis-cli ping"
+```
+
+2026-08-05 已以 Cookie access gate 取代 IP 白名單：未授權與錯誤 token 均返回 `403`；正確入口設置 30 天安全 Cookie 後，首頁與 `/api/v1/health` 均返回 `200`，並已在真實瀏覽器驗證網絡切換不再依賴固定出口 IP。
+
+2026-08-07 已按產品決策移除 Cookie access gate 及網關入口密鑰：普通首頁與 `/api/v1/health` 在不帶 Cookie 時均返回 `200`；`noindex`、獨立資料庫、外部憑據清理及生產副作用隔離維持不變。
 
 ---
 
@@ -788,16 +912,16 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"go
 - 静态前端更新只需同步 `frontend/dist/` 到 `/home/admin/good_price_databoard/frontend-dist/`，通常不需要重启后端或 nginx。
 - 后端更新需重新上传二进制并 `sudo supervisorctl restart good_price_databoard`。
 
----
+### 8. 商品目录与 AJO 图片同步（2026-08-07）
 
-## AJO 公開測試環境
-
-- 公開入口：`https://test.ajoliving.skylinedances.com`，前端與 `/api/v1` 使用同源路由。
-- 應用伺服器使用 `/home/admin/ajoliving-test`、Supervisor `ajoliving_test_server`、本機端口 `20047/20048`、PostgreSQL `45433` 及 Redis `6383`。
-- 測試資料庫、Redis、`JWT_SECRET` 與 `ENCRYPTION_KEY` 保持獨立；正常發布不得重建測試資料庫。
-- 外部服務配置每次從生產 `/home/admin/ajoliving/server/.env` 重新繼承，只有產品明確指定的接口才隔離。測試操作可產生真實短信、郵件、OSS、支付、POS、iSmart 或其他上游副作用。
-- 正常發布執行 `./deploy-ajoliving-test.sh`；只有明確重建測試庫時才使用 `INITIALIZE_DB=1 INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST ./deploy-ajoliving-test.sh`。
-- 2026-08-12 已發布 `20260812193000-theme-auth-c376124`：主題色、住戶授權及邀請啟用頁已上線；iSmart 通告、大廈列表與住戶授權權限接口均驗證為 `200`。此前被清空的 iSmart 與舊系統加密憑據已在測試庫備份後恢復，並轉換為測試環境加密密鑰。
+- 本次以已审核的 Good Price 工作簿和三个图片目录为来源；生产 PostgreSQL 已下架 28 个 `product_code`，并修正 6 个商品名称或品牌。
+- `backend/product_catalog_overrides.go` 的覆盖规则会在每日 CSV 写入前再次执行，避免下架商品或人工修正被日常导入恢复。
+- 335 张可用图片已由 `/home/admin/ajoliving/server/import-supermarket-images` 导入 AJO 生产 OSS，固定物件键前缀为 `ajo_living/supermarket/products/`，并同步建立 `media_assets` 记录；导入命令可重复执行，已有记录默认跳过。
+- 三条工作簿中标记有图但本地没有文件的商品 `P000002837`、`P000002463`、`P000003230` 保持待补，不以占位图写入 OSS。
+- 本次备份：`/home/admin/good_price_databoard/db/good_price_before_catalog_20260807_181842.dump`、`/home/admin/ajoliving/db/backups/ajoliving_before_supermarket_images_20260807_181842.dump`。Good Price 旧二进制保留为 `/home/admin/good_price_databoard/backend/good_price_backend.bak.20260807_catalog`。
+- 测试环境的 `OSS_PROVIDER=mock` 与外部副作用隔离规则保持不变，本批图片只写入生产 OSS；需要测试图片时应使用独立测试对象存储并另行确认。
+- 2026-08-10：新增 `product_subtitle` 持久化與人工商品名稱/副標題回填；`P000005327` 統一為「抗菌全效洗衣膠囊 (海洋) 30個」及副標題 `30個`。每日 CSV 導入及服務啟動回填均會保留該欄位。最終部署前備份為 `/home/admin/good_price_databoard/db/good_price_before_name_subtitle_20260810_1240.dump`，舊二進制保留為 `/home/admin/good_price_databoard/backend/good_price_backend.bak.20260810_1240`。
+- 2026-08-17：每日 CSV 導入新增尾端規格自動拆分，人工審核副標題維持優先；生產回填只處理最新兩個資料日。發布前備份為 `/home/admin/good_price_databoard/db/good_price_before_units_20260817.dump`，舊二進制保留為 `/home/admin/good_price_databoard/backend/good_price_backend.bak.20260817_units`，未修改 FRP、nginx、SSL 或資料庫連接配置。
 
 ---
 
