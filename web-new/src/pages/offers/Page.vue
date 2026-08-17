@@ -1096,11 +1096,11 @@ onBeforeUnmount(() => {
               <td>
                 <div class="gp-table-product">
                   <div class="gp-table-product-head">
-                    <strong>{{ productDisplayName(product) }}</strong>
                     <span
                       v-if="productDisplayBrand(product)"
                       class="gp-table-brand-chip"
                     >{{ productDisplayBrand(product) }}</span>
+                    <strong>{{ productDisplayName(product) }}</strong>
                   </div>
                   <span v-if="productDisplayUnit(product)">{{ productDisplayUnit(product) }}</span>
                   <span>{{ productCategoryText(product) || formatCategory(product.category1 || '') }}</span>
@@ -1724,14 +1724,15 @@ onBeforeUnmount(() => {
 
 .gp-table-product-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 8px;
 }
 
 .gp-table-product-head strong {
   min-width: 0;
-  flex: 1 1 160px;
+  flex: 1 1 auto;
+  line-height: 1.4;
 }
 
 .gp-table-brand-chip {
@@ -1824,6 +1825,7 @@ onBeforeUnmount(() => {
   color: var(--ink-2);
   font-size: 12px;
   padding: 12px;
+  vertical-align: middle;
 }
 
 .gp-table tr {
@@ -1845,6 +1847,14 @@ onBeforeUnmount(() => {
   margin-top: 3px;
   color: var(--ink-3);
   font-size: 11px;
+}
+
+.gp-table .gp-table-brand-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: center;
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .gp-table-fav {
