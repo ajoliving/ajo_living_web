@@ -447,6 +447,8 @@ func (h *IsmartExternalHandler) handleSubaccountMutation(c *gin.Context, action 
 	var request struct {
 		UnitID       string `json:"unit_id"`
 		TargetUserID int64  `json:"target_user_id"`
+		TargetPhone  string `json:"target_phone"`
+		TargetEmail  string `json:"target_email"`
 		Remark       string `json:"remark"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -457,6 +459,8 @@ func (h *IsmartExternalHandler) handleSubaccountMutation(c *gin.Context, action 
 	params := service.IsmartSubaccountMutationParams{
 		UnitID:       strings.TrimSpace(request.UnitID),
 		TargetUserID: request.TargetUserID,
+		TargetPhone:  strings.TrimSpace(request.TargetPhone),
+		TargetEmail:  strings.TrimSpace(request.TargetEmail),
 		Remark:       strings.TrimSpace(request.Remark),
 	}
 	var (

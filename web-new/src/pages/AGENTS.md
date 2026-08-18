@@ -121,5 +121,6 @@ not-found/: 404 頁面。
 2026-08-17: 固定 Good Price 每日導入自動拆分尾端規格，既有資料只回填最新兩個資料日並保留人工審核副標題。
 2026-08-17: 增加 Good Price 商品圖片報錯公開提交；同一正規化商品 code 只保留一筆資料庫記錄，重複提交維持成功回應。
 2026-08-17: 固定 Good Price 商品詳情返回還原完整列表條件，並完整顯示商品已記錄門店價格。
+2026-08-18: 「我的大廈」住戶授權改用 iSmart 單位級副戶接口，以電話及電郵授予完整大廈權限，移除獨立開門／通告功能勾選。
 
 [PROTOCOL]: When adding, moving, renaming, or changing page ownership, update this map, check parent `../../AGENTS.md`, and update `../../../docs/PROMPT_INDEX.md` only if prompt-facing behavior changed.

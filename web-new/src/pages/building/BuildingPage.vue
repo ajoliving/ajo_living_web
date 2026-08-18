@@ -18,9 +18,9 @@ import {
   fetchMemberIsmartBuildingInfo,
   fetchMemberIsmartManagementFees,
   fetchMemberIsmartBuildingNotices,
-  fetchBuildingAuthorizations,
-  createBuildingAuthorization,
-  revokeBuildingAuthorization,
+  fetchMemberIsmartSubaccounts,
+  grantMemberIsmartSubaccount,
+  revokeMemberIsmartSubaccount,
   fetchMemberIsmartOtherFees,
   fetchMemberIsmartServiceCase,
   fetchMemberIsmartServiceCases,
@@ -42,7 +42,7 @@ import {
   type IsmartRecentAccessGroup,
   type IsmartServiceCaseDetailResponse,
   type IsmartServiceCaseListResponse,
-  type BuildingAuthorizationRow,
+  type IsmartSubaccountRow,
 } from '@/httpapis/building';
 import type { PosBuilding } from '@/model/community';
 import {
@@ -281,30 +281,13 @@ const icctvProfile = ref<Awaited<ReturnType<typeof fetchMemberICCTVPublicCameras
 const expandedICCTVCameraIDs = ref<string[]>([]);
 const residentAuthorizationLoading = ref(false);
 const residentAuthorizationError = ref('');
-const residentAuthorizations = ref<BuildingAuthorizationRow[]>([]);
+const residentAuthorizations = ref<IsmartSubaccountRow[]>([]);
 const residentAuthorizationPhoneCountryCode = ref('+852');
 const residentAuthorizationPhone = ref('');
 const residentAuthorizationEmail = ref('');
-const residentAuthorizationPermissions = ref<string[]>(['remote_door_open', 'building_notices']);
 const residentAuthorizationSubmitting = ref(false);
 const revokingResidentAuthorization = ref('');
-const authorizationOptions = computed(() => [
-  { value: 'remote_door_open', label: t('building.authorizations.permissions.remoteDoorOpen') },
-  { value: 'building_notices', label: t('building.authorizations.permissions.buildingNotices') },
-]);
-const authorizationPermissionLabel = (value: string): string => {
-  const keyMap: Record<string, string> = {
-    remote_door_open: 'remoteDoorOpen',
-    building_notices: 'buildingNotices',
-  };
-  return t(`building.authorizations.permissions.${keyMap[value] ?? value}`);
-};
 
-// 3.1 顯示目前授權狀態
-const authorizationStatusLabel = (status: string | undefined): string =>
-  status === 'active'
-    ? t('building.authorizations.status.active')
-    : t('building.authorizations.status.pending');
 const contextPickerUnitID = ref('');
 const {
   selectedUnitID: contextUnitID,
@@ -329,14 +312,13 @@ const affairsMode = ref<AffairsMode>('repair');
 const affairsStep = ref(1);
 const expandedRecord = ref('');
 const repairCategory = ref('');
-const repairSubcategory = ref('');
 const feedbackCategory = ref('');
-const feedbackSubcategory = ref('');
 const repairContent = ref('');
 const feedbackContent = ref('');
 const feedbackLocationText = ref('');
 const serviceCaseLoading = ref(false);
 const serviceCaseSubmitting = ref(false);
+const serviceCaseSuccessOpen = ref(false);
 const serviceCaseError = ref('');
 const serviceCaseSubmitError = ref('');
 const serviceCaseStatus = ref('');
@@ -352,8 +334,8 @@ const navItems = computed<NavItem[]>(() => [
   { target: 'affairs-forms', label: t('building.nav.forms') },
   { target: 'affairs-feedback', label: t('building.nav.feedback') },
   { target: 'affairs-access', label: t('building.nav.access') },
-  { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations') },
   { target: 'affairs-icctv', label: t('building.nav.icctv') },
+  { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations') },
 ]);
 
 // 6. 最新通告資料
@@ -1023,81 +1005,63 @@ const ownerRecordsEmptyText = computed(() => {
 const forms = computed(() => buildingForms.value);
 
 // 10. 意見提供與維修服務個案資料
-const feedbackBuildingID = computed(() => selectedBuildingID.value || ownerUnitContext.value.buildingID);
+const feedbackBuildingID = computed(() => {
+  const boundBuildingIDs = normalizeOwnerTextList(sessionStore.me?.bound_building_ids);
+  const selectedID = selectedBuildingID.value;
+  const primaryBuildingID = String(sessionStore.me?.primary_community?.public_id ?? '').trim();
+  if (boundBuildingIDs.includes(selectedID)) return selectedID;
+  return boundBuildingIDs.includes(primaryBuildingID) ? primaryBuildingID : (boundBuildingIDs[0] ?? '');
+});
+const feedbackUnitID = computed(() => (
+  normalizeOwnerTextList(sessionStore.me?.bound_flat_unit_ids)
+    .find((unitID) => ownerDigitsOnly(unitID).slice(0, 7) === feedbackBuildingID.value) ?? ''
+));
+const residentAuthorizationUnitID = computed(() => (
+  normalizeOwnerTextList(sessionStore.me?.bound_flat_unit_ids)
+    .find((unitID) => ownerDigitsOnly(unitID).slice(0, 7) === selectedBuildingID.value) ?? ''
+));
 const selectedFeedbackBuildingLabel = computed(() => (
   feedbackBuildingID.value ? noticeBuildingLabel(feedbackBuildingID.value) : t('building.common.emptySelection')
 ));
 
-const repairCategoryMap: Record<string, string[]> = {
-  electrical: ['corridorLighting', 'lobbyLighting', 'switchFault', 'otherLighting'],
-  structure: ['doorLock', 'window', 'wall', 'ceiling', 'otherStructure'],
-  environment: ['cleaning', 'standingWater', 'pests', 'otherHygiene'],
-  lift: ['fault', 'cleaning', 'other'],
-  water: ['freshWater', 'flushingWater', 'leakage', 'other'],
-  other: ['other'],
-};
+const repairCategories = computed<SelectOption[]>(() => [
+  { value: '門卡報失', label: t('building.feedback.commentTypes.doorCardLoss') },
+  { value: '冷氣滴水', label: t('building.feedback.commentTypes.airConditionerDripping') },
+  { value: '樓梯雜物', label: t('building.feedback.commentTypes.staircaseObstruction') },
+  { value: '水質問題', label: t('building.feedback.commentTypes.waterQuality') },
+  { value: '渠務問題', label: t('building.feedback.commentTypes.drainage') },
+  { value: '電力問題', label: t('building.feedback.commentTypes.electrical') },
+  { value: '其他事宜', label: t('building.feedback.commentTypes.other') },
+]);
 
-const feedbackCategoryMap: Record<string, string[]> = {
-  environment: ['cleaningSuggestion', 'environmentImprovement', 'otherHygiene'],
-  facilities: ['suggestion', 'damage', 'other'],
-  management: ['serviceSuggestion', 'staffPerformance', 'other'],
-  platform: ['feature', 'issue', 'other'],
-  other: ['other'],
-};
+const feedbackCategories = computed<SelectOption[]>(() => [
+  { value: '嘈音滋擾', label: t('building.feedback.commentTypes.noise') },
+  { value: '保安事宜', label: t('building.feedback.commentTypes.security') },
+  { value: '清潔衛生', label: t('building.feedback.commentTypes.cleaning') },
+  { value: '增加服務', label: t('building.feedback.commentTypes.additionalService') },
+  { value: '其他事宜', label: t('building.feedback.commentTypes.other') },
+]);
 
-// 10.1 初始化目前模式的首個可用分類與次分類。
+// 10.1 初始化目前模式的首個有效 iSmart 分類。
 const initializeAffairsCategories = (mode: AffairsMode): void => {
-  const categoryMap = mode === 'repair' ? repairCategoryMap : feedbackCategoryMap;
-  const categoryKeys = Object.keys(categoryMap);
+  const categories = mode === 'repair' ? repairCategories.value : feedbackCategories.value;
   const currentCategory = mode === 'repair' ? repairCategory.value : feedbackCategory.value;
-  const category = categoryKeys.includes(currentCategory) ? currentCategory : (categoryKeys[0] ?? '');
-  const subcategoryKeys = categoryMap[category] ?? [];
-  const currentSubcategory = mode === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
-  const subcategory = subcategoryKeys.includes(currentSubcategory) ? currentSubcategory : (subcategoryKeys[0] ?? '');
+  const category = categories.some((item) => item.value === currentCategory)
+    ? currentCategory
+    : (categories[0]?.value ?? '');
 
   if (mode === 'repair') {
     repairCategory.value = category;
-    repairSubcategory.value = subcategory;
     return;
   }
   feedbackCategory.value = category;
-  feedbackSubcategory.value = subcategory;
 };
 
 // 10.2 頁面初始預設為維修分類的第一項。
 initializeAffairsCategories('repair');
 
-const repairCategoryLabel = (category: string): string =>
-  category ? t(`building.feedback.categories.repair.${category}.label`) : '';
-const repairSubcategoryLabel = (category: string, subcategory: string): string =>
-  category && subcategory ? t(`building.feedback.categories.repair.${category}.${subcategory}`) : '';
-const feedbackCategoryLabel = (category: string): string =>
-  category ? t(`building.feedback.categories.feedback.${category}.label`) : '';
-const feedbackSubcategoryLabel = (category: string, subcategory: string): string =>
-  category && subcategory ? t(`building.feedback.categories.feedback.${category}.${subcategory}`) : '';
-
-const repairCategories = computed<SelectOption[]>(() => Object.keys(repairCategoryMap).map((value) => ({
-  value,
-  label: repairCategoryLabel(value),
-})));
-const feedbackCategories = computed<SelectOption[]>(() => Object.keys(feedbackCategoryMap).map((value) => ({
-  value,
-  label: feedbackCategoryLabel(value),
-})));
-const repairSubcategories = computed<SelectOption[]>(() => {
-  if (!repairCategory.value) return [];
-  return (repairCategoryMap[repairCategory.value] ?? []).map((value) => ({
-    value,
-    label: repairSubcategoryLabel(repairCategory.value, value),
-  }));
-});
-const feedbackSubcategories = computed<SelectOption[]>(() => {
-  if (!feedbackCategory.value) return [];
-  return (feedbackCategoryMap[feedbackCategory.value] ?? []).map((value) => ({
-    value,
-    label: feedbackSubcategoryLabel(feedbackCategory.value, value),
-  }));
-});
+const categoryLabel = (category: string, options: SelectOption[]): string =>
+  options.find((item) => item.value === category)?.label ?? '';
 
 const serviceCaseStatusChoices = computed(() => serviceCaseList.value?.status_choices ?? []);
 const feedbackRecords = computed<FeedbackRecord[]>(() => (serviceCaseList.value?.cases ?? []).map((item) => ({
@@ -1443,12 +1407,15 @@ const loadICCTV = async () => {
   }
 };
 
-// 15.1 讀取目前單位授權住戶
+// 15.1 讀取目前單位的 iSmart 授權住戶
 const loadResidentAuthorizations = async (): Promise<void> => {
   residentAuthorizationLoading.value = true;
   residentAuthorizationError.value = '';
   try {
-    residentAuthorizations.value = selectedBuildingID.value ? await fetchBuildingAuthorizations(selectedBuildingID.value) : [];
+    const response = residentAuthorizationUnitID.value
+      ? await fetchMemberIsmartSubaccounts(residentAuthorizationUnitID.value)
+      : { items: [] };
+    residentAuthorizations.value = response.items ?? [];
   } catch (error) {
     console.error(error);
     residentAuthorizations.value = [];
@@ -1458,27 +1425,27 @@ const loadResidentAuthorizations = async (): Promise<void> => {
   }
 };
 
-// 15.2 提交電話及電郵授權
+// 15.2 以電話及電郵解析 iSmart 用戶並授予單位權限
 const submitResidentAuthorization = async (): Promise<void> => {
   const phone = residentAuthorizationPhone.value.trim();
   const email = residentAuthorizationEmail.value.trim();
-  if (!selectedBuildingID.value || !phone || !email || residentAuthorizationPermissions.value.length === 0) {
+  if (!residentAuthorizationUnitID.value || !phone || !email) {
     residentAuthorizationError.value = 'building.authorizations.validation';
     return;
   }
   residentAuthorizationSubmitting.value = true;
   residentAuthorizationError.value = '';
   try {
-    await createBuildingAuthorization({
-      building_id: selectedBuildingID.value,
-      phone_country_code: residentAuthorizationPhoneCountryCode.value,
-      phone_number: phone,
-      email,
-      permissions: residentAuthorizationPermissions.value,
+    const normalizedPhone = phone.startsWith('+')
+      ? phone.replace(/[^\d+]/g, '')
+      : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`;
+    await grantMemberIsmartSubaccount({
+      unit_id: residentAuthorizationUnitID.value,
+      target_phone: normalizedPhone,
+      target_email: email,
     });
     residentAuthorizationPhone.value = '';
     residentAuthorizationEmail.value = '';
-    residentAuthorizationPermissions.value = ['remote_door_open', 'building_notices'];
     await loadResidentAuthorizations();
   } catch (error) {
     console.error(error);
@@ -1488,12 +1455,14 @@ const submitResidentAuthorization = async (): Promise<void> => {
   }
 };
 
-// 15.3 撤銷一項住戶授權
-const revokeResidentAuthorization = async (row: BuildingAuthorizationRow): Promise<void> => {
-  if (!row.authorization_id || !window.confirm(t('building.authorizations.revokeConfirm'))) return;
-  revokingResidentAuthorization.value = row.authorization_id;
+// 15.3 撤銷一項 iSmart 單位授權
+const revokeResidentAuthorization = async (row: IsmartSubaccountRow): Promise<void> => {
+  const targetUserID = Number(row.target_user_id);
+  const rowKey = String(row.relation_info_id ?? `${row.unit_id ?? ''}:${row.target_user_id ?? ''}`);
+  if (!residentAuthorizationUnitID.value || !Number.isInteger(targetUserID) || targetUserID <= 0 || !window.confirm(t('building.authorizations.revokeConfirm'))) return;
+  revokingResidentAuthorization.value = rowKey;
   try {
-    await revokeBuildingAuthorization(row.authorization_id);
+    await revokeMemberIsmartSubaccount({ unit_id: residentAuthorizationUnitID.value, target_user_id: targetUserID });
     await loadResidentAuthorizations();
   } catch (error) {
     console.error(error);
@@ -1505,9 +1474,6 @@ const revokeResidentAuthorization = async (row: BuildingAuthorizationRow): Promi
 
 // 16. 切換主面板
 const switchTab = (target: AffairsTab) => {
-  if (target === 'affairs-resident-authorizations' && !residentAuthorizationLoading.value) {
-    void loadResidentAuthorizations();
-  }
   activeTab.value = target;
   if (target === 'affairs-notices' && !ismartNoticeProfile.value && !noticeLoading.value) {
     void loadBuildingNotices();
@@ -1530,6 +1496,9 @@ const switchTab = (target: AffairsTab) => {
   }
   if (target === 'affairs-icctv' && !icctvProfile.value && !icctvLoading.value) {
     void loadICCTV();
+  }
+  if (target === 'affairs-resident-authorizations' && !residentAuthorizationLoading.value) {
+    void loadResidentAuthorizations();
   }
 };
 
@@ -1632,9 +1601,8 @@ const setAffairsStep = (step: number) => {
 // 23. 下一步
 const nextAffairsStep = () => {
   const category = affairsMode.value === 'repair' ? repairCategory.value : feedbackCategory.value;
-  const subcategory = affairsMode.value === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
   const content = affairsMode.value === 'repair' ? repairContent.value : feedbackContent.value;
-  if (affairsStep.value === 1 && (!feedbackBuildingID.value || !category || !subcategory)) {
+  if (affairsStep.value === 1 && (!feedbackBuildingID.value || !category)) {
     serviceCaseSubmitError.value = 'building.feedback.categoryRequired';
     return;
   }
@@ -1670,9 +1638,8 @@ const toggleRecord = async (record: FeedbackRecord): Promise<void> => {
 // 25. 提交意見提供或維修服務個案
 const submitAffairsFeedback = async (): Promise<void> => {
   const category = affairsMode.value === 'repair' ? repairCategory.value : feedbackCategory.value;
-  const subcategory = affairsMode.value === 'repair' ? repairSubcategory.value : feedbackSubcategory.value;
   const content = affairsMode.value === 'repair' ? repairContent.value.trim() : feedbackContent.value.trim();
-  if (!feedbackBuildingID.value || !category || !subcategory) {
+  if (!feedbackBuildingID.value || !category) {
     serviceCaseSubmitError.value = 'building.feedback.categoryRequired';
     affairsStep.value = 1;
     return;
@@ -1684,28 +1651,27 @@ const submitAffairsFeedback = async (): Promise<void> => {
   }
 
   serviceCaseSubmitting.value = true;
+  serviceCaseSuccessOpen.value = false;
   serviceCaseSubmitError.value = '';
   try {
     await submitMemberIsmartBuildingComment({
       building_id: feedbackBuildingID.value,
-      unit_id: ownerUnitContext.value.unitID || undefined,
-      request_type: affairsMode.value,
-      category,
-      subcategory,
-      subject: [reviewCategory.value, reviewSubcategory.value].filter(Boolean).join(' - '),
+      unit_id: feedbackUnitID.value || undefined,
+      comment_type: category,
+      comment: content,
+      subject: reviewCategory.value,
       content,
       location_text: feedbackLocationText.value.trim() || undefined,
     });
     affairsStep.value = 1;
     repairCategory.value = '';
-    repairSubcategory.value = '';
     feedbackCategory.value = '';
-    feedbackSubcategory.value = '';
     initializeAffairsCategories(affairsMode.value);
     repairContent.value = '';
     feedbackContent.value = '';
     feedbackLocationText.value = '';
     await loadBuildingServiceCases(feedbackBuildingID.value);
+    serviceCaseSuccessOpen.value = true;
   } catch (error) {
     console.error(error);
     serviceCaseSubmitError.value = 'building.feedback.submitError';
@@ -1714,21 +1680,19 @@ const submitAffairsFeedback = async (): Promise<void> => {
   }
 };
 
+// 25.1 關閉服務個案提交成功提示框
+const closeServiceCaseSuccess = (): void => {
+  serviceCaseSuccessOpen.value = false;
+};
+
 // 26. 確認提交摘要
 const reviewMode = computed(() => (affairsMode.value === 'repair'
   ? t('building.feedback.mode.repair')
   : t('building.feedback.mode.feedback')));
 const reviewCategory = computed(() =>
   affairsMode.value === 'repair'
-    ? repairCategoryLabel(repairCategory.value) || t('building.feedback.review.selectCategory')
-    : feedbackCategoryLabel(feedbackCategory.value) || t('building.feedback.review.selectCategory'),
-);
-const reviewSubcategory = computed(() =>
-  affairsMode.value === 'repair'
-    ? repairSubcategoryLabel(repairCategory.value, repairSubcategory.value)
-      || t('building.feedback.review.selectSubcategory')
-    : feedbackSubcategoryLabel(feedbackCategory.value, feedbackSubcategory.value)
-      || t('building.feedback.review.selectSubcategory'),
+    ? categoryLabel(repairCategory.value, repairCategories.value) || t('building.feedback.review.selectCategory')
+    : categoryLabel(feedbackCategory.value, feedbackCategories.value) || t('building.feedback.review.selectCategory'),
 );
 const reviewContent = computed(() =>
   affairsMode.value === 'repair'
@@ -1788,6 +1752,7 @@ const handleSaveBuildingContext = async (): Promise<void> => {
   if (activeTab.value === 'affairs-feedback') await loadBuildingServiceCases(buildingID);
   if (activeTab.value === 'affairs-access') await loadBuildingAccess();
   if (activeTab.value === 'affairs-icctv') await loadICCTV();
+  if (activeTab.value === 'affairs-resident-authorizations') await loadResidentAuthorizations();
 };
 
 // 28.3 選擇後立即切換目前物業
@@ -2927,7 +2892,8 @@ onMounted(() => {
             <button
               type="button"
               class="affairs-entry-card"
-              :class="{ on: affairsMode === 'repair' }"
+              :class="{ on: feedbackBuildingID && affairsMode === 'repair' }"
+              :disabled="!feedbackBuildingID"
               @click="setAffairsMode('repair')"
             >
               <span
@@ -2959,7 +2925,8 @@ onMounted(() => {
             <button
               type="button"
               class="affairs-entry-card"
-              :class="{ on: affairsMode === 'feedback' }"
+              :class="{ on: feedbackBuildingID && affairsMode === 'feedback' }"
+              :disabled="!feedbackBuildingID"
               @click="setAffairsMode('feedback')"
             >
               <span
@@ -2989,11 +2956,32 @@ onMounted(() => {
               </span>
             </button>
           </section>
-          <section class="work-card affairs-feedback-form">
+          <section
+            v-if="feedbackBuildingID"
+            class="work-card affairs-feedback-form"
+          >
             <div class="work-card-title">{{ t('building.feedback.boundBuilding') }}</div>
             <div class="work-card-sub">{{ selectedFeedbackBuildingLabel }}</div>
           </section>
-          <section class="work-card affairs-guided-shell">
+          <section
+            v-else
+            class="work-card building-binding-empty"
+          >
+            <div>
+              <div class="work-card-title">{{ t('building.feedback.noBoundBuildingTitle') }}</div>
+              <p class="work-card-sub">{{ t('building.feedback.noBoundBuildingDescription') }}</p>
+            </div>
+            <RouterLink
+              class="work-action"
+              to="/account/profile?panel=property-binding"
+            >
+              {{ t('building.binding.action') }}
+            </RouterLink>
+          </section>
+          <section
+            v-if="feedbackBuildingID"
+            class="work-card affairs-guided-shell"
+          >
             <div
               class="affairs-stepper"
               :aria-label="t('building.feedback.flowAria')"
@@ -3046,7 +3034,6 @@ onMounted(() => {
                     id="affairs-repair-category"
                     v-model="repairCategory"
                     class="affairs-select"
-                    @change="initializeAffairsCategories('repair')"
                   >
                     <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
@@ -3055,23 +3042,6 @@ onMounted(() => {
                       :value="c.value"
                     >
                       {{ c.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="affairs-field">
-                  <label for="affairs-repair-subcategory">{{ t('building.feedback.repairSubcategory') }}</label>
-                  <select
-                    id="affairs-repair-subcategory"
-                    v-model="repairSubcategory"
-                    class="affairs-select"
-                  >
-                    <option value="">{{ t('building.common.emptySelection') }}</option>
-                    <option
-                      v-for="s in repairSubcategories"
-                      :key="s.value"
-                      :value="s.value"
-                    >
-                      {{ s.label }}
                     </option>
                   </select>
                 </div>
@@ -3086,7 +3056,6 @@ onMounted(() => {
                     id="affairs-feedback-category"
                     v-model="feedbackCategory"
                     class="affairs-select"
-                    @change="initializeAffairsCategories('feedback')"
                   >
                     <option value="">{{ t('building.common.emptySelection') }}</option>
                     <option
@@ -3095,23 +3064,6 @@ onMounted(() => {
                       :value="c.value"
                     >
                       {{ c.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="affairs-field">
-                  <label for="affairs-feedback-subcategory">{{ t('building.feedback.feedbackSubcategory') }}</label>
-                  <select
-                    id="affairs-feedback-subcategory"
-                    v-model="feedbackSubcategory"
-                    class="affairs-select"
-                  >
-                    <option value="">{{ t('building.common.emptySelection') }}</option>
-                    <option
-                      v-for="s in feedbackSubcategories"
-                      :key="s.value"
-                      :value="s.value"
-                    >
-                      {{ s.label }}
                     </option>
                   </select>
                 </div>
@@ -3187,12 +3139,8 @@ onMounted(() => {
                   <strong>{{ selectedFeedbackBuildingLabel }}</strong>
                 </div>
                 <div class="affairs-review-row">
-                  <span>{{ t('building.feedback.majorCategory') }}</span>
+                  <span>{{ t('building.feedback.category') }}</span>
                   <strong>{{ reviewCategory }}</strong>
-                </div>
-                <div class="affairs-review-row">
-                  <span>{{ t('building.feedback.subcategory') }}</span>
-                  <strong>{{ reviewSubcategory }}</strong>
                 </div>
                 <div class="affairs-review-row">
                   <span>{{ t('building.common.content') }}</span>
@@ -3403,6 +3351,51 @@ onMounted(() => {
                     <strong>{{ formatLocaleDateValue(accessQRPanel.expiresAt) }}</strong>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="work-card">
+            <div class="building-section-head">
+              <div class="work-card-title">{{ t('building.access.recentRecords') }}</div>
+            </div>
+            <table class="work-table access-record-table">
+              <thead>
+                <tr>
+                  <th>{{ t('building.access.door') }}</th>
+                  <th>{{ t('building.common.time') }}</th>
+                  <th>{{ t('building.access.method') }}</th>
+                  <th>{{ t('building.common.status') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in accessRecentRows"
+                  :key="row.key"
+                >
+                  <td>{{ row.doorTitle }}</td>
+                  <td>{{ row.openTime }}</td>
+                  <td>{{ row.openType }}</td>
+                  <td>
+                    <span
+                      class="work-chip"
+                      :class="row.status"
+                    >{{ row.statusText }}</span>
+                  </td>
+                </tr>
+                <tr v-if="accessRecentRows.length === 0">
+                  <td
+                    class="building-empty-row"
+                    colspan="4"
+                  >
+                    {{ t('building.access.emptyRecords') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+
         <!-- 住戶授權 -->
         <div
           v-show="activeTab === 'affairs-resident-authorizations'"
@@ -3460,17 +3453,9 @@ onMounted(() => {
                 <div class="authorization-form-section authorization-permission-section">
                   <div class="authorization-section-kicker">
                     <AppIcon name="shield" :size="15" />
-                    <span>{{ t('building.authorizations.permissionTitle') }}</span>
+                    <span>{{ t('building.authorizations.accessTitle') }}</span>
                   </div>
-                  <div class="authorization-permission-grid">
-                    <label v-for="option in authorizationOptions" :key="option.value" class="authorization-permission-option">
-                      <input v-model="residentAuthorizationPermissions" type="checkbox" :value="option.value">
-                      <span class="authorization-permission-mark"><AppIcon :name="option.value === 'remote_door_open' ? 'building' : 'bell'" :size="16" /></span>
-                      <span class="authorization-permission-copy">
-                        <strong>{{ option.label }}</strong>
-                      </span>
-                    </label>
-                  </div>
+                  <p class="authorization-access-notice">{{ t('building.authorizations.accessNotice') }}</p>
                 </div>
               </div>
             </div>
@@ -3478,7 +3463,6 @@ onMounted(() => {
               {{ t(residentAuthorizationError) }}
             </p>
             <div class="authorization-form-actions">
-              <span class="authorization-action-hint">{{ t('building.authorizations.permissionHint') }}</span>
               <button type="submit" class="work-action" :disabled="residentAuthorizationSubmitting">
                 <AppIcon name="send" :size="15" />
                 <span>{{ residentAuthorizationSubmitting ? t('building.authorizations.submitting') : t('building.authorizations.submit') }}</span>
@@ -3502,78 +3486,30 @@ onMounted(() => {
               <strong>{{ t('building.authorizations.empty') }}</strong>
             </div>
             <div v-else class="authorization-record-list">
-              <div v-for="row in residentAuthorizations" :key="row.authorization_id" class="authorization-record">
+              <div v-for="row in residentAuthorizations" :key="row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`" class="authorization-record">
                 <div class="authorization-record-person">
                   <span class="authorization-record-avatar"><AppIcon name="user" :size="16" /></span>
                   <div>
-                    <strong>{{ row.grantee_user_id ? t('building.authorizations.authorizedUser') : t('building.authorizations.pendingUser') }}</strong>
-                    <span class="authorization-status" :class="row.status">{{ authorizationStatusLabel(row.status) }}</span>
+                    <strong>{{ row.target_name || row.target_username || t('building.authorizations.authorizedUser') }}</strong>
+                    <span class="authorization-status active">{{ t('building.authorizations.status.active') }}</span>
                   </div>
                 </div>
                 <div class="authorization-record-contact">
-                  <span v-if="row.phone_number"><AppIcon name="phone" :size="14" />{{ [row.phone_country_code, row.phone_number].filter(Boolean).join(' ') }}</span>
-                  <span v-if="row.email"><AppIcon name="inbox" :size="14" />{{ row.email }}</span>
-                </div>
-                <div class="authorization-record-permissions">
-                  <span v-for="permission in row.permissions ?? []" :key="permission" class="authorization-permission-chip">{{ authorizationPermissionLabel(permission) }}</span>
+                  <span v-if="row.target_phone"><AppIcon name="phone" :size="14" />{{ row.target_phone }}</span>
+                  <span v-if="row.target_email"><AppIcon name="inbox" :size="14" />{{ row.target_email }}</span>
                 </div>
                 <button
                   type="button"
                   class="authorization-revoke-button"
-                  :disabled="revokingResidentAuthorization === row.authorization_id"
+                  :disabled="revokingResidentAuthorization === String(row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`)"
                   :aria-label="t('building.authorizations.revoke')"
                   @click="revokeResidentAuthorization(row)"
                 >
                   <AppIcon name="close" :size="16" />
-                  <span>{{ revokingResidentAuthorization === row.authorization_id ? t('building.authorizations.revoking') : t('building.authorizations.revoke') }}</span>
+                  <span>{{ revokingResidentAuthorization === String(row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`) ? t('building.authorizations.revoking') : t('building.authorizations.revoke') }}</span>
                 </button>
               </div>
             </div>
-          </section>
-        </div>
-
-              </div>
-            </div>
-          </section>
-
-          <section class="work-card">
-            <div class="building-section-head">
-              <div class="work-card-title">{{ t('building.access.recentRecords') }}</div>
-            </div>
-            <table class="work-table access-record-table">
-              <thead>
-                <tr>
-                  <th>{{ t('building.access.door') }}</th>
-                  <th>{{ t('building.common.time') }}</th>
-                  <th>{{ t('building.access.method') }}</th>
-                  <th>{{ t('building.common.status') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="row in accessRecentRows"
-                  :key="row.key"
-                >
-                  <td>{{ row.doorTitle }}</td>
-                  <td>{{ row.openTime }}</td>
-                  <td>{{ row.openType }}</td>
-                  <td>
-                    <span
-                      class="work-chip"
-                      :class="row.status"
-                    >{{ row.statusText }}</span>
-                  </td>
-                </tr>
-                <tr v-if="accessRecentRows.length === 0">
-                  <td
-                    class="building-empty-row"
-                    colspan="4"
-                  >
-                    {{ t('building.access.emptyRecords') }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </section>
         </div>
 
@@ -3693,6 +3629,46 @@ onMounted(() => {
             </div>
           </section>
         </div>
+
+        <Teleport to="body">
+          <Transition name="affairs-success-dialog">
+            <div
+              v-if="serviceCaseSuccessOpen"
+              class="affairs-success-dialog"
+              role="dialog"
+              aria-modal="true"
+              :aria-label="t('building.feedback.submitSuccessTitle')"
+              @click.self="closeServiceCaseSuccess"
+              @keydown.esc="closeServiceCaseSuccess"
+            >
+              <div class="affairs-success-dialog__panel">
+                <span
+                  class="affairs-success-dialog__icon"
+                  aria-hidden="true"
+                >
+                  <AppIcon
+                    name="check-circle"
+                    :size="28"
+                  />
+                </span>
+                <h2>{{ t('building.feedback.submitSuccessTitle') }}</h2>
+                <p>{{ t('building.feedback.submitSuccessDescription') }}</p>
+                <button
+                  type="button"
+                  class="work-action affairs-success-dialog__action"
+                  autofocus
+                  @click="closeServiceCaseSuccess"
+                >
+                  <AppIcon
+                    name="check-circle"
+                    :size="16"
+                  />
+                  {{ t('building.feedback.submitSuccessClose') }}
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
 
       </main>
     </div>
@@ -4780,6 +4756,13 @@ onMounted(() => {
   background: var(--brand-light);
 }
 
+.affairs-entry-card:disabled {
+  border-color: var(--bdr);
+  background: var(--sur);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .affairs-entry-icon {
   display: flex;
   width: 44px;
@@ -5017,7 +5000,85 @@ onMounted(() => {
   color: var(--ink-3);
 }
 
-/* 14. ICCTV */
+/* 14. 服務個案提交成功提示框 */
+.affairs-success-dialog {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(15 23 42 / 0.32);
+  padding: 16px;
+}
+
+.affairs-success-dialog__panel {
+  width: min(100%, 28rem);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  padding: 24px;
+  box-shadow: 0 24px 60px rgb(15 23 42 / 0.2);
+  color: var(--ink);
+  text-align: center;
+}
+
+.affairs-success-dialog__icon {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.affairs-success-dialog__panel h2 {
+  margin: 16px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.affairs-success-dialog__panel p {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.affairs-success-dialog__action {
+  display: inline-flex;
+  min-width: 112px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.affairs-success-dialog-enter-active,
+.affairs-success-dialog-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.affairs-success-dialog-enter-active .affairs-success-dialog__panel,
+.affairs-success-dialog-leave-active .affairs-success-dialog__panel {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.affairs-success-dialog-enter-from,
+.affairs-success-dialog-leave-to {
+  opacity: 0;
+}
+
+.affairs-success-dialog-enter-from .affairs-success-dialog__panel,
+.affairs-success-dialog-leave-to .affairs-success-dialog__panel {
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+}
+
+/* 15. ICCTV */
 .icctv-panel-wide {
   grid-column: 1 / -1;
 }
@@ -5169,92 +5230,6 @@ onMounted(() => {
   background: #0F172A;
 }
 
-/* 15. 響應式設計 */
-@media (max-width: 1023px) {
-  .work-shell {
-    grid-template-columns: 1fr;
-    padding: 14px;
-  }
-
-  .work-sidebar {
-    position: static;
-  }
-
-  .work-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .affairs-entry-grid,
-  .affairs-field-grid,
-  .affairs-stepper {
-    grid-template-columns: 1fr;
-  }
-
-  .building-doc-grid,
-  .finance-summary-grid,
-  .building-field-grid,
-  .authorization-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .authorization-field-stack,
-  .authorization-permission-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .building-field {
-    grid-template-columns: 1fr;
-    border-right: 0;
-  }
-
-  .access-qr-layout,
-  .access-qr-meta {
-    grid-template-columns: 1fr;
-  }
-
-  .acct-tabs {
-    overflow: auto;
-  }
-
-  .acct-tab {
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 767px) {
-  .work-shell {
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .work-nav {
-    grid-template-columns: 1fr;
-  }
-
-  .work-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .building-binding-empty {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .building-binding-empty .work-action {
-    align-self: flex-start;
-  }
-
-  .icctv-profile-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .icctv-table-wrap {
-    overflow-x: visible;
-  }
-
-  .icctv-table {
 /* 15.1 住戶授權 */
 .authorization-form-card {
   display: grid;
@@ -5405,6 +5380,13 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.authorization-access-notice {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .authorization-permission-option {
@@ -5677,33 +5659,39 @@ onMounted(() => {
   opacity: 0.5;
 }
 
-    width: 100%;
-    min-width: 0;
+/* 15. 響應式設計 */
+@media (max-width: 1023px) {
+  .work-shell {
+    grid-template-columns: 1fr;
+    padding: 14px;
   }
 
-  .icctv-table th:nth-child(1),
-  .icctv-table td:nth-child(1) {
-    width: 42%;
+  .work-sidebar {
+    position: static;
   }
 
-  .icctv-table th:nth-child(2),
-  .icctv-table td:nth-child(2) {
-    display: none;
+  .work-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .icctv-table th:nth-child(3),
-  .icctv-table td:nth-child(3) {
-    width: 58%;
+  .affairs-entry-grid,
+  .affairs-field-grid,
+  .affairs-stepper {
+    grid-template-columns: 1fr;
   }
 
-  .icctv-table th,
-  .icctv-table td {
-    padding: 10px 8px;
+  .building-doc-grid,
+  .finance-summary-grid,
+  .building-field-grid,
+  .authorization-form-grid {
+    grid-template-columns: 1fr;
   }
 
-  .icctv-row-actions {
-    align-items: stretch;
-    flex-direction: column;
+  .authorization-field-stack,
+  .authorization-permission-grid {
+    grid-template-columns: 1fr;
+  }
+
   .authorization-form-section {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -5745,6 +5733,86 @@ onMounted(() => {
     font-size: 16px;
   }
 
+  .building-field {
+    grid-template-columns: 1fr;
+    border-right: 0;
+  }
+
+  .access-qr-layout,
+  .access-qr-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .acct-tabs {
+    overflow: auto;
+  }
+
+  .acct-tab {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 767px) {
+  .work-shell {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .work-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .work-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .building-binding-empty {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .building-binding-empty .work-action {
+    align-self: flex-start;
+  }
+
+  .icctv-profile-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .icctv-table-wrap {
+    overflow-x: visible;
+  }
+
+  .icctv-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .icctv-table th:nth-child(1),
+  .icctv-table td:nth-child(1) {
+    width: 42%;
+  }
+
+  .icctv-table th:nth-child(2),
+  .icctv-table td:nth-child(2) {
+    display: none;
+  }
+
+  .icctv-table th:nth-child(3),
+  .icctv-table td:nth-child(3) {
+    width: 58%;
+  }
+
+  .icctv-table th,
+  .icctv-table td {
+    padding: 10px 8px;
+  }
+
+  .icctv-row-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .icctv-row-actions .work-mini-btn {

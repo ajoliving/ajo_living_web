@@ -170,7 +170,7 @@ const handleSubmit = async () => { ... };
 ### 5，我会在其他的terminal中自己运行我的前端和后端
 - 我会在其他的terminal中自己运行我的前端和后端，不要帮我直接运行。
 - 我的一切的功能等尽量是能做减法，然后ui上也是最好是简约，不要复杂逻辑啥的
-- /Users/yangliu/Documents/Code/ajoliving_web/doc copy/server-deployment-ai-prompt.md部署的话，帮我读这个文件后部署
+- 部署时先读取 `/Users/yangliu/Documents/Code/hk/ajoliving_web/docs/deployment/server-deployment-ai-prompt.md`，再按当前部署脚本执行
 
 ## 專案記憶與索引
 

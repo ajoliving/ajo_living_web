@@ -46,6 +46,8 @@ type IsmartSubaccountQuery struct {
 type IsmartSubaccountMutationParams struct {
 	UnitID       string
 	TargetUserID int64
+	TargetPhone  string
+	TargetEmail  string
 	Remark       string
 }
 
@@ -305,7 +307,7 @@ func (s *IsmartExternalService) ListBuildingServiceCases(ctx context.Context, us
 	query.Set("scope", "mine")
 	copyQueryValue(query, "status", params.Status)
 	copyQueryValue(query, "request_type", params.RequestType)
-	result, err := s.getIntegration(ctx, "/buildings/service-cases/", query)
+	result, err := s.getServiceCaseIntegration(ctx, "/buildings/service-cases/", query)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +329,7 @@ func (s *IsmartExternalService) GetBuildingServiceCase(ctx context.Context, user
 	query := url.Values{}
 	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
 	query.Set("building_id", buildingID)
-	result, err := s.getIntegration(ctx, "/buildings/service-cases/"+url.PathEscape(caseID)+"/", query)
+	result, err := s.getServiceCaseIntegration(ctx, "/buildings/service-cases/"+url.PathEscape(caseID)+"/", query)
 	if err != nil {
 		return nil, err
 	}
@@ -429,17 +431,31 @@ func (s *IsmartExternalService) mutateSubaccount(ctx context.Context, userID int
 		return nil, err
 	}
 	unitID := strings.TrimSpace(params.UnitID)
-	if unitID == "" || params.TargetUserID <= 0 {
-		return nil, errcode.New(errcode.CodeValidationError, "unit id and target user id are required")
+	if unitID == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "unit id is required")
 	}
 	if !s.unitVisible(account, unitID) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
+	}
+	targetUserID := params.TargetUserID
+	if strings.HasSuffix(path, "/grant/") && targetUserID <= 0 {
+		var resolveErr error
+		targetUserID, resolveErr = s.ResolveSubaccountTargetUser(ctx, IsmartSubaccountContactParams{
+			Phone: params.TargetPhone,
+			Email: params.TargetEmail,
+		})
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+	}
+	if targetUserID <= 0 {
+		return nil, errcode.New(errcode.CodeValidationError, "target user id is required")
 	}
 
 	payload := map[string]any{
 		"user_id":        account.IsmartUserID,
 		"unit_id":        unitID,
-		"target_user_id": params.TargetUserID,
+		"target_user_id": targetUserID,
 	}
 	if remark := strings.TrimSpace(params.Remark); remark != "" {
 		payload["remark"] = remark

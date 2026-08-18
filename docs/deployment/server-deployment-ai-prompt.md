@@ -828,6 +828,12 @@ ssh admin@47.239.117.108 \
 
 2026-08-07 已按產品決策移除 Cookie access gate 及網關入口密鑰：普通首頁與 `/api/v1/health` 在不帶 Cookie 時均返回 `200`；`noindex`、獨立資料庫、外部憑據清理及生產副作用隔離維持不變。
 
+2026-08-18 已部署測試 release `20260818111641-test-79673`：
+
+- 更新住戶 iSmart 副戶授權流程，使用電話及電郵解析 `target_user_id`，再由 iSmart 執行單位授權；前端移除獨立開門及通告權限選項，改為顯示副戶擁有完整大廈權限。
+- 保留既有測試資料庫，測試後端、同源前端、Supervisor、PostgreSQL、Redis、FRP、HTTPS 及 `noindex` 驗證通過。
+- 生產 `/api/v1/health` 同步驗證為 `200`，未修改生產 release、資料庫或路由配置。
+
 ---
 
 ## 十一、GOOD PRICE 项目固定配置（已落地）

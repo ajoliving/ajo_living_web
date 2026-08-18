@@ -207,6 +207,7 @@ describe('BuildingPage binding refresh', () => {
       recent_records: [],
     });
     mocks.openDoor.mockResolvedValue({ is_success: true });
+    mocks.submitServiceCase.mockResolvedValue({ case_id: 'case-new', status: 'submitted' });
     mocks.fetchServiceCases.mockResolvedValue({
       selected_building_id: '0999900',
       status_choices: [],
@@ -428,7 +429,7 @@ describe('BuildingPage binding refresh', () => {
     expect(wrapper.text()).toContain('需要管理處跟進');
   });
 
-  it('defaults both repair classifications to the first available option', async () => {
+  it('submits only iSmart-supported legacy classifications', async () => {
     const wrapper = mount(BuildingPage, {
       global: { plugins: [i18n], stubs: { RouterLink: true } },
     });
@@ -440,20 +441,69 @@ describe('BuildingPage binding refresh', () => {
     await flushPromises();
 
     const repairCategory = wrapper.get('#affairs-repair-category');
-    const repairSubcategory = wrapper.get('#affairs-repair-subcategory');
-    expect((repairCategory.element as HTMLSelectElement).value).toBe('electrical');
-    expect((repairSubcategory.element as HTMLSelectElement).value).toBe('corridorLighting');
+    expect((repairCategory.element as HTMLSelectElement).value).toBe('門卡報失');
+    expect(wrapper.find('#affairs-repair-subcategory').exists()).toBe(false);
+    await repairCategory.setValue('電力問題');
 
-    await repairCategory.setValue('water');
-    expect((repairSubcategory.element as HTMLSelectElement).value).toBe('freshWater');
+    const actionButton = () => wrapper.findAll('.affairs-guided-actions .work-action')[1];
+    await actionButton()?.trigger('click');
+    await wrapper.get('#affairs-repair-content').setValue('12樓走廊照明故障');
+    await wrapper.get('#affairs-location').setValue('12樓走廊');
+    await actionButton()?.trigger('click');
+    await actionButton()?.trigger('click');
+    await flushPromises();
+
+    expect(mocks.submitServiceCase).toHaveBeenCalledWith({
+      building_id: '0999900',
+      unit_id: '09999000012',
+      comment_type: '電力問題',
+      comment: '12樓走廊照明故障',
+      subject: '電力問題',
+      content: '12樓走廊照明故障',
+      location_text: '12樓走廊',
+    });
+    const successDialog = document.body.querySelector('.affairs-success-dialog');
+    expect(successDialog?.textContent).toContain('提交成功');
+    expect(successDialog?.textContent).toContain('管理處將按提交內容跟進');
+    (successDialog?.querySelector('.affairs-success-dialog__action') as HTMLButtonElement).click();
+    await flushPromises();
+    expect(document.body.querySelector('.affairs-success-dialog')).toBeNull();
 
     const feedbackEntry = wrapper.findAll('.affairs-entry-card')
       .find((button) => button.text().includes('意見反映'));
     await feedbackEntry?.trigger('click');
     await flushPromises();
 
-    expect((wrapper.get('#affairs-feedback-category').element as HTMLSelectElement).value).toBe('environment');
-    expect((wrapper.get('#affairs-feedback-subcategory').element as HTMLSelectElement).value).toBe('cleaningSuggestion');
+    expect((wrapper.get('#affairs-feedback-category').element as HTMLSelectElement).value).toBe('嘈音滋擾');
+    expect(wrapper.find('#affairs-feedback-subcategory').exists()).toBe(false);
+  });
+
+  it('blocks service-case submission without a current building binding', async () => {
+    const unboundMember = {
+      ...mocks.session.me,
+      bound_building_ids: [],
+      bound_flat_unit_ids: [],
+      residence_binding_status: '',
+    };
+    mocks.session.me = unboundMember;
+    mocks.loadCurrentUser.mockResolvedValue(unboundMember);
+
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const feedbackButton = wrapper.findAll('.work-nav-item')
+      .find((button) => button.text().includes('意見提供/維修報修'));
+    await feedbackButton?.trigger('click');
+    await flushPromises();
+
+    const feedbackPanel = wrapper.get('[data-work-panel="affairs-feedback"]');
+    expect(feedbackPanel.text()).toContain('目前沒有已綁定大廈，無法提交維修或意見個案');
+    expect(feedbackPanel.find('.affairs-guided-shell').exists()).toBe(false);
+    expect(feedbackPanel.findAll('.affairs-entry-card').every((button) => button.attributes('disabled') !== undefined)).toBe(true);
+    expect(mocks.fetchServiceCases).not.toHaveBeenCalled();
+    expect(mocks.submitServiceCase).not.toHaveBeenCalled();
   });
 
   it('lets the open-door API make the final permission decision', async () => {

@@ -3,6 +3,7 @@
  * 1. 驗證會員中心綁定大廈優先於 iSmart 可見大廈預設順序。
  * 2. 驗證未指定大廈時仍保留 iSmart 可見範圍校驗。
  * 3. 驗證大廈資料快取不重複回源且不繞過會員權限。
+ * 4. 驗證服務個案只使用獨立測試環境且不回退生產接口。
  */
 package service
 
@@ -334,7 +335,7 @@ func TestIsmartOwnerBindingInjectsCurrentUser(t *testing.T) {
 
 // 8. TestIsmartServiceCasesUseCurrentIdentity verifies service-case submission, listing, and detail use the current iSmart account.
 func TestIsmartServiceCasesUseCurrentIdentity(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+	serviceCaseServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
 		case "/api/v1/integration/buildings/comments/":
@@ -369,9 +370,16 @@ func TestIsmartServiceCasesUseCurrentIdentity(t *testing.T) {
 			t.Fatalf("unexpected service-case path: %s", request.URL.Path)
 		}
 	}))
-	defer server.Close()
+	defer serviceCaseServer.Close()
+	var productionCalls atomic.Int32
+	productionServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		productionCalls.Add(1)
+		response.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer productionServer.Close()
 
-	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, productionServer.URL)
+	runtimeValue.Config.IsmartServiceCaseAPIBaseURL = serviceCaseServer.URL + "/api/v1/integration"
 	ismartService := NewIsmartExternalService(runtimeValue)
 	if _, err := ismartService.SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
 		BuildingID: "0348200", RequestType: "repair", Category: "water", Subcategory: "leakage", Subject: "走廊漏水", Content: "18樓走廊漏水", UnitID: "0348200001",
@@ -386,9 +394,106 @@ func TestIsmartServiceCasesUseCurrentIdentity(t *testing.T) {
 	if err != nil || detail["case_id"] != "case-1" {
 		t.Fatalf("get service case: result=%#v err=%v", detail, err)
 	}
+	if productionCalls.Load() != 0 {
+		t.Fatalf("service-case calls must not use production base URL, got %d calls", productionCalls.Load())
+	}
 }
 
-// 9. TestIsmartServiceCaseRejectsInvisibleUnit verifies a resident cannot file for an inaccessible unit.
+// 8.1 TestIsmartServiceCaseLegacyClassification verifies documented comment types are forwarded without unsupported taxonomy fields.
+func TestIsmartServiceCaseLegacyClassification(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		if request.URL.Path != "/api/v1/integration/buildings/comments/" || request.Method != http.MethodPost {
+			t.Fatalf("unexpected legacy service-case request: %s %s", request.Method, request.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode legacy service-case payload: %v", err)
+		}
+		if payload["user_id"] != float64(88) || payload["building_id"] != "0348200" || payload["unit_id"] != "0348200001" {
+			t.Fatalf("unexpected legacy service-case identity payload: %#v", payload)
+		}
+		if payload["comment_type"] != "電力問題" || payload["comment"] != "18樓走廊照明故障" || payload["content"] != "18樓走廊照明故障" {
+			t.Fatalf("unexpected legacy service-case classification payload: %#v", payload)
+		}
+		for _, field := range []string{"request_type", "category", "subcategory"} {
+			if _, exists := payload[field]; exists {
+				t.Fatalf("legacy service-case payload must omit %s: %#v", field, payload)
+			}
+		}
+		_, _ = response.Write([]byte(`{"status":"success","data":{"case_id":"case-legacy","status":"submitted"}}`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	if _, err := NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", CommentType: "電力問題", Comment: "18樓走廊照明故障", Content: "18樓走廊照明故障", UnitID: "0348200001",
+	}); err != nil {
+		t.Fatalf("submit legacy service case: %v", err)
+	}
+}
+
+// 8.2 TestIsmartServiceCaseFailureDoesNotFallbackToProduction verifies test API errors never trigger the production endpoint.
+func TestIsmartServiceCaseFailureDoesNotFallbackToProduction(t *testing.T) {
+	serviceCaseServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v1/integration/buildings/comments/" {
+			t.Fatalf("unexpected service-case test path: %s", request.URL.Path)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(http.StatusNotFound)
+		_, _ = response.Write([]byte(`{"message":"test endpoint unavailable"}`))
+	}))
+	defer serviceCaseServer.Close()
+
+	var productionCalls atomic.Int32
+	productionServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		productionCalls.Add(1)
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"success","data":{"case_id":"production-case"}}`))
+	}))
+	defer productionServer.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, productionServer.URL)
+	runtimeValue.Config.IsmartServiceCaseAPIBaseURL = serviceCaseServer.URL + "/api/v1/integration"
+	_, err := NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", CommentType: "其他事宜", Comment: "測試環境失敗", Content: "測試環境失敗", UnitID: "0348200001",
+	})
+	if err == nil {
+		t.Fatal("expected service-case test API error")
+	}
+	if productionCalls.Load() != 0 {
+		t.Fatalf("failed service-case call must not fallback to production, got %d calls", productionCalls.Load())
+	}
+}
+
+// 8.3 TestIsmartServiceCaseRequiresCurrentBuildingBinding verifies iSmart visibility alone cannot authorize a submission.
+func TestIsmartServiceCaseRequiresCurrentBuildingBinding(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		t.Fatalf("unbound service case must not reach upstream: %s", request.URL.String())
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	emptyBindings, err := marshalJSON([]string{})
+	if err != nil {
+		t.Fatalf("marshal empty building bindings: %v", err)
+	}
+	if err := runtimeValue.DB.Model(&model.UserProfile{}).Where("user_id = ?", user.ID).Updates(map[string]any{
+		"bound_building_ids":  emptyBindings,
+		"bound_flat_unit_ids": emptyBindings,
+	}).Error; err != nil {
+		t.Fatalf("clear current building binding: %v", err)
+	}
+
+	_, err = NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", CommentType: "其他事宜", Comment: "未綁定大廈測試", Content: "未綁定大廈測試",
+	})
+	if err == nil {
+		t.Fatal("expected missing current building binding to be rejected")
+	}
+}
+
+// 9. TestIsmartServiceCaseRejectsInvisibleUnit verifies a resident cannot file for an inaccessible or cross-building unit.
 func TestIsmartServiceCaseRejectsInvisibleUnit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		t.Fatalf("invisible unit must not reach upstream: %s", request.URL.String())
@@ -396,8 +501,16 @@ func TestIsmartServiceCaseRejectsInvisibleUnit(t *testing.T) {
 	defer server.Close()
 
 	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
-	_, err := NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
-		BuildingID: "0348200", RequestType: "repair", Category: "water", Subcategory: "leakage", Content: "18樓走廊漏水", UnitID: "0348200999",
+	visibleUnits, err := marshalJSON([]string{"0348200001", "0999900001"})
+	if err != nil {
+		t.Fatalf("marshal cross-building units: %v", err)
+	}
+	if err := runtimeValue.DB.Model(&model.UserIsmartAccount{}).Where("user_id = ?", user.ID).
+		Update("client_building_flat_units_permissions", visibleUnits).Error; err != nil {
+		t.Fatalf("update cross-building units: %v", err)
+	}
+	_, err = NewIsmartExternalService(runtimeValue).SubmitBuildingComment(context.Background(), user.ID, IsmartBuildingCommentParams{
+		BuildingID: "0348200", RequestType: "repair", Category: "water", Subcategory: "leakage", Content: "18樓走廊漏水", UnitID: "0999900001",
 	})
 	if err == nil {
 		t.Fatal("expected invisible service-case unit to be rejected")
@@ -414,6 +527,18 @@ func TestIsmartSubaccountsUseIntegrationPaths(t *testing.T) {
 				t.Fatalf("unexpected subaccount list request: %s %s", request.Method, request.URL.String())
 			}
 			_, _ = response.Write([]byte(`{"status":"success","data":{"items":[{"unit_id":"0348200001","target_user_id":99}],"count":1}}`))
+		case "/api/v1/integration/auth/check-contact/":
+			if request.Method != http.MethodPost {
+				t.Fatalf("unexpected contact lookup method: %s", request.Method)
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode contact lookup payload: %v", err)
+			}
+			if payload["phone"] != "+85261230009" || payload["email"] != "target@example.com" {
+				t.Fatalf("unexpected contact lookup payload: %#v", payload)
+			}
+			_, _ = response.Write([]byte(`{"status":"success","data":{"target_user_id":99}}`))
 		case "/api/v1/integration/buildings/subaccounts/grant/", "/api/v1/integration/buildings/subaccounts/revoke/":
 			if request.Method != http.MethodPost {
 				t.Fatalf("unexpected subaccount mutation method: %s", request.Method)
@@ -447,6 +572,9 @@ func TestIsmartSubaccountsUseIntegrationPaths(t *testing.T) {
 	}
 	if _, err := ismartService.RevokeSubaccount(context.Background(), user.ID, params); err != nil {
 		t.Fatalf("revoke subaccount: %v", err)
+	}
+	if _, err := ismartService.GrantSubaccount(context.Background(), user.ID, IsmartSubaccountMutationParams{UnitID: "0348200001", TargetPhone: "+85261230009", TargetEmail: "target@example.com"}); err != nil {
+		t.Fatalf("grant subaccount by contact: %v", err)
 	}
 }
 
@@ -547,6 +675,7 @@ func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, mo
 			IsmartExternalAppBaseURL:    baseURL,
 			IsmartExternalAppAPIBaseURL: baseURL + "/api/v1/external",
 			IsmartIntegrationAPIBaseURL: baseURL + "/api/v1/integration",
+			IsmartServiceCaseAPIBaseURL: baseURL + "/api/v1/integration",
 		},
 		&model.User{},
 		&model.UserProfile{},
@@ -571,6 +700,14 @@ func newIsmartIntegrationTestRuntime(t *testing.T, baseURL string) (*Runtime, mo
 	visibleUnitJSON, err := marshalJSON([]string{"0348200001"})
 	if err != nil {
 		t.Fatalf("marshal visible unit json: %v", err)
+	}
+	if err := runtimeValue.DB.Create(&model.UserProfile{
+		UserID:                 user.ID,
+		BoundBuildingIDs:       visibleBuildingJSON,
+		BoundFlatUnitIDs:       visibleUnitJSON,
+		ResidenceBindingStatus: "approved",
+	}).Error; err != nil {
+		t.Fatalf("create current building binding: %v", err)
 	}
 	if err := runtimeValue.DB.Create(&model.UserIsmartAccount{
 		UserID:                             user.ID,

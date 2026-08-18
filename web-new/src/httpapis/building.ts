@@ -208,6 +208,8 @@ export interface IsmartSubaccountRow {
   target_email?: string;
   role?: string;
   history_count?: number;
+  permissions?: string[];
+  status?: string;
 }
 
 export interface IsmartSubaccountsResponse extends IsmartBuildingOptionResponse {
@@ -218,8 +220,10 @@ export interface IsmartSubaccountsResponse extends IsmartBuildingOptionResponse 
 
 export interface IsmartSubaccountMutationPayload {
   unit_id: string;
-  target_user_id: number;
-  remark?: string;
+  target_user_id?: number;
+  target_phone?: string;
+  target_email?: string;
+  permissions?: string[];
 }
 
 export interface IsmartSubaccountMutationResponse extends IsmartBuildingOptionResponse {
@@ -294,15 +298,17 @@ export interface IsmartBuildingNoticesResponse extends IsmartBuildingOptionRespo
 
 export interface IsmartServiceCaseSubmitPayload {
   building_id?: string;
-  request_type: 'repair' | 'feedback';
-  category: string;
-  subcategory: string;
+  request_type?: 'repair' | 'feedback';
+  category?: string;
+  subcategory?: string;
   subject?: string;
   content: string;
   location_text?: string;
   unit_id?: string;
   contact_name?: string;
   contact_phone?: string;
+  comment_type?: string;
+  comment?: string;
 }
 
 export interface IsmartServiceCaseSummary {

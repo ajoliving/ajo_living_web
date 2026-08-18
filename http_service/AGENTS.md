@@ -242,7 +242,7 @@ go test ./...
 - 是否遵守主要函式編號註解規範。
 - 是否避免引入無明確收益的新抽象層。
 - 是否同步補充測試與文件。
-- 对于我的部署的话，需要参考我的/Users/yangliu/Documents/Code/ajoliving_web/doc copy/server-deployment-ai-prompt.md 文档，以及我的/Users/yangliu/Documents/Code/ajoliving_web/deploy-ajoliving.sh 脚本
+- 对于部署，需要参考 `/Users/yangliu/Documents/Code/hk/ajoliving_web/docs/deployment/server-deployment-ai-prompt.md` 文档，以及当前仓库的 `deploy-ajoliving-test.sh` 或 `deploy-ajoliving.sh` 脚本
 - 部署不要破坏我的已经部署好的项目，可以先ssh链接上服务器后直接查看相关的服务器的配置文件等等，然后再部署，不要新加多余的垃圾
 
 ## 子目錄記憶
