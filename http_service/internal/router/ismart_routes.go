@@ -29,6 +29,10 @@ func registerIsmartRoutes(
 	requireAuth gin.HandlerFunc,
 ) {
 	api.GET("/me/ismart/buildings", requireAuth, ismartHandler.ListBuildings)
+	api.POST("/me/ismart/change-password", requireAuth, ismartHandler.ChangePassword)
+	api.GET("/me/ismart/notification-settings", requireAuth, ismartHandler.GetNotificationSettings)
+	api.PATCH("/me/ismart/notification-settings", requireAuth, ismartHandler.UpdateNotificationSettings)
+	api.PATCH("/me/ismart/profile", requireAuth, ismartHandler.UpdateClientProfile)
 	api.POST("/me/ismart/account-registration", requireAuth, ismartHandler.RegisterAccount)
 	api.GET("/me/ismart/building-info", requireAuth, ismartHandler.GetBuildingInfo)
 	api.GET("/me/ismart/management-fees", requireAuth, ismartHandler.ListManagementFees)

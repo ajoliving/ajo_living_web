@@ -43,6 +43,123 @@ func (h *IsmartExternalHandler) ListBuildings(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
+// 3.0 ChangePassword changes the current member's linked iSmart password.
+func (h *IsmartExternalHandler) ChangePassword(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request struct {
+		OldPassword        string `json:"old_password"`
+		NewPassword        string `json:"new_password"`
+		NewPasswordConfirm string `json:"new_password_confirm"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid password payload"))
+		return
+	}
+	result, err := h.ismartService.ChangeIsmartPassword(c.Request.Context(), user.UserID, service.IsmartPasswordChangeParams{
+		OldPassword: request.OldPassword, NewPassword: request.NewPassword, NewPasswordConfirm: request.NewPasswordConfirm,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 3.0.1 GetNotificationSettings reads the current member's iSmart email preference.
+func (h *IsmartExternalHandler) GetNotificationSettings(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	result, err := h.ismartService.GetIsmartNotificationSettings(c.Request.Context(), user.UserID)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 3.0.2 UpdateNotificationSettings updates the current member's iSmart email preference.
+func (h *IsmartExternalHandler) UpdateNotificationSettings(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request struct {
+		ReceiveEmail *bool `json:"is_receive_email"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil || request.ReceiveEmail == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "is_receive_email is required"))
+		return
+	}
+	result, err := h.ismartService.UpdateIsmartNotificationSettings(c.Request.Context(), user.UserID, *request.ReceiveEmail)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 3.1 UpdateClientProfile updates the current member's documented iSmart profile fields.
+func (h *IsmartExternalHandler) UpdateClientProfile(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	var request struct {
+		AccountEmail          *string `json:"account_email"`
+		AccountPhone          *string `json:"account_phone"`
+		ContactName           *string `json:"contact_name"`
+		EmergencyContactName  *string `json:"emergency_contact_name"`
+		OwnerNameEN           *string `json:"owner_name_en"`
+		OwnerNameZH           *string `json:"owner_name_zh"`
+		AccountName           *string `json:"account_name"`
+		IdentityNumber        *string `json:"identity_number"`
+		ContactPhone          *string `json:"contact_phone"`
+		EmergencyContactPhone *string `json:"emergency_contact_phone"`
+		ContactEmail          *string `json:"contact_email"`
+		BirthDate             *string `json:"birth_date"`
+		Gender                *string `json:"gender"`
+		AddressEN             *string `json:"billing_address_en"`
+		AddressZH             *string `json:"billing_address_zh"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid ismart profile payload"))
+		return
+	}
+
+	result, err := h.ismartService.UpdateClientProfile(c.Request.Context(), user.UserID, service.IsmartClientProfileUpdate{
+		AccountEmail:          request.AccountEmail,
+		AccountPhone:          request.AccountPhone,
+		ContactName:           request.ContactName,
+		EmergencyContactName:  request.EmergencyContactName,
+		OwnerNameEN:           request.OwnerNameEN,
+		OwnerNameZH:           request.OwnerNameZH,
+		AccountName:           request.AccountName,
+		IdentityNumber:        request.IdentityNumber,
+		ContactPhone:          request.ContactPhone,
+		EmergencyContactPhone: request.EmergencyContactPhone,
+		ContactEmail:          request.ContactEmail,
+		BirthDate:             request.BirthDate,
+		Gender:                request.Gender,
+		AddressEN:             request.AddressEN,
+		AddressZH:             request.AddressZH,
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
 // 4. GetBuildingInfo returns the selected iSmart building profile.
 func (h *IsmartExternalHandler) GetBuildingInfo(c *gin.Context) {
 	user := currentUser(c)

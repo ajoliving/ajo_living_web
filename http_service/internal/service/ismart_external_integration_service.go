@@ -15,6 +15,7 @@ import (
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
+	"ajoliving_web/http_service/internal/utils"
 )
 
 // 1. IsmartReceivableParams defines building receivable lookup input.
@@ -95,6 +96,90 @@ type IsmartDirectRegistrationParams struct {
 	Gender         string
 	IsReceiveEmail bool
 	Password       string
+}
+
+// 8.1 IsmartPasswordChangeParams defines an authenticated iSmart password change.
+type IsmartPasswordChangeParams struct {
+	OldPassword        string
+	NewPassword        string
+	NewPasswordConfirm string
+}
+
+// 8.2 IsmartNotificationSettings defines the building-notice email preference.
+type IsmartNotificationSettings struct {
+	BuildingNoticeEmail bool `json:"blg_notice_email"`
+	ReceiveEmail        bool `json:"is_receive_email"`
+}
+
+// 8.3 ChangeIsmartPassword changes the linked iSmart login password.
+func (s *IsmartExternalService) ChangeIsmartPassword(ctx context.Context, userID int64, params IsmartPasswordChangeParams) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(params.OldPassword) == "" || strings.TrimSpace(params.NewPassword) == "" {
+		return nil, errcode.New(errcode.CodeValidationError, "current and new passwords are required")
+	}
+	payload := map[string]any{
+		"user_id":              account.IsmartUserID,
+		"old_password":         params.OldPassword,
+		"new_password":         params.NewPassword,
+		"new_password_confirm": params.NewPasswordConfirm,
+	}
+	result, err := s.postIntegration(ctx, "/auth/change-password/", payload)
+	if err != nil {
+		return nil, err
+	}
+	passwordHash, err := utils.HashPassword(params.NewPassword)
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare local password")
+	}
+	passwordEncrypted, err := utils.EncryptString(s.runtime.Config.EncryptionKey, params.NewPassword)
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare local password")
+	}
+	if err := s.runtime.DB.WithContext(ctx).Model(&model.UserIsmartAccount{}).Where("user_id = ?", userID).Update("password_encrypted", passwordEncrypted).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to save local ismart password")
+	}
+	if err := s.runtime.DB.WithContext(ctx).Model(&model.UserCredential{}).Where("user_id = ?", userID).Updates(map[string]any{
+		"password_hash": passwordHash, "password_encrypted": passwordEncrypted,
+	}).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to save local password")
+	}
+	return decorateIsmartPayload(result.Payload, "", nil, result.Message, account.IsStaff), nil
+}
+
+// 8.4 GetIsmartNotificationSettings reads the linked iSmart email preference.
+func (s *IsmartExternalService) GetIsmartNotificationSettings(ctx context.Context, userID int64) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	query := url.Values{}
+	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
+	result, err := s.getIntegration(ctx, "/auth/settings/", query)
+	if err != nil {
+		return nil, err
+	}
+	return decorateIsmartPayload(result.Payload, "", nil, result.Message, account.IsStaff), nil
+}
+
+// 8.5 UpdateIsmartNotificationSettings updates the linked iSmart email preference.
+func (s *IsmartExternalService) UpdateIsmartNotificationSettings(ctx context.Context, userID int64, receiveEmail bool) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	payload := map[string]any{
+		"user_id":          account.IsmartUserID,
+		"blg_notice_email": receiveEmail,
+		"is_receive_email": receiveEmail,
+	}
+	result, err := s.patchIntegration(ctx, "/auth/settings/", payload)
+	if err != nil {
+		return nil, err
+	}
+	return decorateIsmartPayload(result.Payload, "", nil, result.Message, account.IsStaff), nil
 }
 
 // 9. RegisterDirectAccount creates one iSmart account during AJO registration.
