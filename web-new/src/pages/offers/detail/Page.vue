@@ -32,12 +32,17 @@ import {
   displaySupermarketStore,
   formatSupermarketDate,
   formatSupermarketHKPrice,
+  resolveSupermarketProductBrand,
+  resolveSupermarketProductCategory,
+  resolveSupermarketProductFullTitle,
+  resolveSupermarketProductName,
+  resolveSupermarketProductUnit,
   supermarketBestDealStorePrices,
   supermarketCurrentStorePrices,
   supermarketOfferTexts,
   supermarketIsSimpleOffer,
   supermarketOfferDisplayText,
-  supermarketPriceDiscountRate,
+  supermarketSecondPriceAdvantageRate,
   supermarketPrimaryPrice,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
@@ -224,7 +229,57 @@ const sameCategoryProducts = computed<SupermarketProduct[]>(() =>
     .slice(0, 8),
 );
 
-// 11. 取得商品頭圖首字
+// 11. 取得目前商品可切換的同系列資料。
+const seriesProducts = computed<SupermarketProduct[]>(() => {
+  const currentSeriesID = product.value?.seriesId?.trim();
+  if (!currentSeriesID) {
+    return [];
+  }
+
+  return [product.value, ...(detail.value?.sameSeries ?? [])]
+    .filter((item): item is SupermarketProduct => Boolean(item))
+    .filter((item) => item.seriesId === currentSeriesID && item.variantLabels)
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.code === item.code) === index);
+});
+
+// 12. 取得目前商品的同系列屬性值。
+const productVariantLabel = (item: SupermarketProduct, key: 'formula' | 'package'): string =>
+  item.variantLabels?.[key]?.trim() ?? '';
+
+// 13. 依目前另一個屬性篩選真正可切換的同系列商品。
+const seriesOptionsFor = (key: 'formula' | 'package'): SupermarketProduct[] => {
+  const current = product.value;
+  if (!current) {
+    return [];
+  }
+
+  const companionKey = key === 'formula' ? 'package' : 'formula';
+  const companionValue = productVariantLabel(current, companionKey);
+  const uniqueOptions = new Map<string, SupermarketProduct>();
+  seriesProducts.value.forEach((item) => {
+    const value = productVariantLabel(item, key);
+    if (!value || (companionValue && productVariantLabel(item, companionKey) !== companionValue)) {
+      return;
+    }
+    if (!uniqueOptions.has(value)) {
+      uniqueOptions.set(value, item);
+    }
+  });
+  return [...uniqueOptions.values()];
+};
+
+// 14. 取得相同包裝下可切換的口味或配方。
+const seriesFormulaOptions = computed<SupermarketProduct[]>(() => seriesOptionsFor('formula'));
+
+// 15. 取得相同口味或配方下可切換的包裝規格。
+const seriesPackageOptions = computed<SupermarketProduct[]>(() => seriesOptionsFor('package'));
+
+// 16. 判斷是否有值得顯示的同系列選擇。
+const hasSeriesOptions = computed(() =>
+  seriesFormulaOptions.value.length > 1 || seriesPackageOptions.value.length > 1,
+);
+
+// 17. 取得商品頭圖首字
 const productInitial = computed(() => {
   const source = product.value?.brand?.trim()
     || product.value?.name?.trim()
@@ -232,10 +287,10 @@ const productInitial = computed(() => {
   return source.slice(0, 1);
 });
 
-// 12. 建立走勢圖資料
+// 18. 建立走勢圖資料
 const trendChart = computed(() => buildTrendChart(detail.value?.history ?? [], chartMode.value));
 
-// 13. 建立走勢圖浮層資料
+// 19. 建立走勢圖浮層資料
 const trendHover = computed(() => {
   const date = trendHoverDate.value;
   const chart = trendChart.value;
@@ -264,15 +319,15 @@ const trendHover = computed(() => {
   };
 });
 
-// 14. 取得關聯商品價格
+// 20. 取得關聯商品價格
 const relatedProductPriceText = (item: SupermarketProduct): string =>
   formatOfferPrice(supermarketPrimaryPrice(item, preferenceStore.locale).effectiveUnitPrice);
 
-// 15. 取得關聯商品門店
+// 21. 取得關聯商品門店
 const relatedProductStoreText = (item: SupermarketProduct): string =>
   formatStore(supermarketPrimaryPrice(item, preferenceStore.locale).store);
 
-// 16. 取得關聯商品優惠文字
+// 22. 取得關聯商品優惠文字
 const relatedProductOfferText = (item: SupermarketProduct): string => {
   const [firstOffer] = supermarketOfferTexts(item, preferenceStore.locale);
   return firstOffer
@@ -280,7 +335,7 @@ const relatedProductOfferText = (item: SupermarketProduct): string => {
     || t('offers.detail.regularPrice');
 };
 
-// 17. 取得關聯商品品牌首字
+// 23. 取得關聯商品品牌首字
 const relatedProductInitial = (item: SupermarketProduct): string => {
   const source = item.brand?.trim()
     || item.name?.trim()
@@ -288,24 +343,24 @@ const relatedProductInitial = (item: SupermarketProduct): string => {
   return source.slice(0, 1);
 };
 
-// 18. 記錄無法載入的商品圖片，改用既有後備顯示。
+// 24. 記錄無法載入的商品圖片，改用既有後備顯示。
 const handleProductImageError = (code: string): void => {
   failedImageCodes.value = new Set([...failedImageCodes.value, code]);
 };
 
-// 19. 開啟商品圖片預覽。
+// 25. 開啟商品圖片預覽。
 const openImagePreview = (): void => {
   if (productImageUrl.value && !failedImageCodes.value.has(productCode.value)) {
     isImagePreviewOpen.value = true;
   }
 };
 
-// 20. 關閉商品圖片預覽。
+// 26. 關閉商品圖片預覽。
 const closeImagePreview = (): void => {
   isImagePreviewOpen.value = false;
 };
 
-// 21. 提交商品圖片問題。
+// 27. 提交商品圖片問題。
 const reportImageIssue = async (): Promise<void> => {
   if (!productCode.value || reportingImageIssue.value) {
     return;
@@ -323,7 +378,7 @@ const reportImageIssue = async (): Promise<void> => {
   }
 };
 
-// 22. 載入商品詳情
+// 28. 載入商品詳情
 const loadDetail = async (code: string): Promise<void> => {
   if (!code.trim()) {
     detail.value = null;
@@ -350,7 +405,7 @@ const loadDetail = async (code: string): Promise<void> => {
   }
 };
 
-// 23. 返回列表並還原原本搜尋記錄。
+// 29. 返回列表並還原原本搜尋記錄。
 const backToList = async (): Promise<void> => {
   if (route.query.return === 'supermarket-offers') {
     await router.replace({ path: '/supermarket-offers', query: returnListQuery.value });
@@ -359,7 +414,7 @@ const backToList = async (): Promise<void> => {
   await router.push('/supermarket-offers');
 };
 
-// 22. 開啟列表篩選結果。
+// 30. 開啟列表篩選結果。
 const openListFilter = async (field: 'brand' | 'category', value: string): Promise<void> => {
   await router.push({
     path: '/supermarket-offers',
@@ -367,7 +422,7 @@ const openListFilter = async (field: 'brand' | 'category', value: string): Promi
   });
 };
 
-// 23. 開啟相關商品
+// 31. 開啟相關商品
 const openRelatedProduct = async (item: SupermarketProduct): Promise<void> => {
   await router.push({
     path: `/supermarket-offers/products/${encodeURIComponent(item.code)}`,
@@ -375,7 +430,15 @@ const openRelatedProduct = async (item: SupermarketProduct): Promise<void> => {
   });
 };
 
-// 22. 切換收藏
+// 32. 切換同系列商品。
+const selectSeriesProduct = async (item: SupermarketProduct): Promise<void> => {
+  if (item.code === productCode.value) {
+    return;
+  }
+  await openRelatedProduct(item);
+};
+
+// 33. 切換收藏
 const toggleFavorite = async (): Promise<void> => {
   if (!detail.value) return;
   if (!readStoredAccessToken()) {
@@ -669,12 +732,25 @@ const formatStore = (value: string): string =>
 const formatOfferPrice = (value: number | null | undefined): string =>
   formatSupermarketHKPrice(value, preferenceStore.locale);
 
-// 39. 組合品牌與審核後商品名稱
+// 39. 格式化商品名稱
+const formatProductName = (item: SupermarketProduct): string =>
+  resolveSupermarketProductName(item);
+
+// 40. 格式化商品品牌
+const formatProductBrand = (item: SupermarketProduct): string =>
+  resolveSupermarketProductBrand(item);
+
+// 41. 格式化商品規格
+const formatProductUnit = (item: SupermarketProduct): string =>
+  resolveSupermarketProductUnit(item);
+
+// 42. 格式化商品分類
+const formatProductCategory = (item: SupermarketProduct): string =>
+  resolveSupermarketProductCategory(item);
+
+// 43. 格式化完整商品標題
 const formatProductTitle = (item: SupermarketProduct): string =>
-  [item.brand, item.name]
-    .map((value) => value?.trim())
-    .filter(Boolean)
-    .join(' ');
+  resolveSupermarketProductFullTitle(item);
 
 watch(
   productCode,
@@ -684,7 +760,7 @@ watch(
   { immediate: true },
 );
 
-// 40. 以 Esc 關閉圖片預覽。
+// 44. 以 Esc 關閉圖片預覽。
 const handlePreviewKeydown = (event: KeyboardEvent): void => {
   if (event.key === 'Escape') {
     closeImagePreview();
@@ -754,18 +830,21 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div>
-            <div class="gp-detail-title">{{ formatProductTitle(product) }}</div>
-            <div class="gp-product-brand">
+            <div class="gp-detail-title-row">
               <button
-                v-if="product.brand"
+                v-if="formatProductBrand(product)"
                 type="button"
-                class="gp-filter-link"
-                @click="openListFilter('brand', product.brand)"
+                class="gp-detail-brand-chip"
+                @click="openListFilter('brand', formatProductBrand(product))"
               >
-                {{ product.brand }}
+                {{ formatProductBrand(product) }}
               </button>
-              <span v-if="product.subtitle">{{ product.brand ? ' · ' : '' }}{{ product.subtitle }}</span>
+              <div class="gp-detail-title">{{ formatProductName(product) }}</div>
             </div>
+            <div
+              v-if="formatProductUnit(product)"
+              class="gp-product-unit"
+            >{{ formatProductUnit(product) }}</div>
             <div class="gp-product-cat">
               <button
                 v-for="category in productCategories"
@@ -776,6 +855,53 @@ onBeforeUnmount(() => {
               >
                 {{ category.label }}
               </button>
+            </div>
+            <div
+              v-if="hasSeriesOptions"
+              class="gp-series-selector"
+            >
+              <div
+                v-if="seriesFormulaOptions.length > 1"
+                class="gp-series-row"
+                role="group"
+                :aria-label="t('offers.detail.formula')"
+              >
+                <span class="gp-series-label">{{ t('offers.detail.formula') }}</span>
+                <div class="gp-series-options">
+                  <button
+                    v-for="item in seriesFormulaOptions"
+                    :key="`formula-${item.code}`"
+                    type="button"
+                    class="gp-series-option"
+                    :class="item.code === product.code ? 'on' : ''"
+                    :aria-pressed="item.code === product.code"
+                    @click="selectSeriesProduct(item)"
+                  >
+                    {{ productVariantLabel(item, 'formula') }}
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="seriesPackageOptions.length > 1"
+                class="gp-series-row"
+                role="group"
+                :aria-label="t('offers.detail.package')"
+              >
+                <span class="gp-series-label">{{ t('offers.detail.package') }}</span>
+                <div class="gp-series-options">
+                  <button
+                    v-for="item in seriesPackageOptions"
+                    :key="`package-${item.code}`"
+                    type="button"
+                    class="gp-series-option"
+                    :class="item.code === product.code ? 'on' : ''"
+                    :aria-pressed="item.code === product.code"
+                    @click="selectSeriesProduct(item)"
+                  >
+                    {{ productVariantLabel(item, 'package') }}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="gp-detail-actions">
@@ -857,10 +983,6 @@ onBeforeUnmount(() => {
               step="0.1"
               :placeholder="t('offers.detail.targetPricePlaceholder')"
             >
-            <select v-model="alertForm.priceMode">
-              <option value="effective">{{ t('offers.detail.effectiveEquivalent') }}</option>
-              <option value="list">{{ t('offers.detail.originalPrice') }}</option>
-            </select>
             <label>
               <input
                 v-model="alertForm.offerRequired"
@@ -895,16 +1017,13 @@ onBeforeUnmount(() => {
             >
               <div class="gp-compare-store">{{ formatStore(price.store) }}</div>
               <div class="gp-compare-price">{{ formatOfferPrice(price.effectiveUnitPrice) }}</div>
-              <div class="gp-compare-origin">{{ t('offers.detail.originalPriceValue', {
-                price: formatOfferPrice(price.listPrice),
-              }) }}</div>
               <div
                 v-if="simpleOfferTrendLabel(price) || priceOfferDisplayText(price)"
                 class="gp-compare-offer"
               >
                 {{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) }}
               </div>
-              <div class="gp-compare-badge">-{{ supermarketPriceDiscountRate(price).toFixed(0) }}%</div>
+              <div class="gp-compare-badge">{{ t('offers.detail.secondPriceAdvantage', { rate: supermarketSecondPriceAdvantageRate(latestStoreCards).toFixed(0) }) }}</div>
             </div>
           </div>
           <div class="gp-best-shop">
@@ -983,14 +1102,6 @@ onBeforeUnmount(() => {
             <h3>{{ t('offers.detail.summary90Days') }}</h3>
             <div class="gp-summary-grid">
               <div class="gp-summary-item">
-                <div class="gp-summary-label">{{ t('offers.detail.lowestList90Days') }}</div>
-                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.lowestList) }}</div>
-              </div>
-              <div class="gp-summary-item">
-                <div class="gp-summary-label">{{ t('offers.detail.highestList90Days') }}</div>
-                <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.highestList) }}</div>
-              </div>
-              <div class="gp-summary-item">
                 <div class="gp-summary-label">{{ t('offers.detail.lowestDeal90Days') }}</div>
                 <div class="gp-summary-value">{{ formatOfferPrice(detail.summary.lowestDeal) }}</div>
               </div>
@@ -1002,9 +1113,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="gp-detail-card">
             <h3>{{ t('offers.detail.trend90Days') }}</h3>
-            <div class="gp-detail-subtitle">{{ chartMode === 'effective'
-              ? t('offers.detail.effectiveEquivalent')
-              : t('offers.detail.originalPrice') }}</div>
+            <div class="gp-detail-subtitle">{{ t('offers.detail.effectiveEquivalent') }}</div>
             <div class="gp-chart-mode">
               <button
                 type="button"
@@ -1013,14 +1122,6 @@ onBeforeUnmount(() => {
                 @click="chartMode = 'effective'"
               >
                 {{ t('offers.detail.dealPrice') }}
-              </button>
-              <button
-                type="button"
-                class="gp-mode-pill"
-                :class="chartMode === 'list' ? 'on' : ''"
-                @click="chartMode = 'list'"
-              >
-                {{ t('offers.detail.originalPrice') }}
               </button>
             </div>
 
@@ -1170,11 +1271,21 @@ onBeforeUnmount(() => {
                 </span>
               </div>
               <div class="gp-related-body">
-                <div class="gp-related-name">{{ formatProductTitle(item) }}</div>
+                <div class="gp-related-title-row">
+                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
+                  <span
+                    v-if="formatProductBrand(item)"
+                    class="gp-related-brand-chip"
+                  >{{ formatProductBrand(item) }}</span>
+                </div>
                 <div
-                  v-if="item.subtitle"
-                  class="gp-related-brand"
-                >{{ item.subtitle }}</div>
+                  v-if="formatProductUnit(item)"
+                  class="gp-related-unit"
+                >{{ formatProductUnit(item) }}</div>
+                <div
+                  v-if="formatProductCategory(item)"
+                  class="gp-related-category"
+                >{{ formatProductCategory(item) }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
                 <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
               </div>
@@ -1211,11 +1322,21 @@ onBeforeUnmount(() => {
                 </span>
               </div>
               <div class="gp-related-body">
-                <div class="gp-related-name">{{ formatProductTitle(item) }}</div>
+                <div class="gp-related-title-row">
+                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
+                  <span
+                    v-if="formatProductBrand(item)"
+                    class="gp-related-brand-chip"
+                  >{{ formatProductBrand(item) }}</span>
+                </div>
                 <div
-                  v-if="item.subtitle"
-                  class="gp-related-brand"
-                >{{ item.subtitle }}</div>
+                  v-if="formatProductUnit(item)"
+                  class="gp-related-unit"
+                >{{ formatProductUnit(item) }}</div>
+                <div
+                  v-if="formatProductCategory(item)"
+                  class="gp-related-category"
+                >{{ formatProductCategory(item) }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
                 <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
               </div>
@@ -1419,18 +1540,38 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.gp-product-brand {
-  margin-bottom: 6px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .gp-detail-title {
   color: var(--ink);
   font-size: 24px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.gp-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.gp-detail-brand-chip {
+  border: 1px solid var(--bdr);
+  border-radius: 999px;
+  background: var(--sur-2);
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 5px 10px;
+}
+
+.gp-product-unit {
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .gp-product-cat {
@@ -1452,6 +1593,57 @@ onBeforeUnmount(() => {
 
 .gp-product-cat .gp-filter-link + .gp-filter-link {
   margin-left: 6px;
+}
+
+/* 5. 同系列選擇 */
+.gp-series-selector {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.gp-series-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.gp-series-label {
+  flex: 0 0 70px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 32px;
+}
+
+.gp-series-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gp-series-option {
+  min-height: 32px;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  background: var(--sur-2);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 7px 10px;
+}
+
+.gp-series-option:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.gp-series-option.on {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+  font-weight: 700;
 }
 
 .gp-detail-actions {
@@ -1636,13 +1828,6 @@ onBeforeUnmount(() => {
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
-}
-
-.gp-compare-origin {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 11px;
-  text-decoration: line-through;
 }
 
 .gp-compare-offer {
@@ -1971,18 +2156,46 @@ onBeforeUnmount(() => {
   padding: 11px;
 }
 
-.gp-related-brand {
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .gp-related-name {
-  margin-top: 4px;
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.gp-related-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.gp-related-brand-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--bdr);
+  border-radius: 999px;
+  background: var(--sur-2);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+}
+
+.gp-related-unit,
+.gp-related-category {
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.gp-related-unit {
+  margin-top: 5px;
+}
+
+.gp-related-category {
+  margin-top: 2px;
 }
 
 .gp-related-offer {
@@ -2038,6 +2251,10 @@ onBeforeUnmount(() => {
 
   .gp-detail-primary-actions {
     justify-content: flex-start;
+  }
+
+  .gp-series-label {
+    flex-basis: 68px;
   }
 
   .gp-compare-grid,

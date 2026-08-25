@@ -110,7 +110,7 @@ func (s *IsmartExternalService) GetBuildingInfo(ctx context.Context, userID int6
 
 // 9. SubmitBuildingComment proxies a repair or feedback service case submission.
 func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userID int64, params IsmartBuildingCommentParams) (map[string]any, error) {
-	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	account, buildingID, buildingOptions, profile, err := s.resolveServiceCaseAccess(ctx, userID, params.BuildingID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userI
 		return nil, errcode.New(errcode.CodeValidationError, "request type must be repair or feedback")
 	}
 	unitID := strings.TrimSpace(params.UnitID)
-	if unitID != "" && !s.unitVisible(account, unitID) {
+	if unitID != "" && !s.serviceCaseUnitVisible(account, profile, buildingID, unitID) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "unit is not visible")
 	}
 	content := strings.TrimSpace(params.Content)
@@ -149,8 +149,8 @@ func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userI
 		payload["comment_type"] = commentType
 		payload["comment"] = content
 	}
-	result, err := s.postIntegration(ctx, "/buildings/comments/", payload)
-	if err != nil && ismartFallbackAllowed(err, true) {
+	result, err := s.postServiceCaseIntegration(ctx, "/buildings/comments/", payload)
+	if err != nil && s.serviceCaseUsesIntegrationAPI() && ismartFallbackAllowed(err, true) {
 		legacyCommentType := commentType
 		if legacyCommentType == "" {
 			legacyCommentType = "其他事宜"
@@ -168,6 +168,53 @@ func (s *IsmartExternalService) SubmitBuildingComment(ctx context.Context, userI
 	}
 
 	return decorateIsmartPayload(result.Payload, buildingID, buildingOptions, result.Message, account.IsStaff), nil
+}
+
+// 9.1 resolveServiceCaseAccess requires an explicit current AJO building binding.
+func (s *IsmartExternalService) resolveServiceCaseAccess(ctx context.Context, userID int64, requestedBuildingID string) (*model.UserIsmartAccount, string, []string, *model.UserProfile, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, "", nil, nil, err
+	}
+	var profile model.UserProfile
+	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", nil, nil, errcode.New(errcode.CodeAuthForbidden, "current building binding is required")
+		}
+		return nil, "", nil, nil, errcode.New(errcode.CodeInternalError, "failed to load current building binding")
+	}
+	boundBuildings := normalizeStringSlice(unmarshalStringSlice(profile.BoundBuildingIDs))
+	if len(boundBuildings) == 0 {
+		return nil, "", nil, nil, errcode.New(errcode.CodeAuthForbidden, "current building binding is required")
+	}
+	requested := strings.TrimSpace(requestedBuildingID)
+	if requested != "" && !containsString(boundBuildings, requested) {
+		return nil, "", nil, nil, errcode.New(errcode.CodeAuthForbidden, "building is not bound")
+	}
+	buildingID, options, err := s.selectVisibleBuilding(ctx, account, requested)
+	if err != nil || !containsString(boundBuildings, buildingID) {
+		if err != nil {
+			return nil, "", nil, nil, err
+		}
+		return nil, "", nil, nil, errcode.New(errcode.CodeAuthForbidden, "building is not bound")
+	}
+	return account, buildingID, options, &profile, nil
+}
+
+// 9.2 serviceCaseUnitVisible enforces both iSmart and current AJO unit scope.
+func (s *IsmartExternalService) serviceCaseUnitVisible(account *model.UserIsmartAccount, profile *model.UserProfile, buildingID string, unitID string) bool {
+	unitID = strings.TrimSpace(unitID)
+	if unitID == "" || !strings.HasPrefix(unitID, strings.TrimSpace(buildingID)) {
+		return false
+	}
+	if account != nil && !s.unitVisible(account, unitID) {
+		return false
+	}
+	if profile == nil {
+		return false
+	}
+	boundUnits := normalizeStringSlice(unmarshalStringSlice(profile.BoundFlatUnitIDs))
+	return len(boundUnits) > 0 && containsString(boundUnits, unitID)
 }
 
 // 10. GetBuildingAccess proxies building door access summary.

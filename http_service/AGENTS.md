@@ -25,6 +25,7 @@
 - 檔案儲存統一接入阿里雲 `OSS`。
 - 超市商品圖片固定使用 `ajo_living/supermarket/products/<PRODUCT_CODE>.jpg` object key；導入時按檔案內容識別 JPEG、PNG、WebP，只有顯式使用 `--replace` 才覆蓋既有媒體記錄與 OSS 物件。
 - 超市商品圖片報錯使用公開 `POST /api/v1/supermarket-offers/image-reports`，只接收 `productCode`；後端正規化為大寫後以全域唯一索引保存，首次及重複提交都須返回成功。
+- Good Price 商品詳情的 `sameSeries` 只使用上游人工確認的 `product_code` 系列資料；AJO 受控轉發其配方、包裝規格與商品編號，並為每個同系列商品附加既有 OSS 圖片網址，不得以品牌、分類或名稱在 AJO 端自動拼接系列。
 - HTTP 服務負責認證、會員資料、列表發佈、聊天、上傳、生命周期與權限校驗。
 - API 路徑統一使用 `/api/` 前綴。
 
@@ -39,6 +40,7 @@
 - 舊業務後台仍繼續使用時，AJO 後端優先提供受控讀取、身份映射、權限校驗與資料聚合，不默認接管舊後台的寫入流程。
 - 共用資料庫時，必須明確 AJO 對每張舊表是唯讀、可寫還是同步後讀取；未確認前按唯讀處理。
 - AJO service 不得直接把舊系統表結構原樣暴露給前端，必須轉成 AJO 穩定回應結構與權限語義。
+- iSmart ClientTbl 會員資料更新只可經 AJO 會員態代理接口提交外部文檔已列明的可更新欄位；AJO 後端從 `UserIsmartAccount` 解析上游身份，不接受前端提交任意 `user_id`，`cli_id` 與 `cli_join_dt` 維持只讀。
 - 舊系統資料寫入仍由舊後台負責時，AJO 只做讀取與展示；若確需寫入，必須先建立明確的所有權、交易邊界與回滾策略。
 
 ## 舊系統接入分層
@@ -275,10 +277,12 @@ go test ./...
 2026-08-03: 固定 `charge_draft` 只可在首次建立草稿時扣款，任何既有樓盤儲存修改均不扣 POINT。
 2026-08-04: 固定樓盤唯一封面、非首圖封面優先及舊重複封面標記恢復契約。
 2026-08-04: 將樓盤聯絡人、電話、WhatsApp 與 Wechat 收斂為逐樓盤發布快照，代理資料修訂只刷新代理公開展示欄位。
+2026-08-19: 增加 iSmart ClientTbl 會員資料的 AJO 受控 PATCH 代理契約；只轉發文檔允許的資料欄位，並在成功後刷新本地清理快照。
 2026-08-05: 固定樓盤草稿可修改物業資料，正式發佈後的物業分類、地址、面積、樓層及單位由後端鎖定。
 2026-08-07: 固定樓盤公開詳情返回逐樓盤聯絡人姓名，電話與其他聯絡入口維持受控解鎖。
 2026-08-07: 增加測試快照密文重加密契約，確保登入樓盤所有者可讀取原有聯絡資料且測試環境不共用生產密鑰。
 2026-08-12: 測試環境改為預設沿用生產外部服務配置，只有產品明確指定的接口才另行隔離。
 2026-08-17: 增加 Good Price 商品圖片報錯資料表及公開提交接口，按正規化商品 code 全域去重並保持重複提交成功。
+2026-08-19: 固定 Good Price 同系列詳情資料只由上游人工目錄提供，AJO 轉發時為 `sameSeries` 補齊商品圖片。
 
 [PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.

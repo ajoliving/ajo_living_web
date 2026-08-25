@@ -91,6 +91,7 @@ func (s *SupermarketOfferService) attachSupermarketImages(payload map[string]any
 
 	attachProductSlice("sameBrand")
 	attachProductSlice("sameCategory")
+	attachProductSlice("sameSeries")
 	attachProductSlice("items")
 	attachProductSlice("favorites")
 	attachProductSlice("cheapest")

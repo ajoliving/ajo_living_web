@@ -38,3 +38,4 @@ tmp/
 asserts/
 pns_images/
 .claude/
+/outputs

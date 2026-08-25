@@ -104,6 +104,7 @@ const routeMobileContracts = [
   { path: '/account', selectors: ['.work-shell'] },
   { path: '/profile', selectors: ['.work-shell'] },
   { path: '/account/profile', selectors: ['.work-shell'] },
+  { path: '/account/profile/preferences', selectors: ['.preferences-page'] },
   { path: '/account/profile/wallet', selectors: ['.wallet-page', '.wallet-recharge-dialog'] },
   { path: '/account/chat/:conversationId?', selectors: ['.marketplace-chat-page', '.chat-layout'] },
   { path: '/account/properties/sale', selectors: ['.property-my-page', '.property-table-wrap'] },

@@ -35,7 +35,7 @@ const loadSettings = async (): Promise<void> => {
     const { data } = await fetchMemberIsmartNotificationSettings();
     receiveEmail.value = data.data.is_receive_email ?? data.data.blg_notice_email;
   } catch (error) {
-    feedbackStore.pushToast(readError(error, t('account.center.preferences.loadError')), 'error');
+    feedbackStore.pushToast(readError(error, t('account.preferences.loadError')), 'error');
   } finally {
     isLoading.value = false;
   }
@@ -47,9 +47,9 @@ const saveEmailSetting = async (): Promise<void> => {
   try {
     const { data } = await updateMemberIsmartNotificationSettings(receiveEmail.value);
     receiveEmail.value = data.data.is_receive_email ?? data.data.blg_notice_email;
-    feedbackStore.pushToast(t('account.center.preferences.emailSaved'), 'success');
+    feedbackStore.pushToast(t('account.preferences.emailSaved'), 'success');
   } catch (error) {
-    feedbackStore.pushToast(readError(error, t('account.center.preferences.emailSaveError')), 'error');
+    feedbackStore.pushToast(readError(error, t('account.preferences.emailSaveError')), 'error');
   } finally {
     isSavingEmail.value = false;
   }
@@ -58,11 +58,11 @@ const saveEmailSetting = async (): Promise<void> => {
 const savePassword = async (): Promise<void> => {
   if (isSavingPassword.value) return;
   if (passwordForm.new_password.length < 8) {
-    feedbackStore.pushToast(t('account.center.preferences.passwordTooShort'), 'error');
+    feedbackStore.pushToast(t('account.preferences.passwordTooShort'), 'error');
     return;
   }
   if (passwordForm.new_password !== passwordForm.new_password_confirm) {
-    feedbackStore.pushToast(t('account.center.preferences.passwordMismatch'), 'error');
+    feedbackStore.pushToast(t('account.preferences.passwordMismatch'), 'error');
     return;
   }
   isSavingPassword.value = true;
@@ -71,9 +71,9 @@ const savePassword = async (): Promise<void> => {
     passwordForm.old_password = '';
     passwordForm.new_password = '';
     passwordForm.new_password_confirm = '';
-    feedbackStore.pushToast(t('account.center.preferences.passwordSaved'), 'success');
+    feedbackStore.pushToast(t('account.preferences.passwordSaved'), 'success');
   } catch (error) {
-    feedbackStore.pushToast(readError(error, t('account.center.preferences.passwordSaveError')), 'error');
+    feedbackStore.pushToast(readError(error, t('account.preferences.passwordSaveError')), 'error');
   } finally {
     isSavingPassword.value = false;
   }
@@ -100,15 +100,15 @@ onMounted(() => { void loadSettings(); });
 
     <section class="preferences-page__card preferences-page__password-card">
       <div>
-        <h3>{{ t('account.center.preferences.changeIsmartPassword') }}</h3>
-        <p>{{ t('account.center.preferences.changeIsmartPasswordDescription') }}</p>
+        <h3>{{ t('account.preferences.changeIsmartPassword') }}</h3>
+        <p>{{ t('account.preferences.changeIsmartPasswordDescription') }}</p>
       </div>
       <form class="preferences-page__password-form" @submit.prevent="savePassword">
-        <input v-model="passwordForm.old_password" type="password" :placeholder="t('account.center.preferences.currentPassword')" autocomplete="current-password">
-        <input v-model="passwordForm.new_password" type="password" :placeholder="t('account.center.preferences.newPassword')" autocomplete="new-password">
-        <input v-model="passwordForm.new_password_confirm" type="password" :placeholder="t('account.center.preferences.confirmNewPassword')" autocomplete="new-password">
+        <input v-model="passwordForm.old_password" type="password" :placeholder="t('account.preferences.currentPassword')" autocomplete="current-password">
+        <input v-model="passwordForm.new_password" type="password" :placeholder="t('account.preferences.newPassword')" autocomplete="new-password">
+        <input v-model="passwordForm.new_password_confirm" type="password" :placeholder="t('account.preferences.confirmNewPassword')" autocomplete="new-password">
         <button type="submit" class="preferences-page__submit" :disabled="isSavingPassword">
-          {{ isSavingPassword ? t('account.center.common.saving') : t('account.center.preferences.savePassword') }}
+          {{ isSavingPassword ? t('account.center.common.saving') : t('account.preferences.savePassword') }}
         </button>
       </form>
     </section>

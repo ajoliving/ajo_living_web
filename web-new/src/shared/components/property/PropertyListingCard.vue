@@ -68,12 +68,6 @@ const handleFavorite = (): void => {
       />
     </div>
     <div class="property-listing-card__body">
-      <h3>{{ card.title }}</h3>
-      <p class="property-listing-card__location">{{ card.location }}</p>
-      <p
-        v-if="card.facts.length > 0"
-        class="property-listing-card__facts"
-      >{{ card.facts.join(' · ') }}</p>
       <div
         v-if="card.tags.length > 0"
         class="property-listing-card__tags"
@@ -85,6 +79,12 @@ const handleFavorite = (): void => {
           class="property-listing-card__tag"
         >{{ tag.label }}</span>
       </div>
+      <h3>{{ card.title }}</h3>
+      <p class="property-listing-card__location">{{ card.location }}</p>
+      <p
+        v-if="card.facts.length > 0"
+        class="property-listing-card__facts"
+      >{{ card.facts.join(' · ') }}</p>
       <div class="property-listing-card__price">
         <span :class="card.priceKind">{{ card.priceKind === 'sale' ? t('property.publicList.sale') : t('property.publicList.rent') }}</span>
         {{ card.price }}<small v-if="card.priceUnit">{{ card.priceUnit }}</small>

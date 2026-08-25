@@ -462,7 +462,7 @@ const selectPage = (page: PageButton): void => {
   }
 };
 
-// 34. 開啟商品詳情
+// 34. 開啟商品詳情。
 const openDetail = (product: SupermarketProduct): void => {
   void router.push({
     path: `/supermarket-offers/products/${encodeURIComponent(product.code)}`,
@@ -1060,10 +1060,6 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <b>{{ formatOfferPrice(price.effectiveUnitPrice) }}</b>
-                  <span
-                    v-if="price.listPrice > price.effectiveUnitPrice"
-                    class="gp-price-row-original"
-                  >{{ t('offers.list.originalPrice', { price: formatOfferPrice(price.listPrice) }) }}</span>
                 </div>
               </div>
             </div>
@@ -1083,7 +1079,6 @@ onBeforeUnmount(() => {
               <th>{{ t('offers.list.store') }}</th>
               <th>{{ t('offers.list.offer') }}</th>
               <th>{{ t('offers.list.effectivePrice') }}</th>
-              <th>{{ t('offers.list.originalPriceHeading') }}</th>
               <th>{{ t('offers.list.favorite') }}</th>
             </tr>
           </thead>
@@ -1109,7 +1104,6 @@ onBeforeUnmount(() => {
               <td>{{ formatStore(productPrimaryPrice(product).store) }}</td>
               <td>{{ productOfferTexts(product).join(' / ') || '-' }}</td>
               <td>{{ formatOfferPrice(productPrimaryPrice(product).effectiveUnitPrice) }}</td>
-              <td>{{ formatOfferPrice(productPrimaryPrice(product).listPrice) }}</td>
               <td>
                 <button
                   type="button"
@@ -1783,17 +1777,6 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 800;
   text-align: right;
-  white-space: nowrap;
-}
-
-.gp-price-row-original {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 11px;
-  line-height: 1.2;
-  text-align: right;
-  text-decoration: line-through;
   white-space: nowrap;
 }
 

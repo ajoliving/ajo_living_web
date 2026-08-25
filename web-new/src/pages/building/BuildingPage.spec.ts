@@ -28,6 +28,12 @@ const mocks = vi.hoisted(() => ({
   fetchTransactionsByUnit: vi.fn(),
   fetchTransactionsByDate: vi.fn(),
   updateMe: vi.fn(),
+  routerPush: vi.fn(),
+  routerReplace: vi.fn(),
+  route: {
+    path: '/building',
+    query: {} as Record<string, string>,
+  },
   session: {
     me: {
       display_name: 'Member',
@@ -66,6 +72,11 @@ vi.mock('vue-router', () => ({
     props: ['to'],
     template: '<a><slot /></a>',
   },
+  useRoute: () => mocks.route,
+  useRouter: () => ({
+    push: mocks.routerPush,
+    replace: mocks.routerReplace,
+  }),
 }));
 
 vi.mock('@/httpapis/building', () => ({
@@ -115,6 +126,9 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchTransactionsByUnit.mockReset();
     mocks.fetchTransactionsByDate.mockReset();
     mocks.updateMe.mockReset();
+    mocks.routerReplace.mockReset();
+    mocks.route.path = '/building';
+    mocks.route.query = {};
     mocks.session.me = {
       display_name: 'Member',
       primary_community: {

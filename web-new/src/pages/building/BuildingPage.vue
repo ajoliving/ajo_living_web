@@ -6,8 +6,9 @@
  * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
 -->
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute, useRouter } from 'vue-router';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
@@ -177,6 +178,8 @@ interface OwnerPaymentRecordRow {
 // 2. 會員狀態
 const sessionStore = useSessionStore();
 const { t, locale } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 // 2.1 建立日期查詢預設值
 const formatDateInputValue = (date: Date): string => {
@@ -337,6 +340,54 @@ const navItems = computed<NavItem[]>(() => [
   { target: 'affairs-icctv', label: t('building.nav.icctv') },
   { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations') },
 ]);
+
+// 5.1 以路由查詢對應大廈面板
+const affairsTabQueryMap: Record<string, AffairsTab> = {
+  notices: 'affairs-notices',
+  building: 'affairs-building',
+  finance: 'affairs-finance',
+  ownerAccount: 'affairs-owner-account',
+  'owner-account': 'affairs-owner-account',
+  forms: 'affairs-forms',
+  feedback: 'affairs-feedback',
+  access: 'affairs-access',
+  icctv: 'affairs-icctv',
+  authorizations: 'affairs-resident-authorizations',
+};
+
+// 5.2 解析面板 query
+const resolveAffairsTabFromQuery = (value: unknown): AffairsTab | null => {
+  const key = String(value ?? '').trim();
+  if (!key) return null;
+  if (affairsTabQueryMap[key]) {
+    return affairsTabQueryMap[key];
+  }
+  return [
+    'affairs-notices',
+    'affairs-building',
+    'affairs-finance',
+    'affairs-owner-account',
+    'affairs-forms',
+    'affairs-feedback',
+    'affairs-access',
+    'affairs-icctv',
+    'affairs-resident-authorizations',
+  ].includes(key as AffairsTab)
+    ? (key as AffairsTab)
+    : null;
+};
+
+// 5.3 同步路由 query 到目前面板
+watch(
+  () => route.query.tab,
+  (value) => {
+    const nextTab = resolveAffairsTabFromQuery(value);
+    if (nextTab && nextTab !== activeTab.value) {
+      activeTab.value = nextTab;
+    }
+  },
+  { immediate: true },
+);
 
 // 6. 最新通告資料
 const rawNotices = computed<IsmartBuildingNotice[]>(() => ismartNoticeProfile.value?.result ?? []);
@@ -1475,6 +1526,13 @@ const revokeResidentAuthorization = async (row: IsmartSubaccountRow): Promise<vo
 // 16. 切換主面板
 const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
+  const nextTab = Object.entries(affairsTabQueryMap).find(([, value]) => value === target)?.[0] ?? target;
+  if (String(route.query.tab ?? '').trim() !== nextTab) {
+    void router.replace({
+      path: route.path,
+      query: { ...route.query, tab: nextTab },
+    });
+  }
   if (target === 'affairs-notices' && !ismartNoticeProfile.value && !noticeLoading.value) {
     void loadBuildingNotices();
   }

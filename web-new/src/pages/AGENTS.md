@@ -27,6 +27,7 @@ not-found/: 404 頁面。
 - Good Price 每日 CSV 導入必須自動把名稱末段可確認的重量、容量、尺寸、數量及包裝規格寫入獨立 `subtitle`；人工審核副標題優先，歷史回填只處理最近兩個資料日。
 - Good Price 商品詳情的「圖片報錯」入口對所有商品圖片狀態可用，提交 `POST /api/v1/supermarket-offers/image-reports` 的 `productCode`；後端對正規化 code 全域去重，首次及重複提交均視為成功。
 - Good Price 商品詳情返回列表時必須還原原有搜尋、分類、商店、品牌、排序、分頁與視圖條件；門店價格須合併詳情價格與商品已記錄門店，不得因單一明細或有優惠篩選而隱藏其他門店。
+- Good Price 商品詳情的同系列選擇只讀取 API `sameSeries` 中人工確認且實際存在的商品編號；口味／配方與包裝規格各自只顯示目前另一屬性下可切換的真實組合。切換後必須前往目標商品詳情並保留既有列表返回條件，現有同品牌及同分類區塊維持推薦用途。
 - 註冊帳戶類型固定為 `personal`、`individual_agent`、`agency_company`；代理帳戶須提交對應資料並通過人工審核。未通過前可瀏覽公開頁，受保護會員操作須導向代理資料頁。
 - AJO 本地帳戶登入優先於 iSmart 回退；代理帳戶處於 `pending_profile`、`pending_review` 或 `rejected` 時仍須保留 session，進入受保護會員操作時強制導向代理資料頁展示進度或拒絕原因，並必須保留登出入口。
 - 登入頁只提供一個「手提電話 / 電郵 / iSmart username」帳戶輸入框，不再提供電話與通用帳戶切換；前端只提交一次統一登入請求，帳戶類型識別與 iSmart 回退由 AJO 後端處理。
@@ -121,6 +122,7 @@ not-found/: 404 頁面。
 2026-08-17: 固定 Good Price 每日導入自動拆分尾端規格，既有資料只回填最新兩個資料日並保留人工審核副標題。
 2026-08-17: 增加 Good Price 商品圖片報錯公開提交；同一正規化商品 code 只保留一筆資料庫記錄，重複提交維持成功回應。
 2026-08-17: 固定 Good Price 商品詳情返回還原完整列表條件，並完整顯示商品已記錄門店價格。
+2026-08-19: 增加 Good Price 人工確認同系列商品的口味／配方及包裝規格選擇，詳情切換維持獨立商品價格資料與列表返回條件。
 2026-08-18: 「我的大廈」住戶授權改用 iSmart 單位級副戶接口，以電話及電郵授予完整大廈權限，移除獨立開門／通告功能勾選。
 
 [PROTOCOL]: When adding, moving, renaming, or changing page ownership, update this map, check parent `../../AGENTS.md`, and update `../../../docs/PROMPT_INDEX.md` only if prompt-facing behavior changed.

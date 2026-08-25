@@ -58,6 +58,7 @@ go run ./http_service/cmd/server
 | 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
 | 51 | /api/v1/auth/phone/login | POST | 使用手機密碼登入 | 無 |
 | 73 | /api/v1/auth/ismart/login | POST | 使用 ismart 帳戶登入並同步 POS 權限 | 無 |
+| 73.0 | /api/v1/me/ismart/profile | PATCH | 更新目前會員可修改的 iSmart ClientTbl 資料 | 會員 |
 | 73.1 | /api/v1/me/ismart/building-info | GET | 查詢目前會員可見大廈資料與文件中繼資料 | 會員 |
 | 73.2 | /api/v1/me/ismart/notices | GET | 查詢目前會員可見大廈的有效通告 | 會員 |
 | 73.3 | /api/v1/me/ismart/owner-binding-requests | POST | 提交業主單位綁定申請 | 會員 |
@@ -4373,7 +4374,7 @@ curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/search?offerOnly=tr
   "days": 90
 }
 ```
-- **回應參數**: good-price product detail 原始資料，並附加 `isFavorite`、`alertRule`
+- **回應參數**: good-price product detail 原始資料，並附加 `isFavorite`、`alertRule`；當商品由 Good Price 人工目錄明確關聯時，`sameSeries` 返回實際可切換商品及其 `variantLabels.formula`、`variantLabels.package`，AJO 會附加各商品圖片網址。
 - **Curl測試**
 ```bash
 curl -X GET "http://127.0.0.1:8080/api/v1/supermarket-offers/products/P000000001?days=90"

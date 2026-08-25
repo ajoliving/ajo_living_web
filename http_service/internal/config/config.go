@@ -43,6 +43,7 @@ type Config struct {
 	IsmartExternalAppBaseURL    string
 	IsmartExternalAppAPIBaseURL string
 	IsmartIntegrationAPIBaseURL string
+	IsmartServiceCaseAPIBaseURL string
 	IsmartExternalAppTimeout    time.Duration
 	RedisEnabled                bool
 	RedisAddr                   string
@@ -159,6 +160,7 @@ func Load() *Config {
 		IsmartExternalAppBaseURL:    getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()),
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
 		IsmartIntegrationAPIBaseURL: getEnv("ISMART_INTEGRATION_API_BASE_URL", defaultIsmartIntegrationAPIBaseURL()),
+		IsmartServiceCaseAPIBaseURL: getEnv("ISMART_SERVICE_CASE_API_BASE_URL", defaultIsmartServiceCaseAPIBaseURL()),
 		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
 		RedisEnabled:                getBoolEnv("REDIS_ENABLED", true),
 		RedisAddr:                   strings.TrimSpace(getEnv("REDIS_ADDR", "127.0.0.1:6382")),
@@ -599,7 +601,12 @@ func defaultIsmartIntegrationAPIBaseURL() string {
 	return strings.TrimRight(getEnv("ISMART_EXTERNAL_APP_BASE_URL", defaultIsmartExternalAppBaseURL()), "/") + "/api/v1/integration"
 }
 
-// 28. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.
+// 28. defaultIsmartServiceCaseAPIBaseURL returns the iSmart service-case API base URL.
+func defaultIsmartServiceCaseAPIBaseURL() string {
+	return "https://clouddev.ismart.ajoliving.com/api/v1/integration"
+}
+
+// 29. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.
 func defaultICCTVAPIBaseURL() string {
 	return "https://icctv.skylinedances.com/api"
 }

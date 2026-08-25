@@ -381,7 +381,7 @@ func (s *IsmartExternalService) RevokeSubaccount(ctx context.Context, userID int
 
 // 18.1 ListBuildingServiceCases returns only service cases visible to the current member.
 func (s *IsmartExternalService) ListBuildingServiceCases(ctx context.Context, userID int64, params IsmartServiceCaseListParams) (map[string]any, error) {
-	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	account, buildingID, buildingOptions, _, err := s.resolveServiceCaseAccess(ctx, userID, params.BuildingID)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func (s *IsmartExternalService) ListBuildingServiceCases(ctx context.Context, us
 
 // 18.2 GetBuildingServiceCase returns one current member-visible service case and message thread.
 func (s *IsmartExternalService) GetBuildingServiceCase(ctx context.Context, userID int64, params IsmartServiceCaseDetailParams) (map[string]any, error) {
-	account, buildingID, buildingOptions, err := s.resolveBuildingAccess(ctx, userID, params.BuildingID)
+	account, buildingID, buildingOptions, _, err := s.resolveServiceCaseAccess(ctx, userID, params.BuildingID)
 	if err != nil {
 		return nil, err
 	}

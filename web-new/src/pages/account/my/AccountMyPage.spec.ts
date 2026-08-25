@@ -6,7 +6,7 @@
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import i18n, { applyLocale } from '@/i18n';
 
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   fetchPublicUnits: vi.fn(),
   loadCurrentUser: vi.fn(),
   pushToast: vi.fn(),
+  updateMemberIsmartProfile: vi.fn(),
   routerPush: vi.fn(),
   route: {
     path: '/account/profile',
@@ -38,8 +39,36 @@ const mocks = vi.hoisted(() => ({
       bound_flat_unit_ids: ['09999000401'],
       residence_floor: '04',
       residence_unit: 'G',
+      ismart_username: 'patrick',
+      ismart_bound_phone: '+85261980774',
       ismart_msg: {
+        username: 'patrick',
+        email: 'patrick@seventy2.hk',
+        phone: '+85261980774',
         client_building_flat_units_permissions: ['09999000401'],
+      },
+      ismart_account_profile: {
+        account_code: 'patrick',
+        account_phone: '+85261980774',
+        account_email: 'patrick@seventy2.hk',
+        owner_name_en: 'patrick',
+        owner_name_zh: '林曉洸',
+        account_name: 'patrick',
+        identity_number: 'A123456(7)',
+        legal_entity: '',
+        client_type: '員工',
+        gender: 'M',
+        birth_date: '1980-01-01',
+        contact_name: 'patrick',
+        contact_phone: '+85261980774',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        billing_phone: '+85261980774',
+        billing_email: 'patrick@seventy2.hk',
+        billing_address: '',
+        billing_address_en: '',
+        billing_address_zh: '',
+        properties: [],
       },
       roles: ['member'],
       permissions: [],
@@ -93,6 +122,7 @@ vi.mock('@/httpapis/building', () => ({
 
 vi.mock('@/httpapis/me', () => ({
   updateMe: vi.fn(),
+  updateMemberIsmartProfile: mocks.updateMemberIsmartProfile,
 }));
 
 // 1. 掛載會員中心並等待初始化請求完成
@@ -121,6 +151,10 @@ const clickPanel = async (wrapper: Awaited<ReturnType<typeof mountAccountPage>>,
 };
 
 describe('AccountMyPage lazy data loading', () => {
+  afterEach(() => {
+    document.body.querySelectorAll('.work-ismart-modal').forEach((element) => element.remove());
+  });
+
   beforeEach(() => {
     setActivePinia(createPinia());
     applyLocale('zh-HK');
@@ -132,6 +166,7 @@ describe('AccountMyPage lazy data loading', () => {
     mocks.fetchPublicUnits.mockReset();
     mocks.loadCurrentUser.mockReset();
     mocks.pushToast.mockReset();
+    mocks.updateMemberIsmartProfile.mockReset();
     mocks.routerPush.mockReset();
     mocks.fetchMemberBuildings.mockResolvedValue([
       { building_id: '0999900', buildname_chi: '測試1大廈', buildname: 'Test Building 1' },
@@ -146,6 +181,17 @@ describe('AccountMyPage lazy data loading', () => {
       { unit_id: '09999000401', floor: '04', unit: 'G' },
     ]);
     mocks.routerPush.mockResolvedValue(undefined);
+    mocks.updateMemberIsmartProfile.mockResolvedValue({
+      data: {
+        data: {
+          ...mocks.session.me,
+          ismart_account_profile: {
+            ...mocks.session.me.ismart_account_profile,
+            account_email: 'new.patrick@seventy2.hk',
+          },
+        },
+      },
+    });
   });
 
   it('loads only account data initially and reuses the current building unit response', async () => {
@@ -178,5 +224,42 @@ describe('AccountMyPage lazy data loading', () => {
 
     expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
     expect(mocks.fetchPublicUnits).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens notification settings from the member centre navigation', async () => {
+    const wrapper = await mountAccountPage();
+
+    await clickPanel(wrapper, i18n.global.t('account.center.nav.preferences'));
+
+    expect(mocks.routerPush).toHaveBeenCalledWith('/account/profile/preferences');
+  });
+
+  it('submits the editable iSmart profile fields through the documented proxy', async () => {
+    const wrapper = await mountAccountPage();
+
+    const editButton = wrapper.findAll('button').find((item) =>
+      item.text().includes(i18n.global.t('account.center.account.editIsmartProfile')),
+    );
+    expect(editButton).toBeTruthy();
+    await editButton!.trigger('click');
+    await flushPromises();
+
+    const dialog = document.body.querySelector('.work-ismart-dialog');
+    expect(dialog).toBeTruthy();
+    const emailInput = dialog?.querySelector('input[type="email"]') as HTMLInputElement | null;
+    expect(emailInput).toBeTruthy();
+    emailInput!.value = 'new.patrick@seventy2.hk';
+    emailInput!.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const saveButton = dialog?.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+    expect(saveButton).toBeTruthy();
+    saveButton!.click();
+    await flushPromises();
+
+    expect(mocks.updateMemberIsmartProfile).toHaveBeenCalledWith(expect.objectContaining({
+      account_email: 'new.patrick@seventy2.hk',
+      account_phone: '+85261980774',
+      account_name: 'patrick',
+    }));
   });
 });

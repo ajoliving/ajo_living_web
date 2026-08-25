@@ -12,7 +12,6 @@
 | Deployment prompt map | `docs/deployment/AGENTS.md` | Local ownership and safety protocol for deployment prompt files. | Manual server inspection before deployment |
 | Frontend page memory map | `web-new/src/pages/AGENTS.md` | Local page tree ownership, module boundaries, and UI prompt landing rules. | `npm run typecheck`, `npm run test:unit` when frontend behavior changes |
 | Backend internal memory map | `http_service/internal/AGENTS.md` | Local backend layer ownership, domain boundaries, and API contract impact rules. | `go test ./...` when backend behavior changes |
-| Remote Codex runtime notes | `TOOLS.md` | Local Feishu-to-Codex workspace entry, visibility boundary, and operating context. | OpenClaw channel probe and a non-mutating Codex CLI turn |
 | Public UI baseline prompt | `docs/prompts/ajo-living-public-ui-style-prompt.md` | Reusable baseline for formal AJO Living public page UI, copy, layout, and visual restrictions. | Manual visual review and responsive check |
 | Page UI prompts | `docs/prompts/home-page-prompt.md`, `docs/prompts/login-page-prompt.md`, `docs/prompts/marketplace-discover-page-prompt.md`, `docs/prompts/marketplace-filter-page-prompt.md`, `docs/prompts/marketplace-publish-page-prompt.md` | Reusable page-specific UI prompts for frontend implementation or redesign work. | Manual visual review and relevant frontend checks |
 | Form dialog prompt | `docs/prompts/global-form-dialog-prompt.md` | Reusable form modal structure, field, state, and acceptance rules. | Manual review and relevant form tests |
@@ -25,7 +24,6 @@
 ## Runtime Prompt Chain
 - Product runtime code currently has no LLM request chain and no model-facing prompt builder.
 - Repository work starts from `AGENTS.md`, then follows the nearest child `AGENTS.md` for touched files.
-- Paired Feishu direct messages enter the local `Codex Remote Control` session described in `TOOLS.md`; it is a workspace-scoped CLI session, remains separate from desktop Codex tasks, and creates a fresh Codex CLI run per message until CLI resume is supported upstream.
 - UI prompt work uses `docs/prompts/AGENTS.md`, the relevant prompt file, `web-new/AGENTS.md`, and `web-new/src/pages/AGENTS.md`, then verifies against the relevant page and responsive states.
 - Deployment work uses `docs/deployment/AGENTS.md` and `docs/deployment/server-deployment-ai-prompt.md`, then must inspect the live server configuration before changing deployment state.
 - Backend contract work uses `http_service/AGENTS.md` and `http_service/internal/AGENTS.md` before changing handler, service, model, router, or API docs.
@@ -53,6 +51,7 @@
 | Frontend i18n and theme tokens | `web-new/src/i18n/index.spec.ts`, `web-new/src/utils/theme.spec.ts` | English and zh-HK message-key parity, serviced-residence channel copy, locale synchronization, and fixed white-canvas and bright-orange semantic-to-legacy token synchronization. |
 | Backend services | `http_service/internal/service/*_test.go` | Auth, chat, iSmart, trend, notification, POS payment, property, secondhand, security CCTV, and wallet service behavior. |
 | Supermarket image reports | `web-new/src/pages/offers/detail/Page.vue`, `http_service/internal/service/supermarket_offer_image_report_test.go` | Public image-issue submission for any product image state; normalized product codes are globally deduplicated, while repeat submissions remain successful. |
+| Supermarket series selection | `web-new/src/pages/offers/detail/Page.vue`, `http_service/internal/service/supermarket_offer_service.go`, `good_price_databoard/backend/product_series_catalog.go` | Only reviewed Good Price `product_code` entries may form a public series; AJO forwards `sameSeries`, adds product images, and the detail page switches to the selected concrete product code. |
 | Backend seeds and migrations | `http_service/internal/database/*_test.go` | Admin seed, media asset migration, and system notification seed behavior. |
 
 No direct prompt regression test currently guards prompt wording or localization leakage. Prompt changes require manual review plus the nearest runtime tests when behavior is affected.
@@ -65,6 +64,9 @@ No direct prompt regression test currently guards prompt wording or localization
 - Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, `docs/archive`, database dumps, or backups as stable prompt surfaces.
 
 ## Change Log
+2026-08-19: Recorded the Good Price manually reviewed product-series contract: public detail only exposes available same-series product codes with formula and pack metadata, while AJO keeps price, history, favorites, and alerts bound to the selected code.
+2026-08-23: Recorded the supermarket series flow: cards open product detail directly; product detail shows only reviewed `sameSeries` formula and pack combinations, then navigates to the selected concrete product code.
+2026-08-24: Recorded the supermarket offer display trial: original-price labels are hidden from card and store comparison surfaces, and discount intensity is the lowest-price advantage over the second-lowest current store price.
 2026-08-14: Recorded the paired Feishu direct-message entry for the local workspace-scoped Codex CLI session, including its separation from desktop Codex tasks, credential boundary, and the current no-resume execution requirement.
 2026-07-08: Established the project prompt/context index and connected docs, AGENTS files, deployment prompts, and local Codex skill prompts.
 2026-07-08: Added local memory maps for reusable UI prompts, deployment prompts, frontend pages, and backend internal layers.
@@ -197,3 +199,13 @@ No direct prompt regression test currently guards prompt wording or localization
 2026-08-18: Recorded the iSmart resident-subaccount contract: AJO resolves `target_user_id` through iSmart `auth/check-contact/` using the submitted phone and email, delegates the unit-level grant and revoke to iSmart, and presents the resulting full access scope without separate door or notice permission toggles.
 2026-08-18: Recorded testing release `20260818111641-test-79673` for the iSmart resident-subaccount update, with the existing isolated testing database preserved and same-origin HTTPS, Supervisor, PostgreSQL, Redis, FRP, `noindex`, and production health verification passing.
 2026-08-18: Updated the root and backend deployment references from the removed `doc copy` path to `docs/deployment/server-deployment-ai-prompt.md` and the dedicated testing deployment script.
+2026-08-19: Recorded the member-center account contract: AJO-local account fields, password changes, and email updates with OTP are editable; notification email preference persists through `/me/profile`; property switching preserves all AJO-linked units; and unlinking affects only the local AJO residence association, never iSmart source-account permissions or identity data.
+2026-08-19: Recorded the iSmart ClientTbl member-profile contract: `/me` continues to return the sanitized profile snapshot, while documented editable fields use the authenticated AJO `/me/ismart/profile` PATCH proxy; upstream username and join date remain read-only, and the proxy derives the linked iSmart identity server-side.
+2026-08-19: Recorded the member-center iSmart profile editor contract: the account page now keeps AJO-local account data, binding data, and iSmart profile data in separate vertical sections, and documented writable iSmart fields are submitted only through `/me/ismart/profile`.
+2026-08-20: Consolidated the iSmart integration reference into one Traditional Chinese document under `docs/integrations/`, archived the old duplicate markdown files, and kept the dual-environment base URLs plus the current iSmart per-endpoint detail sections in a single place.
+2026-08-20: Recorded the upstream iSmart source-of-truth rule: AJO Web and AJO backend iSmart features should be treated as controlled proxies over routes actually exposed by `/Users/yangliu/Documents/Code/hk/ajo_ismart`; page-only flows or non-exposed fields in that upstream repo must not be assumed to be available integration APIs.
+2026-08-21: Recorded the member-center iSmart display rule: account identifiers, account contact values, owner names, account name, and identity number are hidden from the read-only account panel; owner, contact, and billing data remain visible while documented profile updates stay available.
+2026-08-21: Recorded the member-center account layout rule: local account data, linked unit, and iSmart data remain full-width vertical sections; iSmart read-only data is grouped into owner, contact, and billing columns on desktop and a single column on mobile.
+2026-08-22: Recorded the member-center iSmart editor rule: documented writable fields open in a dedicated scrollable dialog with a fixed action footer; the account page remains read-only outside the dialog.
+2026-08-25: Recorded the member-center iSmart settings contract: password changes require the current password and are proxied through AJO to the upstream `/auth/password/`; building-notice email preference reads and writes through `/auth/notification-settings/` and is never sent directly from the browser to iSmart.
+2026-08-25: Removed unused OpenClaw workspace metadata and templates from the repository; `TOOLS.md` is no longer a project prompt/context surface.

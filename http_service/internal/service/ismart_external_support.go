@@ -40,12 +40,27 @@ func (s *IsmartExternalService) getIntegration(ctx context.Context, path string,
 	return s.requestJSON(ctx, http.MethodGet, s.integrationURL(path), query, nil)
 }
 
-// 5. postIntegration sends one POST request to the iSmart integration API.
+// 5. getServiceCaseIntegration sends one GET request to the iSmart service-case API.
+func (s *IsmartExternalService) getServiceCaseIntegration(ctx context.Context, path string, query url.Values) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodGet, s.serviceCaseIntegrationURL(path), query, nil)
+}
+
+// 6. postIntegration sends one POST request to the iSmart integration API.
 func (s *IsmartExternalService) postIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
 	return s.requestJSON(ctx, http.MethodPost, s.integrationURL(path), nil, payload)
 }
 
-// 6. postIntegrationAccepted posts an OwnerReg request where HTTP 2xx alone means acceptance.
+// 7. patchIntegration sends one PATCH request to the iSmart integration API.
+func (s *IsmartExternalService) patchIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodPatch, s.integrationURL(path), nil, payload)
+}
+
+// 7. postServiceCaseIntegration sends one POST request to the iSmart service-case API.
+func (s *IsmartExternalService) postServiceCaseIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodPost, s.serviceCaseIntegrationURL(path), nil, payload)
+}
+
+// 8. postIntegrationAccepted posts an OwnerReg request where HTTP 2xx alone means acceptance.
 func (s *IsmartExternalService) postIntegrationAccepted(ctx context.Context, path string, payload map[string]any) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -79,7 +94,7 @@ func (s *IsmartExternalService) postIntegrationAccepted(ctx context.Context, pat
 	return errcode.New(errcode.CodeInternalError, "ismart service request failed")
 }
 
-// 7. requestJSON sends one JSON request to iSmart and decodes the response.
+// 9. requestJSON sends one JSON request to iSmart and decodes the response.
 func (s *IsmartExternalService) requestJSON(ctx context.Context, method string, requestURL string, query url.Values, payload any) (*ismartProxyResult, error) {
 	var requestBody io.Reader
 	if payload != nil {
@@ -122,7 +137,7 @@ func (s *IsmartExternalService) requestJSON(ctx context.Context, method string, 
 	return decodeIsmartProxyResponse(response.StatusCode, responseBody)
 }
 
-// 7. externalURL builds an iSmart external app API URL.
+// 10. externalURL builds an iSmart external app API URL.
 func (s *IsmartExternalService) externalURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppAPIBaseURL), "/")
 	if baseURL == "" {
@@ -132,7 +147,7 @@ func (s *IsmartExternalService) externalURL(path string) string {
 	return baseURL + "/" + strings.TrimLeft(path, "/")
 }
 
-// 8. integrationURL builds an iSmart integration API URL.
+// 11. integrationURL builds an iSmart integration API URL.
 func (s *IsmartExternalService) integrationURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
 	if baseURL == "" {
@@ -142,7 +157,20 @@ func (s *IsmartExternalService) integrationURL(path string) string {
 	return baseURL + "/" + strings.TrimLeft(path, "/")
 }
 
-// 9. rootURL builds an iSmart root API URL.
+// 12. serviceCaseIntegrationURL builds an iSmart service-case integration API URL.
+func (s *IsmartExternalService) serviceCaseIntegrationURL(path string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartServiceCaseAPIBaseURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
+	}
+	if baseURL == "" {
+		baseURL = "https://ismart.ajoliving.com/api/v1/integration"
+	}
+
+	return baseURL + "/" + strings.TrimLeft(path, "/")
+}
+
+// 13. rootURL builds an iSmart root API URL.
 func (s *IsmartExternalService) rootURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartExternalAppBaseURL), "/")
 	if baseURL == "" {
@@ -152,7 +180,7 @@ func (s *IsmartExternalService) rootURL(path string) string {
 	return baseURL + "/" + strings.TrimLeft(path, "/")
 }
 
-// 10. httpClient returns the iSmart HTTP client.
+// 14. httpClient returns the iSmart HTTP client.
 func (s *IsmartExternalService) httpClient() *http.Client {
 	timeout := s.runtime.Config.IsmartExternalAppTimeout
 	if timeout <= 0 {
@@ -162,13 +190,13 @@ func (s *IsmartExternalService) httpClient() *http.Client {
 	return &http.Client{Timeout: timeout}
 }
 
-// 11. ismartProxyResult stores a normalized iSmart response.
+// 15. ismartProxyResult stores a normalized iSmart response.
 type ismartProxyResult struct {
 	Payload any
 	Message string
 }
 
-// 12. decodeIsmartProxyResponse normalizes iSmart success and error payloads.
+// 16. decodeIsmartProxyResponse normalizes iSmart success and error payloads.
 func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult, error) {
 	var payload any = map[string]any{}
 	if len(strings.TrimSpace(string(body))) > 0 {
@@ -211,7 +239,7 @@ func decodeIsmartProxyResponse(statusCode int, body []byte) (*ismartProxyResult,
 	return &ismartProxyResult{Payload: payload, Message: message}, nil
 }
 
-// 13. ismartHTTPErrorCode maps upstream status into AJO error codes.
+// 17. ismartHTTPErrorCode maps upstream status into AJO error codes.
 func ismartHTTPErrorCode(statusCode int) string {
 	switch statusCode {
 	case http.StatusBadRequest, http.StatusConflict:
@@ -225,7 +253,7 @@ func ismartHTTPErrorCode(statusCode int) string {
 	}
 }
 
-// 14. ismartFallbackAllowed keeps write fallback conservative.
+// 18. ismartFallbackAllowed keeps write fallback conservative.
 func ismartFallbackAllowed(err error, isWrite bool) bool {
 	var appErr *errcode.AppError
 	if !errors.As(err, &appErr) {
@@ -235,4 +263,11 @@ func ismartFallbackAllowed(err error, isWrite bool) bool {
 		return true
 	}
 	return !isWrite && appErr.Code == errcode.CodeInternalError
+}
+
+// 19. serviceCaseUsesIntegrationAPI reports whether service cases use the legacy integration base URL.
+func (s *IsmartExternalService) serviceCaseUsesIntegrationAPI() bool {
+	serviceCaseBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartServiceCaseAPIBaseURL), "/")
+	integrationBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
+	return serviceCaseBaseURL == "" || serviceCaseBaseURL == integrationBaseURL
 }

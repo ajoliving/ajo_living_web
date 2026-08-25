@@ -1,6 +1,6 @@
 <!--
  * 會員中心頁。
- * 1. 承載左側模組導覽與右側內容面板，支援帳號管理、物業綁定、AJO 錢包、我的樓盤、我的住宅、我的家具與我的收藏等面板切換。
+ * 1. 承載左側模組導覽與右側內容面板，支援帳號管理、提示設定、物業綁定、AJO 錢包、我的樓盤、我的住宅、我的家具與我的收藏等面板切換。
  * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
@@ -10,10 +10,10 @@
  * 會員中心頁邏輯。
  * 1. 面板索引型別與導覽項目定義。
  * 2. 當前面板狀態與切換方法。
- * 3. 帳號管理、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
+ * 3. 帳號管理、提示設定、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
  * 4. 退出登入後返回登入頁。
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
@@ -26,7 +26,7 @@ import {
   fetchPosBuildingUnits,
   submitMemberIsmartOwnerBindingRequest,
 } from '@/httpapis/building';
-import { updateMe } from '@/httpapis/me';
+import { updateMemberIsmartProfile, updateMe } from '@/httpapis/me';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -45,6 +45,7 @@ const sessionStore = useSessionStore();
 // 1. 面板索引類型
 type PanelKey =
   | 'profile-account'
+  | 'profile-preferences'
   | 'profile-agency-company'
   | 'profile-property-binding'
   | 'profile-wallet'
@@ -64,6 +65,7 @@ const navItems = computed<Array<{ key: PanelKey; label: string; needsApi?: boole
   ? [{ key: 'profile-agency-company', label: t('account.center.nav.agencyCompany') }]
   : [
   { key: 'profile-account', label: t('account.center.nav.account') },
+  { key: 'profile-preferences', label: t('account.center.nav.preferences') },
   ...(['individual_agent', 'agency_company'].includes(sessionStore.me?.account_type ?? '')
     ? [{ key: 'profile-agency-company' as PanelKey, label: t('account.center.nav.agencyCompany') }]
     : []),
@@ -82,6 +84,7 @@ const isSigningOut = ref(false);
 
 const routePanelPaths = [
   '/account/profile/wallet',
+  '/account/profile/preferences',
   '/account/profile/agency-profile',
   '/account/chat',
   '/account/properties',
@@ -98,6 +101,7 @@ const shouldRenderRoutePanel = computed(() =>
 // 5. 切換面板
 const switchPanel = (key: PanelKey) => {
   const routeMap: Partial<Record<PanelKey, string>> = {
+    'profile-preferences': '/account/profile/preferences',
     'profile-agency-company': '/account/profile/agency-profile',
     'profile-wallet': '/account/profile/wallet',
     'profile-chat': '/account/chat',
@@ -120,6 +124,10 @@ const switchPanel = (key: PanelKey) => {
 const syncActivePanelFromRoute = (path: string) => {
   if (path.startsWith('/account/profile/agency-profile')) {
     activePanel.value = 'profile-agency-company';
+    return;
+  }
+  if (path.startsWith('/account/profile/preferences')) {
+    activePanel.value = 'profile-preferences';
     return;
   }
   if (path.startsWith('/account/profile/wallet')) {
@@ -168,6 +176,122 @@ const displayText = (value: unknown, fallback = unsetText.value): string => {
 
 const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
 
+// 7.1 iSmart 資料編輯
+interface IsmartEditFormState {
+  account_email: string;
+  account_phone: string;
+  contact_name: string;
+  emergency_contact_name: string;
+  owner_name_en: string;
+  owner_name_zh: string;
+  account_name: string;
+  identity_number: string;
+  contact_phone: string;
+  emergency_contact_phone: string;
+  contact_email: string;
+  birth_date: string;
+  gender: string;
+  billing_address_en: string;
+  billing_address_zh: string;
+}
+
+const ismartEditOpen = ref(false);
+const ismartEditSaving = ref(false);
+const ismartEditForm = reactive<IsmartEditFormState>({
+  account_email: '',
+  account_phone: '',
+  contact_name: '',
+  emergency_contact_name: '',
+  owner_name_en: '',
+  owner_name_zh: '',
+  account_name: '',
+  identity_number: '',
+  contact_phone: '',
+  emergency_contact_phone: '',
+  contact_email: '',
+  birth_date: '',
+  gender: '',
+  billing_address_en: '',
+  billing_address_zh: '',
+});
+
+// 7.2 同步 iSmart 編輯表單
+const syncIsmartEditForm = (): void => {
+  const profile = ismartProfile.value;
+  ismartEditForm.account_email = profile?.account_email?.trim() ?? sessionStore.me?.ismart_msg?.email?.trim() ?? '';
+  ismartEditForm.account_phone = profile?.account_phone?.trim() ?? sessionStore.me?.ismart_bound_phone?.trim() ?? sessionStore.me?.ismart_msg?.phone?.trim() ?? '';
+  ismartEditForm.contact_name = profile?.contact_name?.trim() ?? '';
+  ismartEditForm.emergency_contact_name = profile?.emergency_contact_name?.trim() ?? '';
+  ismartEditForm.owner_name_en = profile?.owner_name_en?.trim() ?? '';
+  ismartEditForm.owner_name_zh = profile?.owner_name_zh?.trim() ?? '';
+  ismartEditForm.account_name = profile?.account_name?.trim() ?? '';
+  ismartEditForm.identity_number = profile?.identity_number?.trim() ?? '';
+  ismartEditForm.contact_phone = profile?.contact_phone?.trim() ?? sessionStore.me?.ismart_bound_phone?.trim() ?? sessionStore.me?.ismart_msg?.phone?.trim() ?? '';
+  ismartEditForm.emergency_contact_phone = profile?.emergency_contact_phone?.trim() ?? '';
+  ismartEditForm.contact_email = profile?.contact_email?.trim() ?? sessionStore.me?.ismart_msg?.email?.trim() ?? '';
+  ismartEditForm.birth_date = profile?.birth_date?.trim() ?? '';
+  ismartEditForm.gender = profile?.gender?.trim() ?? '';
+  ismartEditForm.billing_address_en = profile?.billing_address_en?.trim() ?? '';
+  ismartEditForm.billing_address_zh = profile?.billing_address_zh?.trim() ?? '';
+};
+
+// 7.3 判斷是否可修改 iSmart 資料
+const canEditIsmartProfile = computed(() => Boolean(ismartProfile.value || sessionStore.me?.ismart_linked));
+
+// 7.4 開啟 iSmart 編輯
+const openIsmartEdit = (): void => {
+  if (!canEditIsmartProfile.value) {
+    feedbackStore.pushToast(t('account.center.account.ismartProfileUnavailable'), 'error');
+    return;
+  }
+  syncIsmartEditForm();
+  ismartEditOpen.value = true;
+};
+
+// 7.5 關閉 iSmart 編輯
+const closeIsmartEdit = (): void => {
+  if (!ismartEditSaving.value) {
+    ismartEditOpen.value = false;
+  }
+};
+
+// 7.6 儲存 iSmart 資料
+const handleSaveIsmartProfile = async (): Promise<void> => {
+  if (ismartEditSaving.value) {
+    return;
+  }
+
+  ismartEditSaving.value = true;
+  try {
+    const { data } = await updateMemberIsmartProfile({
+      account_email: ismartEditForm.account_email.trim(),
+      account_phone: ismartEditForm.account_phone.trim(),
+      contact_name: ismartEditForm.contact_name.trim(),
+      emergency_contact_name: ismartEditForm.emergency_contact_name.trim(),
+      owner_name_en: ismartEditForm.owner_name_en.trim(),
+      owner_name_zh: ismartEditForm.owner_name_zh.trim(),
+      account_name: ismartEditForm.account_name.trim(),
+      identity_number: ismartEditForm.identity_number.trim(),
+      contact_phone: ismartEditForm.contact_phone.trim(),
+      emergency_contact_phone: ismartEditForm.emergency_contact_phone.trim(),
+      contact_email: ismartEditForm.contact_email.trim(),
+      birth_date: ismartEditForm.birth_date.trim(),
+      gender: ismartEditForm.gender.trim(),
+      billing_address_en: ismartEditForm.billing_address_en.trim(),
+      billing_address_zh: ismartEditForm.billing_address_zh.trim(),
+    });
+
+    sessionStore.me = data.data;
+    syncIsmartEditForm();
+    ismartEditOpen.value = false;
+    feedbackStore.pushToast(t('account.center.account.ismartProfileSaved'), 'success');
+  } catch (error) {
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.center.account.ismartProfileSaveError')), 'error');
+  } finally {
+    ismartEditSaving.value = false;
+  }
+};
+
 // 7. 讀取 API 錯誤訊息
 const readAccountApiErrorMessage = (error: unknown, fallback: string): string =>
   axios.isAxiosError<{ message?: string }>(error)
@@ -207,28 +331,6 @@ const ajoAccountData = computed<AccountDisplayField[]>(() => [
   { label: t('account.profile.districtCode'), value: displayText(sessionStore.me?.district_code) },
   { label: t('account.center.account.residentUnits'), value: residentUnitNameText.value },
 ]);
-
-const identityStatus = computed(() => ({
-  memberNo: displayText(sessionStore.me?.public_id),
-  memberStatus: displayText(sessionStore.me?.member_status),
-  memberType: displayText(sessionStore.me?.member_type),
-  primaryRole: displayText(sessionStore.me?.role),
-  profileCompleteness: sessionStore.me?.profile_completed
-    ? t('account.center.account.profileComplete')
-    : t('account.center.account.profileIncomplete'),
-  staffPermission: sessionStore.me?.is_staff
-    ? t('account.center.account.staffEnabled')
-    : t('account.center.account.staffDisabled'),
-}));
-const accountRoles = computed(() => {
-  const roles = sessionStore.me?.roles?.filter(Boolean) ?? [];
-  return roles.length > 0 ? roles : [displayText(sessionStore.me?.role, 'user')];
-});
-const accountPermissionText = computed(() =>
-  (sessionStore.me?.permissions?.length ?? 0) > 0
-    ? t('account.center.account.permissionCount', { count: sessionStore.me?.permissions?.length ?? 0 })
-    : t('account.center.account.noPermissions'),
-);
 
 interface BindOption {
   label: string;
@@ -779,25 +881,6 @@ const handleSaveBindUnit = async (): Promise<void> => {
   }
 };
 
-const ismartAccountData = computed<AccountDisplayField[]>(() => [
-  {
-    label: t('account.center.account.accountCode'),
-    value: displayText(ismartProfile.value?.account_code || sessionStore.me?.ismart_username || sessionStore.me?.ismart_msg?.username),
-  },
-  {
-    label: t('account.center.account.accountPhone'),
-    value: displayText(ismartProfile.value?.account_phone || sessionStore.me?.ismart_bound_phone || sessionStore.me?.ismart_msg?.phone),
-  },
-  {
-    label: t('account.center.account.accountEmail'),
-    value: displayText(ismartProfile.value?.account_email || sessionStore.me?.ismart_msg?.email),
-  },
-  { label: t('account.center.account.ownerNameEnglish'), value: displayText(ismartProfile.value?.owner_name_en) },
-  { label: t('account.center.account.ownerNameChinese'), value: displayText(ismartProfile.value?.owner_name_zh) },
-  { label: t('account.center.account.accountName'), value: displayText(ismartProfile.value?.account_name) },
-  { label: t('account.center.account.identityNumber'), value: displayText(ismartProfile.value?.identity_number) },
-]);
-
 const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
   { label: t('account.center.account.legalEntity'), value: displayText(ismartProfile.value?.legal_entity) },
   { label: t('account.center.account.clientType'), value: displayText(ismartProfile.value?.client_type) },
@@ -813,6 +896,9 @@ const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
   { label: t('account.center.account.billingAddressEnglish'), value: displayText(ismartProfile.value?.billing_address_en) },
   { label: t('account.center.account.billingAddressChinese'), value: displayText(ismartProfile.value?.billing_address_zh) },
 ]);
+const ismartOwnerData = computed(() => ismartHouseholdData.value.slice(0, 4));
+const ismartContactData = computed(() => ismartHouseholdData.value.slice(4, 8));
+const ismartBillingData = computed(() => ismartHouseholdData.value.slice(8));
 
 /*
  * 授權副戶操作已遷移至「我的大廈」。
@@ -1593,120 +1679,297 @@ watch(activePanel, () => {
                 >
                   {{ isSigningOut ? t('account.center.account.signingOut') : t('account.actions.signOut') }}
                 </button>
-                <button type="button" class="work-account-btn primary">{{ t('account.center.account.editProfile') }}</button>
-                <button type="button" class="work-account-btn">{{ t('account.center.account.updateIsmart') }}</button>
               </div>
             </div>
           </section>
 
-          <section class="work-account-grid">
-            <div class="work-account-card">
-              <div class="work-card-title">{{ t('account.center.account.accountInfo') }}</div>
-              <div
-                v-for="item in ajoAccountData"
-                :key="item.label"
-                class="work-account-field"
-              >
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-              </div>
-            </div>
-            <div class="work-account-card">
-              <div class="work-card-title">{{ t('account.center.account.identityStatus') }}</div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberId') }}</span><strong>{{ identityStatus.memberNo }}</strong></div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberStatus') }}</span><strong>{{ identityStatus.memberStatus }}</strong></div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.memberType') }}</span><strong>{{ identityStatus.memberType }}</strong></div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.primaryRole') }}</span><strong>{{ identityStatus.primaryRole }}</strong></div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.profileCompleted') }}</span><strong>{{ identityStatus.profileCompleteness }}</strong></div>
-              <div class="work-account-field"><span>{{ t('marketplace.myProfile.staffAccess') }}</span><strong>{{ identityStatus.staffPermission }}</strong></div>
-              <div class="work-role-strip">
-                <span
-                  v-for="role in accountRoles"
-                  :key="role"
-                  class="work-role-badge"
+          <div class="work-account-detail-grid">
+            <section class="work-account-grid work-account-grid--single">
+              <div class="work-account-card">
+                <div class="work-card-title">{{ t('account.center.account.accountInfo') }}</div>
+                <div
+                  v-for="item in ajoAccountData"
+                  :key="item.label"
+                  class="work-account-field"
                 >
-                  {{ role }}
-                </span>
-                <span class="work-role-tag">{{ accountPermissionText }}</span>
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
-            <div class="work-bind-wrap">
-              <div class="work-bind-current">{{ bindCurrent }}</div>
-              <div class="work-bind-control-row">
-                <div class="work-bind-grid work-bind-grid--single">
-                  <div class="work-bind-field">
-                    <label class="work-bind-label">{{ t('building.context.property') }}</label>
-                    <select
-                      v-model="bindUnitID"
-                      class="work-bind-select"
-                      :disabled="bindLoading || bindUnitsLoading || bindPropertyOptions.length === 0"
-                    >
-                      <option value="">{{ bindLoading || bindUnitsLoading ? t('account.center.common.loading') : t('building.context.selectProperty') }}</option>
-                      <option
-                        v-for="item in bindPropertyOptions"
-                        :key="item.value"
-                        :value="item.value"
+            <section class="work-card work-bind-section">
+              <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
+              <div class="work-bind-wrap">
+                <div class="work-bind-current">{{ bindCurrent }}</div>
+                <div class="work-bind-control-row">
+                  <div class="work-bind-grid work-bind-grid--single">
+                    <div class="work-bind-field">
+                      <label class="work-bind-label">{{ t('building.context.property') }}</label>
+                      <select
+                        v-model="bindUnitID"
+                        class="work-bind-select"
+                        :disabled="bindLoading || bindUnitsLoading || bindPropertyOptions.length === 0"
                       >
-                        {{ item.label }}
-                      </option>
-                    </select>
+                        <option value="">{{ bindLoading || bindUnitsLoading ? t('account.center.common.loading') : t('building.context.selectProperty') }}</option>
+                        <option
+                          v-for="item in bindPropertyOptions"
+                          :key="item.value"
+                          :value="item.value"
+                        >
+                          {{ item.label }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="work-bind-actions">
+                    <button
+                      type="button"
+                      class="work-action work-compact-action"
+                      :disabled="!canSaveBindUnit || bindSaving"
+                      @click="handleSaveBindUnit"
+                    >
+                      {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
+                    </button>
                   </div>
                 </div>
-                <div class="work-bind-actions">
+              </div>
+            </section>
+          </div>
+
+          <section class="work-card work-ismart-section">
+            <div class="work-section-heading">
+              <div>
+                <div class="work-card-title">{{ t('account.center.account.ismartData') }}</div>
+                <p>{{ t('account.center.account.ismartProfileDescription') }}</p>
+              </div>
+              <button
+                type="button"
+                class="work-action work-compact-action"
+                :disabled="ismartEditSaving || !canEditIsmartProfile"
+                @click="openIsmartEdit"
+              >
+                {{ t('account.center.account.editIsmartProfile') }}
+              </button>
+            </div>
+            <div class="work-ismart-grid">
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.ownerData') }}</div>
+                <div v-for="item in ismartOwnerData" :key="item.label" class="work-row">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.value }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.contactData') }}</div>
+                <div v-for="item in ismartContactData" :key="item.label" class="work-row">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.value }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.billingData') }}</div>
+                <div v-for="item in ismartBillingData" :key="item.label" class="work-row">
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.value }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <Teleport to="body">
+              <div
+                v-if="ismartEditOpen"
+                class="work-ismart-modal"
+                role="presentation"
+                @click.self="closeIsmartEdit"
+              >
+                <form
+                  class="work-ismart-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  :aria-label="t('account.center.account.editIsmartProfile')"
+                  @submit.prevent="handleSaveIsmartProfile"
+                >
+                  <header class="work-ismart-dialog__header">
+                    <div>
+                      <div class="work-kicker">{{ t('account.center.account.ismartData') }}</div>
+                      <h2 class="work-title">{{ t('account.center.account.editIsmartProfile') }}</h2>
+                    </div>
                   <button
                     type="button"
-                    class="work-action work-compact-action"
-                    :disabled="!canSaveBindUnit || bindSaving"
-                    @click="handleSaveBindUnit"
+                    class="work-ismart-dialog__close"
+                    :aria-label="t('marketplace.myProfile.closeEdit')"
+                    :disabled="ismartEditSaving"
+                    @click="closeIsmartEdit"
+                  />
+                  </header>
+                  <div class="work-ismart-dialog__body">
+                    <div class="acct-form-grid work-ismart-edit-grid">
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.accountEmail') }}</span>
+                  <input
+                    v-model="ismartEditForm.account_email"
+                    class="acct-input"
+                    type="email"
+                    autocomplete="email"
                   >
-                    {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
-                  </button>
-                </div>
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.accountPhone') }}</span>
+                  <input
+                    v-model="ismartEditForm.account_phone"
+                    class="acct-input"
+                    type="tel"
+                    autocomplete="tel"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.contactName') }}</span>
+                  <input
+                    v-model="ismartEditForm.contact_name"
+                    class="acct-input"
+                    type="text"
+                    autocomplete="name"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.emergencyContactName') }}</span>
+                  <input
+                    v-model="ismartEditForm.emergency_contact_name"
+                    class="acct-input"
+                    type="text"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.ownerNameEnglish') }}</span>
+                  <input
+                    v-model="ismartEditForm.owner_name_en"
+                    class="acct-input"
+                    type="text"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.ownerNameChinese') }}</span>
+                  <input
+                    v-model="ismartEditForm.owner_name_zh"
+                    class="acct-input"
+                    type="text"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.accountName') }}</span>
+                  <input
+                    v-model="ismartEditForm.account_name"
+                    class="acct-input"
+                    type="text"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.identityNumber') }}</span>
+                  <input
+                    v-model="ismartEditForm.identity_number"
+                    class="acct-input"
+                    type="text"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.contactPhone') }}</span>
+                  <input
+                    v-model="ismartEditForm.contact_phone"
+                    class="acct-input"
+                    type="tel"
+                    autocomplete="tel"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.emergencyContactPhone') }}</span>
+                  <input
+                    v-model="ismartEditForm.emergency_contact_phone"
+                    class="acct-input"
+                    type="tel"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.contactEmail') }}</span>
+                  <input
+                    v-model="ismartEditForm.contact_email"
+                    class="acct-input"
+                    type="email"
+                    autocomplete="email"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.birthDate') }}</span>
+                  <input
+                    v-model="ismartEditForm.birth_date"
+                    class="acct-input"
+                    type="date"
+                  >
+                </label>
+                <label class="acct-field">
+                  <span>{{ t('account.center.account.gender') }}</span>
+                  <select
+                    v-model="ismartEditForm.gender"
+                    class="acct-select"
+                  >
+                    <option value="">{{ t('account.center.common.unset') }}</option>
+                    <option value="M">M</option>
+                    <option value="F">F</option>
+                  </select>
+                </label>
+                <label class="acct-field full">
+                  <span>{{ t('account.center.account.billingAddressEnglish') }}</span>
+                  <textarea
+                    v-model="ismartEditForm.billing_address_en"
+                    class="acct-textarea"
+                    rows="3"
+                  />
+                </label>
+                <label class="acct-field full">
+                  <span>{{ t('account.center.account.billingAddressChinese') }}</span>
+                  <textarea
+                    v-model="ismartEditForm.billing_address_zh"
+                    class="acct-textarea"
+                    rows="3"
+                  />
+                </label>
+                    </div>
+                  </div>
+                  <footer class="work-ismart-edit-actions">
+                    <button
+                      type="button"
+                      class="work-action work-compact-action secondary"
+                      :disabled="ismartEditSaving"
+                      @click="closeIsmartEdit"
+                    >
+                      {{ t('account.center.common.cancel') }}
+                    </button>
+                    <button
+                      type="submit"
+                      class="work-action work-compact-action"
+                      :disabled="ismartEditSaving"
+                    >
+                      {{ ismartEditSaving ? t('account.center.common.saving') : t('account.center.common.submit') }}
+                    </button>
+                  </footer>
+                </form>
               </div>
-            </div>
+            </Teleport>
           </section>
 
-          <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">{{ t('account.center.account.ismartData') }}</div>
-            <div class="work-ismart-grid">
-              <div class="work-ismart-card">
-                <div class="work-card-sub">{{ t('account.center.account.ismartAccountData') }}</div>
-                <div v-for="item in ismartAccountData" :key="item.label" class="work-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="work-ismart-card">
-                <div class="work-card-sub">{{ t('account.center.account.ismartHouseholdData') }}</div>
-                <div v-for="item in ismartHouseholdData" :key="item.label" class="work-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="work-card" style="margin-top:14px;">
-            <div class="work-card-title">{{ t('account.center.account.reminderSettings') }}</div>
-            <div class="work-setting-box">
-              <label class="work-setting-check">
-                <input type="checkbox" checked>
-                <span>{{ t('account.center.account.receiveNoticeEmail') }}</span>
-              </label>
-              <button type="button" class="work-action work-compact-action">{{ t('account.center.common.submit') }}</button>
-            </div>
-          </section>
         </div>
 
-        <!-- 2.2 地產代理公司 -->
+        <!-- 2.2 提示設定 -->
+        <div v-show="activePanel === 'profile-preferences'" class="work-panel on" data-work-panel="profile-preferences">
+          <RouterView v-if="activePanel === 'profile-preferences'" />
+        </div>
+
+        <!-- 2.3 地產代理公司 -->
         <div v-show="activePanel === 'profile-agency-company'" class="work-panel on" data-work-panel="profile-agency-company">
           <RouterView v-if="activePanel === 'profile-agency-company'" />
         </div>
@@ -2311,7 +2574,10 @@ watch(activePanel, () => {
 /* 5.1 特定面板 work-hero 調整（對齊 HTML 設計稿 #page-profile 覆蓋） */
 [data-work-panel="profile-account"] .work-hero {
   align-items: center;
-  padding: 10px 0 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #fff;
+  padding: 18px 20px;
 }
 
 [data-work-panel="profile-properties"] .work-hero,
@@ -2427,6 +2693,18 @@ watch(activePanel, () => {
   margin-top: 12px;
 }
 
+.work-account-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 0;
+}
+
+.work-account-detail-grid .work-account-grid {
+  margin-top: 0;
+}
+
 .work-account-card {
   background: #fff;
   overflow: hidden;
@@ -2434,6 +2712,14 @@ watch(activePanel, () => {
 
 .work-account-card:first-child {
   border-right: 1px solid var(--bdr);
+}
+
+.work-account-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.work-account-grid--single .work-account-card:first-child {
+  border-right: 0;
 }
 
 .work-account-card .work-card-title {
@@ -2470,38 +2756,6 @@ watch(activePanel, () => {
   font-weight: 700;
   line-height: 1.5;
   word-break: break-word;
-}
-
-.work-role-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  border-top: 1px solid var(--sur-3);
-}
-
-.work-role-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 4px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 7px 10px;
-}
-
-.work-role-tag {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--bdr);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 10px;
 }
 
 /* 8. 綁定單位 */
@@ -2564,50 +2818,173 @@ watch(activePanel, () => {
 /* 9. iSmart 卡片 */
 .work-ismart-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 16px;
 }
 
-.work-ismart-card {
+.work-ismart-section {
+  margin-top: 0;
+}
+
+.work-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.work-section-heading .work-card-title {
+  margin-bottom: 4px;
+}
+
+.work-section-heading p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.work-ismart-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgb(24 26 25 / 0.52);
+  padding: 24px;
+}
+
+.work-ismart-dialog {
+  display: flex;
+  width: min(100%, 760px);
+  max-height: min(820px, calc(100svh - 48px));
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: var(--sur);
-  padding: 14px;
+  background: #fff;
+  box-shadow: 0 24px 72px rgb(0 0 0 / 0.25);
 }
 
-.work-ismart-card .work-card-sub {
+.work-ismart-dialog__header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--bdr);
+  padding: 20px 72px 20px 24px;
+}
+
+.work-ismart-dialog__header .work-kicker {
+  margin: 0 0 6px;
+}
+
+.work-ismart-dialog__close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bdr);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.work-ismart-dialog__close:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.work-ismart-dialog__close::before,
+.work-ismart-dialog__close::after {
+  position: absolute;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  content: '';
+}
+
+.work-ismart-dialog__close::before {
+  transform: rotate(45deg);
+}
+
+.work-ismart-dialog__close::after {
+  transform: rotate(-45deg);
+}
+
+.work-ismart-dialog__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.work-ismart-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.work-ismart-group {
+  min-width: 0;
+}
+
+.work-ismart-group + .work-ismart-group {
+  border-left: 1px solid var(--bdr);
+  padding-left: 24px;
+}
+
+.work-ismart-group .work-card-sub {
   font-size: 13px;
   font-weight: 800;
   color: var(--ink);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
-.work-ismart-card .work-row {
-  padding: 10px 0;
+.work-ismart-group .work-row {
+  padding: 11px 0;
 }
 
-.work-ismart-card .work-row > div {
+.work-ismart-group .work-row > div {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-columns: 132px minmax(0, 1fr);
   gap: 12px;
   width: 100%;
 }
 
-.work-ismart-card .work-row strong {
+.work-ismart-group .work-row strong {
   font-size: 12px;
   font-weight: 700;
   color: var(--ink-3);
   line-height: 1.5;
 }
 
-.work-ismart-card .work-row span {
+.work-ismart-group .work-row span {
   margin-top: 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   line-height: 1.5;
   word-break: break-word;
+}
+
+.work-ismart-edit-grid {
+  margin-top: 0;
+}
+
+.work-ismart-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--bdr);
+  margin-top: 0;
+  padding: 16px 24px;
 }
 
 /* 10. 通用行 */
@@ -2912,35 +3289,7 @@ watch(activePanel, () => {
   padding: 18px 12px;
 }
 
-/* 17. 提示設定 */
-.work-setting-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 14px;
-  margin-top: 12px;
-}
-
-.work-setting-check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.work-setting-check input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--brand);
-}
-
-/* 18. 物業綁定流程 */
+/* 17. 物業綁定流程 */
 .binding-flow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3169,6 +3518,7 @@ watch(activePanel, () => {
 
   .work-grid,
   .work-ismart-grid,
+  .work-account-detail-grid,
   .work-account-grid,
   .work-bind-grid,
   .binding-flow,
@@ -3188,6 +3538,23 @@ watch(activePanel, () => {
   .work-subaccount-form {
     grid-template-columns: 1fr;
   }
+
+  .work-ismart-modal {
+    place-items: end center;
+    padding: var(--app-safe-top) var(--layout-page-padding-inline) calc(var(--app-safe-bottom) + 10px);
+  }
+
+  .work-ismart-dialog {
+    max-height: calc(100svh - var(--app-safe-top) - var(--app-safe-bottom) - 20px);
+  }
+
+  .work-ismart-group + .work-ismart-group {
+    border-top: 1px solid var(--bdr);
+    border-left: 0;
+    padding-top: 18px;
+    padding-left: 0;
+  }
+
 }
 
 /* 25. 響應式 - 行動 */
@@ -3207,6 +3574,30 @@ watch(activePanel, () => {
 
   .work-bind-actions,
   .work-bind-actions .work-action {
+    width: 100%;
+  }
+
+  .work-ismart-dialog__header,
+  .work-ismart-dialog__body,
+  .work-ismart-edit-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .work-ismart-dialog__header {
+    padding-right: 64px;
+  }
+
+  .work-ismart-dialog__close {
+    top: 12px;
+    right: 16px;
+  }
+
+  .work-ismart-edit-actions {
+    flex-direction: column;
+  }
+
+  .work-ismart-edit-actions .work-action {
     width: 100%;
   }
 

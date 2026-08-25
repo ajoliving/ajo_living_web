@@ -18,11 +18,17 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 ## 架構決策
 - `docs/PROMPT_INDEX.md` 是本目錄的 prompt/context 主索引；新增或移動 prompt、agent 規則、AI 文件生成規範或工具描述時必須同步更新。
 - `docs/prompts/` 只保存可直接複用的 UI 與頁面 prompt；活躍產品決策、驗收口徑與資料流優先放在 `docs/architecture/` 或 `docs/integrations/`，歷史產品資料只作 `docs/archive/product/` 參考。
+- `docs/integrations/` 內與 iSmart 相關的活躍接口文檔，預設以 `/Users/yangliu/Documents/Code/hk/ajo_ismart` 倉庫已暴露路由為真值來源；整理 AJO 可接入能力時，需先核對上游實際路由與 view，再更新本目錄文檔。
 - 部署類 prompt 保持在 `docs/deployment/`；執行部署前仍需按根級規則先讀部署文件與現有伺服器配置。
 - 文檔內容使用繁體中文或 English；除非維護既有文件，不新增簡體中文正文。
 - `docs/archive/`、`.claude/worktrees/`、`dist`、`node_modules`、資料庫備份與 HTML 備份不列入穩定 prompt surface，除非使用者明確要求追溯歷史。
 
 ## 變更日誌
+2026-08-25: 將 `docs/archive/integrations/` 的 iSmart external app API 重複版本收斂為 `external_app_building_api_v3.md` 及其繁體中文版本；中文與英文底稿同步以 `ajo_ismart` 已暴露的 `/auth/password/`、`/auth/notification-settings/` 路由為真值。
+2026-08-20: 記錄 `docs/integrations` 的 iSmart 活躍接口文檔以 `ajo_ismart` 倉庫已暴露路由為真值來源，未暴露 API 的頁面功能不得寫成 AJO 可直接接入能力。
+2026-08-19: 記錄 Good Price 同系列商品人工目錄、公開詳情與 AJO 商品編號切換契約，避免以文字規則錯誤建立公開規格關係。
+2026-08-19: 記錄會員中心帳戶資料、獨立提示設定與 AJO 業戶資料關聯契約；iSmart 原始帳戶資料維持唯讀，解除綁定只影響 AJO 本地關聯與目前使用物業。
+2026-08-14: 在 `PROMPT_INDEX.md` 記錄本機 Feishu 直連 Codex CLI 的工作區、憑據與不使用 CLI resume 的運行邊界。
 2026-07-08: 建立 docs prompt/context 記憶邊界與索引維護規則。
 2026-07-08: 補充 `docs/prompts` 與 `docs/deployment` 的本地 prompt 維護入口。
 2026-07-08: 將 `product`、`prototypes`、`backups` 移入 `archive`，並從活躍 prompt/context 入口排除。
@@ -60,5 +66,10 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 2026-07-28: 記錄樓盤草稿預付與發布差額抵扣的 API 契約、會員確認資料流與回歸測試索引。
 2026-07-28: 記錄歷史樓盤草稿重複扣費的退款更正命令、淨預付計算及錢包流水本地化契約。
 2026-07-30: 記錄代理註冊、牌照上載與 Staff 審核啟用的 API 契約索引更新。
+2026-08-04: 記錄樓盤逐樓盤聯絡快照、代理展示資料邊界及公開詳情解鎖契約。
+2026-08-05: 記錄樓盤草稿可修改物業資料、正式發佈後由前後端共同鎖定的 API 契約。
+2026-08-05: 記錄 AJO 生產與測試雙環境的獨立部署、資料快照、安全隔離及驗收入口。
+2026-08-05: 記錄測試站以受限入口密鑰換取安全 Cookie 的穩定訪問規則，取代易受網絡切換影響的 IP 白名單。
+2026-08-07: 記錄測試站按產品決策取消 Cookie access gate，改為公開直接訪問並維持資料與外部副作用隔離。
 
 [PROTOCOL]: When changing prompt-bearing docs in this directory, update `PROMPT_INDEX.md`, add a dated change-log line, and check parent `../AGENTS.md` for project-level memory changes.

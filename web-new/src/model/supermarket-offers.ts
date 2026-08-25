@@ -62,6 +62,9 @@ export interface SupermarketProduct {
   offerType: string;
   offerPattern: string;
   parseStatus: string;
+  seriesId?: string;
+  seriesName?: string;
+  variantLabels?: Record<string, string>;
   isFavorite?: boolean;
 }
 
@@ -123,6 +126,7 @@ export interface SupermarketProductDetail {
   history: SupermarketDailyStorePrice[];
   sameBrand: SupermarketProduct[];
   sameCategory: SupermarketProduct[];
+  sameSeries?: SupermarketProduct[];
   alertRule?: SupermarketPriceAlert | null;
   isFavorite: boolean;
 }

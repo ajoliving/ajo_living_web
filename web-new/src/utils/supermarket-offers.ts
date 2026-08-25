@@ -184,6 +184,15 @@ export const supermarketCurrentStorePrices = (
 export const supermarketPriceDiscountRate = (price: SupermarketStorePrice): number =>
   price.listPrice > 0 ? Math.max(0, ((price.listPrice - price.effectiveUnitPrice) / price.listPrice) * 100) : 0;
 
+// 12. 計算最低價相對第二低價的優勢百分比。
+export const supermarketSecondPriceAdvantageRate = (stores: SupermarketStorePrice[]): number => {
+  const prices = supermarketCurrentStorePrices(stores)
+    .map((item) => item.effectiveUnitPrice)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  if (prices.length < 2 || prices[1] <= 0 || prices[1] <= prices[0]) return 0;
+  return ((prices[1] - prices[0]) / prices[1]) * 100;
+};
+
 // 12. 取得有折扣的商店價格排序
 export const supermarketDiscountStorePrices = (
   stores: SupermarketStorePrice[],
@@ -269,3 +278,35 @@ export const supermarketOfferDisplayText = (value: string): string => value
       && !normalized.includes('current price');
   })
   .join(' / ');
+
+// 19. 取得商品規格
+const resolveProductUnit = (product: SupermarketProduct): string =>
+  Object.values(product.variantLabels ?? {}).map((value) => value.trim()).filter(Boolean).join(' / ')
+  || product.subtitle?.trim()
+  || '';
+
+// 20. 取得商品名稱並移除名稱末尾重複規格
+export const resolveSupermarketProductName = (product: SupermarketProduct): string => {
+  const name = product.name?.trim() || product.code;
+  const unit = resolveProductUnit(product);
+  if (!unit || !name.endsWith(unit)) return name;
+  return name.slice(0, -unit.length).trim().replace(/[-–—|:/]+$/, '').trim() || name;
+};
+
+// 21. 取得商品品牌
+export const resolveSupermarketProductBrand = (product: SupermarketProduct): string =>
+  product.brand?.trim() || '';
+
+// 22. 取得商品規格
+export const resolveSupermarketProductUnit = (product: SupermarketProduct): string =>
+  resolveProductUnit(product);
+
+// 23. 取得商品完整標題
+export const resolveSupermarketProductFullTitle = (product: SupermarketProduct): string =>
+  [resolveSupermarketProductBrand(product), resolveSupermarketProductName(product), resolveSupermarketProductUnit(product)]
+    .filter(Boolean)
+    .join(' ');
+
+// 23. 取得商品完整分類
+export const resolveSupermarketProductCategory = (product: SupermarketProduct): string =>
+  [product.category1, product.category2, product.category3].map((value) => value?.trim()).filter(Boolean).join(' / ');

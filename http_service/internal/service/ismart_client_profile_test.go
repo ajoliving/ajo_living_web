@@ -78,3 +78,46 @@ func TestGetMeRefreshesIsmartClientProfile(t *testing.T) {
 		t.Fatalf("client snapshot must not retain password: %#v", client)
 	}
 }
+
+// 2. TestUpdateClientProfileUsesLinkedIdentity verifies AJO writes only to the linked iSmart account.
+func TestUpdateClientProfileUsesLinkedIdentity(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPatch || request.URL.Path != "/api/v1/integration/auth/client/" {
+			t.Fatalf("unexpected client update request: %s %s", request.Method, request.URL.String())
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode client update request: %v", err)
+		}
+		if paymentInt64Value(payload["user_id"]) != 88 {
+			t.Fatalf("expected linked iSmart user id, got %#v", payload["user_id"])
+		}
+		if payload["cli_chi_name"] != "陳更新" || payload["cli_id"] != nil {
+			t.Fatalf("unexpected client update payload: %#v", payload)
+		}
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"success","data":{"user_id":88,"username":"03141139","email":"member@example.com","phone":"+85296022060","client":{"cli_id":"03141139","cli_name":"CHAN UPDATED","cli_chi_name":"陳更新","cli_acname":"CHAN UPDATED","cli_id_card":"A1234567","cli_tel":"+85296022060","cli_email":"member@example.com"}}}`))
+	}))
+	defer server.Close()
+
+	runtimeValue, user := newIsmartIntegrationTestRuntime(t, server.URL)
+	result, err := NewIsmartExternalService(runtimeValue).UpdateClientProfile(context.Background(), user.ID, IsmartClientProfileUpdate{
+		OwnerNameZH: pointerToString("陳更新"),
+	})
+	if err != nil {
+		t.Fatalf("update client profile: %v", err)
+	}
+	if paymentStringValue(result["username"]) != "03141139" {
+		t.Fatalf("unexpected update result: %#v", result)
+	}
+
+	profile := NewUserService(runtimeValue).loadIsmartAccountProfile(context.Background(), user.ID)
+	if profile == nil || profile.OwnerNameZH != "陳更新" {
+		t.Fatalf("expected updated iSmart profile snapshot, got %#v", profile)
+	}
+}
+
+// 3. pointerToString creates an optional string test value.
+func pointerToString(value string) *string {
+	return &value
+}

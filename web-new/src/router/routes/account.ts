@@ -7,6 +7,7 @@ import type { RouteRecordRaw } from 'vue-router';
 
 const AccountMyPage = () => import('@/pages/account/my/AccountMyPage.vue');
 const AccountAgencyCompanyPage = () => import('@/pages/account/my/agency-company/Page.vue');
+const AccountPreferencesPage = () => import('@/pages/account/my/preferences/Page.vue');
 const AccountWalletPage = () => import('@/pages/account/my/profile/wallet/Page.vue');
 const ForgotPasswordPage = () => import('@/pages/account/forgot-password/Page.vue');
 const LoginPage = () => import('@/pages/account/login/LoginPage.vue');
@@ -172,6 +173,12 @@ export const accountRoutes: RouteRecordRaw[] = [
       {
         path: 'profile/info',
         redirect: '/account/profile',
+      },
+      {
+        path: 'profile/preferences',
+        name: 'AccountPreferences',
+        component: AccountPreferencesPage,
+        meta: { titleKey: 'account.center.nav.preferences', requiresAuth: true },
       },
       {
         path: 'profile/agency-profile',

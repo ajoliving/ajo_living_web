@@ -49,6 +49,7 @@ export interface IsmartAccountProfile {
   birth_date: string;
   contact_name: string;
   contact_phone: string;
+  contact_email?: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   billing_phone: string;

@@ -16,7 +16,26 @@ import (
 	"ajoliving_web/http_service/internal/model"
 )
 
-// 1. RefreshClientProfile updates the linked member's read-only ClientTbl snapshot.
+// 1. IsmartClientProfileUpdate defines fields documented as writable by iSmart.
+type IsmartClientProfileUpdate struct {
+	AccountEmail          *string
+	AccountPhone          *string
+	ContactName           *string
+	EmergencyContactName  *string
+	OwnerNameEN           *string
+	OwnerNameZH           *string
+	AccountName           *string
+	IdentityNumber        *string
+	ContactPhone          *string
+	EmergencyContactPhone *string
+	ContactEmail          *string
+	BirthDate             *string
+	Gender                *string
+	AddressEN             *string
+	AddressZH             *string
+}
+
+// 2. RefreshClientProfile updates the linked member's read-only ClientTbl snapshot.
 func (s *IsmartExternalService) RefreshClientProfile(ctx context.Context, userID int64) error {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {
@@ -29,7 +48,56 @@ func (s *IsmartExternalService) RefreshClientProfile(ctx context.Context, userID
 	if err != nil {
 		return err
 	}
+	return s.saveClientProfileResponse(ctx, userID, account, paymentMapValue(result.Payload))
+}
+
+// 3. UpdateClientProfile updates only the ClientTbl fields exposed by the member center.
+func (s *IsmartExternalService) UpdateClientProfile(ctx context.Context, userID int64, params IsmartClientProfileUpdate) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"user_id": account.IsmartUserID}
+	setClientProfileField(payload, "email", params.AccountEmail)
+	setClientProfileField(payload, "phone", params.AccountPhone)
+	setClientProfileField(payload, "cli_contact_person", params.ContactName)
+	setClientProfileField(payload, "cli_urgent_contact_person", params.EmergencyContactName)
+	setClientProfileField(payload, "cli_name", params.OwnerNameEN)
+	setClientProfileField(payload, "cli_chi_name", params.OwnerNameZH)
+	setClientProfileField(payload, "cli_acname", params.AccountName)
+	setClientProfileField(payload, "cli_id_card", params.IdentityNumber)
+	setClientProfileField(payload, "cli_tel", params.ContactPhone)
+	setClientProfileField(payload, "cli_tel2", params.EmergencyContactPhone)
+	setClientProfileField(payload, "cli_email", params.ContactEmail)
+	setClientProfileField(payload, "cli_birthday", params.BirthDate)
+	setClientProfileField(payload, "cli_sex", params.Gender)
+	setClientProfileField(payload, "cli_addr", params.AddressEN)
+	setClientProfileField(payload, "cli_chiadd", params.AddressZH)
+	if len(payload) == 1 {
+		return nil, errcode.New(errcode.CodeValidationError, "at least one profile field is required")
+	}
+
+	result, err := s.patchIntegration(ctx, "auth/client/", payload)
+	if err != nil {
+		return nil, err
+	}
 	data := paymentMapValue(result.Payload)
+	if err := s.saveClientProfileResponse(ctx, userID, account, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// 4. setClientProfileField keeps omitted and explicitly empty values distinct.
+func setClientProfileField(payload map[string]any, key string, value *string) {
+	if value != nil {
+		payload[key] = strings.TrimSpace(*value)
+	}
+}
+
+// 5. saveClientProfileResponse persists the sanitized iSmart profile snapshot.
+func (s *IsmartExternalService) saveClientProfileResponse(ctx context.Context, userID int64, account *model.UserIsmartAccount, data map[string]any) error {
 	if paymentInt64Value(data["user_id"]) != account.IsmartUserID {
 		return errcode.New(errcode.CodeInternalError, "ismart client profile identity mismatch")
 	}
@@ -66,7 +134,7 @@ func (s *IsmartExternalService) RefreshClientProfile(ctx context.Context, userID
 	return nil
 }
 
-// 2. ismartClientProfileSnapshot maps ClientTbl fields to AJO's stable member-center contract.
+// 6. ismartClientProfileSnapshot maps ClientTbl fields to AJO's stable member-center contract.
 func ismartClientProfileSnapshot(data map[string]any, client map[string]any, account *model.UserIsmartAccount) map[string]any {
 	snapshot := sanitizeIsmartRawMessage(client)
 	snapshot["account_code"] = firstIsmartProfileText(client, data, account.Username, "cli_id", "username")
@@ -93,7 +161,7 @@ func ismartClientProfileSnapshot(data map[string]any, client map[string]any, acc
 	return snapshot
 }
 
-// 3. firstIsmartProfileText resolves ClientTbl, envelope, and local fallback values in order.
+// 7. firstIsmartProfileText resolves ClientTbl, envelope, and local fallback values in order.
 func firstIsmartProfileText(primary map[string]any, secondary map[string]any, fallback string, keys ...string) string {
 	for _, source := range []map[string]any{primary, secondary} {
 		for _, key := range keys {

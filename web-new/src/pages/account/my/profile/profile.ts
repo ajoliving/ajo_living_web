@@ -289,6 +289,7 @@ export const useAccountProfilePage = () => {
   const isLoading = ref(false);
   const isEditModalOpen = ref(false);
   const isIsmartModalOpen = ref(false);
+  const isUnitModalOpen = ref(false);
   const isUploadingAvatar = ref(false);
   const isSigningOut = ref(false);
   const isBindingIsmart = ref(false);
@@ -670,6 +671,18 @@ export const useAccountProfilePage = () => {
     }
   };
 
+  // 2.12.3 開啟綁定單位彈窗
+  const openUnitModal = (): void => {
+    isUnitModalOpen.value = true;
+  };
+
+  // 2.12.4 關閉綁定單位彈窗
+  const closeUnitModal = (): void => {
+    if (!isSavingUnit.value) {
+      isUnitModalOpen.value = false;
+    }
+  };
+
   // 2.13 上傳頭像並更新會員資料
   const handleAvatarFileChange = async (event: Event): Promise<void> => {
     const input = event.target as HTMLInputElement;
@@ -997,6 +1010,7 @@ export const useAccountProfilePage = () => {
     canSaveUnit,
     closeEditModal,
     closeIsmartModal,
+    closeUnitModal,
     floorOptions,
     formState,
     handleAvatarFileChange,
@@ -1014,11 +1028,13 @@ export const useAccountProfilePage = () => {
     isSaving,
     isSavingUnit,
     isSigningOut,
+    isUnitModalOpen,
     isUnitsLoading,
     isUploadingAvatar,
     ismartFormState,
     openEditModal,
     openIsmartModal,
+    openUnitModal,
     permissionChips,
     phoneDisplay,
     profileRows,
