@@ -465,6 +465,8 @@ export default {
   notifications: {
     title: 'Notifications',
     description: 'Review offers, property, payment, and system updates in one place.',
+    sectionNotifications: 'Notifications',
+    sectionConversations: 'Conversations',
     all: 'All',
     allTitle: 'All notifications',
     offers: 'Offer alerts',

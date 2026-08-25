@@ -9,11 +9,25 @@ import type { ComponentPublicInstance } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { ChatSummaryResponse } from '@/httpapis/chats';
-import { fetchChatDetail, fetchChats, markChatRead } from '@/httpapis/chats';
+import type { BuildingChatSummaryResponse, ChatSummaryResponse } from '@/httpapis/chats';
+import {
+  fetchBuildingChatDetail,
+  fetchBuildingChatMessages,
+  fetchBuildingChatMembers,
+  fetchBuildingChatJoinRequests,
+  fetchBuildingChats,
+  fetchChatDetail,
+  fetchChats,
+  markBuildingChatRead,
+  markChatRead,
+  leaveBuildingChat,
+  moderateBuildingChatMember,
+  reviewBuildingChatJoin,
+  sendBuildingChatMessage,
+} from '@/httpapis/chats';
 import type { MessageResponse } from '@/httpapis/messages';
 import { fetchMessages, sendMessage } from '@/httpapis/messages';
-import type { ChatConversationView, ChatMessageView } from '@/model/chat';
+import type { BuildingChatJoinRequestView, BuildingChatMemberView, ChatConversationView, ChatMessageView } from '@/model/chat';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -21,11 +35,17 @@ import { formatPrice } from '@/utils/format';
 
 const messageMaxLength = 1000;
 const directListingChatType = 'direct_listing_chat';
+const buildingGroupChatType = 'building_group';
 const hiddenMessageTypes = new Set(['notice_card']);
+export type ChatListFilter = 'all' | 'direct' | 'building_group';
 
 // 1. 只保留真實聊天會話
 const isDisplayableConversation = (item: ChatSummaryResponse): boolean =>
   String(item.chat_type) === directListingChatType;
+
+// 2. 只保留大廈群聊摘要
+const isDisplayableBuildingConversation = (item: BuildingChatSummaryResponse): boolean =>
+  String(item.chat_type) === buildingGroupChatType;
 
 // 2. 過濾歷史通知卡片訊息
 const isDisplayableMessage = (item: MessageResponse): boolean =>
@@ -43,8 +63,15 @@ export const useMarketplaceChatPage = () => {
   const loadingMessages = ref(false);
   const sendingMessage = ref(false);
   const conversations = ref<ChatConversationView[]>([]);
+  const conversationFilter = ref<ChatListFilter>(
+    String(route.query.chatType || '') === buildingGroupChatType ? 'building_group' : 'all',
+  );
+  const showBuildingGroups = ref(conversationFilter.value === 'building_group');
   const selectedChatId = ref('');
   const activeMessages = ref<ChatMessageView[]>([]);
+  const activeMembers = ref<BuildingChatMemberView[]>([]);
+  const activeJoinRequests = ref<BuildingChatJoinRequestView[]>([]);
+  const canManageGroup = ref(false);
   const participantPublicIdByUserId = ref<Record<string, string>>({});
   const draftMessage = ref('');
   const messageContainerRef = ref<HTMLDivElement | null>(null);
@@ -52,6 +79,23 @@ export const useMarketplaceChatPage = () => {
   const activeConversation = computed(() =>
     conversations.value.find((conversation) => conversation.id === selectedChatId.value),
   );
+  const directConversations = computed(() =>
+    conversations.value.filter((conversation) => conversation.type === directListingChatType),
+  );
+  const buildingConversations = computed(() =>
+    conversations.value.filter((conversation) => conversation.type === buildingGroupChatType),
+  );
+  const filteredConversations = computed(() => {
+    if (conversationFilter.value === 'building_group') {
+      return buildingConversations.value;
+    }
+    if (conversationFilter.value === 'direct') {
+      return directConversations.value;
+    }
+    return showBuildingGroups.value
+      ? [...buildingConversations.value, ...directConversations.value]
+      : directConversations.value;
+  });
   const activeReferencePrice = computed(() => Number(activeConversation.value?.listing.price_hkd || 0));
   const canSendMessage = computed(() =>
     Boolean(
@@ -62,10 +106,32 @@ export const useMarketplaceChatPage = () => {
     ),
   );
 
-  // 3.1 映射會話資料
+  // 3.1 切換會話列表篩選
+  const setConversationFilter = (filter: ChatListFilter): void => {
+    conversationFilter.value = filter;
+    showBuildingGroups.value = filter === 'building_group';
+  };
+
+  // 3.2 展開或收起大廈群聊
+  const toggleBuildingGroups = async (): Promise<void> => {
+    showBuildingGroups.value = !showBuildingGroups.value;
+    if (conversationFilter.value !== 'building_group' || !showBuildingGroups.value) {
+      conversationFilter.value = 'all';
+    }
+    await router.replace({
+      path: '/notifications',
+      query: conversationFilter.value === 'building_group' && showBuildingGroups.value
+        ? { tab: 'conversations', chatType: buildingGroupChatType }
+        : { tab: 'conversations' },
+    });
+  };
+
+  // 3.1 映射私聊資料
   const mapConversation = (item: ChatSummaryResponse): ChatConversationView => ({
     id: item.chat_id,
     type: directListingChatType,
+    title: item.peer?.display_name || t('chat.memberFallback'),
+    subtitle: item.listing?.title || item.listing_title,
     listing: {
       id: item.listing?.listing_id || item.listing_id,
       title: item.listing?.title || item.listing_title,
@@ -81,6 +147,33 @@ export const useMarketplaceChatPage = () => {
       display_name: item.peer?.display_name || t('chat.memberFallback'),
       avatar_url: '',
       role_in_chat: item.peer?.role_in_chat || '',
+    },
+    unread_count: item.unread_count,
+    last_message: item.last_message_preview,
+    last_message_at: item.last_message_at || '',
+  });
+
+  // 3.2 映射大廈群聊資料
+  const mapBuildingConversation = (item: BuildingChatSummaryResponse): ChatConversationView => ({
+    id: item.chat_id,
+    type: buildingGroupChatType,
+    title: `${t('chat.buildingGroup')} ${item.building_id}`,
+    subtitle: `${item.member_count} ${t('chat.members')}`,
+    building_id: item.building_id,
+    member_count: item.member_count,
+    listing: {
+      id: item.building_id,
+      title: `${t('chat.buildingGroup')} ${item.building_id}`,
+      summary: '',
+      price_hkd: 0,
+      status: 'active',
+    },
+    peer: {
+      user_id: '',
+      public_id: '',
+      display_name: `${t('chat.buildingGroup')} ${item.building_id}`,
+      avatar_url: '',
+      role_in_chat: 'group',
     },
     unread_count: item.unread_count,
     last_message: item.last_message_preview,
@@ -107,10 +200,23 @@ export const useMarketplaceChatPage = () => {
     loadingConversations.value = true;
 
     try {
-      const { data } = await fetchChats({ page: 1, page_size: 50 });
-      conversations.value = data.data.items.filter(isDisplayableConversation).map(mapConversation);
+      const { data: directData } = await fetchChats({ page: 1, page_size: 50 });
+      let buildingItems: BuildingChatSummaryResponse[] = [];
+      try {
+        const buildingChatsLoader = fetchBuildingChats;
+        if (typeof buildingChatsLoader === 'function') {
+          const { data: buildingData } = await buildingChatsLoader();
+          buildingItems = buildingData.data.items;
+        }
+      } catch {
+        buildingItems = [];
+      }
+      conversations.value = [
+        ...directData.data.items.filter(isDisplayableConversation).map(mapConversation),
+        ...buildingItems.filter(isDisplayableBuildingConversation).map(mapBuildingConversation),
+      ];
 
-      const deepLinkedChatId = String(route.params.conversationId || '').trim();
+      const deepLinkedChatId = String(route.params.conversationId || route.query.conversationId || '').trim();
       const targetConversationType = String(route.query.target || '').trim();
       const targetConversation = conversations.value.find(
         (conversation) => conversation.type === targetConversationType,
@@ -122,10 +228,10 @@ export const useMarketplaceChatPage = () => {
         selectedChatId.value = deepLinkedChatId;
       } else if (targetConversation) {
         selectedChatId.value = targetConversation.id;
-        await router.replace(`/account/chat/${targetConversation.id}`);
+        await router.replace({ path: '/notifications', query: { tab: 'conversations', conversationId: targetConversation.id } });
       } else if (deepLinkedChatId) {
         selectedChatId.value = '';
-        await router.replace('/account/chat');
+        await router.replace({ path: '/notifications', query: { tab: 'conversations' } });
       }
     } catch (error) {
       feedbackStore.pushToast(
@@ -144,41 +250,78 @@ export const useMarketplaceChatPage = () => {
     if (!selectedChatId.value) {
       activeMessages.value = [];
       participantPublicIdByUserId.value = {};
+      activeMembers.value = [];
+      activeJoinRequests.value = [];
+      canManageGroup.value = false;
       return;
     }
     const selectedConversation = conversations.value.find((item) => item.id === selectedChatId.value);
     if (!selectedConversation) {
       activeMessages.value = [];
       participantPublicIdByUserId.value = {};
+      activeMembers.value = [];
+      activeJoinRequests.value = [];
+      canManageGroup.value = false;
       selectedChatId.value = '';
-      await router.replace('/account/chat');
+      await router.replace({ path: '/notifications', query: { tab: 'conversations' } });
       return;
     }
 
     loadingMessages.value = true;
 
     try {
-      const [{ data: chatData }, { data: messageData }] = await Promise.all([
-        fetchChatDetail(selectedChatId.value),
-        fetchMessages(selectedChatId.value, { page: 1, page_size: 100 }),
-      ]);
-      if (String(chatData.data.chat_type) !== directListingChatType) {
-        conversations.value = conversations.value.filter((item) => item.id !== selectedChatId.value);
-        activeMessages.value = [];
-        participantPublicIdByUserId.value = {};
-        selectedChatId.value = '';
-        await router.replace('/account/chat');
-        return;
-      }
+      const isBuildingGroup = selectedConversation.type === buildingGroupChatType;
+      const [{ data: chatData }, { data: messageData }] = isBuildingGroup
+        ? await Promise.all([
+            fetchBuildingChatDetail(selectedChatId.value),
+            fetchBuildingChatMessages(selectedChatId.value, { page: 1, page_size: 100 }),
+          ])
+        : await Promise.all([
+            fetchChatDetail(selectedChatId.value),
+            fetchMessages(selectedChatId.value, { page: 1, page_size: 100 }),
+          ]);
 
       participantPublicIdByUserId.value = Object.fromEntries(
         chatData.data.participants.map((participant) => [participant.user_id, participant.public_id || '']),
       );
+      canManageGroup.value = isBuildingGroup && Boolean(chatData.data.can_manage);
+      if (isBuildingGroup) {
+        const { data: memberData } = await fetchBuildingChatMembers(selectedChatId.value);
+        activeMembers.value = memberData.data.items.map((member) => ({
+          user_id: member.user_id,
+          display_name: member.display_name,
+          role_in_chat: member.role_in_chat,
+          membership_status: member.membership_status,
+          muted_until: member.muted_until,
+          banned_until: member.banned_until,
+        }));
+        if (canManageGroup.value) {
+          const { data: requestData } = await fetchBuildingChatJoinRequests(selectedChatId.value);
+          activeJoinRequests.value = requestData.data.items
+            .filter((request) => request.status === 'pending')
+            .map((request) => ({
+              request_id: request.request_id,
+              user_id: request.user_id,
+              status: request.status,
+              reason: request.reason,
+              created_at: request.created_at,
+            }));
+        } else {
+          activeJoinRequests.value = [];
+        }
+      } else {
+        activeMembers.value = [];
+        activeJoinRequests.value = [];
+      }
       activeMessages.value = messageData.data.items.filter(isDisplayableMessage).map(mapMessage);
 
       const matchedConversation = conversations.value.find((item) => item.id === selectedChatId.value);
       if (matchedConversation?.unread_count) {
-        await markChatRead(selectedChatId.value);
+        if (isBuildingGroup) {
+          await markBuildingChatRead(selectedChatId.value);
+        } else {
+          await markChatRead(selectedChatId.value);
+        }
         conversations.value = conversations.value.map((item) =>
           item.id === selectedChatId.value ? { ...item, unread_count: 0 } : item,
         );
@@ -197,14 +340,45 @@ export const useMarketplaceChatPage = () => {
 
   // 3.5 切換會話
   const handleSelectChat = async (chatId: string): Promise<void> => {
+    if (!conversations.value.some((conversation) => conversation.id === chatId)) {
+      await loadChats();
+    }
+    if (!conversations.value.some((conversation) => conversation.id === chatId)) {
+      return;
+    }
     selectedChatId.value = chatId;
+    const selectedConversation = conversations.value.find((conversation) => conversation.id === chatId);
+    if (selectedConversation?.type === buildingGroupChatType) {
+      await router.replace({
+        path: '/notifications',
+        query: {
+          tab: 'conversations',
+          conversationId: chatId,
+          chatType: buildingGroupChatType,
+        },
+      });
+      return;
+    }
+
+    // 私聊沿用舊路徑，由路由守衛統一轉到通信中心。
     await router.replace(`/account/chat/${chatId}`);
   };
 
   // 3.6 返回會話列表
   const handleBackToChats = async (): Promise<void> => {
+    const selectedConversation = conversations.value.find((conversation) => conversation.id === selectedChatId.value);
     selectedChatId.value = '';
-    await router.replace('/account/chat');
+    if (selectedConversation?.type === directListingChatType) {
+      await router.replace('/account/chat');
+      return;
+    }
+
+    await router.replace({
+      path: '/notifications',
+      query: conversationFilter.value === 'building_group'
+        ? { tab: 'conversations', chatType: buildingGroupChatType }
+        : { tab: 'conversations' },
+    });
   };
 
   // 3.7 送出訊息
@@ -217,7 +391,10 @@ export const useMarketplaceChatPage = () => {
     sendingMessage.value = true;
 
     try {
-      const { data } = await sendMessage(selectedChatId.value, { content });
+      const isBuildingGroup = activeConversation.value?.type === buildingGroupChatType;
+      const { data } = isBuildingGroup
+        ? await sendBuildingChatMessage(selectedChatId.value, { content })
+        : await sendMessage(selectedChatId.value, { content });
       activeMessages.value = [...activeMessages.value, mapMessage(data.data)];
       conversations.value = conversations.value.map((conversation) =>
         conversation.id === selectedChatId.value
@@ -252,7 +429,77 @@ export const useMarketplaceChatPage = () => {
     void handleSendMessage();
   };
 
-  // 3.9 綁定訊息滾動容器
+  // 3.9 離開大廈群聊
+  const handleLeaveBuildingChat = async (): Promise<void> => {
+    if (!selectedChatId.value || activeConversation.value?.type !== buildingGroupChatType) {
+      return;
+    }
+    try {
+      await leaveBuildingChat(selectedChatId.value);
+      await handleBackToChats();
+      await loadChats();
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('chat.leaveError')
+          : t('chat.leaveError'),
+        'error',
+      );
+    }
+  };
+
+  // 3.10 執行大廈群聊成員管理
+  const handleModerateBuildingMember = async (
+    userId: string,
+    action: 'mute' | 'unmute' | 'kick' | 'ban' | 'unban',
+  ): Promise<void> => {
+    if (!selectedChatId.value || !canManageGroup.value) {
+      return;
+    }
+    try {
+      await moderateBuildingChatMember(selectedChatId.value, {
+        user_id: Number(userId),
+        action,
+        duration_minutes: action === 'mute' || action === 'ban' ? 60 : undefined,
+      });
+      const { data } = await fetchBuildingChatMembers(selectedChatId.value);
+      activeMembers.value = data.data.items;
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('chat.moderationError')
+          : t('chat.moderationError'),
+        'error',
+      );
+    }
+  };
+
+  // 3.11 審核大廈群聊加入申請
+  const handleReviewBuildingChatJoin = async (
+    requestId: string,
+    status: 'approved' | 'rejected',
+  ): Promise<void> => {
+    if (!selectedChatId.value || !canManageGroup.value) {
+      return;
+    }
+    try {
+      await reviewBuildingChatJoin(requestId, status);
+      activeJoinRequests.value = activeJoinRequests.value.filter((request) => request.request_id !== requestId);
+      if (status === 'approved') {
+        const { data } = await fetchBuildingChatMembers(selectedChatId.value);
+        activeMembers.value = data.data.items;
+      }
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message ?? t('chat.reviewError')
+          : t('chat.reviewError'),
+        'error',
+      );
+    }
+  };
+
+  // 3.12 綁定訊息滾動容器
   const setMessageContainerRef = (element: Element | ComponentPublicInstance | null): void => {
     messageContainerRef.value = element instanceof HTMLDivElement ? element : null;
   };
@@ -278,7 +525,7 @@ export const useMarketplaceChatPage = () => {
   );
 
   watch(
-    () => route.params.conversationId,
+    () => route.params.conversationId || route.query.conversationId,
     (conversationId) => {
       const nextId = String(conversationId || '').trim();
       if (!nextId) {
@@ -292,8 +539,16 @@ export const useMarketplaceChatPage = () => {
           return;
         }
 
-        void router.replace('/account/chat');
+        void router.replace({ path: '/notifications', query: { tab: 'conversations' } });
       }
+    },
+  );
+
+  watch(
+    () => route.query.chatType,
+    (chatType) => {
+      conversationFilter.value = String(chatType || '') === buildingGroupChatType ? 'building_group' : 'all';
+      showBuildingGroups.value = conversationFilter.value === 'building_group';
     },
   );
 
@@ -305,20 +560,33 @@ export const useMarketplaceChatPage = () => {
     activeConversation,
     activeReferencePrice,
     activeMessages,
+    activeMembers,
+    activeJoinRequests,
+    buildingConversations,
     canSendMessage,
+    canManageGroup,
     conversations,
+    conversationFilter,
+    directConversations,
     draftMessage,
+    filteredConversations,
     formatPrice,
     handleBackToChats,
     handleSelectChat,
     handleSendByEnter,
     handleSendMessage,
+    handleLeaveBuildingChat,
+    handleModerateBuildingMember,
+    handleReviewBuildingChatJoin,
     loadingConversations,
     loadingMessages,
     messageMaxLength,
     preferenceStore,
     selectedChatId,
+    setConversationFilter,
     setMessageContainerRef,
+    showBuildingGroups,
+    toggleBuildingGroups,
     sendingMessage,
     sessionStore,
     t,

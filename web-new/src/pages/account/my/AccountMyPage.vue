@@ -49,7 +49,6 @@ type PanelKey =
   | 'profile-agency-company'
   | 'profile-property-binding'
   | 'profile-wallet'
-  | 'profile-chat'
   | 'profile-properties'
   | 'profile-homes'
   | 'profile-furniture'
@@ -71,7 +70,6 @@ const navItems = computed<Array<{ key: PanelKey; label: string; needsApi?: boole
     : []),
   { key: 'profile-property-binding', label: t('account.center.nav.propertyBinding') },
   { key: 'profile-wallet', label: t('account.center.nav.wallet') },
-  { key: 'profile-chat', label: t('account.center.nav.messages') },
   { key: 'profile-properties', label: t('account.center.nav.properties') },
   { key: 'profile-homes', label: t('account.center.nav.homes') },
   { key: 'profile-furniture', label: t('account.center.nav.furniture') },
@@ -86,7 +84,6 @@ const routePanelPaths = [
   '/account/profile/wallet',
   '/account/profile/preferences',
   '/account/profile/agency-profile',
-  '/account/chat',
   '/account/properties',
   '/account/listings',
   '/account/favorites',
@@ -104,7 +101,6 @@ const switchPanel = (key: PanelKey) => {
     'profile-preferences': '/account/profile/preferences',
     'profile-agency-company': '/account/profile/agency-profile',
     'profile-wallet': '/account/profile/wallet',
-    'profile-chat': '/account/chat',
     'profile-properties': '/account/properties/sale',
     'profile-homes': '/account/properties/serviced-residences',
     'profile-furniture': '/account/listings',
@@ -132,10 +128,6 @@ const syncActivePanelFromRoute = (path: string) => {
   }
   if (path.startsWith('/account/profile/wallet')) {
     activePanel.value = 'profile-wallet';
-    return;
-  }
-  if (path.startsWith('/account/chat')) {
-    activePanel.value = 'profile-chat';
     return;
   }
   if (path.startsWith('/account/properties/serviced-residences')) {
@@ -2278,12 +2270,7 @@ watch(activePanel, () => {
           <AccountWalletPage v-else-if="activePanel === 'profile-wallet'" />
         </div>
 
-        <!-- 2.5 訊息管理 -->
-        <div v-show="activePanel === 'profile-chat'" class="work-panel on" data-work-panel="profile-chat">
-          <RouterView v-if="activePanel === 'profile-chat'" />
-        </div>
-
-        <!-- 2.6 我的樓盤 -->
+        <!-- 2.5 我的樓盤 -->
         <div v-show="activePanel === 'profile-properties'" class="work-panel on" data-work-panel="profile-properties">
           <RouterView v-if="shouldRenderRoutePanel && activePanel === 'profile-properties'" />
           <PropertyMyPage

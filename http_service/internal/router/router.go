@@ -99,7 +99,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerOrderRoutes(api, orderHandler, requireActive)
 	registerNotificationRoutes(api, notificationHandler, requireActive)
 	registerSupermarketMemberRoutes(api, supermarketOfferHandler, requireActive)
-	registerStaffRoutes(api, staffHandler, staffWalletHandler, staffListingHandler, homeContentHandler, secondhandHandler, requireStaff)
+	registerStaffRoutes(api, staffHandler, staffWalletHandler, staffListingHandler, homeContentHandler, secondhandHandler, chatHandler, requireStaff)
 	registerAgencyCompanyStaffRoutes(api, agencyCompanyHandler, requireStaff)
 	registerStaffNoticeRoutes(api, notificationHandler, requireStaff)
 

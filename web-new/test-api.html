@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Building Chats API</title>
+</head>
+<body>
+    <h1>Test Building Chats API</h1>
+    <button onclick="testAPI()">Test /api/v1/building-chats</button>
+    <pre id="result"></pre>
+    
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch('/api/v1/building-chats', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

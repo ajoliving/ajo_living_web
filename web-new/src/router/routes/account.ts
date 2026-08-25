@@ -9,9 +9,9 @@ const AccountMyPage = () => import('@/pages/account/my/AccountMyPage.vue');
 const AccountAgencyCompanyPage = () => import('@/pages/account/my/agency-company/Page.vue');
 const AccountPreferencesPage = () => import('@/pages/account/my/preferences/Page.vue');
 const AccountWalletPage = () => import('@/pages/account/my/profile/wallet/Page.vue');
+const NotificationsPage = () => import('@/pages/notifications/Page.vue');
 const ForgotPasswordPage = () => import('@/pages/account/forgot-password/Page.vue');
 const LoginPage = () => import('@/pages/account/login/LoginPage.vue');
-const MarketplaceChatPage = () => import('@/pages/marketplace/chat/MarketplaceChatPage.vue');
 const MarketplaceListingEditorPage = () =>
   import('@/pages/marketplace/my-listings/editor/MarketplaceListingEditorPage.vue');
 const MarketplaceManagementPage = () => import('@/pages/marketplace/management/Page.vue');
@@ -207,7 +207,14 @@ export const accountRoutes: RouteRecordRaw[] = [
       {
         path: 'chat/:conversationId?',
         name: 'AccountChat',
-        component: MarketplaceChatPage,
+        component: NotificationsPage,
+        beforeEnter: (to) => ({
+          path: '/notifications',
+          query: {
+            tab: 'conversations',
+            ...(to.params.conversationId ? { conversationId: String(to.params.conversationId) } : {}),
+          },
+        }),
         meta: { titleKey: 'nav.chat', requiresAuth: true },
       },
       {

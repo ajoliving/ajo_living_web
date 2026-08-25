@@ -23,11 +23,14 @@ type ChatSummary struct {
 // 2. ChatDetail defines the chat detail payload.
 type ChatDetail struct {
 	ChatID       string              `json:"chat_id"`
+	BuildingID   string              `json:"building_id,omitempty"`
 	ListingID    string              `json:"listing_id"`
 	ListingTitle string              `json:"listing_title"`
 	BizModule    string              `json:"biz_module"`
 	ChatType     string              `json:"chat_type"`
 	CreatedAt    string              `json:"created_at"`
+	UnreadCount  int                 `json:"unread_count,omitempty"`
+	CanManage    bool                `json:"can_manage,omitempty"`
 	Peer         *ChatPeerSummary    `json:"peer,omitempty"`
 	Listing      *ChatListingSummary `json:"listing,omitempty"`
 	Participants []ChatMember        `json:"participants"`
@@ -56,10 +59,11 @@ type ChatListingSummary struct {
 
 // 5. ChatMember defines a chat participant response.
 type ChatMember struct {
-	UserID      string `json:"user_id"`
-	PublicID    string `json:"public_id"`
-	DisplayName string `json:"display_name"`
-	RoleInChat  string `json:"role_in_chat"`
+	UserID           string `json:"user_id"`
+	PublicID         string `json:"public_id"`
+	DisplayName      string `json:"display_name"`
+	RoleInChat       string `json:"role_in_chat"`
+	MembershipStatus string `json:"membership_status,omitempty"`
 }
 
 // 6. MessageResponse defines a chat message payload.

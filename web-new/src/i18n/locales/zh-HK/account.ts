@@ -465,6 +465,8 @@ export default {
   notifications: {
     title: '通知中心',
     description: '集中查看優惠提醒、物業消息、支付提醒與系統通知。',
+    sectionNotifications: '通知',
+    sectionConversations: '會話',
     all: '全部',
     allTitle: '所有通知',
     offers: '優惠提醒',

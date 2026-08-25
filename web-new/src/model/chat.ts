@@ -32,7 +32,7 @@ export interface ChatConversation {
 export type ChatMessageRole = 'self' | 'peer';
 
 // 5. 定義聊天頁會話類型
-export type ChatConversationType = 'direct_listing_chat';
+export type ChatConversationType = 'direct_listing_chat' | 'building_group';
 
 // 6. 定義聊天頁訊息
 export interface ChatMessageView {
@@ -70,9 +70,31 @@ export interface ChatPeerView {
 export interface ChatConversationView {
   id: string;
   type: ChatConversationType;
+  title: string;
+  subtitle: string;
+  building_id?: string;
+  member_count?: number;
   listing: ChatListingView;
   peer: ChatPeerView;
   unread_count: number;
   last_message: string;
   last_message_at: string;
+}
+
+// 10. 定義大廈群聊成員
+export interface BuildingChatMemberView {
+  user_id: string;
+  display_name: string;
+  role_in_chat: string;
+  membership_status: string;
+  muted_until?: string | null;
+  banned_until?: string | null;
+}
+
+export interface BuildingChatJoinRequestView {
+  request_id: string;
+  user_id: string;
+  status: string;
+  reason?: string;
+  created_at: string;
 }

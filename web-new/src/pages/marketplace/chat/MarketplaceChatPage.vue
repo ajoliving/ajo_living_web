@@ -1,7 +1,9 @@
 <!--
  * 聊天頁。
  * 1. 串接真實會話列表、詳情、訊息與已讀流程。
- * 2. 以會話列表與聊天內容單頁切換，維持清晰的訊息操作流程。
+ * 2. 左側會話列表採用與通知導航一致的按鈕樣式。
+ * 3. 頂部提供群聊/私聊篩選器。
+ * 4. 默認自動打開第一個對話。
 -->
 <script setup lang="ts">
 import AppIcon from '@/shared/components/base/AppIcon.vue';
@@ -15,21 +17,29 @@ import MessageBubble from './widgets/MessageBubble.vue';
 
 const {
   activeConversation,
+  activeMembers,
+  activeJoinRequests,
   activeReferencePrice,
   activeMessages,
   canSendMessage,
-  conversations,
+  canManageGroup,
+  conversationFilter,
   draftMessage,
+  filteredConversations,
   formatPrice,
   handleBackToChats,
   handleSelectChat,
   handleSendByEnter,
   handleSendMessage,
+  handleLeaveBuildingChat,
+  handleModerateBuildingMember,
+  handleReviewBuildingChatJoin,
   loadingConversations,
   loadingMessages,
   messageMaxLength,
   preferenceStore,
   selectedChatId,
+  setConversationFilter,
   setMessageContainerRef,
   sendingMessage,
   sessionStore,
@@ -44,114 +54,209 @@ const {
         v-if="sessionStore.isAuthenticated"
         class="chat-layout"
       >
-        <div
-          v-if="!activeConversation"
-          class="chat-panel chat-panel--conversations"
-        >
-          <div class="chat-panel__header chat-panel__header--compact">
-            <div>
-              <p class="chat-panel__eyebrow">{{ t('chat.kicker') }}</p>
-              <h1 class="chat-panel__title">{{ t('chat.title') }}</h1>
+        <div class="chat-sidebar">
+          <header class="chat-sidebar__header">
+            <h2>{{ t('chat.title') }}</h2>
+            <div class="chat-filter-tabs">
+              <button
+                type="button"
+                class="chat-filter-tab"
+                :class="conversationFilter === 'all' ? 'active' : ''"
+                @click="setConversationFilter('all')"
+              >
+                {{ t('chat.filterAll') }}
+              </button>
+              <button
+                type="button"
+                class="chat-filter-tab"
+                :class="conversationFilter === 'building_group' ? 'active' : ''"
+                @click="setConversationFilter('building_group')"
+              >
+                {{ t('chat.filterBuilding') }}
+              </button>
             </div>
-            <span class="chat-panel__count">{{ conversations.length }}</span>
-          </div>
+          </header>
+
           <div
             v-if="loadingConversations"
-            class="chat-loading"
+            class="chat-sidebar__loading"
           >
             {{ t('chat.loadingConversations') }}
           </div>
+
           <div
-            v-else-if="conversations.length === 0"
-            class="chat-conversation-empty"
+            v-else-if="filteredConversations.length === 0"
+            class="chat-sidebar__empty"
           >
             <p>{{ t('chat.noConversationsTitle') }}</p>
             <span>{{ t('chat.noConversationsDescription') }}</span>
           </div>
-          <div
+
+          <nav
             v-else
             class="chat-conversation-list"
           >
             <button
-              v-for="conversation in conversations"
+              v-for="conversation in filteredConversations"
               :key="conversation.id"
               type="button"
-              class="chat-conversation-card"
-              :class="
-                selectedChatId === conversation.id
-                  ? 'chat-conversation-card--active'
-                  : 'chat-conversation-card--idle'
-              "
+              class="chat-nav-item"
+              :class="selectedChatId === conversation.id ? 'active' : ''"
               @click="handleSelectChat(conversation.id)"
             >
-              <div class="chat-conversation-card__content">
+              <div class="chat-nav-item__avatar">
                 <BaseAvatar
                   :src="conversation.peer.avatar_url"
                   :name="conversation.peer.display_name"
-                  :size="48"
+                  :size="40"
                 />
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <p class="truncate text-sm font-semibold text-text">
-                        {{ conversation.peer.display_name }}
-                      </p>
-                      <p class="truncate text-xs text-text-muted">
-                        {{ conversation.listing.title }}
-                      </p>
-                    </div>
-                    <span
-                      v-if="conversation.unread_count > 0"
-                      class="chat-unread-badge"
-                    >
-                      {{ conversation.unread_count }}
-                    </span>
-                  </div>
-                  <p class="chat-conversation-card__message">
-                    {{ conversation.last_message }}
-                  </p>
+              </div>
+              <div class="chat-nav-item__content">
+                <div class="chat-nav-item__header">
+                  <h4 class="chat-nav-item__title">{{ conversation.title }}</h4>
+                  <span
+                    v-if="conversation.unread_count > 0"
+                    class="chat-nav-item__badge"
+                  >
+                    {{ conversation.unread_count }}
+                  </span>
                 </div>
+                <p
+                  v-if="conversation.peer.role_in_chat"
+                  class="chat-nav-item__role"
+                >
+                  {{ conversation.peer.role_in_chat }}
+                </p>
+                <p class="chat-nav-item__subtitle">
+                  {{ conversation.subtitle }}
+                </p>
+                <p class="chat-nav-item__message">
+                  {{ conversation.last_message }}
+                </p>
               </div>
             </button>
-          </div>
+          </nav>
         </div>
 
         <div
-          v-else
-          class="chat-panel chat-thread"
+          v-if="activeConversation"
+          class="chat-main"
         >
-          <div class="chat-panel__header">
-            <div class="chat-thread-header">
-              <div class="chat-thread-header__identity">
-                <button
-                  type="button"
-                  class="chat-back-button"
-                  :aria-label="t('chat.backToConversations')"
-                  :title="t('chat.backToConversations')"
-                  @click="handleBackToChats"
+          <header class="chat-main__header">
+            <div class="chat-thread-identity">
+              <button
+                type="button"
+                class="chat-back-button"
+                :aria-label="t('chat.backToConversations')"
+                :title="t('chat.backToConversations')"
+                @click="handleBackToChats"
+              >
+                <AppIcon
+                  name="arrow-left"
+                  :size="18"
+                />
+              </button>
+              <div class="chat-thread-info">
+                <h3 class="chat-thread-title">{{ activeConversation.title }}</h3>
+                <p class="chat-thread-subtitle">{{ activeConversation.subtitle }}</p>
+              </div>
+            </div>
+            <div
+              v-if="activeReferencePrice > 0"
+              class="chat-listing-price"
+            >
+              <span class="chat-listing-price__label">{{ t('chat.listingPrice') }}</span>
+              <strong class="chat-listing-price__value">
+                {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
+              </strong>
+            </div>
+          </header>
+
+          <div
+            v-if="activeConversation.type === 'building_group'"
+            class="chat-group-panel"
+          >
+            <div class="chat-group-panel__header">
+              <span>{{ t('chat.groupMembers') }} {{ activeMembers.length }}</span>
+              <BaseButton
+                variant="ghost"
+                size="sm"
+                @click="handleLeaveBuildingChat"
+              >
+                {{ t('chat.leaveGroup') }}
+              </BaseButton>
+            </div>
+            <div class="chat-group-members">
+              <div
+                v-for="member in activeMembers"
+                :key="member.user_id"
+                class="chat-group-member"
+              >
+                <div class="chat-group-member__info">
+                  <strong>{{ member.display_name }}</strong>
+                  <span>{{ member.role_in_chat }} · {{ member.membership_status }}</span>
+                </div>
+                <div
+                  v-if="canManageGroup"
+                  class="chat-group-member__actions"
                 >
-                  <AppIcon
-                    name="arrow-left"
-                    :size="18"
-                  />
-                </button>
-                <div class="chat-thread-header__main">
-                  <p class="chat-thread-header__title">
-                    {{ activeConversation.peer.display_name }}
-                  </p>
-                  <p class="chat-thread-header__subtitle">
-                    {{ activeConversation.listing.title }}
-                  </p>
+                  <button
+                    v-if="member.membership_status === 'active' && !member.muted_until"
+                    type="button"
+                    @click="handleModerateBuildingMember(member.user_id, 'mute')"
+                  >
+                    {{ t('chat.mute') }}
+                  </button>
+                  <button
+                    v-if="member.membership_status === 'active' && member.muted_until"
+                    type="button"
+                    @click="handleModerateBuildingMember(member.user_id, 'unmute')"
+                  >
+                    {{ t('chat.unmute') }}
+                  </button>
+                  <button
+                    v-if="member.membership_status === 'active'"
+                    type="button"
+                    @click="handleModerateBuildingMember(member.user_id, 'kick')"
+                  >
+                    {{ t('chat.kick') }}
+                  </button>
+                  <button
+                    v-if="member.membership_status === 'active'"
+                    type="button"
+                    @click="handleModerateBuildingMember(member.user_id, 'ban')"
+                  >
+                    {{ t('chat.ban') }}
+                  </button>
+                  <button
+                    v-if="member.membership_status === 'banned'"
+                    type="button"
+                    @click="handleModerateBuildingMember(member.user_id, 'unban')"
+                  >
+                    {{ t('chat.unban') }}
+                  </button>
                 </div>
               </div>
+            </div>
+            <div
+              v-if="canManageGroup && activeJoinRequests.length"
+              class="chat-group-requests"
+            >
+              <strong>{{ t('chat.joinRequests') }}</strong>
               <div
-                v-if="activeReferencePrice > 0"
-                class="chat-listing-summary"
+                v-for="request in activeJoinRequests"
+                :key="request.request_id"
+                class="chat-group-request"
               >
-                <p class="chat-listing-summary__label">{{ t('chat.listingPrice') }}</p>
-                <p class="chat-listing-summary__price">
-                  {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
-                </p>
+                <span>{{ request.user_id }}<template v-if="request.reason"> · {{ request.reason }}</template></span>
+                <div class="chat-group-member__actions">
+                  <button type="button" @click="handleReviewBuildingChatJoin(request.request_id, 'approved')">
+                    {{ t('chat.approve') }}
+                  </button>
+                  <button type="button" @click="handleReviewBuildingChatJoin(request.request_id, 'rejected')">
+                    {{ t('chat.reject') }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -162,7 +267,7 @@ const {
           >
             <div
               v-if="loadingMessages"
-              class="chat-loading"
+              class="chat-message-loading"
             >
               {{ t('chat.loadingMessages') }}
             </div>
@@ -208,6 +313,16 @@ const {
             </div>
           </div>
         </div>
+
+        <div
+          v-else
+          class="chat-main chat-main--empty"
+        >
+          <BaseEmpty
+            :title="t('chat.emptyThreadTitle')"
+            :description="t('chat.emptyThreadDescription')"
+          />
+        </div>
       </div>
 
       <BaseEmpty
@@ -232,332 +347,517 @@ const {
 
 .chat-layout {
   display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
   width: 100%;
-  max-width: 56rem;
-  gap: 1rem;
+  max-width: none;
   align-items: stretch;
-  margin-inline: auto;
 }
 
-.chat-panel {
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
-  min-height: clamp(34rem, calc(100svh - 12rem), 46rem);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
   overflow: hidden;
 }
 
-.chat-panel--conversations {
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-panel__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
+.chat-sidebar__header {
+  padding: 16px 18px;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding: 0.9rem;
 }
 
-.chat-panel__header--compact {
-  align-items: center;
-}
-
-.chat-panel__eyebrow {
-  margin: 0;
-  color: rgb(var(--color-primary));
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  line-height: 1.3;
-  text-transform: uppercase;
-}
-
-.chat-panel__title {
-  margin: 6px 0 0;
+.chat-sidebar__header h2 {
+  margin: 0 0 12px;
   color: rgb(var(--color-text));
-  font-family: var(--font-display);
-  font-size: 1.55rem;
-  font-weight: 500;
-  line-height: 1.15;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
-.chat-panel__count {
-  display: inline-flex;
-  min-width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 2px;
-  background: rgb(var(--color-primary) / 0.1);
-  color: rgb(var(--color-primary));
+.chat-filter-tabs {
+  display: flex;
+  gap: 6px;
+  border-radius: 6px;
+  background: rgb(var(--color-surface-raised));
+  padding: 4px;
+}
+
+.chat-filter-tab {
+  flex: 1;
+  min-height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 10px;
+  color: rgb(var(--color-text-muted));
+  cursor: pointer;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 700;
-  padding-inline: 10px;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
-.chat-loading {
+.chat-filter-tab:hover {
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+}
+
+.chat-filter-tab.active {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.chat-sidebar__loading,
+.chat-sidebar__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 200px;
+  padding: 20px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  padding: 1rem 0.9rem;
+  font-size: 13px;
+  text-align: center;
 }
 
-.chat-conversation-empty {
-  display: grid;
-  gap: 0.35rem;
-  color: rgb(var(--color-text-muted));
-  padding: 1rem 0.9rem;
-}
-
-.chat-conversation-empty p {
+.chat-sidebar__empty p {
   margin: 0;
   color: rgb(var(--color-text));
-  font-size: 0.9rem;
   font-weight: 700;
 }
 
-.chat-conversation-empty span {
-  font-size: 0.8rem;
-  line-height: 1.6;
+.chat-sidebar__empty span {
+  font-size: 12px;
 }
 
 .chat-conversation-list {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.45rem;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
   overflow-y: auto;
-  padding: 0.7rem;
 }
 
-.chat-conversation-card {
-  width: 100%;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  padding: 0.7rem;
+.chat-nav-item {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 68px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 12px;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  font-family: inherit;
   text-align: left;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease;
+    background-color 0.2s ease,
+    transform 0.1s ease;
 }
 
-.chat-conversation-card--active {
-  border-color: rgb(var(--color-primary));
-  background: rgb(var(--color-primary) / 0.1);
-}
-
-.chat-conversation-card--idle:hover {
-  border-color: rgb(var(--color-primary) / 0.3);
+.chat-nav-item:hover {
   background: rgb(var(--color-surface-raised));
 }
 
-.chat-conversation-card__content {
+.chat-nav-item.active {
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
+}
+
+.chat-nav-item__content {
+  min-width: 0;
+}
+
+.chat-nav-item__header {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
-.chat-conversation-card__message {
-  display: -webkit-box;
-  margin: 8px 0 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.chat-nav-item__title {
+  margin: 0;
+  min-width: 0;
   overflow: hidden;
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-  line-height: 1.55;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-unread-badge {
+.chat-nav-item__badge {
   display: inline-flex;
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
+  border-radius: 10px;
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
   font-size: 11px;
   font-weight: 700;
-  line-height: 1;
-  padding-inline: 6px;
+  padding: 0 6px;
 }
 
-.chat-thread {
-  display: flex;
-  flex-direction: column;
+.chat-nav-item.active .chat-nav-item__badge {
+  background: rgb(var(--color-primary-contrast));
+  color: rgb(var(--color-primary));
 }
 
-.chat-thread-header {
+.chat-nav-item__role {
+  margin: 0 0 2px;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.8;
+}
+
+.chat-nav-item__subtitle {
+  margin: 0 0 4px;
+  overflow: hidden;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.75;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-nav-item__message {
+  margin: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.chat-main {
   display: grid;
-  gap: 12px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+  min-height: clamp(500px, calc(100svh - 200px), 700px);
+  overflow: hidden;
 }
 
-.chat-thread-header__main {
-  min-width: 0;
-}
-
-.chat-thread-header__identity {
+.chat-main--empty {
   display: flex;
-  min-width: 0;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: center;
+}
+
+.chat-main__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding: 16px 20px;
+}
+
+.chat-thread-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .chat-back-button {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
   align-items: center;
   justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
+  border-radius: 6px;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
   cursor: pointer;
   transition:
     border-color 0.2s ease,
-    color 0.2s ease;
+    background-color 0.2s ease;
 }
 
-.chat-back-button:hover,
-.chat-back-button:focus-visible {
+.chat-back-button:hover {
   border-color: rgb(var(--color-primary));
-  color: rgb(var(--color-primary));
-  outline: none;
+  background: rgb(var(--color-primary) / 0.05);
 }
 
-.chat-thread-header__title {
+.chat-thread-info {
+  min-width: 0;
+}
+
+.chat-thread-title {
   margin: 0;
   color: rgb(var(--color-text));
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-thread-header__subtitle {
+.chat-thread-subtitle {
   margin: 4px 0 0;
   color: rgb(var(--color-text-muted));
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-listing-summary {
-  min-width: 132px;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 2px;
-  background: rgb(var(--color-surface));
-  padding: 0.65rem 0.75rem;
-  text-align: left;
+.chat-listing-price {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  text-align: right;
 }
 
-.chat-listing-summary__label {
-  margin: 0;
+.chat-listing-price__label {
   color: rgb(var(--color-text-muted));
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  line-height: 1.3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.chat-listing-summary__price {
-  margin: 6px 0 0;
+.chat-listing-price__value {
+  color: rgb(var(--color-primary));
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.chat-group-panel {
+  border-bottom: 1px solid rgb(var(--color-border));
+  background: rgb(var(--color-surface-raised));
+  padding: 12px 20px;
+}
+
+.chat-group-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-group-members {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-group-member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 4px;
+  background: rgb(var(--color-surface));
+  padding: 10px 12px;
+}
+
+.chat-group-member__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-group-member__info strong {
   color: rgb(var(--color-text));
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 500;
-  line-height: 1.15;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-group-member__info span {
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+}
+
+.chat-group-member__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chat-group-member__actions button {
+  min-height: 28px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 4px;
+  background: rgb(var(--color-surface));
+  padding: 4px 10px;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.chat-group-member__actions button:hover {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary) / 0.05);
+}
+
+.chat-group-requests {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(var(--color-border));
+}
+
+.chat-group-requests strong {
+  display: block;
+  margin-bottom: 8px;
+  color: rgb(var(--color-text));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-group-request {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 4px;
+  background: rgb(var(--color-surface));
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.chat-group-request span {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
 }
 
 .chat-message-scroll {
   display: flex;
-  flex: 1;
-  min-height: 0;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 12px;
   overflow-y: auto;
-  padding: 1rem;
-  background: rgb(var(--color-surface-raised));
+  padding: 20px;
+  background: rgb(var(--color-surface-muted));
+}
+
+.chat-message-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: rgb(var(--color-text-muted));
+  font-size: 13px;
 }
 
 .chat-composer {
   border-top: 1px solid rgb(var(--color-border));
-  padding: 0.75rem;
+  background: rgb(var(--color-surface));
+  padding: 16px 20px;
 }
 
 .chat-composer__meta {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.55rem;
+  margin-bottom: 10px;
   color: rgb(var(--color-text-muted));
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .chat-composer__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
 }
 
 .chat-composer__textarea {
-  min-height: 72px;
-  resize: none;
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-composer__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-shrink: 0;
 }
 
 .chat-send-button {
   min-height: 40px;
-  padding-inline: 14px;
-  white-space: nowrap;
 }
 
-.chat-send-button :deep(span) {
-  white-space: nowrap;
-}
-
-@media (min-width: 1024px) {
-  .chat-panel {
-    height: clamp(34rem, calc(100svh - 7rem), 46rem);
-    min-height: 0;
+@media (max-width: 1023px) {
+  .chat-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
-  .chat-thread-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+  .chat-sidebar {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .chat-main {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+  }
+
+  .chat-back-button {
+    display: none;
   }
 }
 
-@media (max-width: 640px) {
-  .chat-panel {
-    min-height: 32rem;
+@media (max-width: 767px) {
+  .chat-main__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chat-listing-price {
+    text-align: left;
   }
 
   .chat-composer__row {
-    grid-template-columns: 1fr;
-  }
-
-  .chat-composer__actions {
-    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .chat-send-button {
-    flex: 1;
+    width: 100%;
   }
+}
+
+:deep(.app-button),
+:deep(.app-input-shell),
+:deep(.app-textarea-shell) {
+  border-radius: 6px;
 }
 </style>

@@ -159,6 +159,20 @@ go run ./http_service/cmd/server
 | 24 | /api/v1/chats/{chatId}/messages | GET | 查詢聊天訊息列表 | 會員 |
 | 25 | /api/v1/chats/{chatId}/messages | POST | 傳送聊天訊息 | 會員 |
 | 26 | /api/v1/chats/{chatId}/read | POST | 標記聊天已讀 | 會員 |
+| 26.1 | /api/v1/building-chats | GET | 查詢目前會員可見大廈的群聊摘要及未讀數 | 會員 |
+| 26.2 | /api/v1/buildings/{buildingId}/chat | POST | 建立或加入指定大廈群聊；首次進入會建立成員記錄 | 會員 |
+| 26.3 | /api/v1/building-chats/{chatId} | GET | 查詢大廈群聊詳情、成員摘要及管理權限 | 群聊成員 |
+| 26.4 | /api/v1/building-chats/{chatId}/members | GET | 查詢大廈群聊成員及禁言、封禁狀態 | 群聊成員 |
+| 26.5 | /api/v1/building-chats/{chatId}/messages | GET | 分頁查詢大廈群聊文字訊息 | 群聊成員 |
+| 26.6 | /api/v1/building-chats/{chatId}/messages | POST | 傳送大廈群聊文字訊息，請求體 `{ "content": "..." }` | 有效群聊成員 |
+| 26.7 | /api/v1/building-chats/{chatId}/read | POST | 標記大廈群聊已讀 | 群聊成員 |
+| 26.8 | /api/v1/building-chats/{chatId}/leave | POST | 退出大廈群聊；之後可重新申請加入 | 群聊成員 |
+| 26.9 | /api/v1/building-chats/{chatId}/join-requests | POST | 提交加入申請，請求體可帶 `{ "reason": "..." }` | 有大廈訪問權限的會員 |
+| 26.10 | /api/v1/building-chat-join-requests/{requestId}/review | POST | 審核加入申請，請求體 `{ "status": "approved\|rejected" }` | 所屬大廈管理員 / Staff |
+| 26.11 | /api/v1/building-chats/{chatId}/join-requests | GET | 查詢待審核加入申請 | 所屬大廈管理員 / Staff |
+| 26.12 | /api/v1/building-chats/{chatId}/members/moderate | POST | 禁言、解除禁言、剔除、群內封禁或解除封禁；請求體含 `user_id`、`action`、可選 `duration_minutes`、`reason` | 所屬大廈管理員 / Staff |
+
+大廈群聊管理動作 `action` 支援：`mute`、`unmute`、`kick`、`ban`、`unban`。大廈管理員只能操作其有效授權所屬的大廈，Staff 可作全局違規處理。群聊成員由有效大廈綁定或授權關係決定；退出後保留成員記錄，重新加入需再次通過大廈訪問權限與加入流程。
 
 ### Order 模組
 

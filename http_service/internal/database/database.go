@@ -70,6 +70,7 @@ func Migrate(db *gorm.DB) error {
 		&model.OrderLog{},
 		&model.Chat{},
 		&model.ChatParticipant{},
+		&model.ChatJoinRequest{},
 		&model.Message{},
 		&model.ModerationAction{},
 		&model.Notification{},
@@ -93,6 +94,10 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := ensureBuildingChatUniqueIndex(db); err != nil {
+		return err
+	}
+
 	if err := migrateDistrictCodeColumnSize(db); err != nil {
 		return err
 	}
@@ -106,6 +111,11 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// 3. ensureBuildingChatUniqueIndex prevents concurrent duplicate building groups.
+func ensureBuildingChatUniqueIndex(db *gorm.DB) error {
+	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS uk_chats_building_group ON chats (building_id) WHERE chat_type = 'building_group'").Error
 }
 
 // 3. SeedCommunities inserts baseline communities when the table is empty.

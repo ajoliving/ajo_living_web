@@ -19,6 +19,7 @@ func registerStaffRoutes(
 	staffListingHandler *handler.StaffListingHandler,
 	homeContentHandler *handler.HomeContentHandler,
 	secondhandHandler *handler.SecondhandHandler,
+	chatHandler *handler.ChatHandler,
 	requireStaff gin.HandlerFunc,
 ) {
 	// 1.1 Staff account and user management routes.
@@ -69,5 +70,7 @@ func registerStaffRoutes(
 	// 1.7 Staff secondhand setting routes.
 	api.GET("/secondhand/settings/listings", requireStaff, secondhandHandler.SettingsListings)
 	api.POST("/secondhand/settings/listings/:listingId/mark-sold", requireStaff, secondhandHandler.SettingsMarkSold)
-	api.POST("/secondhand/settings/listings/:listingId/deactivate", requireStaff, secondhandHandler.SettingsDeactivate)
+
+	// 1.8 Staff building chat management routes.
+	api.GET("/staff/building-chats", requireStaff, chatHandler.ListAllBuildingChatsForStaff)
 }

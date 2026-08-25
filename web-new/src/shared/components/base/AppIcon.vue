@@ -6,13 +6,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-type IconName =
+export type IconName =
   | 'arrow-left'
   | 'arrow-right'
   | 'bell'
   | 'building'
   | 'browse'
   | 'check-circle'
+  | 'check'
+  | 'credit-card'
   | 'chevron-down'
   | 'cloud-upload'
   | 'clock'
@@ -38,6 +40,8 @@ type IconName =
   | 'send'
   | 'shield'
   | 'star'
+  | 'settings'
+  | 'tag'
   | 'user'
   | 'view'
   | 'view-off'
@@ -63,6 +67,8 @@ const iconMap: Record<IconName, string> = {
     'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z M4 10h16 M10 4v16',
   'check-circle':
     'M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10z M8 12.5l2.5 2.5L16.5 9',
+  check: 'M5 12.5 9.5 17 19 7.5',
+  'credit-card': 'M3 6h18v12H3z M3 10h18 M7 15h4',
   'chevron-down': 'M6 9l6 6 6-6',
   'cloud-upload':
     'M16 16l-4-4-4 4 M12 12v9 M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3',
@@ -92,8 +98,10 @@ const iconMap: Record<IconName, string> = {
   reload: 'M20 6v6h-6 M4 18v-6h6 M6.93 9A8 8 0 0 1 20 12 M17.07 15A8 8 0 0 1 4 12',
   search: 'm21 21-4.35-4.35 M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z',
   send: 'M22 2 11 13 M22 2l-7 20-4-9-9-4z',
+  settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 12h2 M18 12h2 M12 4v2 M12 18v2',
   shield: 'M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6z M9.5 12l1.8 1.8L15 10',
   star: 'm12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.23 6.44 20.12l1.06-6.2L3 9.53l6.22-.9z',
+  tag: 'M3 5v6l10 10 8-8L11 3H5a2 2 0 0 0-2 2z M7 7h.01',
   user: 'M20 21a8 8 0 1 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   view: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   'view-off': 'M3 3l18 18 M10.58 10.58A3 3 0 0 0 13.42 13.42 M9.88 4.24A10.65 10.65 0 0 1 12 4c6.5 0 10 8 10 8a18.33 18.33 0 0 1-2.19 3.12 M6.61 6.61C3.62 8.42 2 12 2 12s3.5 6 10 6a10.5 10.5 0 0 0 4.39-.95',

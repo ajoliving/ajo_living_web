@@ -24,6 +24,7 @@ import ManagementSecondhandListingsPage from './secondhand-listings/Page.vue';
 import ManagementServicedApartmentsPage from './serviced-apartments/Page.vue';
 import ManagementSystemNoticesPage from './system-notices/Page.vue';
 import ManagementWalletTransactionsPage from './wallet-transactions/Page.vue';
+import ManagementBuildingChatsPage from './building-chats/Page.vue';
 import ManagementIcctvPanel from './widgets/ManagementIcctvPanel.vue';
 import ManagementAdSettingsPanel from './widgets/ManagementAdSettingsPanel.vue';
 
@@ -35,6 +36,7 @@ type ManagementTab =
   | 'admin-icctv'
   | 'admin-members'
   | 'admin-agency-companies'
+  | 'admin-building-chats'
   | 'admin-notices'
   | 'admin-ads'
   | 'admin-ad-settings'
@@ -56,6 +58,7 @@ const validTabs: ManagementTab[] = [
   'admin-icctv',
   'admin-members',
   'admin-agency-companies',
+  'admin-building-chats',
   'admin-notices',
   'admin-ads',
   'admin-ad-settings',
@@ -70,6 +73,7 @@ const navItems = computed<ManagementTabNavItem[]>(() => [
   { key: 'admin-icctv', label: t('marketplace.management.icctv') },
   { key: 'admin-members', label: t('marketplace.management.members') },
   { key: 'admin-agency-companies', label: t('marketplace.management.agencyCompany.title') },
+  { key: 'admin-building-chats', label: t('marketplace.management.buildingChats.navTitle') },
   { key: 'admin-notices', label: t('marketplace.management.systemNotices') },
   { key: 'admin-ads', label: t('marketplace.management.walletAdListSection') },
   { key: 'admin-ad-settings', label: t('marketplace.management.adSettings') },
@@ -98,6 +102,8 @@ const activeComponent = computed(() => {
       return ManagementMembersPage;
     case 'admin-agency-companies':
       return ManagementAgencyCompaniesPage;
+    case 'admin-building-chats':
+      return ManagementBuildingChatsPage;
     case 'admin-notices':
       return ManagementSystemNoticesPage;
     case 'admin-ads':
