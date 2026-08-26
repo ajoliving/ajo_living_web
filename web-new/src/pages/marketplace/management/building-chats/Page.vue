@@ -384,7 +384,7 @@ onMounted(() => {
             @click="openInviteDialog"
           >
             <AppIcon
-              name="user-plus"
+              name="user"
               :size="16"
             />
             {{ t('marketplace.management.buildingChats.inviteUser') }}
