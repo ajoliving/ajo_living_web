@@ -638,7 +638,7 @@ func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]Build
 		Where("chat_type = ?", chatTypeBuildingGroup).
 		Order("created_at DESC").
 		Find(&chats).Error; err != nil {
-		return nil, errcode.New(errcode.CodeDatabaseError, "failed to load building chats")
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load building chats")
 	}
 
 	items := make([]BuildingChatSummary, 0, len(chats))
@@ -653,7 +653,7 @@ func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]Build
 			ChatID:       chat.PublicID,
 			BuildingID:   chat.BuildingID,
 			ChatType:     chat.ChatType,
-			MemberCount:  int(count),
+			MemberCount:  count,
 			LastPreview:  chat.LastMessagePreview,
 			UnreadCount:  0,
 		}
