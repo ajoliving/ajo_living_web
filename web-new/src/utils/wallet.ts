@@ -3,9 +3,10 @@
  * 1. 集中提供三模組扣費規則與積分顯示。
  * 2. 提供積分流水來源的本地化顯示。
  * 3. 避免頁面重複硬編碼扣費金額。
+ * 4. 提供展示廣告公開投放時段判斷。
  */
 
-import type { WalletTransactionResponse } from '@/model/wallet';
+import type { StaffRewardAdResponse, WalletTransactionResponse } from '@/model/wallet';
 
 export const WALLET_CHARGE_COSTS = {
   secondhand: 100,
@@ -75,3 +76,21 @@ export const resolveWalletDraftChargeCost = (module: keyof typeof WALLET_DRAFT_C
 // 5. 取得續期扣費
 export const resolveWalletRenewChargeCost = (module: 'secondhand'): number =>
   WALLET_RENEW_CHARGE_COSTS[module];
+
+// 6. 判斷展示廣告是否符合公開投放時段
+export const isPublicDisplayAdActive = (
+  ad: Pick<StaffRewardAdResponse, 'ends_at' | 'is_active' | 'starts_at'>,
+  now = Date.now(),
+): boolean => {
+  if (!ad.is_active) {
+    return false;
+  }
+
+  const startsAt = ad.starts_at ? Date.parse(ad.starts_at) : Number.NaN;
+  if (Number.isFinite(startsAt) && startsAt > now) {
+    return false;
+  }
+
+  const endsAt = ad.ends_at ? Date.parse(ad.ends_at) : Number.NaN;
+  return !Number.isFinite(endsAt) || endsAt >= now;
+};

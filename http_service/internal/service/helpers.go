@@ -87,3 +87,13 @@ func buildMediaURL(baseURL string, objectKey string) string {
 
 	return strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(objectKey, "/")
 }
+
+// 8. firstListingImage returns the first image or nil.
+func firstListingImage(images []ListingImageResponse) *ListingImageResponse {
+	if len(images) == 0 {
+		return nil
+	}
+
+	image := images[0]
+	return &image
+}

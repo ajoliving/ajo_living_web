@@ -1,30 +1,23 @@
 <!--
  * 會員中心提示設定頁。
  * 1. 讀取並更新 iSmart 大廈通告電郵設定。
- * 2. 提供 iSmart 登入密碼修改流程。
 -->
 <script setup lang="ts">
 /*
  * 會員中心提示設定頁邏輯。
  * 1. 提供頁面所需的多語系文字。
  */
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import axios from 'axios';
-import {
-  changeMemberIsmartPassword,
-  fetchMemberIsmartNotificationSettings,
-  updateMemberIsmartNotificationSettings,
-} from '@/httpapis/me';
+import { fetchMemberIsmartNotificationSettings, updateMemberIsmartNotificationSettings } from '@/httpapis/me';
 import { useFeedbackStore } from '@/stores/feedback';
 
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
 const isLoading = ref(true);
 const isSavingEmail = ref(false);
-const isSavingPassword = ref(false);
 const receiveEmail = ref(true);
-const passwordForm = reactive({ old_password: '', new_password: '', new_password_confirm: '' });
 
 const readError = (error: unknown, fallback: string): string =>
   axios.isAxiosError<{ message?: string }>(error) ? error.response?.data?.message ?? fallback : fallback;
@@ -55,30 +48,6 @@ const saveEmailSetting = async (): Promise<void> => {
   }
 };
 
-const savePassword = async (): Promise<void> => {
-  if (isSavingPassword.value) return;
-  if (passwordForm.new_password.length < 8) {
-    feedbackStore.pushToast(t('account.preferences.passwordTooShort'), 'error');
-    return;
-  }
-  if (passwordForm.new_password !== passwordForm.new_password_confirm) {
-    feedbackStore.pushToast(t('account.preferences.passwordMismatch'), 'error');
-    return;
-  }
-  isSavingPassword.value = true;
-  try {
-    await changeMemberIsmartPassword({ ...passwordForm });
-    passwordForm.old_password = '';
-    passwordForm.new_password = '';
-    passwordForm.new_password_confirm = '';
-    feedbackStore.pushToast(t('account.preferences.passwordSaved'), 'success');
-  } catch (error) {
-    feedbackStore.pushToast(readError(error, t('account.preferences.passwordSaveError')), 'error');
-  } finally {
-    isSavingPassword.value = false;
-  }
-};
-
 onMounted(() => { void loadSettings(); });
 </script>
 
@@ -96,21 +65,6 @@ onMounted(() => { void loadSettings(); });
       <button type="button" class="preferences-page__submit" :disabled="isLoading || isSavingEmail" @click="saveEmailSetting">
         {{ isSavingEmail ? t('account.center.common.saving') : t('account.center.common.submit') }}
       </button>
-    </section>
-
-    <section class="preferences-page__card preferences-page__password-card">
-      <div>
-        <h3>{{ t('account.preferences.changeIsmartPassword') }}</h3>
-        <p>{{ t('account.preferences.changeIsmartPasswordDescription') }}</p>
-      </div>
-      <form class="preferences-page__password-form" @submit.prevent="savePassword">
-        <input v-model="passwordForm.old_password" type="password" :placeholder="t('account.preferences.currentPassword')" autocomplete="current-password">
-        <input v-model="passwordForm.new_password" type="password" :placeholder="t('account.preferences.newPassword')" autocomplete="new-password">
-        <input v-model="passwordForm.new_password_confirm" type="password" :placeholder="t('account.preferences.confirmNewPassword')" autocomplete="new-password">
-        <button type="submit" class="preferences-page__submit" :disabled="isSavingPassword">
-          {{ isSavingPassword ? t('account.center.common.saving') : t('account.preferences.savePassword') }}
-        </button>
-      </form>
     </section>
   </section>
 </template>
@@ -185,35 +139,6 @@ onMounted(() => { void loadSettings(); });
 .preferences-page__submit:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-}
-
-.preferences-page__password-card {
-  align-items: stretch;
-  flex-direction: column;
-}
-
-.preferences-page__password-card h3,
-.preferences-page__password-card p {
-  margin: 0;
-}
-
-.preferences-page__password-card p {
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 6px;
-}
-
-.preferences-page__password-form {
-  display: grid;
-  gap: 10px;
-  max-width: 420px;
-}
-
-.preferences-page__password-form input {
-  min-height: 40px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  padding: 8px 10px;
 }
 
 .preferences-page__submit:focus-visible {

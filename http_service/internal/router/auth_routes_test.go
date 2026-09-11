@@ -35,6 +35,7 @@ func TestRegisterAuthRoutesIncludesUnifiedLogin(t *testing.T) {
 		"POST /api/v1/auth/username/login",
 		"POST /api/v1/auth/phone/login",
 		"POST /api/v1/auth/ismart/login",
+		"POST /api/v1/auth/refresh",
 	} {
 		if !routes[route] {
 			t.Fatalf("expected route %s", route)

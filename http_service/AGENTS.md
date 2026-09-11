@@ -8,6 +8,7 @@
 
 ## 適用範圍
 - `cmd/server`
+- `cmd/` 其餘目錄只保留運維導入與修復工具，不再包含示範樓盤、示範廣告、獨立首頁種子或草稿扣費更正命令。
 - `internal/router`
 - `internal/handler`
 - `internal/service`
@@ -34,6 +35,8 @@
 - 新增資料模型與 service 前，必須先判斷業務域：帳戶身份、物業大廈、單位與成員、通知站內信、支付賬務、設備安防、交易列表或管理端配置。
 - 涉及業主、租客、職員、管理公司、大廈、單位關係的功能，必須在 service 層明確資料歸屬、可見性與權限校驗。
 - AJO `users.is_staff` 只授予管理中心及管理設定權限；一般會員接口不得因非 Staff 身份拒絕，應改按登入狀態、會員狀態及資源可見範圍校驗。
+- 不維護獨立 RBAC 角色/權限表；管理中心新增管理員只寫 `users.is_staff`。大廈授權、代理子帳戶與 iSmart 單位權限維持各自真實權限模型。
+- 不提供二手 marketplace 訂單或交收；訂單語義只保留 POS 繳費與錢包充值。
 - iSmart `is_staff` 只保存為舊系統業務資料，不得自動提升 AJO `users.is_staff`；管理員身份只可由 AJO 管理流程或已配置的 AJO bootstrap 帳戶授予。
 - 舊系統遷移只能作為流程與欄位參考；不得讓新 service 直接形成對舊前端或舊資料語義的長期耦合。
 - 面向未來 POS、iBoard、iCCTV、iLock、Intercom、iSmart 等能力時，只建立當前功能必需的模型與 API，不提前鋪設未使用的抽象。
@@ -56,6 +59,12 @@
 - 一對一聊天可先按最小需求實作，但資料命名應保留會話、參與者、消息、來源模組與業務上下文的演進空間。
 - 大廈群聊已基於既有 `Chat` / `ChatParticipant` / `Message` 模型落地，以 `chat_type=building_group`、`building_id` 保持會話上下文，不另建割裂的群聊表。
 - 大廈群聊每棟大廈維持唯一群組；有效綁定或授權住戶首次訪問自動加入，離開後可重新加入，成員狀態支援 active、left、kicked、banned，消息發送前重新校驗禁言與封禁。
+- 群組成員資料只記錄群內狀態，不是長期資源授權；非 Staff 的群詳情、成員、消息、已讀與離開操作均須同時重新校驗目前大廈綁定或有效授權，綁定失效後舊成員不得繼續存取。
+- 即時聊天的 WebSocket 只傳送小型 JSON 事件；消息先在 PostgreSQL 交易內提交，再由 outbox 發布 Redis。連線斷開時由消息游標補償，Redis 不作消息唯一存儲。
+- 聊天大檔使用 OSS multipart 續傳 API；token 必須綁定 upload session，並提供列出已完成分片、完成及取消操作。
+- 聊天附件下載 URL 只在 `processing_status=ready` 且 `scan_status=passed` 時返回；命令模式媒體 worker 以短時簽名 URL 將 OSS 原始檔下載至受控暫存目錄，ffmpeg 產物回寫並驗證後才更新狀態。production、prod、staging 必須同時配置真實 ffmpeg 相容處理器與 ClamAV 相容掃描器，否則啟動拒絕；其他未配置情況 fail-closed。
+- 多個媒體 worker 先以 `media_assets.worker_claim_token` 和 `worker_claimed_at` 原子聲明工作；短租約未過期不可重複處理，完成時必須按 token 更新並清除聲明，超時後才可接管。
+- 聊天媒體最終 processing 或 scan 狀態須與獨立 `realtime_outboxes` 附件事件在同一交易提交；事件 aggregate 不得與消息 aggregate 共用，避免同步消息確認誤標附件事件。
 - 群聊管理權限只接受 AJO `users.is_staff` 或該大廈有效 `BuildingAuthorization` owner；成員禁言、剔除、封禁、解除處分及加入申請審核均寫入受控服務流程，不能以群組建立者身份自動放權。
 - 群聊加入使用 `ChatJoinRequest` 申請確認；申請批准前重新校驗申請人的大廈可見權限，Staff 可處理全局違規，普通管理者僅能處理所屬大廈。
 - 公告與聊天必須分清：公告是單向發布，站內信是可追蹤消息，聊天是互動會話；API、模型與通知策略不得混淆。
@@ -68,6 +77,7 @@
 | 層級 | 目錄 | 職責 |
 | --- | --- | --- |
 | 入口 | `cmd/server` | 服務啟動、初始化、遷移、系統級裝配 |
+| 運維命令 | `cmd/` 其他目錄 | 地址導入、超市圖片導入、OSS CORS、密文重加密；不提供示範內容種子或草稿扣費更正入口 |
 | 路由 | `internal/router` | 路由註冊、中間件掛載、快取與限流策略編排 |
 | 控制器 | `internal/handler` | HTTP 請求解析、基礎參數校驗、回應輸出 |
 | 服務 | `internal/service` | 業務邏輯、資料庫讀寫、交易處理、第三方服務編排 |
@@ -154,7 +164,7 @@ router -> handler -> service -> model/database
 - 禁止以 panic 處理運行期業務錯誤。
 - 樓盤放售草稿可保存未完成資料，完整欄位校驗只在正式發布時執行。`land` 類型不強制要求 `estate_name`，但發布時仍需樓盤編號、地址、價格、建築面積、土地分類標籤、聯絡資料與發布圖片；前後端必須保持同一必填契約。
 - 樓盤放售只有首次建立並明確儲存草稿時才接受 `charge_draft=true`，建立與 600 AJO Points 預扣必須在同一交易完成；既有草稿或已發佈樓盤更新即使收到該標記亦不得扣 POINT。正式發佈總費為 1,000，後端按同一樓盤既有草稿扣款抵扣差額，舊草稿超額預付不得再扣款。
-- 歷史樓盤草稿重複扣費不得修改或刪除既有錢包流水；只可對指定且仍為草稿的 `property_sale` 建立帶 `listing_id`、穩定幂等鍵與 `draft_charge_correction` 動作的退款流水。草稿抵扣金額必須以草稿扣款減去該更正退款計算，確保淨預付為 600、發布待付為 400。
+- 歷史樓盤草稿重複扣費不得修改或刪除既有錢包流水。若帳本已有 `draft_charge_correction` 退款，草稿抵扣必須扣除該更正，確保淨預付為 600、發布待付為 400；不再提供維護命令入口。
 - 樓盤放售的發布者身份必須由 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生，不信任前端請求值；`publisher_identity_type` 僅作舊接口兼容欄位。
 - 樓盤公開列表與公開詳情必須同時返回 `floor_raw` 實際樓層及 `floor_zone` 公開樓層；電話、內部備註及其他私密資料仍按既有權限限制返回。
 - 樓盤圖片必須正規化為唯一封面；明確選中的非首圖封面優先於 `sort_order`，沒有封面標記時才回退首圖，舊重複封面資料以最後一個標記恢復會員選擇。
@@ -254,6 +264,17 @@ go test ./...
 - API 文檔、錯誤語義、模型契約或 AI 文件生成規範受影響時，同步檢查 `doc/api.md` 與 `../docs/PROMPT_INDEX.md`。
 
 ## 變更日誌
+2026-09-12: 固定 `ajo_ismart` 為只讀參考倉庫；生產副戶 list/grant/revoke 因上游 `IFlatTbl` 沒有 `building` 屬性而失敗，AJO 只轉發該錯誤。
+2026-09-12: AJO 註冊同步 iSmart 時改傳送完整國際電話，避免只交本地號碼被上游預設成其他區號。
+2026-09-12: 副戶授權電話查 iSmart 時兼容提交值、本地號碼及常見區號舊格式，電郵與電話仍須對上同一個 user_id。
+2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源；POS 目錄快取維持不變。
+2026-09-11: 按減法清理 `internal/handler`：移除該層單元測試檔，並把樓盤翻譯與 POS 繳費擴展入口併回對應 handler。
+2026-09-11: 按減法清理 `internal/service`：移除該層單元測試檔，並把過碎的角色、二手選項、Staff 設定、聊天媒體清理、iCCTV 代理與代理審核郵件檔併回對應主檔。
+2026-09-11: 移除 RBAC 角色權限表、二手訂單模型及對應接口；Staff 建號只設定 `is_staff`，啟動時刪除舊 `roles`/`permissions`/`orders` 表。
+2026-09-11: 移除 `cmd/reconcile-property-draft-charge` 及僅供該入口使用的更正函式；既有 `draft_charge_correction` 退款仍計入草稿抵扣，錢包展示維持不變。
+2026-09-11: 移除 `cmd/seed-home-content`、`cmd/seed-sample-listings`、`cmd/seed-sample-ads` 及對應本機二進制；空庫預設首頁與登入圖仍由 `cmd/server` 在 `SEED_HOME_CONTENT` 開啟時補入。
+2026-09-11: 副戶列表、授權與撤銷預設固定使用 `clouddev` 的 `ISMART_SUBACCOUNT_API_BASE_URL`；授權前仍分別核對手機號與電郵。
+2026-09-10: 固定副戶列表、授權與撤銷使用獨立 `ISMART_SUBACCOUNT_API_BASE_URL`（`clouddev`）；授權前分別查手機號與電郵，`user_id` 一致才提交 grant，不得回退生產接口。
 2026-07-08: 補充後端 internal 目錄記憶入口，連接 API 契約與 prompt/context 索引。
 2026-07-10: 對齊土地樓盤發布契約，取消後端對 `estate_name` 的額外強制要求並保留其餘發布校驗。
 2026-07-12: 對齊未完成樓盤草稿保存與正式發布完整校驗的服務端契約。
@@ -286,5 +307,10 @@ go test ./...
 2026-08-12: 測試環境改為預設沿用生產外部服務配置，只有產品明確指定的接口才另行隔離。
 2026-08-17: 增加 Good Price 商品圖片報錯資料表及公開提交接口，按正規化商品 code 全域去重並保持重複提交成功。
 2026-08-19: 固定 Good Price 同系列詳情資料只由上游人工目錄提供，AJO 轉發時為 `sameSeries` 補齊商品圖片。
+2026-08-26: 固定即時聊天後端的 WebSocket、PostgreSQL 真相、Redis 廣播、outbox 補償及 OSS 附件邊界，並要求斷線按消息游標恢復。
+2026-08-27: 聊天附件重用既有 OSS presign/complete，固定 `ajo_living/chat/` object prefix、所有權校驗和 `message_attachments` 關聯；消息最多引用 5 個附件。
+2026-08-27: 聊天消息寫入必須支持 `client_message_id` 幂等鍵；消息交易同步寫入 `realtime_outboxes`，由 worker 發布 Redis 並按退避重試。
+2026-08-27: 聊天媒體補充 multipart 續傳、處理/掃描狀態門控及 `/api/v1/health/ready` 資料庫 readiness 契約。
+2026-08-27: 固定附件媒體狀態以獨立 outbox 事件可靠廣播；Redis 發布短暫失敗時，處理結果仍保留為待重試事件。
 
 [PROTOCOL]: When backend internal ownership or prompt-facing API contract changes, check `internal/AGENTS.md`, parent `../AGENTS.md`, and `../docs/PROMPT_INDEX.md`.

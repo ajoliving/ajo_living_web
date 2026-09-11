@@ -16,6 +16,8 @@ export default {
     revealContact: 'Reveal contact',
     openChat: 'In-app message',
     send: 'Send',
+    cancel: 'Cancel',
+    search: 'Search',
     saveDraft: 'Save draft',
     signIn: 'Sign in',
     signOut: 'Sign out',

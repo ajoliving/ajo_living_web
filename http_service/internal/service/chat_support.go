@@ -1,18 +1,19 @@
 /*
  * Chat response support helpers.
  * 1. Load peer display payloads for chat list and detail responses.
- * 2. Keep chat summary mapping helpers outside the core message workflow file.
+ * 2. Clean orphan chat media after the retention window.
  */
 package service
 
 import (
+	"ajoliving_web/http_service/internal/errcode"
+	"ajoliving_web/http_service/internal/model"
 	"context"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"strconv"
 	"strings"
 	"time"
-
-	"ajoliving_web/http_service/internal/errcode"
-	"ajoliving_web/http_service/internal/model"
 )
 
 // 1. chatPeerRow defines batched peer query fields.
@@ -187,4 +188,46 @@ func (s *ChatService) loadChatListingImages(ctx context.Context, listingIDs []in
 	}
 
 	return result, nil
+}
+
+// 1. CleanupOrphanChatMedia removes stale unbound chat uploads.
+func (s *ChatService) CleanupOrphanChatMedia(ctx context.Context, olderThan time.Duration, limit int) (int, error) {
+	if s == nil || s.runtime == nil || s.runtime.DB == nil || s.runtime.StorageProvider == nil || !s.runtime.DB.Migrator().HasTable(&model.MessageAttachment{}) {
+		return 0, nil
+	}
+	if olderThan <= 0 {
+		olderThan = 24 * time.Hour
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	cutoff := s.runtime.Now().Add(-olderThan)
+	var assets []model.MediaAsset
+	if err := s.runtime.DB.WithContext(ctx).Where("object_key LIKE ? AND created_at < ? AND id NOT IN (SELECT media_asset_id FROM message_attachments)", chatMediaObjectPrefix+"%", cutoff).Order("id asc").Limit(limit).Find(&assets).Error; err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, asset := range assets {
+		if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var lockedAsset model.MediaAsset
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", asset.ID).First(&lockedAsset).Error; err != nil {
+				return err
+			}
+			var referenceCount int64
+			if err := tx.Model(&model.MessageAttachment{}).Where("media_asset_id = ?", lockedAsset.ID).Count(&referenceCount).Error; err != nil {
+				return err
+			}
+			if referenceCount > 0 {
+				return gorm.ErrRecordNotFound
+			}
+			if err := s.runtime.StorageProvider.DeleteObject(ctx, lockedAsset.ObjectKey); err != nil {
+				return err
+			}
+			return tx.Delete(&model.MediaAsset{}, lockedAsset.ID).Error
+		}); err != nil {
+			continue
+		}
+		removed++
+	}
+	return removed, nil
 }

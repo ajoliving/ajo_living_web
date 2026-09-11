@@ -214,6 +214,9 @@ export interface MediaAssetResponse {
   url: string;
   in_use: boolean;
   created_at: string;
+  processing_status: string;
+  scan_status: string;
+  rejection_reason?: string;
 }
 
 // 16. 定義前端卡片可接受的帖子資料

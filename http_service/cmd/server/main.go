@@ -11,7 +11,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -25,6 +24,8 @@ import (
 
 // 1. main wires the application dependencies and starts the HTTP server.
 func main() {
+	appCtx, cancelApp := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancelApp()
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatal(err)
@@ -37,10 +38,6 @@ func main() {
 	}
 
 	if err := database.Migrate(db); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := database.SeedAccessControl(context.Background(), db); err != nil {
 		log.Fatal(err)
 	}
 
@@ -62,6 +59,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	mediaProcessor, err := service.NewMediaProcessor(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	mediaScanner, err := service.NewMediaScanner(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	otpProvider, err := service.NewOTPProvider(cfg)
 	if err != nil {
 		log.Fatal(err)
@@ -73,6 +78,13 @@ func main() {
 	if cacheStore != nil {
 		defer cacheStore.Close()
 	}
+	realtimeBroker, err := service.NewRedisRealtimeBroker(context.Background(), cfg)
+	if err != nil {
+		logg.Warn("redis realtime broker unavailable at startup; realtime workers will retry", "error", err)
+	}
+	if realtimeBroker != nil {
+		defer realtimeBroker.Close()
+	}
 
 	runtime := &service.Runtime{
 		Config:          cfg,
@@ -81,9 +93,14 @@ func main() {
 		OTPProvider:     otpProvider,
 		MailSender:      service.NewMailSender(cfg),
 		StorageProvider: storageProvider,
+		MediaProcessor:  mediaProcessor,
+		MediaScanner:    mediaScanner,
 		CacheStore:      cacheStore,
 		OTPStore:        service.NewOTPStore(),
 		Now:             time.Now,
+	}
+	if realtimeBroker != nil {
+		go service.NewRealtimeOutboxWorker(runtime, realtimeBroker).Run(appCtx)
 	}
 
 	authService := service.NewAuthService(runtime)
@@ -105,7 +122,8 @@ func main() {
 	supermarketOfferService := service.NewSupermarketOfferService(runtime)
 	marketTrendService := service.NewMarketTrendService(runtime)
 	chatService := service.NewChatService(runtime, secondhandService, propertyService)
-	orderService := service.NewOrderService(runtime, secondhandService, notificationService)
+	go service.NewMediaProcessingWorker(runtime).Run(appCtx)
+	go startChatMediaCleanupTicker(appCtx, chatService)
 	lifecycleService := service.NewLifecycleService(runtime)
 
 	if cfg.SeedHomeContent {
@@ -126,6 +144,7 @@ func main() {
 
 	engine := router.New(&router.Dependencies{
 		Config:                       cfg,
+		Runtime:                      runtime,
 		Logger:                       logg,
 		AuthService:                  authService,
 		UserService:                  userService,
@@ -142,10 +161,10 @@ func main() {
 		PropertyService:              propertyService,
 		AgencyCompanyService:         agencyCompanyService,
 		ChatService:                  chatService,
-		OrderService:                 orderService,
 		NotificationService:          notificationService,
 		SupermarketOfferService:      supermarketOfferService,
 		MarketTrendService:           marketTrendService,
+		RealtimeBroker:               realtimeBroker,
 	})
 
 	server := &http.Server{
@@ -160,7 +179,21 @@ func main() {
 		}
 	}()
 
-	waitForShutdown(server)
+	waitForShutdown(appCtx, server)
+}
+
+// 2.1 startChatMediaCleanupTicker removes stale unbound chat uploads.
+func startChatMediaCleanupTicker(ctx context.Context, chatService *service.ChatService) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, _ = chatService.CleanupOrphanChatMedia(ctx, 24*time.Hour, 500)
+		}
+	}
 }
 
 // 2. startExpireTicker periodically expires overdue listings.
@@ -186,12 +219,9 @@ func startSupermarketAlertTicker(supermarketOfferService *service.SupermarketOff
 	}
 }
 
-// 4. waitForShutdown gracefully stops the HTTP server.
-func waitForShutdown(server *http.Server) {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	<-signalChan
-
+// 4. waitForShutdown gracefully stops the HTTP server after context cancellation.
+func waitForShutdown(ctx context.Context, server *http.Server) {
+	<-ctx.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)

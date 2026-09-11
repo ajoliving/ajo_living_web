@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,15 @@ type StorageProvider interface {
 	PutObject(ctx context.Context, input PutObjectInput) (*StorageObjectInfo, error)
 	HeadObject(ctx context.Context, objectKey string) (*StorageObjectInfo, error)
 	DeleteObject(ctx context.Context, objectKey string) error
+}
+
+// 2.1 MultipartStorageProvider handles resumable multipart uploads.
+type MultipartStorageProvider interface {
+	InitiateMultipart(ctx context.Context, input MultipartInitiateInput) (*StorageMultipartInitiateResult, error)
+	PresignMultipartPart(ctx context.Context, input MultipartPartInput, expires time.Duration) (*PresignUploadResult, error)
+	ListMultipartParts(ctx context.Context, input MultipartListInput) ([]MultipartPart, error)
+	CompleteMultipart(ctx context.Context, input MultipartCompleteInput) (*StorageObjectInfo, error)
+	AbortMultipart(ctx context.Context, input MultipartAbortInput) error
 }
 
 // 3. PresignUploadInput defines input for upload presign.
@@ -62,6 +72,50 @@ type PutObjectInput struct {
 	Body      []byte
 }
 
+// 6. MultipartInitiateInput defines a multipart upload target.
+type MultipartInitiateInput struct {
+	ObjectKey string
+	MimeType  string
+}
+
+// 7. MultipartInitiateResult contains the provider upload ID.
+type StorageMultipartInitiateResult struct {
+	UploadID  string
+	ObjectKey string
+}
+
+// 8. MultipartPartInput identifies one upload part.
+type MultipartPartInput struct {
+	ObjectKey  string
+	UploadID   string
+	PartNumber int32
+}
+
+// 9. MultipartCompleteInput contains uploaded part ETags.
+type MultipartCompleteInput struct {
+	ObjectKey string
+	UploadID  string
+	Parts     []MultipartPart
+}
+
+// 9.1 MultipartListInput identifies an upload whose parts should be listed.
+type MultipartListInput struct {
+	ObjectKey string
+	UploadID  string
+}
+
+// 10. MultipartAbortInput identifies an upload to cancel.
+type MultipartAbortInput struct {
+	ObjectKey string
+	UploadID  string
+}
+
+// 11. MultipartPart represents one OSS part and its ETag.
+type MultipartPart struct {
+	PartNumber int32
+	ETag       string
+}
+
 // 6. StorageObjectInfo defines the storage object metadata payload.
 type StorageObjectInfo struct {
 	ObjectKey     string
@@ -77,6 +131,7 @@ const homeEngMediaObjectPrefix = "ajo_living/eng/home-carousel/"
 const loginBagMediaObjectPrefix = "ajo_living/login_bag/"
 const advertisementImageObjectPrefix = "ajo_living/advertisements/images/"
 const advertisementVideoObjectPrefix = "ajo_living/advertisements/video/"
+const chatMediaObjectPrefix = "ajo_living/chat/"
 const agencyIndividualAvatarObjectPrefix = "ajo_living/agency_individual/avatar/"
 const agencyIndividualEAAObjectPrefix = "ajo_living/agency_individual/eaa/"
 const agencyIndividualCompanyCardObjectPrefix = "ajo_living/agency_individual/company-card/"
@@ -205,6 +260,51 @@ func (p *MockStorageProvider) DeleteObject(_ context.Context, objectKey string) 
 	return nil
 }
 
+// 17. InitiateMultipart creates a deterministic mock upload ID.
+func (p *MockStorageProvider) InitiateMultipart(_ context.Context, input MultipartInitiateInput) (*StorageMultipartInitiateResult, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.MimeType) == "" {
+		return nil, fmt.Errorf("invalid multipart initiate payload")
+	}
+	return &StorageMultipartInitiateResult{UploadID: utils.NewPublicID(), ObjectKey: input.ObjectKey}, nil
+}
+
+// 18. PresignMultipartPart returns a deterministic mock part URL.
+func (p *MockStorageProvider) PresignMultipartPart(_ context.Context, input MultipartPartInput, expires time.Duration) (*PresignUploadResult, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" || input.PartNumber <= 0 || expires <= 0 {
+		return nil, fmt.Errorf("invalid multipart part payload")
+	}
+	baseURL := strings.TrimRight(p.config.StorageEndpoint, "/")
+	return &PresignUploadResult{
+		UploadURL: baseURL + "/multipart/" + url.PathEscape(input.ObjectKey) + "?uploadId=" + url.QueryEscape(input.UploadID) + "&partNumber=" + strconv.FormatInt(int64(input.PartNumber), 10),
+		ObjectKey: input.ObjectKey,
+		Headers:   map[string]string{},
+	}, nil
+}
+
+// 19. CompleteMultipart accepts a mock multipart completion.
+func (p *MockStorageProvider) CompleteMultipart(_ context.Context, input MultipartCompleteInput) (*StorageObjectInfo, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" || len(input.Parts) == 0 {
+		return nil, fmt.Errorf("invalid multipart complete payload")
+	}
+	return &StorageObjectInfo{ObjectKey: input.ObjectKey}, nil
+}
+
+// 19. ListMultipartParts returns no persisted parts in the mock provider.
+func (p *MockStorageProvider) ListMultipartParts(_ context.Context, input MultipartListInput) ([]MultipartPart, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" {
+		return nil, fmt.Errorf("invalid multipart list payload")
+	}
+	return []MultipartPart{}, nil
+}
+
+// 20. AbortMultipart accepts a mock multipart cancellation.
+func (p *MockStorageProvider) AbortMultipart(_ context.Context, input MultipartAbortInput) error {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" {
+		return fmt.Errorf("invalid multipart abort payload")
+	}
+	return nil
+}
+
 // 16. newOSSStorageProvider validates config and creates the OSS-backed provider.
 func newOSSStorageProvider(cfg *config.Config) (*OSSStorageProvider, error) {
 	if err := validateOSSConfig(cfg); err != nil {
@@ -265,6 +365,93 @@ func (p *OSSStorageProvider) PresignDownload(ctx context.Context, objectKey stri
 		return "", fmt.Errorf("presign oss download: %w", err)
 	}
 	return result.URL, nil
+}
+
+// 21. InitiateMultipart starts a multipart upload in OSS.
+func (p *OSSStorageProvider) InitiateMultipart(ctx context.Context, input MultipartInitiateInput) (*StorageMultipartInitiateResult, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.MimeType) == "" {
+		return nil, fmt.Errorf("invalid multipart initiate payload")
+	}
+	result, err := p.client.InitiateMultipartUpload(ctx, &oss.InitiateMultipartUploadRequest{
+		Bucket:      oss.Ptr(p.config.StorageBucket),
+		Key:         oss.Ptr(strings.TrimSpace(input.ObjectKey)),
+		ContentType: oss.Ptr(strings.TrimSpace(input.MimeType)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initiate oss multipart upload: %w", err)
+	}
+	return &StorageMultipartInitiateResult{UploadID: strings.TrimSpace(oss.ToString(result.UploadId)), ObjectKey: strings.TrimSpace(input.ObjectKey)}, nil
+}
+
+// 22. PresignMultipartPart creates a signed PUT URL for one OSS part.
+func (p *OSSStorageProvider) PresignMultipartPart(ctx context.Context, input MultipartPartInput, expires time.Duration) (*PresignUploadResult, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" || input.PartNumber <= 0 || input.PartNumber > 10000 || expires <= 0 {
+		return nil, fmt.Errorf("invalid multipart part payload")
+	}
+	result, err := p.client.Presign(ctx, &oss.UploadPartRequest{
+		Bucket:     oss.Ptr(p.config.StorageBucket),
+		Key:        oss.Ptr(strings.TrimSpace(input.ObjectKey)),
+		UploadId:   oss.Ptr(strings.TrimSpace(input.UploadID)),
+		PartNumber: input.PartNumber,
+	}, oss.PresignExpires(expires))
+	if err != nil {
+		return nil, fmt.Errorf("presign oss multipart part: %w", err)
+	}
+	headers := map[string]string{}
+	for key, value := range result.SignedHeaders {
+		headers[key] = value
+	}
+	return &PresignUploadResult{UploadURL: result.URL, ObjectKey: input.ObjectKey, Headers: headers}, nil
+}
+
+// 23. CompleteMultipart commits all uploaded parts in OSS.
+func (p *OSSStorageProvider) CompleteMultipart(ctx context.Context, input MultipartCompleteInput) (*StorageObjectInfo, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" || len(input.Parts) == 0 {
+		return nil, fmt.Errorf("invalid multipart complete payload")
+	}
+	parts := make([]oss.UploadPart, 0, len(input.Parts))
+	for _, part := range input.Parts {
+		if part.PartNumber <= 0 || part.PartNumber > 10000 || strings.TrimSpace(part.ETag) == "" {
+			return nil, fmt.Errorf("invalid multipart part")
+		}
+		parts = append(parts, oss.UploadPart{PartNumber: part.PartNumber, ETag: oss.Ptr(strings.TrimSpace(part.ETag))})
+	}
+	result, err := p.client.CompleteMultipartUpload(ctx, &oss.CompleteMultipartUploadRequest{
+		Bucket: oss.Ptr(p.config.StorageBucket), Key: oss.Ptr(strings.TrimSpace(input.ObjectKey)), UploadId: oss.Ptr(strings.TrimSpace(input.UploadID)),
+		CompleteMultipartUpload: &oss.CompleteMultipartUpload{Parts: parts},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("complete oss multipart upload: %w", err)
+	}
+	return &StorageObjectInfo{ObjectKey: input.ObjectKey, ETag: strings.TrimSpace(oss.ToString(result.ETag))}, nil
+}
+
+// 24. ListMultipartParts returns uploaded OSS parts for resumable clients.
+func (p *OSSStorageProvider) ListMultipartParts(ctx context.Context, input MultipartListInput) ([]MultipartPart, error) {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" {
+		return nil, fmt.Errorf("invalid multipart list payload")
+	}
+	result, err := p.client.ListParts(ctx, &oss.ListPartsRequest{Bucket: oss.Ptr(p.config.StorageBucket), Key: oss.Ptr(strings.TrimSpace(input.ObjectKey)), UploadId: oss.Ptr(strings.TrimSpace(input.UploadID)), MaxParts: 1000})
+	if err != nil {
+		return nil, fmt.Errorf("list oss multipart parts: %w", err)
+	}
+	parts := make([]MultipartPart, 0, len(result.Parts))
+	for _, part := range result.Parts {
+		parts = append(parts, MultipartPart{PartNumber: part.PartNumber, ETag: strings.TrimSpace(oss.ToString(part.ETag))})
+	}
+	return parts, nil
+}
+
+// 24. AbortMultipart cancels an in-progress OSS multipart upload.
+func (p *OSSStorageProvider) AbortMultipart(ctx context.Context, input MultipartAbortInput) error {
+	if strings.TrimSpace(input.ObjectKey) == "" || strings.TrimSpace(input.UploadID) == "" {
+		return fmt.Errorf("invalid multipart abort payload")
+	}
+	_, err := p.client.AbortMultipartUpload(ctx, &oss.AbortMultipartUploadRequest{Bucket: oss.Ptr(p.config.StorageBucket), Key: oss.Ptr(strings.TrimSpace(input.ObjectKey)), UploadId: oss.Ptr(strings.TrimSpace(input.UploadID))})
+	if err != nil {
+		return fmt.Errorf("abort oss multipart upload: %w", err)
+	}
+	return nil
 }
 
 // 18. buildOSSUploadCallback returns the optional OSS upload callback payload.
@@ -351,6 +538,8 @@ func normalizeMediaObjectPrefix(prefix string) string {
 		return advertisementImageObjectPrefix
 	case "ajo_living/advertisements/video", "advertisements/video":
 		return advertisementVideoObjectPrefix
+	case "ajo_living/chat", "chat":
+		return chatMediaObjectPrefix
 	case "ajo_living/agency_individual/avatar", "agency_individual/avatar":
 		return agencyIndividualAvatarObjectPrefix
 	case "ajo_living/agency_individual/eaa", "agency_individual/eaa":

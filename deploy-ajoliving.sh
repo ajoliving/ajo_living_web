@@ -213,6 +213,15 @@ set_env "WEB_PUBLIC_DIR" "$WEB_DIR/current_public"
 set_env "OSS_CALLBACK_ENABLED" "$OSS_CALLBACK_ENABLED"
 set_env "OSS_CALLBACK_URL" "$OSS_CALLBACK_URL"
 set_env "OSS_ALLOWED_ORIGINS" "$OSS_ALLOWED_ORIGINS"
+set_env "MEDIA_PROCESSING_PROVIDER" "ffmpeg"
+set_env "MEDIA_FFMPEG_BINARY" "ffmpeg"
+set_env "MEDIA_SCAN_PROVIDER" "clamav"
+set_env "MEDIA_CLAMAV_BINARY" "clamscan"
+
+if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v clamscan >/dev/null 2>&1; then
+  echo "Production chat media requires ffmpeg and clamscan on the application host."
+  exit 1
+fi
 
 # 7. Keep the existing PostgreSQL volume intact.
 cat > "$DB_DIR/docker-compose.yml" <<YAML
@@ -391,6 +400,21 @@ server {
 
     if (\$http_x_ajo_forwarded_proto != "https") {
         return 301 https://\$host\$request_uri;
+    }
+
+    location ^~ /api/v1/realtime/ws {
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_set_header X-AJO-Forwarded-Proto \$http_x_ajo_forwarded_proto;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
     }
 
     location /api/ {

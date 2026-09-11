@@ -252,9 +252,38 @@ onMounted(() => {
   padding: 10px 12px;
 }
 
-@media (max-width: 1199px) {
+/* 1. 單欄列表時把已投放廣告保留在列表下方，避免窄桌面留下空白廣告欄。 */
+@media (max-width: 1100px) {
   .listing-side-ads {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .listing-side-ads__slot--long {
+    aspect-ratio: 16 / 9;
+  }
+
+  .listing-side-ads__slot--placeholder {
     display: none;
+  }
+
+  .listing-side-ads__body {
+    padding: 10px;
+  }
+
+  .listing-side-ads__body span {
+    display: none;
+  }
+
+  .listing-side-ads__slot--long .listing-side-ads__body {
+    padding: 10px;
+  }
+}
+
+/* 2. 手機端維持可掃讀的雙欄展示。 */
+@media (max-width: 640px) {
+  .listing-side-ads {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

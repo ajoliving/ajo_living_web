@@ -99,6 +99,11 @@ type identifierLoginRequest struct {
 	Password   string `json:"password" binding:"required"`
 }
 
+// 8.2 refreshTokenRequest defines the token rotation payload.
+type refreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 // 9. NewAuthHandler creates an auth handler instance.
 func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
@@ -389,7 +394,24 @@ func (h *AuthHandler) LoginIdentifier(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 21. Logout handles logout calls.
+// 21. RefreshTokens rotates a valid refresh token without requiring a valid access token.
+func (h *AuthHandler) RefreshTokens(c *gin.Context) {
+	var request refreshTokenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+
+	result, err := h.authService.RefreshTokens(c.Request.Context(), strings.TrimSpace(request.RefreshToken))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
+}
+
+// 22. Logout handles logout calls.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	user := currentUser(c)
 	if user == nil {

@@ -12,7 +12,6 @@ import (
 	"errors"
 	"strings"
 
-	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
 	"ajoliving_web/http_service/internal/errcode"
@@ -21,8 +20,7 @@ import (
 
 // 1. IsmartExternalService handles iSmart external API proxy calls.
 type IsmartExternalService struct {
-	runtime           *Runtime
-	buildingInfoGroup singleflight.Group
+	runtime *Runtime
 }
 
 // 2. IsmartBuildingParams defines one selected building request.

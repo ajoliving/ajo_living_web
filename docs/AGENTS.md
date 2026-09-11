@@ -24,6 +24,11 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 - `docs/archive/`、`.claude/worktrees/`、`dist`、`node_modules`、資料庫備份與 HTML 備份不列入穩定 prompt surface，除非使用者明確要求追溯歷史。
 
 ## 變更日誌
+2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源。
+2026-09-10: 副戶接口暫時改走生產 `ISMART_SUBACCOUNT_API_BASE_URL`，服務個案維持 `clouddev`。
+2026-09-10: 記錄 iSmart 副戶授權走 `ISMART_SUBACCOUNT_API_BASE_URL` 的 `clouddev` 接口；授權前分別核對手機號與電郵 `user_id`，不得回退生產。
+2026-09-12: 記錄 `ajo_ismart` 對 AJO 開發為只讀參考倉庫；生產副戶授權因上游 `IFlatTbl.building` 不存在而失敗，缺陷只寫入 AJO 提示文檔，不改上游程式碼。
+2026-09-10: 為 `docs/integrations/external_app_building_api(1).md` 新增對應繁體中文接口文檔 `external_app_building_api.zh-HK.md`。該對譯以該英文底稿為準；AJO 實際接入仍以 `ajo_ismart` 已暴露路由為真值，現行上游是 `/auth/password/`、`/auth/notification-settings/` 與 `/payments/fees/`，不得把底稿中的 `/auth/change-password/`、`/auth/settings/`、`/payments/types/` 當成已上線接口。
 2026-08-25: 將 `docs/archive/integrations/` 的 iSmart external app API 重複版本收斂為 `external_app_building_api_v3.md` 及其繁體中文版本；中文與英文底稿同步以 `ajo_ismart` 已暴露的 `/auth/password/`、`/auth/notification-settings/` 路由為真值。
 2026-08-20: 記錄 `docs/integrations` 的 iSmart 活躍接口文檔以 `ajo_ismart` 倉庫已暴露路由為真值來源，未暴露 API 的頁面功能不得寫成 AJO 可直接接入能力。
 2026-08-19: 記錄 Good Price 同系列商品人工目錄、公開詳情與 AJO 商品編號切換契約，避免以文字規則錯誤建立公開規格關係。

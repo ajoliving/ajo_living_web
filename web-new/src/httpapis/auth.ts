@@ -5,7 +5,7 @@
  */
 import httpClient from '@/httpapis';
 import type { ApiResponse } from '@/model/api';
-import type { EmailOtpPayload, EmailPasswordPayload, EmailPasswordResetPayload, EmailPasswordResetResult, IdentifierPasswordPayload, IsmartLoginPayload, PhonePasswordPayload, RegisterEmailAccountPayload, RegistrationAvailabilityPayload, RegistrationAvailabilityResult, RequestOtpResult, UsernamePasswordPayload, VerifyOtpResult } from '@/model/auth';
+import type { EmailOtpPayload, EmailPasswordPayload, EmailPasswordResetPayload, EmailPasswordResetResult, IdentifierPasswordPayload, IsmartLoginPayload, PhonePasswordPayload, RefreshTokenResult, RegisterEmailAccountPayload, RegistrationAvailabilityPayload, RegistrationAvailabilityResult, RequestOtpResult, UsernamePasswordPayload, VerifyOtpResult } from '@/model/auth';
 
 interface RequestOtpPayload {
   phone_country_code: string;
@@ -72,6 +72,10 @@ export const loginWithPhone = (payload: PhonePasswordPayload) =>
 export const loginWithIsmart = (payload: IsmartLoginPayload) =>
   httpClient.post<ApiResponse<VerifyOtpResult>>('/auth/ismart/login', payload);
 
-// 13. 登出目前會員
+// 13. 使用 refresh token 輪換目前登入狀態
+export const refreshTokens = (refreshToken: string) =>
+  httpClient.post<ApiResponse<RefreshTokenResult>>('/auth/refresh', { refresh_token: refreshToken });
+
+// 14. 登出目前會員
 export const logout = () =>
   httpClient.post<ApiResponse<{ logged_out: boolean }>>('/auth/logout');

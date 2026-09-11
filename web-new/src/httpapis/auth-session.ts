@@ -43,7 +43,26 @@ export const clearStoredTokens = (): void => {
   window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 };
 
-// 6. 廣播登入失效事件
+// 6. isAccessTokenExpired safely reads an optional JWT exp claim without trusting token contents.
+export const isAccessTokenExpired = (accessToken: string): boolean => {
+  const payload = accessToken.trim().split('.')[1];
+  if (!payload || typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decodedPayload = window.atob(normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '='));
+    const decodedBytes = Uint8Array.from(decodedPayload, (character) => character.charCodeAt(0));
+    const parsedPayload = JSON.parse(new TextDecoder().decode(decodedBytes)) as { exp?: unknown };
+    const expiresAt = Number(parsedPayload.exp);
+    return Number.isFinite(expiresAt) && expiresAt > 0 && Date.now() >= expiresAt * 1000;
+  } catch {
+    return false;
+  }
+};
+
+// 7. 廣播登入失效事件
 export const emitAuthSessionExpired = (): void => {
   if (typeof window === 'undefined') {
     return;

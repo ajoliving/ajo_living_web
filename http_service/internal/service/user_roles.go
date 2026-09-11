@@ -1,7 +1,7 @@
 /*
  * Shared user role helpers.
  * 1. Keep member type and staff role normalization consistent.
- * 2. Expose small helpers for auth, profile, and staff services.
+ * 2. Resolve compact staff or member access snapshots from is_staff.
  */
 package service
 
@@ -31,4 +31,28 @@ func resolveUserRole(memberType string, isStaff bool) string {
 // 5. isValidMemberType reports whether the input is the ordinary user type.
 func isValidMemberType(memberType string) bool {
 	return strings.TrimSpace(memberType) == MemberTypeUser
+}
+
+// 1. AccessSnapshot defines resolved access data for one user.
+type AccessSnapshot struct {
+	RoleCodes   []string
+	Permissions []string
+	IsStaff     bool
+}
+
+// 2. buildAccessSnapshot returns the compact user or staff access view.
+func buildAccessSnapshot(isStaff bool) *AccessSnapshot {
+	if isStaff {
+		return &AccessSnapshot{
+			RoleCodes:   []string{RoleStaff},
+			Permissions: []string{},
+			IsStaff:     true,
+		}
+	}
+
+	return &AccessSnapshot{
+		RoleCodes:   []string{MemberTypeUser},
+		Permissions: []string{},
+		IsStaff:     false,
+	}
 }

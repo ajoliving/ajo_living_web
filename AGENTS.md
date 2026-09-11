@@ -45,6 +45,8 @@
 - 舊 `iSmart` 物業管理功能可參考 `https://ismart.legend-in.com.hk/memberreg/` 與 `https://ismart.legend-in.com.hk/blg_notice/`，後續遷移時以 AJO 的身份、物業、大廈、通知與權限模型重新收斂。
 - AJO Web 與 AJO 後端目前接入的 iSmart 會員、大廈、門禁、服務個案、支付與副戶能力，預設以 `/Users/yangliu/Documents/Code/hk/ajo_ismart` 倉庫已暴露的接口為上游真值；接口可用性、請求欄位、回應欄位與讀寫邊界，必須先核對該倉庫當前分支的實際路由與 view，再決定 AJO 是否代理或展示。
 - 若 `ajo_ismart` 倉庫只有頁面、表單或後台流程而未暴露對應 API，AJO 不得把該能力當成既有可接入接口；未在上游暴露的欄位或功能，不得自行補寫為 iSmart 已支持。
+- `/Users/yangliu/Documents/Code/hk/ajo_ismart` 對 AJO 開發為只讀參考倉庫；除非使用者明確要求修改該上游倉庫，不得改其程式碼、設定或部署。上游缺陷只記錄在 AJO 提示文檔，等待 iSmart 自行修復並發布。
+- 現行生產 iSmart 副戶 list/grant/revoke 會因單位模型沒有 `building` 屬性而回傳 `'IFlatTbl' object has no attribute 'building'`；正確關聯是 `IFlatTbl.building_id`。AJO 只能原樣轉發該錯誤，不得在 AJO 內補寫上游欄位或繞過該接口。
 - 舊系統只能作為業務流程、欄位與交互參考；除非明確要求，不得讓 AJO 前端直接依賴舊系統前端，不得讓新後端繞過 AJO 既有分層直接拼接舊系統資料。
 - 若舊系統仍保留獨立後台，舊後台可繼續作為該業務的主要寫入端與營運入口；AJO 優先作為統一會員入口、統一查詢入口與正式展示入口。
 - AJO 接入舊業務資料時，優先由 AJO 後端提供受控 API 給前端讀取；前端不得直接連接舊資料庫、舊服務內網地址或繞過 AJO 權限模型。
@@ -73,6 +75,13 @@
 - 站內信與聊天應視為平台級通訊能力，不應長期綁死在二手 marketplace 聊天語義下。
 - 現有一對一聊天與大廈群聊共用 `Chat`、`ChatParticipant`、`Message` 會話資料模型；透過 `chat_type`、`biz_module` 與 `building_id` 區分業務上下文。
 - 大廈群聊按每棟大廈唯一建立一組；有效綁定或授權住戶首次進入自動加入，成員可退出並在重新進入時恢復加入，未讀、已讀與純文字消息由同一通信中心管理。
+- 大廈群聊的 `ChatParticipant` 只保存群內狀態，不可取代目前大廈可見範圍；非 Staff 每次讀取、已讀、離開或發送群消息時，服務端均須重新校驗有效綁定或授權，綁定失效後不得因舊成員記錄繼續存取。
+- 即時聊天採 WebSocket 傳送小型 JSON 事件，PostgreSQL 保存消息真相，Redis 只作跨實例廣播，斷線後按消息游標補回；圖片、文件與視頻一律直傳 OSS，不經 WebSocket 傳二進制。
+- 大檔聊天媒體使用 OSS multipart 續傳；upload token 綁定用戶、物件、MIME、大小與 upload session，未完成分片需可取消及定期清理。
+- 聊天媒體只有在 processing 完成且 scan 通過時返回下載 URL；命令模式必須以短時簽名 URL 將 OSS 原始檔下載至受控暫存目錄，ffmpeg 產物回寫並驗證 OSS 後才可用。生產與預發布環境缺少真實 ffmpeg 或 ClamAV 時必須拒絕啟動，不得把未處理或未掃描物件暴露給客戶端。
+- 多個媒體 worker 必須以 `media_assets` 的資料庫短租約原子聲明附件任務，租約未過期不得重複掃描或轉碼；程序中斷後只可由租約過期接管。
+- 聊天媒體處理完成、拒絕或掃描狀態變更時，必須與每條受影響消息的獨立 realtime outbox 事件同一交易寫入 PostgreSQL；不得直接發布 Redis 後遺失在線附件狀態。
+- `/api/v1/health` 只代表程序存活，`/api/v1/health/ready` 用於資料庫 readiness；監控與容量驗收以 realtime-chat production acceptance 文檔為準。
 - 大廈群聊管理只限 AJO Staff 或該大廈有效授權管理者；禁言、剔除、群內封禁、解除處分與加入申請審核必須在服務端按大廈範圍校驗，普通首位加入者不得因建立群組取得管理權。
 - 群聊申請使用申請確認流程，公告、通知與聊天仍分別代表單向發布、可追蹤提醒與互動會話。
 - 通告、公告與站內信需要區分：公告偏單向發布，站內信偏可追蹤消息，聊天偏會話互動，不得在 UI 和資料模型上混為一談。
@@ -194,8 +203,23 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 - 生產快照導入獨立測試資料庫後，保留的樓盤聯絡密文必須由生產密鑰受控讀取並以測試 `ENCRYPTION_KEY` 原子重加密；測試服務不得長期共用生產密鑰，也不得因登入會員觸發聯絡資料解密而令公開樓盤詳情返回 `500`。
 - Good Price 同系列商品只可由其人工商品目錄按 `product_code` 明確指定；公開詳情的 `sameSeries` 只返回最新資料日仍存在的同系列商品及其配方、包裝規格。AJO 只受控轉發並補商品圖片，前端按實際商品編號切換各自的價格、走勢、收藏及到價提示，不得用品牌、分類或名稱規則自動建立公開規格關係。
 - `.claude/worktrees/`、`dist`、`node_modules`、`.uploads`、資料庫備份與 HTML 備份不是穩定上下文入口，除非使用者明確要求追溯。
+- 後端不再保留示範樓盤、示範廣告、獨立首頁種子或草稿扣費更正命令；空庫預設首頁與登入圖仍由服務啟動在內容為空時補入。既有草稿更正退款仍計入發布抵扣。
+- AJO 不以獨立 RBAC 角色權限表做運行時鑒權；管理中心只認 `users.is_staff`。大廈授權、代理子帳戶與 iSmart 單位權限維持各自真實權限模型。
+- 二手家具不提供站內訂單或交收流程；訂單語義只保留 POS 繳費與錢包充值。
 
 ### 變更日誌
+2026-09-12: 固定 `ajo_ismart` 對 AJO 開發為只讀參考；生產副戶授權因上游 `IFlatTbl.building` 不存在而失敗，AJO 只轉發錯誤、不改上游倉庫。
+2026-09-12: AJO 註冊同步 iSmart 時改傳送完整國際電話，避免只交本地號碼被上游預設成其他區號。
+2026-09-12: 大廈副戶授權以 iSmart check-contact 解析目標用戶時，電話兼容提交值、本地號碼及常見區號舊格式，電郵與電話仍須對上同一個 iSmart user_id。
+2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源；POS 目錄快取維持不變。
+2026-09-11: 清理後端 `internal/handler` 過碎檔案並移除該層單元測試；各業務 HTTP 入口維持獨立。
+2026-09-11: 清理後端 `internal/service` 過碎檔案並移除該層單元測試；業務行為仍由現有模組檔承載。
+2026-09-11: 移除未生效的 RBAC 角色權限表與二手家具站內訂單/交收；管理中心只認 `users.is_staff`，訂單語義只保留 POS 繳費與錢包充值。
+2026-09-11: 移除樓盤草稿扣費更正命令入口；既有更正退款仍計入草稿抵扣與錢包展示。
+2026-09-11: 移除示範樓盤、示範廣告與獨立首頁種子命令；空庫預設首頁與登入圖改只由服務啟動補入。
+2026-09-10: 副戶列表、授權與撤銷暫時改走生產 iSmart；授權前仍分別核對手機號與電郵 `user_id`。服務個案維持 `clouddev`。
+2026-09-10: 固定 iSmart 副戶列表、授權與撤銷暫時只使用獨立 `clouddev` 測試地址；授權前分別以手機號與電郵呼叫 `/auth/check-contact/`，兩份 `user_id` 一致才作為 `target_user_id`，失敗時不得回退生產接口。
+2026-09-10: 新增 iSmart 整合 API 英文底稿 `docs/integrations/external_app_building_api(1).md` 的繁體中文對譯 `docs/integrations/external_app_building_api.zh-HK.md`。AJO 接入仍以 `ajo_ismart` 已暴露路由為真值；現行密碼與通告電郵寫入端仍是 `/auth/password/` 與 `/auth/notification-settings/`，付款類型仍是 `/payments/fees/`。
 2026-08-20: 固定 AJO 的 iSmart 會員、大廈、門禁、支付、服務個案與副戶能力，以 `ajo_ismart` 倉庫已暴露接口為上游真值；只有頁面或後台流程而未暴露 API 的能力，不得視為 AJO 可直接接入。
 2026-08-19: 固定 Good Price 同系列商品只由人工 `product_code` 目錄建立，公開詳情返回實際可用的配方與包裝規格，AJO 以獨立商品編號切換價格資料。
 2026-08-14: 記錄本機 Feishu 配對私訊進入工作區限定 Codex CLI 的運行邊界；該會話獨立於桌面 Codex task，且不得在倉庫保存機器人憑據。由於 Codex CLI resume 目前上游拒絕，遠端每則訊息改為獨立 CLI 執行。
@@ -222,5 +246,13 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 2026-08-07: 固定 Good Price 人工審核的商品名稱、品牌及下架結果須在每日 CSV 導入前套用；超市圖片由 AJO 後端以固定 `ajo_living/supermarket/products/<PRODUCT_CODE>.jpg` key 登記至 OSS 與 `media_assets`，測試環境不得寫入生產 OSS。
 2026-08-12: 測試環境改為預設沿用生產外部服務配置，只保留本地資料與身份密鑰隔離；只有產品明確指定的接口才另行隔離。
 2026-08-25: 會員中心偏好設定接入 iSmart `/auth/password/` 與 `/auth/notification-settings/`，由 AJO 登入態代理修改 iSmart 密碼及大廈通告電郵偏好；上游兩個寫入端點受 `EXTERNAL_APP_ALLOWED_IPS` 保護。
+2026-08-26: 固定大廈群聊的現時物業可見範圍校驗：舊 `ChatParticipant` 成員記錄不得在綁定或授權失效後繼續授予讀取、已讀、離開或發送群消息權限。
+2026-08-26: 固定大廈即時聊天採 WebSocket、PostgreSQL、Redis 廣播、outbox 補償與 OSS 直傳附件的分階段架構；WebSocket 不承載文件二進制，斷線按消息游標補回。
+2026-08-27: 固定聊天附件沿用 OSS 預簽名流程，以 `chat_attachment` 目錄和 `message_attachments` 關聯表支援圖片、視頻、PDF、純文字文件，單次消息最多 5 個附件。
+2026-08-27: 固定聊天大檔使用 OSS multipart 續傳、媒體處理與掃描採 fail-closed 狀態門控，並提供獨立資料庫 readiness 探針。
+2026-08-27: 即時聊天按生產基線落實消息 `client_message_id` 幂等鍵與 PostgreSQL outbox；Redis 發布失敗由同進程 worker 退避重試，後續擴容不更換聊天核心模型。
+2026-08-27: 固定即時聊天 Redis 啟動暫不可用時保留可重連 broker；媒體命令改由 worker 下載 OSS 原始檔至受控暫存目錄、掃描及轉碼，再回寫並驗證衍生物件，生產與預發布同時要求真實 ffmpeg 與 ClamAV。
+2026-08-27: 固定多實例媒體 worker 使用 `media_assets` 短租約原子聲明任務，避免重複處理，程序中斷後由租約過期接管。
+2026-08-27: 固定聊天附件狀態變更以獨立 realtime outbox 事件和媒體狀態同一交易提交，Redis 故障恢復後仍可更新在線會話。
 
 [PROTOCOL]: When changing repository-level prompt memory, update this section, check child `AGENTS.md` files, and add a dated line to `docs/PROMPT_INDEX.md` when prompt surfaces changed.

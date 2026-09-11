@@ -626,6 +626,7 @@ ISMART_EXTERNAL_APP_BASE_URL=https://ismart.ajoliving.com
 ISMART_EXTERNAL_APP_API_BASE_URL=https://ismart.ajoliving.com/api/v1/external
 ISMART_INTEGRATION_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
 ISMART_SERVICE_CASE_API_BASE_URL=https://clouddev.ismart.ajoliving.com/api/v1/integration
+ISMART_SUBACCOUNT_API_BASE_URL=https://ismart.ajoliving.com/api/v1/integration
 REDIS_ENABLED=true
 REDIS_ADDR=127.0.0.1:6382
 REDIS_PASSWORD=
@@ -634,7 +635,7 @@ ISMART_BUILDING_CACHE_TTL=5m
 POS_DIRECTORY_CACHE_TTL=5m
 ```
 
-`/api/v1/me/ismart/building-comments` 與 `/api/v1/me/ismart/service-cases...` 暫時只使用 `ISMART_SERVICE_CASE_API_BASE_URL` 測試環境，失敗時不得回退生產接口。其餘 `/api/v1/me/ismart/...` 會員態接口繼續使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，已記錄的讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
+`/api/v1/me/ismart/building-comments` 與 `/api/v1/me/ismart/service-cases...` 暫時只使用 `ISMART_SERVICE_CASE_API_BASE_URL` 測試環境，失敗時不得回退生產接口。`/api/v1/me/ismart/subaccounts...` 暫時使用 `ISMART_SUBACCOUNT_API_BASE_URL`，目前指向生產 iSmart。其餘 `/api/v1/me/ismart/...` 會員態接口繼續使用 `ISMART_INTEGRATION_API_BASE_URL`；當新路徑缺失時，已記錄的讀取類接口可回退到舊路徑。不要把 iSmart 原始無認證寫入口直接暴露給前端。
 
 POS 大廈與單位目錄只快取共用唯讀資料，分別使用 `ajo:pos:buildings:v1` 與 `ajo:pos:building-units:v1:<building_id>`；會員權限、綁定狀態、目前物業及 relay token 不得寫入 Redis。會員接口必須先即時校驗本地可見範圍，再讀取共用目錄並過濾；Redis 故障時回源 POS。
 

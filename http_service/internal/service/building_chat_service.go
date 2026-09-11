@@ -62,13 +62,15 @@ type BuildingChatMember struct {
 
 // 3. BuildingChatJoinRequest defines an approval queue payload.
 type BuildingChatJoinRequest struct {
-	RequestID  string  `json:"request_id"`
-	ChatID     string  `json:"chat_id"`
-	UserID     string  `json:"user_id"`
-	Status     string  `json:"status"`
-	Reason     string  `json:"reason,omitempty"`
-	CreatedAt  string  `json:"created_at"`
-	ReviewedAt *string `json:"reviewed_at,omitempty"`
+	RequestID    string  `json:"request_id"`
+	ChatID       string  `json:"chat_id"`
+	UserID       string  `json:"user_id"`
+	UserPublicID string  `json:"user_public_id"`
+	DisplayName  string  `json:"display_name"`
+	Status       string  `json:"status"`
+	Reason       string  `json:"reason,omitempty"`
+	CreatedAt    string  `json:"created_at"`
+	ReviewedAt   *string `json:"reviewed_at,omitempty"`
 }
 
 // 4. ListBuildingChats returns one group for every building visible to a member.
@@ -121,6 +123,16 @@ func (s *ChatService) GetBuildingChat(ctx context.Context, userID int64, chatPub
 
 // 7. ListBuildingChatMessages returns group messages.
 func (s *ChatService) ListBuildingChatMessages(ctx context.Context, userID int64, chatPublicID string, page int, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	return s.listBuildingChatMessages(ctx, userID, chatPublicID, page, pageSize, false)
+}
+
+// 7.1 ListRecentBuildingChatMessages returns the most recent group message page in chronological order.
+func (s *ChatService) ListRecentBuildingChatMessages(ctx context.Context, userID int64, chatPublicID string, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	return s.listBuildingChatMessages(ctx, userID, chatPublicID, 1, pageSize, true)
+}
+
+// 7.2 listBuildingChatMessages keeps legacy pagination while supporting the current chat tail.
+func (s *ChatService) listBuildingChatMessages(ctx context.Context, userID int64, chatPublicID string, page int, pageSize int, newest bool) ([]MessageResponse, *model.Pagination, error) {
 	chat, _, err := s.loadAuthorizedBuildingChat(ctx, userID, chatPublicID, true)
 	if err != nil {
 		return nil, nil, err
@@ -132,20 +144,78 @@ func (s *ChatService) ListBuildingChatMessages(ctx context.Context, userID int64
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to count messages")
 	}
 	var messages []model.Message
-	if err := query.Order("created_at asc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&messages).Error; err != nil {
+	messageQuery := query
+	if newest {
+		messageQuery = query.Order("created_at desc, id desc").Limit(pageSize)
+	} else {
+		messageQuery = query.Order("created_at asc, id asc").Offset((page - 1) * pageSize).Limit(pageSize)
+	}
+	if err := messageQuery.Find(&messages).Error; err != nil {
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load messages")
 	}
-	items := make([]MessageResponse, 0, len(messages))
-	for _, message := range messages {
-		items = append(items, MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(message.SenderUserID), Content: message.ContentText, MessageType: message.MessageType, Status: message.MessageStatus, CreatedAt: message.CreatedAt.UTC().Format(time.RFC3339)})
+	if newest {
+		reverseMessages(messages)
+	}
+	items, err := s.buildMessageResponses(ctx, messages)
+	if err != nil {
+		return nil, nil, err
 	}
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
+// 7.3 ListBuildingChatMessagesAfter returns group messages created after one known message.
+func (s *ChatService) ListBuildingChatMessagesAfter(ctx context.Context, userID int64, chatPublicID string, afterMessageID string, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	chat, _, err := s.loadAuthorizedBuildingChat(ctx, userID, chatPublicID, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, pageSize = normalizePagination(1, pageSize)
+	var anchor model.Message
+	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ? AND chat_id = ?", strings.TrimSpace(afterMessageID), chat.ID).First(&anchor).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, &model.Pagination{Page: 1, PageSize: pageSize, Total: 0}, nil
+		}
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load message cursor")
+	}
+	query := s.runtime.DB.WithContext(ctx).Model(&model.Message{}).Where("chat_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))", chat.ID, anchor.CreatedAt, anchor.CreatedAt, anchor.ID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to count messages")
+	}
+	var messages []model.Message
+	if err := query.Order("created_at asc, id asc").Limit(pageSize).Find(&messages).Error; err != nil {
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load messages")
+	}
+	items, err := s.buildMessageResponses(ctx, messages)
+	if err != nil {
+		return nil, nil, err
+	}
+	return items, &model.Pagination{Page: 1, PageSize: pageSize, Total: total}, nil
+}
+
 // 8. SendBuildingChatMessage persists a text message after group moderation checks.
 func (s *ChatService) SendBuildingChatMessage(ctx context.Context, userID int64, chatPublicID string, content string) (*MessageResponse, error) {
+	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, nil, "")
+}
+
+// 8.1 SendBuildingChatMessageWithAttachments sends a group message with optional uploads.
+func (s *ChatService) SendBuildingChatMessageWithAttachments(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string) (*MessageResponse, error) {
+	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, attachmentIDs, "")
+}
+
+// 8.2 SendBuildingChatMessageWithAttachmentsAndClientID adds retry idempotency.
+func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string, clientMessageID string) (*MessageResponse, error) {
 	content = strings.TrimSpace(content)
-	if content == "" || len([]rune(content)) > messageContentMaxRunes {
+	var attachmentErr error
+	attachmentIDs, attachmentErr = normalizeAttachmentIDs(attachmentIDs)
+	if attachmentErr != nil {
+		return nil, attachmentErr
+	}
+	clientMessageID = strings.TrimSpace(clientMessageID)
+	if len([]rune(clientMessageID)) > 80 {
+		return nil, errcode.New(errcode.CodeValidationError, "client_message_id is too long")
+	}
+	if (content == "" && len(attachmentIDs) == 0) || len([]rune(content)) > messageContentMaxRunes {
 		return nil, errcode.New(errcode.CodeValidationError, "message content is required and must be at most 1000 characters")
 	}
 	chat, participant, err := s.loadAuthorizedBuildingChat(ctx, userID, chatPublicID, true)
@@ -159,12 +229,61 @@ func (s *ChatService) SendBuildingChatMessage(ctx context.Context, userID int64,
 	if participant != nil && ((participant.MutedUntil != nil && now.Before(*participant.MutedUntil)) || (participant.BannedUntil != nil && now.Before(*participant.BannedUntil))) {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "member cannot send messages in this group")
 	}
-	message := model.Message{PublicID: utils.NewPublicID(), ChatID: chat.ID, SenderUserID: userID, MessageType: messageTypeText, ContentText: content, MessageStatus: "sent", CreatedAt: now}
+	if clientMessageID != "" {
+		var existing model.Message
+		if err := s.runtime.DB.WithContext(ctx).Where("chat_id = ? AND sender_user_id = ? AND client_message_id = ?", chat.ID, userID, clientMessageID).First(&existing).Error; err == nil {
+			items, buildErr := s.buildMessageResponses(ctx, []model.Message{existing})
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			return &items[0], nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load message retry")
+		}
+	}
+	assets, err := s.loadChatAttachmentAssets(ctx, userID, attachmentIDs)
+	if err != nil {
+		return nil, err
+	}
+	messageType := messageTypeText
+	if len(assets) > 0 && content == "" {
+		messageType = messageTypeAttachment
+	} else if len(assets) > 0 {
+		messageType = messageTypeMixed
+	}
+	preview := content
+	if preview == "" {
+		preview = "[Attachment]"
+	}
+	message := model.Message{PublicID: utils.NewPublicID(), ChatID: chat.ID, SenderUserID: userID, ClientMessageID: optionalString(clientMessageID), MessageType: messageType, ContentText: content, MessageStatus: "sent", CreatedAt: now}
+	eventPayload, payloadErr := buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+	if payloadErr != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare realtime event")
+	}
+	outboxEnabled := s.runtime.DB.Migrator().HasTable(&model.RealtimeOutbox{})
 	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		assets, err = s.loadChatAttachmentAssetsWithDB(ctx, tx, userID, attachmentIDs, true)
+		if err != nil {
+			return err
+		}
+		eventPayload, payloadErr = buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+		if payloadErr != nil {
+			return payloadErr
+		}
 		if err := tx.Create(&message).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.Chat{}).Where("id = ?", chat.ID).Updates(map[string]any{"last_message_preview": content, "last_message_at": now, "updated_at": now}).Error; err != nil {
+		for index, asset := range assets {
+			if err := tx.Create(&model.MessageAttachment{MessageID: message.ID, MediaAssetID: asset.ID, SortOrder: index}).Error; err != nil {
+				return err
+			}
+		}
+		if outboxEnabled {
+			if err := tx.Create(&model.RealtimeOutbox{EventType: "message", AggregateID: message.PublicID, Payload: eventPayload, Status: "pending", NextAttemptAt: now, CreatedAt: now}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&model.Chat{}).Where("id = ?", chat.ID).Updates(map[string]any{"last_message_preview": preview, "last_message_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&model.ChatParticipant{}).Where("chat_id = ? AND user_id <> ? AND membership_status = ?", chat.ID, userID, chatMemberActive).Update("unread_count", gorm.Expr("unread_count + ?", 1)).Error; err != nil {
@@ -175,7 +294,7 @@ func (s *ChatService) SendBuildingChatMessage(ctx context.Context, userID int64,
 			return err
 		}
 		for _, recipient := range recipients {
-			if err := NewNotificationService(s.runtime).CreateNotification(ctx, tx, CreateNotificationParams{UserID: recipient.UserID, Category: "chat_message", Title: "大廈群組新訊息", Body: content, RelatedType: "chat", RelatedPublicID: chat.PublicID}); err != nil {
+			if err := NewNotificationService(s.runtime).CreateNotification(ctx, tx, CreateNotificationParams{UserID: recipient.UserID, Category: "chat_message", Title: "大廈群組新訊息", Body: preview, RelatedType: "chat", RelatedPublicID: chat.PublicID}); err != nil {
 				return err
 			}
 		}
@@ -186,7 +305,11 @@ func (s *ChatService) SendBuildingChatMessage(ctx context.Context, userID int64,
 	}); err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to send message")
 	}
-	return &MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(userID), Content: content, MessageType: messageTypeText, Status: message.MessageStatus, CreatedAt: now.UTC().Format(time.RFC3339)}, nil
+	items, err := s.buildMessageResponses(ctx, []model.Message{message})
+	if err != nil {
+		return nil, err
+	}
+	return &items[0], nil
 }
 
 // 9. LeaveBuildingChat marks a member as having left the group.
@@ -222,7 +345,7 @@ func (s *ChatService) RequestBuildingChatJoin(ctx context.Context, userID int64,
 	if err := s.runtime.DB.WithContext(ctx).Where("chat_id = ? AND user_id = ? AND status = ?", chat.ID, userID, chatJoinRequestPending).FirstOrCreate(&request).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to create join request")
 	}
-	return mapJoinRequest(&request), nil
+	return s.mapJoinRequest(ctx, &request), nil
 }
 
 // 11. ReviewBuildingChatJoin approves or rejects a pending member request.
@@ -267,7 +390,7 @@ func (s *ChatService) ReviewBuildingChatJoin(ctx context.Context, operatorID int
 		return nil, errcode.New(errcode.CodeInternalError, "failed to review join request")
 	}
 	request.Status, request.ReviewedBy, request.ReviewedAt = status, &operatorID, &now
-	return mapJoinRequest(&request), nil
+	return s.mapJoinRequest(ctx, &request), nil
 }
 
 // 12. ListBuildingChatMembers returns active and moderated members in one group.
@@ -303,7 +426,7 @@ func (s *ChatService) ListBuildingChatJoinRequests(ctx context.Context, operator
 	}
 	result := make([]BuildingChatJoinRequest, 0, len(rows))
 	for _, row := range rows {
-		result = append(result, *mapJoinRequest(&row))
+		result = append(result, *s.mapJoinRequest(ctx, &row))
 	}
 	return result, nil
 }
@@ -438,6 +561,11 @@ func (s *ChatService) loadAuthorizedBuildingChat(ctx context.Context, userID int
 	chat, _, err := s.loadBuildingChat(ctx, chatPublicID)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !s.isStaff(ctx, userID) {
+		if err := s.requireBuildingAccess(ctx, userID, chat.BuildingID); err != nil {
+			return nil, nil, err
+		}
 	}
 	var participant model.ChatParticipant
 	participantErr := s.runtime.DB.WithContext(ctx).Where("chat_id = ? AND user_id = ?", chat.ID, userID).First(&participant).Error
@@ -598,9 +726,10 @@ func (s *ChatService) loadUserPreview(ctx context.Context, userID int64) ChatPee
 	return ChatPeerSummary{UserID: fmtInt64(userID), PublicID: user.PublicID, DisplayName: name}
 }
 
-// 25. mapJoinRequest maps a persisted request to a stable response.
-func mapJoinRequest(value *model.ChatJoinRequest) *BuildingChatJoinRequest {
-	result := &BuildingChatJoinRequest{RequestID: value.PublicID, ChatID: fmtInt64(value.ChatID), UserID: fmtInt64(value.UserID), Status: value.Status, Reason: value.Reason, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339)}
+// 25. mapJoinRequest maps a persisted request to a stable management response.
+func (s *ChatService) mapJoinRequest(ctx context.Context, value *model.ChatJoinRequest) *BuildingChatJoinRequest {
+	preview := s.loadUserPreview(ctx, value.UserID)
+	result := &BuildingChatJoinRequest{RequestID: value.PublicID, ChatID: fmtInt64(value.ChatID), UserID: fmtInt64(value.UserID), UserPublicID: preview.PublicID, DisplayName: preview.DisplayName, Status: value.Status, Reason: value.Reason, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339)}
 	if value.ReviewedAt != nil {
 		formatted := value.ReviewedAt.UTC().Format(time.RFC3339)
 		result.ReviewedAt = &formatted
@@ -650,12 +779,12 @@ func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]Build
 			Count(&count)
 
 		summary := BuildingChatSummary{
-			ChatID:       chat.PublicID,
-			BuildingID:   chat.BuildingID,
-			ChatType:     chat.ChatType,
-			MemberCount:  count,
-			LastPreview:  chat.LastMessagePreview,
-			UnreadCount:  0,
+			ChatID:      chat.PublicID,
+			BuildingID:  chat.BuildingID,
+			ChatType:    chat.ChatType,
+			MemberCount: count,
+			LastPreview: chat.LastMessagePreview,
+			UnreadCount: 0,
 		}
 		if chat.LastMessageAt != nil {
 			value := chat.LastMessageAt.UTC().Format(time.RFC3339)

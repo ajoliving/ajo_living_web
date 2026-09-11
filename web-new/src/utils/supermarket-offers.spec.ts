@@ -1,12 +1,17 @@
 /*
  * 超市優惠顯示工具測試。
  * 1. 確認已記錄門店不會因部分價格資料缺失而消失。
+ * 2. 確認第二低價優勢只標記唯一最低價門店。
  */
 import { describe, expect, it } from 'vitest';
 
-import type { SupermarketProduct } from '@/model/supermarket-offers';
+import type { SupermarketProduct, SupermarketStorePrice } from '@/model/supermarket-offers';
 
-import { supermarketStorePrices } from './supermarket-offers';
+import {
+  supermarketSecondPriceAdvantageRate,
+  supermarketSecondPriceAdvantageStore,
+  supermarketStorePrices,
+} from './supermarket-offers';
 
 // 1. 補齊已有門店的後備價格列。
 describe('supermarketStorePrices', () => {
@@ -45,5 +50,37 @@ describe('supermarketStorePrices', () => {
     };
 
     expect(supermarketStorePrices(product).map((item) => item.store)).toEqual(['WELLCOME', 'PARKNSHOP']);
+  });
+});
+
+// 2. 驗證第二低價優勢標籤對應的唯一最低價門店。
+describe('supermarketSecondPriceAdvantageStore', () => {
+  const prices: SupermarketStorePrice[] = [
+    {
+      store: 'LUNGFUNG', listPrice: 178, effectiveUnitPrice: 178, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
+    },
+    {
+      store: 'SASA', listPrice: 188, effectiveUnitPrice: 188, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
+    },
+    {
+      store: 'WATSONS', listPrice: 449.25, effectiveUnitPrice: 449.25, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
+    },
+    {
+      store: 'MANNINGS', listPrice: 599, effectiveUnitPrice: 599, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
+    },
+  ];
+
+  it('returns only the lowest-priced store and calculates its saving against the second-lowest price', () => {
+    expect(supermarketSecondPriceAdvantageStore(prices)?.store).toBe('LUNGFUNG');
+    expect(supermarketSecondPriceAdvantageRate(prices)).toBeCloseTo((10 / 188) * 100, 8);
+  });
+
+  it('does not return a store when the lowest price is tied', () => {
+    expect(supermarketSecondPriceAdvantageStore([
+      ...prices,
+      {
+        store: 'AEON', listPrice: 178, effectiveUnitPrice: 178, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
+      },
+    ])).toBeNull();
   });
 });

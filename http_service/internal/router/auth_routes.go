@@ -60,5 +60,8 @@ func registerAuthRoutes(
 	api.POST("/auth/ismart/login", limiter.Limit(20, 10*time.Minute, func(c *gin.Context) string {
 		return "ismart_login:" + c.ClientIP()
 	}), authHandler.LoginIsmart)
+	api.POST("/auth/refresh", limiter.Limit(30, 10*time.Minute, func(c *gin.Context) string {
+		return "auth_refresh:" + c.ClientIP()
+	}), authHandler.RefreshTokens)
 	api.POST("/auth/logout", requireAuth, authHandler.Logout)
 }

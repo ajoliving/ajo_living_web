@@ -2,25 +2,24 @@
  * iCCTV 視像監控服務。
  * 1. 依 AJO 登入使用者解析可見大廈。
  * 2. 代理 iCCTV public V2 授權接口取得 Orange Pi、鏡頭 URL 與頻道說明。
- * 3. 將舊系統回應轉為 AJO 視像監控穩定資料結構。
+ * 3. 將 Orange Pi FRP 地址改寫為 AJO 可嵌入的 HTTPS 入口。
  */
 package service
 
 import (
+	"ajoliving_web/http_service/internal/errcode"
+	"ajoliving_web/http_service/internal/model"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
-
-	"ajoliving_web/http_service/internal/errcode"
-	"ajoliving_web/http_service/internal/model"
 )
 
 // 1. SecurityICCTVService handles iCCTV camera lookup through AJO access checks.
@@ -376,4 +375,54 @@ func icctvHTTPErrorCode(statusCode int) string {
 	default:
 		return errcode.CodeInternalError
 	}
+}
+
+// 1. icctvProxyURL rewrites FRP camera URLs to the public HTTPS proxy.
+func (s *SecurityICCTVService) icctvProxyURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return rawURL
+	}
+	sanitizedURL := icctvURLWithoutFragment(parsed)
+	proxyBaseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.ICCTVStreamProxyBaseURL), "/")
+	if proxyBaseURL == "" {
+		return sanitizedURL
+	}
+	parsedPort := parsed.Port()
+	if parsedPort == "" || !icctvStreamPortAllowed(parsedPort) {
+		return sanitizedURL
+	}
+
+	proxyBase, err := url.Parse(proxyBaseURL)
+	if err != nil || proxyBase.Scheme == "" || proxyBase.Host == "" {
+		return sanitizedURL
+	}
+	proxyPath := strings.TrimRight(proxyBase.EscapedPath(), "/")
+	cameraPath := strings.TrimLeft(parsed.EscapedPath(), "/")
+	if cameraPath == "" {
+		return sanitizedURL
+	}
+
+	proxyURL := proxyBase.Scheme + "://" + proxyBase.Host + proxyPath + "/opi/" + parsedPort + "/" + cameraPath
+	if parsed.RawQuery != "" {
+		proxyURL += "?" + parsed.RawQuery
+	}
+	return proxyURL
+}
+
+// 2. icctvStreamPortAllowed checks the configured FRP stream port range.
+func icctvStreamPortAllowed(portValue string) bool {
+	port, err := strconv.Atoi(portValue)
+	if err != nil {
+		return false
+	}
+
+	return port >= 29000 && port <= 29999
+}
+
+// 3. icctvURLWithoutFragment removes browser-only fragments without dropping playback authorization.
+func icctvURLWithoutFragment(parsed *url.URL) string {
+	value := *parsed
+	value.Fragment = ""
+	return value.String()
 }

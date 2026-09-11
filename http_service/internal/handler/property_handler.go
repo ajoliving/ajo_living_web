@@ -1,18 +1,16 @@
 /*
  * Property channel HTTP handlers.
  * 1. Bind property sale and serviced apartment requests.
- * 2. Delegate listing, lifecycle, and contact access flows to the service layer.
+ * 2. Delegate listing, lifecycle, contact access, and content translation to the service layer.
  */
 package handler
 
 import (
-	"strconv"
-	"strings"
-
-	"github.com/gin-gonic/gin"
-
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/service"
+	"github.com/gin-gonic/gin"
+	"strconv"
+	"strings"
 )
 
 // 1. PropertyHandler handles property sale and serviced apartment endpoints.
@@ -485,4 +483,38 @@ func (h *PropertyHandler) DeactivateServicedApartment(c *gin.Context) {
 // 33. ContactAccessServicedApartment grants serviced apartment contact access.
 func (h *PropertyHandler) ContactAccessServicedApartment(c *gin.Context) {
 	h.contactAccess(c, service.PropertyChannelServiced)
+}
+
+// 1. propertyContentTranslationRequest defines property translation input.
+type propertyContentTranslationRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// 2. TranslatePropertyContent translates property title and description to English.
+func (h *PropertyHandler) TranslatePropertyContent(c *gin.Context) {
+	if currentUser(c) == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	var request propertyContentTranslationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid property translation request"))
+		return
+	}
+
+	result, err := h.propertyService.TranslatePropertyContent(
+		c.Request.Context(),
+		service.PropertyContentTranslationInput{
+			Title:       strings.TrimSpace(request.Title),
+			Description: strings.TrimSpace(request.Description),
+		},
+	)
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+
+	errcode.Success(c, result)
 }

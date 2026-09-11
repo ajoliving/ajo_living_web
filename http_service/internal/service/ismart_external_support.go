@@ -45,6 +45,11 @@ func (s *IsmartExternalService) getServiceCaseIntegration(ctx context.Context, p
 	return s.requestJSON(ctx, http.MethodGet, s.serviceCaseIntegrationURL(path), query, nil)
 }
 
+// 5.1 getSubaccountIntegration sends one GET request to the iSmart subaccount API.
+func (s *IsmartExternalService) getSubaccountIntegration(ctx context.Context, path string, query url.Values) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodGet, s.subaccountIntegrationURL(path), query, nil)
+}
+
 // 6. postIntegration sends one POST request to the iSmart integration API.
 func (s *IsmartExternalService) postIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
 	return s.requestJSON(ctx, http.MethodPost, s.integrationURL(path), nil, payload)
@@ -58,6 +63,11 @@ func (s *IsmartExternalService) patchIntegration(ctx context.Context, path strin
 // 7. postServiceCaseIntegration sends one POST request to the iSmart service-case API.
 func (s *IsmartExternalService) postServiceCaseIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
 	return s.requestJSON(ctx, http.MethodPost, s.serviceCaseIntegrationURL(path), nil, payload)
+}
+
+// 7.1 postSubaccountIntegration sends one POST request to the iSmart subaccount API.
+func (s *IsmartExternalService) postSubaccountIntegration(ctx context.Context, path string, payload map[string]any) (*ismartProxyResult, error) {
+	return s.requestJSON(ctx, http.MethodPost, s.subaccountIntegrationURL(path), nil, payload)
 }
 
 // 8. postIntegrationAccepted posts an OwnerReg request where HTTP 2xx alone means acceptance.
@@ -160,6 +170,19 @@ func (s *IsmartExternalService) integrationURL(path string) string {
 // 12. serviceCaseIntegrationURL builds an iSmart service-case integration API URL.
 func (s *IsmartExternalService) serviceCaseIntegrationURL(path string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartServiceCaseAPIBaseURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
+	}
+	if baseURL == "" {
+		baseURL = "https://ismart.ajoliving.com/api/v1/integration"
+	}
+
+	return baseURL + "/" + strings.TrimLeft(path, "/")
+}
+
+// 12.1 subaccountIntegrationURL builds an iSmart subaccount integration API URL.
+func (s *IsmartExternalService) subaccountIntegrationURL(path string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartSubaccountAPIBaseURL), "/")
 	if baseURL == "" {
 		baseURL = strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
 	}

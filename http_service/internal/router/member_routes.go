@@ -17,7 +17,6 @@ func registerMemberRoutes(
 	userHandler *handler.UserHandler,
 	secondhandHandler *handler.SecondhandHandler,
 	propertyHandler *handler.PropertyHandler,
-	orderHandler *handler.OrderHandler,
 	requireAuth gin.HandlerFunc,
 	requireActive gin.HandlerFunc,
 ) {
@@ -29,5 +28,4 @@ func registerMemberRoutes(
 	api.GET("/me/property-sales", requireActive, propertyHandler.MyPropertySales)
 	api.GET("/me/property-sales/favorites", requireActive, propertyHandler.MyFavoritePropertySales)
 	api.GET("/me/serviced-apartments", requireActive, propertyHandler.MyServicedApartments)
-	api.GET("/me/orders", requireActive, orderHandler.MyOrders)
 }

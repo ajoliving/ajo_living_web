@@ -32,7 +32,12 @@ func (s *WalletService) ListStaffRewardAds(ctx context.Context, filters StaffRew
 	if filters.IsActive != nil {
 		query = query.Where("is_active = ?", *filters.IsActive)
 	}
-	if adType := normalizedRewardAdType(filters.AdType); adType != "" {
+	// 1. 空用途表示不篩選；不可經過 normalizedRewardAdType 後誤變成 reward。
+	if rawAdType := strings.TrimSpace(filters.AdType); rawAdType != "" {
+		adType := normalizedRewardAdType(rawAdType)
+		if adType == "" {
+			return nil, nil, errcode.New(errcode.CodeValidationError, "ad type is invalid")
+		}
 		if adType == rewardAdTypeReward {
 			query = query.Where("(ad_type = ? OR ad_type = '')", rewardAdTypeReward)
 		} else if adType == rewardAdTypeDisplay {

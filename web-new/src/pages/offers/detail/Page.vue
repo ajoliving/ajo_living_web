@@ -43,6 +43,7 @@ import {
   supermarketIsSimpleOffer,
   supermarketOfferDisplayText,
   supermarketSecondPriceAdvantageRate,
+  supermarketSecondPriceAdvantageStore,
   supermarketPrimaryPrice,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
@@ -147,6 +148,16 @@ const returnListQuery = computed(() => {
 
 // 6. 取得所有最新商店對比卡，避免只顯示單一商店。
 const latestStoreCards = computed<SupermarketStorePrice[]>(() => latestStorePrices.value);
+
+// 6.1 取得唯一可顯示第二低價優勢的最低價門店。
+const secondPriceAdvantageStore = computed<SupermarketStorePrice | null>(() =>
+  supermarketSecondPriceAdvantageStore(latestStoreCards.value, preferenceStore.locale),
+);
+
+// 6.2 取得最低價相對第二低價的優勢百分比。
+const secondPriceAdvantageRate = computed<number>(() =>
+  supermarketSecondPriceAdvantageRate(latestStoreCards.value),
+);
 
 // 7. 取得純減價或原價貨品的 90 日價格標籤。
 const simpleOfferTrendLabel = (price: SupermarketStorePrice): string => {
@@ -1023,7 +1034,12 @@ onBeforeUnmount(() => {
               >
                 {{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) }}
               </div>
-              <div class="gp-compare-badge">{{ t('offers.detail.secondPriceAdvantage', { rate: supermarketSecondPriceAdvantageRate(latestStoreCards).toFixed(0) }) }}</div>
+              <div
+                v-if="price === secondPriceAdvantageStore"
+                class="gp-compare-badge"
+              >
+                {{ t('offers.detail.secondPriceAdvantage', { rate: secondPriceAdvantageRate.toFixed(0) }) }}
+              </div>
             </div>
           </div>
           <div class="gp-best-shop">

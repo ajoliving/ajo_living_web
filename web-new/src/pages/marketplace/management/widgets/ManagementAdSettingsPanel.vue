@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n';
 import { fetchDisplayAdSettings, fetchStaffRewardAds, saveDisplayAdSettings } from '@/httpapis/wallet';
 import type { DisplayAdSlotSaveItem, PublicDisplayAdResponse, StaffRewardAdResponse } from '@/model/payments';
 import { useFeedbackStore } from '@/stores/feedback';
+import { isPublicDisplayAdActive } from '@/utils/wallet';
 
 type DisplayAdChannel = PublicDisplayAdResponse['display_channel'];
 type DisplaySlotKind = 'long' | 'short';
@@ -47,7 +48,8 @@ const channelOptions = computed<Array<{ label: string; value: DisplayAdChannel }
 ]);
 
 const longAds = computed(() => availableAds.value.filter((ad) => ad.ad_type === 'display_long' || ad.ad_type === 'display'));
-const shortAds = computed(() => availableAds.value.filter((ad) => ad.ad_type === 'display_short'));
+const shortAds = computed(() =>
+  availableAds.value.filter((ad) => ad.ad_type === 'display_short' || ad.ad_type === 'display'));
 
 // 1. 建立固定右側廣告位表單
 const createEmptySlots = (): DisplayAdSlotForm[] => [
@@ -105,7 +107,7 @@ const loadAvailableAds = async (): Promise<void> => {
       display_channel: selectedChannel.value,
       is_active: true,
     });
-    availableAds.value = data.data.items;
+    availableAds.value = data.data.items.filter((ad) => isPublicDisplayAdActive(ad));
   } catch (error: unknown) {
     feedbackStore.pushToast(readErrorMessage(error, t('marketplace.settings.displayAdLoadAdsError')), 'error');
     availableAds.value = [];

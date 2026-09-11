@@ -45,6 +45,10 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 
+	if err := dropUnusedAccessAndMarketplaceOrderTables(db); err != nil {
+		return err
+	}
+
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.UserCredential{},
@@ -52,10 +56,6 @@ func Migrate(db *gorm.DB) error {
 		&model.UserIsmartAccount{},
 		&model.BuildingAuthorization{},
 		&model.Community{},
-		&model.Role{},
-		&model.Permission{},
-		&model.RolePermission{},
-		&model.UserRoleBinding{},
 		&model.Listing{},
 		&model.ListingContact{},
 		&model.MediaAsset{},
@@ -66,12 +66,12 @@ func Migrate(db *gorm.DB) error {
 		&model.ContactAccessLog{},
 		&model.ListingFavorite{},
 		&model.HomeContentPlacement{},
-		&model.Order{},
-		&model.OrderLog{},
 		&model.Chat{},
 		&model.ChatParticipant{},
 		&model.ChatJoinRequest{},
 		&model.Message{},
+		&model.RealtimeOutbox{},
+		&model.MessageAttachment{},
 		&model.ModerationAction{},
 		&model.Notification{},
 		&model.WalletAccount{},
@@ -113,7 +113,24 @@ func Migrate(db *gorm.DB) error {
 	return nil
 }
 
-// 3. ensureBuildingChatUniqueIndex prevents concurrent duplicate building groups.
+// 3. dropUnusedAccessAndMarketplaceOrderTables removes unused RBAC and secondhand order tables.
+func dropUnusedAccessAndMarketplaceOrderTables(db *gorm.DB) error {
+	for _, table := range []string{
+		"user_role_bindings",
+		"role_permissions",
+		"roles",
+		"permissions",
+		"order_logs",
+		"orders",
+	} {
+		if err := db.Migrator().DropTable(table); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// 4. ensureBuildingChatUniqueIndex prevents concurrent duplicate building groups.
 func ensureBuildingChatUniqueIndex(db *gorm.DB) error {
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS uk_chats_building_group ON chats (building_id) WHERE chat_type = 'building_group'").Error
 }

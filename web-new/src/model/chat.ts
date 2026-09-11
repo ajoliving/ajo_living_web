@@ -39,11 +39,13 @@ export interface ChatMessageView {
   id: string;
   chat_id: string;
   sender_role: ChatMessageRole;
+  sender_name: string;
   body: string;
   message_type: string;
   action_label?: string;
   action_url?: string;
   sent_at: string;
+  attachments: Array<{ media_asset_id: string; mime_type: string; file_size: number; url: string; width?: number | null; height?: number | null; processing_status: string; scan_status: string; rejection_reason?: string }>;
 }
 
 // 7. 定義聊天列表商品摘要
@@ -94,6 +96,8 @@ export interface BuildingChatMemberView {
 export interface BuildingChatJoinRequestView {
   request_id: string;
   user_id: string;
+  user_public_id: string;
+  display_name: string;
   status: string;
   reason?: string;
   created_at: string;

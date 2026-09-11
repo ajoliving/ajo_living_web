@@ -947,7 +947,6 @@ const mockData = (url, method, currentMember = member) => {
   if (pathname.startsWith('/api/v1/staff/serviced-apartments/')) return serviced;
   if (pathname.startsWith('/api/v1/staff/secondhand/listings')) return paginated([secondhand]);
   if (pathname === '/api/v1/staff/users') return paginated([member]);
-  if (pathname === '/api/v1/staff/roles') return { items: [{ code: 'staff', scope: 'global', name: 'Staff', description: 'Staff', permissions: ['marketplace:manage'] }] };
   if (pathname === '/api/v1/chats/chat-1/messages' && method === 'POST') return {
     message_id: 'msg-2',
     sender_user_id: 'staff-member',
@@ -990,8 +989,6 @@ const mockData = (url, method, currentMember = member) => {
   if (pathname.startsWith('/api/v1/staff/wallet/reward-ads/')) return { task_id: 'task-1', title: '示範廣告', is_active: true };
   if (pathname === '/api/v1/staff/wallet/display-ad-settings') return { channel: 'furniture', slots: [] };
   if (pathname === '/api/v1/public/ads') return { items: [] };
-  if (pathname === '/api/v1/me/orders') return { items: [], pagination };
-  if (pathname.startsWith('/api/v1/orders/')) return { order_id: 'order-1', status: 'pending', items: [] };
   if (pathname === '/api/v1/me/payments/pos/bills') return {
     context: {
       building_id: 'B001',

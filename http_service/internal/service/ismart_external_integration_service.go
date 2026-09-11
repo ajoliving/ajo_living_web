@@ -362,7 +362,7 @@ func (s *IsmartExternalService) ListSubaccounts(ctx context.Context, userID int6
 		query.Set("unit_id", unitID)
 	}
 
-	result, err := s.getIntegration(ctx, "/buildings/subaccounts/", query)
+	result, err := s.getSubaccountIntegration(ctx, "/buildings/subaccounts/", query)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +546,7 @@ func (s *IsmartExternalService) mutateSubaccount(ctx context.Context, userID int
 		payload["remark"] = remark
 	}
 
-	result, err := s.postIntegration(ctx, path, payload)
+	result, err := s.postSubaccountIntegration(ctx, path, payload)
 	if err != nil {
 		return nil, err
 	}

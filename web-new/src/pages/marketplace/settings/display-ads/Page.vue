@@ -13,6 +13,7 @@ import { fetchDisplayAdSettings, fetchStaffRewardAds, saveDisplayAdSettings } fr
 import type { DisplayAdSlotSaveItem, PublicDisplayAdResponse, StaffRewardAdResponse } from '@/model/payments';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
+import { isPublicDisplayAdActive } from '@/utils/wallet';
 
 type DisplayAdChannel = PublicDisplayAdResponse['display_channel'];
 
@@ -68,7 +69,7 @@ const loadAvailableAds = async (): Promise<void> => {
       display_channel: selectedChannel.value,
       is_active: true,
     });
-    availableAds.value = data.data.items;
+    availableAds.value = data.data.items.filter((ad) => isPublicDisplayAdActive(ad));
   } catch (error: unknown) {
     feedbackStore.pushToast(
       axios.isAxiosError<{ message?: string }>(error)

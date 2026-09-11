@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   fetchMe: vi.fn(),
   loginWithIdentifier: vi.fn(),
   registerWithEmail: vi.fn(),
+  refreshTokens: vi.fn(),
 }));
 
 vi.mock('@/httpapis/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/httpapis/auth')>()),
   loginWithIdentifier: mocks.loginWithIdentifier,
   registerWithEmail: mocks.registerWithEmail,
+  refreshTokens: mocks.refreshTokens,
 }));
 
 vi.mock('@/httpapis/me', () => ({
@@ -67,6 +69,7 @@ describe('session store hydration', () => {
     mocks.fetchMe.mockReset();
     mocks.loginWithIdentifier.mockReset();
     mocks.registerWithEmail.mockReset();
+    mocks.refreshTokens.mockReset();
   });
 
   it('waits for an in-flight hydrate call before exposing loaded staff state', async () => {
@@ -89,6 +92,38 @@ describe('session store hydration', () => {
     expect(sessionStore.isLoaded).toBe(true);
     expect(sessionStore.isHydrating).toBe(false);
     expect(sessionStore.currentUser.is_staff).toBe(true);
+  });
+
+  it('clears an expired access token without requesting the current member', async () => {
+    const expiredPayload = window.btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 60 }));
+    window.localStorage.setItem('ajoliving.access-token', `header.${expiredPayload}.signature`);
+    window.localStorage.setItem('ajoliving.refresh-token', 'refresh-token');
+
+    const sessionStore = useSessionStore();
+    await sessionStore.hydrateSession();
+
+    expect(mocks.fetchMe).not.toHaveBeenCalled();
+    expect(sessionStore.isAuthenticated).toBe(false);
+    expect(window.localStorage.getItem('ajoliving.access-token')).toBeNull();
+    expect(sessionStore.isLoaded).toBe(true);
+  });
+
+  it('refreshes an expired access token before loading the current member', async () => {
+    const expiredPayload = window.btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 60 }));
+    window.localStorage.setItem('ajoliving.access-token', `header.${expiredPayload}.signature`);
+    window.localStorage.setItem('ajoliving.refresh-token', 'refresh-token');
+    mocks.refreshTokens.mockResolvedValue({
+      data: { data: { access_token: 'new-access-token', refresh_token: 'new-refresh-token', expires_in: 3600 } },
+    });
+    mocks.fetchMe.mockResolvedValue({ data: { data: buildStaffMember() } });
+
+    const sessionStore = useSessionStore();
+    await sessionStore.hydrateSession();
+
+    expect(mocks.refreshTokens).toHaveBeenCalledWith('refresh-token');
+    expect(mocks.fetchMe).toHaveBeenCalledTimes(1);
+    expect(sessionStore.isAuthenticated).toBe(true);
+    expect(window.localStorage.getItem('ajoliving.access-token')).toBe('new-access-token');
   });
 
   it('submits the selected agency account type during registration', async () => {

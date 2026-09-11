@@ -8,9 +8,11 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"ajoliving_web/http_service/internal/errcode"
 	"ajoliving_web/http_service/internal/model"
@@ -82,10 +84,29 @@ func (s *UploadService) DeleteMediaAsset(ctx context.Context, userID int64, medi
 		return nil, err
 	}
 
-	if err := s.runtime.StorageProvider.DeleteObject(ctx, asset.ObjectKey); err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to delete media object from storage")
-	}
-	if err := s.runtime.DB.WithContext(ctx).Delete(&model.MediaAsset{}, asset.ID).Error; err != nil {
+	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var lockedAsset model.MediaAsset
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND created_by = ?", asset.ID, userID).First(&lockedAsset).Error; err != nil {
+			return err
+		}
+		var messageReferenceCount int64
+		if tx.Migrator().HasTable(&model.MessageAttachment{}) {
+			if err := tx.Model(&model.MessageAttachment{}).Where("media_asset_id = ?", lockedAsset.ID).Count(&messageReferenceCount).Error; err != nil {
+				return err
+			}
+		}
+		if messageReferenceCount > 0 {
+			return errcode.New(errcode.CodeValidationError, "media asset is already referenced")
+		}
+		if err := s.runtime.StorageProvider.DeleteObject(ctx, lockedAsset.ObjectKey); err != nil {
+			return errcode.New(errcode.CodeInternalError, "failed to delete media object from storage")
+		}
+		return tx.Delete(&model.MediaAsset{}, lockedAsset.ID).Error
+	}); err != nil {
+		var appErr *errcode.AppError
+		if errors.As(err, &appErr) {
+			return nil, appErr
+		}
 		return nil, errcode.New(errcode.CodeInternalError, "failed to delete media asset")
 	}
 
@@ -124,6 +145,9 @@ func (s *UploadService) buildMediaAssetResults(ctx context.Context, assets []mod
 	items := make([]CompleteUploadResult, 0, len(assets))
 	for _, asset := range assets {
 		assetURL := buildMediaURL(s.runtime.Config.MediaBaseURL, asset.ObjectKey)
+		if strings.HasPrefix(asset.ObjectKey, chatMediaObjectPrefix) {
+			assetURL = chatAttachmentURL(s.runtime.Config.MediaBaseURL, asset)
+		}
 		if isPrivateAgencyEvidenceObjectKey(asset.ObjectKey) {
 			if s.runtime.StorageProvider == nil {
 				return nil, errcode.New(errcode.CodeInternalError, "private media storage is not configured")
@@ -135,18 +159,21 @@ func (s *UploadService) buildMediaAssetResults(ctx context.Context, assets []mod
 			assetURL = signedURL
 		}
 		items = append(items, CompleteUploadResult{
-			MediaAssetID:    asset.PublicID,
-			StorageProvider: asset.StorageProvider,
-			BucketName:      asset.BucketName,
-			ObjectKey:       asset.ObjectKey,
-			MimeType:        asset.MimeType,
-			Width:           asset.Width,
-			Height:          asset.Height,
-			FileSize:        asset.FileSize,
-			ChecksumSHA256:  asset.ChecksumSHA256,
-			URL:             assetURL,
-			InUse:           usageMap[asset.ID],
-			CreatedAt:       asset.CreatedAt,
+			MediaAssetID:     asset.PublicID,
+			StorageProvider:  asset.StorageProvider,
+			BucketName:       asset.BucketName,
+			ObjectKey:        asset.ObjectKey,
+			MimeType:         asset.MimeType,
+			Width:            asset.Width,
+			Height:           asset.Height,
+			FileSize:         asset.FileSize,
+			ChecksumSHA256:   asset.ChecksumSHA256,
+			URL:              assetURL,
+			InUse:            usageMap[asset.ID],
+			CreatedAt:        asset.CreatedAt,
+			ProcessingStatus: normalizedProcessingStatus(asset),
+			ScanStatus:       normalizedScanStatus(asset),
+			RejectionReason:  asset.RejectionReason,
 		})
 	}
 
@@ -168,7 +195,7 @@ func (s *UploadService) loadOwnedMediaAsset(ctx context.Context, userID int64, m
 	return &asset, nil
 }
 
-// 8. loadMediaUsageMap returns whether each media asset is already referenced by listings.
+// 8. loadMediaUsageMap returns whether each media asset is already referenced by listings, profiles, or chat messages.
 func (s *UploadService) loadMediaUsageMap(ctx context.Context, assetIDs []int64) (map[int64]bool, error) {
 	result := make(map[int64]bool, len(assetIDs))
 	if len(assetIDs) == 0 {
@@ -202,6 +229,20 @@ func (s *UploadService) loadMediaUsageMap(ctx context.Context, assetIDs []int64)
 	}
 	for _, row := range profileRows {
 		result[row.MediaAssetID] = true
+	}
+
+	if s.runtime.DB.Migrator().HasTable(&model.MessageAttachment{}) {
+		var messageRows []usageRow
+		if err := s.runtime.DB.WithContext(ctx).
+			Model(&model.MessageAttachment{}).
+			Distinct("media_asset_id").
+			Where("media_asset_id IN ?", assetIDs).
+			Scan(&messageRows).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load media asset usage")
+		}
+		for _, row := range messageRows {
+			result[row.MediaAssetID] = true
+		}
 	}
 
 	var homeRows []usageRow

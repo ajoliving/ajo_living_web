@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,7 @@ type Config struct {
 	IsmartExternalAppAPIBaseURL string
 	IsmartIntegrationAPIBaseURL string
 	IsmartServiceCaseAPIBaseURL string
+	IsmartSubaccountAPIBaseURL  string
 	IsmartExternalAppTimeout    time.Duration
 	RedisEnabled                bool
 	RedisAddr                   string
@@ -98,11 +100,20 @@ type Config struct {
 	StorageUseCName             bool
 	StorageDisableSSL           bool
 	StoragePresignExpires       time.Duration
+	StorageMultipartPartSize    int64
 	OSSCallbackEnabled          bool
 	OSSCallbackURL              string
 	OSSCallbackSecret           string
 	OSSAllowedOrigins           string
 	MediaBaseURL                string
+	MediaProcessingProvider     string
+	MediaProcessingTimeout      time.Duration
+	MediaFFmpegBinary           string
+	MediaFFmpegArgs             string
+	MediaScanProvider           string
+	MediaScanTimeout            time.Duration
+	MediaClamAVBinary           string
+	MediaClamAVArgs             string
 	SeedCommunities             bool
 	SeedHomeContent             bool
 	WebPublicDir                string
@@ -161,6 +172,7 @@ func Load() *Config {
 		IsmartExternalAppAPIBaseURL: getEnv("ISMART_EXTERNAL_APP_API_BASE_URL", defaultIsmartExternalAppAPIBaseURL()),
 		IsmartIntegrationAPIBaseURL: getEnv("ISMART_INTEGRATION_API_BASE_URL", defaultIsmartIntegrationAPIBaseURL()),
 		IsmartServiceCaseAPIBaseURL: getEnv("ISMART_SERVICE_CASE_API_BASE_URL", defaultIsmartServiceCaseAPIBaseURL()),
+		IsmartSubaccountAPIBaseURL:  getEnv("ISMART_SUBACCOUNT_API_BASE_URL", defaultIsmartSubaccountAPIBaseURL()),
 		IsmartExternalAppTimeout:    getDurationEnv("ISMART_EXTERNAL_APP_TIMEOUT", 10*time.Second),
 		RedisEnabled:                getBoolEnv("REDIS_ENABLED", true),
 		RedisAddr:                   strings.TrimSpace(getEnv("REDIS_ADDR", "127.0.0.1:6382")),
@@ -215,6 +227,7 @@ func Load() *Config {
 		StorageUseCName:             getBoolEnvWithLegacy("OSS_USE_CNAME", "STORAGE_USE_CNAME", false),
 		StorageDisableSSL:           getBoolEnvWithLegacy("OSS_DISABLE_SSL", "STORAGE_DISABLE_SSL", false),
 		StoragePresignExpires:       getDurationEnvWithLegacy("OSS_PRESIGN_EXPIRES", "STORAGE_PRESIGN_EXPIRES", 15*time.Minute),
+		StorageMultipartPartSize:    getInt64EnvWithLegacy("OSS_MULTIPART_PART_SIZE", "STORAGE_MULTIPART_PART_SIZE", 10*1024*1024),
 		OSSCallbackEnabled:          getBoolEnv("OSS_CALLBACK_ENABLED", false),
 		OSSCallbackSecret:           strings.TrimSpace(os.Getenv("OSS_CALLBACK_SECRET")),
 		OSSAllowedOrigins:           getEnv("OSS_ALLOWED_ORIGINS", ""),
@@ -291,13 +304,48 @@ func Load() *Config {
 
 	cfg.MediaBaseURL = getEnvWithLegacy("OSS_MEDIA_BASE_URL", "MEDIA_BASE_URL", defaultMediaBaseURL(cfg))
 	cfg.OSSCallbackURL = getEnv("OSS_CALLBACK_URL", defaultOSSCallbackURL(cfg))
+	cfg.MediaProcessingProvider = getEnv("MEDIA_PROCESSING_PROVIDER", defaultMediaProvider(cfg.AppEnv))
+	cfg.MediaProcessingTimeout = getDurationEnv("MEDIA_PROCESSING_TIMEOUT", 10*time.Minute)
+	cfg.MediaFFmpegBinary = getEnv("MEDIA_FFMPEG_BINARY", "ffmpeg")
+	cfg.MediaFFmpegArgs = getEnv("MEDIA_FFMPEG_ARGS", "-y -i {source_path} -ss 00:00:01 -frames:v 1 {thumbnail_path} -c:v libx264 -movflags +faststart {playback_path}")
+	cfg.MediaScanProvider = getEnv("MEDIA_SCAN_PROVIDER", defaultMediaProvider(cfg.AppEnv))
+	cfg.MediaScanTimeout = getDurationEnv("MEDIA_SCAN_TIMEOUT", 2*time.Minute)
+	cfg.MediaClamAVBinary = getEnv("MEDIA_CLAMAV_BINARY", "clamscan")
+	cfg.MediaClamAVArgs = getEnv("MEDIA_CLAMAV_ARGS", "--no-summary {source_path}")
 
 	return cfg
 }
 
-// 3. Validate rejects unsafe production-like runtime settings when strict mode is enabled.
+// 3. Validate always enforces production media scanning and applies strict production checks when enabled.
 func (c *Config) Validate() error {
-	if c == nil || !c.StrictProductionConfig || !isProductionLikeEnv(c.AppEnv) {
+	if c == nil {
+		return nil
+	}
+	if isProductionLikeEnv(c.AppEnv) {
+		switch strings.ToLower(strings.TrimSpace(c.MediaProcessingProvider)) {
+		case "ffmpeg", "command":
+			if strings.TrimSpace(c.MediaFFmpegBinary) == "" || strings.TrimSpace(c.MediaFFmpegArgs) == "" {
+				return fmt.Errorf("MEDIA_FFMPEG_BINARY and MEDIA_FFMPEG_ARGS are required when MEDIA_PROCESSING_PROVIDER=%s", c.MediaProcessingProvider)
+			}
+			if _, err := exec.LookPath(strings.TrimSpace(c.MediaFFmpegBinary)); err != nil {
+				return fmt.Errorf("MEDIA_FFMPEG_BINARY is not executable: %w", err)
+			}
+		default:
+			return fmt.Errorf("MEDIA_PROCESSING_PROVIDER must use a real ffmpeg-compatible processor when APP_ENV=%s", c.AppEnv)
+		}
+		switch strings.ToLower(strings.TrimSpace(c.MediaScanProvider)) {
+		case "clamav", "clamscan", "command":
+			if strings.TrimSpace(c.MediaClamAVBinary) == "" || strings.TrimSpace(c.MediaClamAVArgs) == "" {
+				return fmt.Errorf("MEDIA_CLAMAV_BINARY and MEDIA_CLAMAV_ARGS are required when MEDIA_SCAN_PROVIDER=%s", c.MediaScanProvider)
+			}
+			if _, err := exec.LookPath(strings.TrimSpace(c.MediaClamAVBinary)); err != nil {
+				return fmt.Errorf("MEDIA_CLAMAV_BINARY is not executable: %w", err)
+			}
+		default:
+			return fmt.Errorf("MEDIA_SCAN_PROVIDER must use a real ClamAV-compatible scanner when APP_ENV=%s", c.AppEnv)
+		}
+	}
+	if !c.StrictProductionConfig || !isProductionLikeEnv(c.AppEnv) {
 		return nil
 	}
 	if isUnsafeSecret(c.JWTSecret, "dev-secret-key") {
@@ -325,6 +373,11 @@ func (c *Config) Validate() error {
 	if c.OSSCallbackEnabled && strings.TrimSpace(c.OSSCallbackSecret) == "" {
 		return fmt.Errorf("OSS_CALLBACK_SECRET is required when OSS_CALLBACK_ENABLED=true")
 	}
+	if strings.EqualFold(strings.TrimSpace(c.MediaProcessingProvider), "ffmpeg") || strings.EqualFold(strings.TrimSpace(c.MediaProcessingProvider), "command") {
+		if strings.TrimSpace(c.MediaFFmpegBinary) == "" || strings.TrimSpace(c.MediaFFmpegArgs) == "" {
+			return fmt.Errorf("MEDIA_FFMPEG_BINARY and MEDIA_FFMPEG_ARGS are required when MEDIA_PROCESSING_PROVIDER=%s", c.MediaProcessingProvider)
+		}
+	}
 
 	return nil
 }
@@ -336,6 +389,16 @@ func isProductionLikeEnv(value string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// 4.1 defaultMediaProvider enables deterministic local media checks only in development and tests.
+func defaultMediaProvider(appEnv string) string {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "development", "dev", "test", "testing":
+		return "mock"
+	default:
+		return "disabled"
 	}
 }
 
@@ -394,6 +457,17 @@ func getInt64Env(key string, fallback int64) int64 {
 	}
 
 	return value
+}
+
+// 6.1 getInt64EnvWithLegacy parses new or legacy integer env values.
+func getInt64EnvWithLegacy(key string, legacyKey string, fallback int64) int64 {
+	if os.Getenv(key) != "" {
+		return getInt64Env(key, fallback)
+	}
+	if os.Getenv(legacyKey) != "" {
+		return getInt64Env(legacyKey, fallback)
+	}
+	return fallback
 }
 
 // 7. getBoolEnv parses bool env value or fallback.
@@ -603,6 +677,11 @@ func defaultIsmartIntegrationAPIBaseURL() string {
 
 // 28. defaultIsmartServiceCaseAPIBaseURL returns the iSmart service-case API base URL.
 func defaultIsmartServiceCaseAPIBaseURL() string {
+	return "https://clouddev.ismart.ajoliving.com/api/v1/integration"
+}
+
+// 28.1 defaultIsmartSubaccountAPIBaseURL returns the iSmart subaccount API base URL.
+func defaultIsmartSubaccountAPIBaseURL() string {
 	return "https://clouddev.ismart.ajoliving.com/api/v1/integration"
 }
 

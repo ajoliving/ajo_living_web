@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   fetchPublicUnits: vi.fn(),
   loadCurrentUser: vi.fn(),
   pushToast: vi.fn(),
+  changeMemberIsmartPassword: vi.fn(),
   updateMemberIsmartProfile: vi.fn(),
   routerPush: vi.fn(),
   route: {
@@ -121,6 +122,7 @@ vi.mock('@/httpapis/building', () => ({
 }));
 
 vi.mock('@/httpapis/me', () => ({
+  changeMemberIsmartPassword: mocks.changeMemberIsmartPassword,
   updateMe: vi.fn(),
   updateMemberIsmartProfile: mocks.updateMemberIsmartProfile,
 }));
@@ -166,6 +168,7 @@ describe('AccountMyPage lazy data loading', () => {
     mocks.fetchPublicUnits.mockReset();
     mocks.loadCurrentUser.mockReset();
     mocks.pushToast.mockReset();
+    mocks.changeMemberIsmartPassword.mockReset();
     mocks.updateMemberIsmartProfile.mockReset();
     mocks.routerPush.mockReset();
     mocks.fetchMemberBuildings.mockResolvedValue([
@@ -192,6 +195,7 @@ describe('AccountMyPage lazy data loading', () => {
         },
       },
     });
+    mocks.changeMemberIsmartPassword.mockResolvedValue({ data: { data: {} } });
   });
 
   it('loads only account data initially and reuses the current building unit response', async () => {
@@ -232,6 +236,44 @@ describe('AccountMyPage lazy data loading', () => {
     await clickPanel(wrapper, i18n.global.t('account.center.nav.preferences'));
 
     expect(mocks.routerPush).toHaveBeenCalledWith('/account/profile/preferences');
+  });
+
+  it('updates the iSmart password from the account information action', async () => {
+    const wrapper = await mountAccountPage();
+
+    const passwordField = wrapper.findAll('.work-account-field').find((item) =>
+      item.text().includes(i18n.global.t('account.profile.localPassword')),
+    );
+    expect(passwordField?.text()).toContain(i18n.global.t('account.center.account.passwordManaged'));
+    const changePasswordButton = passwordField?.find('.work-action.work-compact-action');
+    expect(changePasswordButton?.text()).toContain(i18n.global.t('account.center.account.changeIsmartPassword'));
+
+    const residentUnitField = wrapper.findAll('.work-account-field').find((item) =>
+      item.text().includes(i18n.global.t('account.center.account.residentUnits')),
+    );
+    expect(residentUnitField?.find('.work-action').exists()).toBe(false);
+
+    await changePasswordButton!.trigger('click');
+    await flushPromises();
+
+    const dialog = document.body.querySelector('.work-password-dialog');
+    expect(dialog).toBeTruthy();
+    const inputs = dialog?.querySelectorAll<HTMLInputElement>('input[type="password"]');
+    expect(inputs).toHaveLength(3);
+    const values = ['current-password', 'new-password', 'new-password'];
+    inputs?.forEach((input, index) => {
+      input.value = values[index] ?? '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    (dialog?.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await flushPromises();
+
+    expect(mocks.changeMemberIsmartPassword).toHaveBeenCalledWith({
+      old_password: 'current-password',
+      new_password: 'new-password',
+      new_password_confirm: 'new-password',
+    });
   });
 
   it('submits the editable iSmart profile fields through the documented proxy', async () => {

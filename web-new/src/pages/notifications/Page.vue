@@ -1,9 +1,8 @@
 <!--
  * 通知與會話中心頁。
- * 1. 左側簡潔導航：通知分類 + 會話入口。
- * 2. 右側主內容區：通知列表或會話頁面。
- * 3. 會話頁面內置群聊/私聊篩選器，並默認打開第一個對話。
- * 4. 現代卡片式設計，優化視覺層次。
+ * 1. 以會話與通知兩組導覽管理通信內容，「會話」僅保留單一訊息管理入口。
+ * 2. 在通知列表與三欄會話工作區之間切換，會話未讀總數由聊天頁上報。
+ * 3. 支援通知已讀、分類檢視及跳轉至指定會話。
 -->
 <script setup lang="ts">
 import axios from 'axios';
@@ -49,14 +48,13 @@ interface PanelConfig {
   navLabel: string;
   icon: IconName;
   chipTone?: ChipTone;
-  kicker: string;
   title: string;
   desc: string;
   showMarkAllRead: boolean;
 }
 
 interface Panel extends PanelConfig {
-  chipCount?: number;
+  unreadCount: number;
   groups: NoticeGroup[];
 }
 
@@ -77,10 +75,13 @@ const selectNotificationPanel = (panel: PanelKey): void => {
   void router.replace({ path: '/notifications', query: {} });
 };
 
-// 2. 進入會話頁面
+// 2. 進入會話（統一入口）
 const enterConversations = async (): Promise<void> => {
   activeSection.value = 'conversations';
-  await router.replace({ path: '/notifications', query: { tab: 'conversations' } });
+  await router.replace({
+    path: '/notifications',
+    query: { tab: 'conversations' },
+  });
 };
 
 watch(
@@ -90,14 +91,13 @@ watch(
   },
 );
 
-// 3. 通知分類面板設定
+// 5. 通知分類面板設定
 const panelConfigs = computed<PanelConfig[]>(() => [
   {
     key: 'notif-all',
     navLabel: t('account.notifications.allTitle'),
     icon: 'bell',
     chipTone: 'brand',
-    kicker: t('account.notifications.title'),
     title: t('account.notifications.allTitle'),
     desc: t('account.notifications.filters.allDescription'),
     showMarkAllRead: true,
@@ -106,7 +106,6 @@ const panelConfigs = computed<PanelConfig[]>(() => [
     key: 'notif-offers',
     navLabel: t('account.notifications.offers'),
     icon: 'tag',
-    kicker: t('account.notifications.offers'),
     title: t('account.notifications.offers'),
     desc: t('account.notifications.filters.offersDescription'),
     showMarkAllRead: true,
@@ -115,7 +114,6 @@ const panelConfigs = computed<PanelConfig[]>(() => [
     key: 'notif-property',
     navLabel: t('account.notifications.property'),
     icon: 'home',
-    kicker: t('account.notifications.property'),
     title: t('account.notifications.property'),
     desc: t('account.notifications.filters.propertyDescription'),
     showMarkAllRead: true,
@@ -125,7 +123,6 @@ const panelConfigs = computed<PanelConfig[]>(() => [
     navLabel: t('account.notifications.payment'),
     icon: 'credit-card',
     chipTone: 'warn',
-    kicker: t('account.notifications.payment'),
     title: t('account.notifications.payment'),
     desc: t('account.notifications.filters.paymentDescription'),
     showMarkAllRead: true,
@@ -134,7 +131,6 @@ const panelConfigs = computed<PanelConfig[]>(() => [
     key: 'notif-system',
     navLabel: t('account.notifications.system'),
     icon: 'settings',
-    kicker: t('account.notifications.system'),
     title: t('account.notifications.system'),
     desc: t('account.notifications.filters.systemDescription'),
     showMarkAllRead: false,
@@ -262,14 +258,25 @@ const panels = computed<Panel[]>(() =>
         items: items.filter((item) => item.group === group),
       }))
       .filter((group) => group.items.length > 0);
-    const chipCount = items.filter((item) => item.unread).length;
+    const unreadCount = items.filter((item) => item.unread).length;
 
     return {
       ...config,
-      chipCount: chipCount > 0 ? chipCount : undefined,
+      unreadCount,
       groups,
     };
   }),
+);
+
+// 10.1 接收聊天頁上報的會話未讀總數
+const totalUnreadChats = ref(0);
+const handleUnreadCountChange = (count: number): void => {
+  totalUnreadChats.value = count;
+};
+
+// 10.2 行動端開啟會話內容時隱藏側欄，讓聊天區貼近全屏
+const isThreadActive = computed(() =>
+  activeSection.value === 'conversations' && Boolean(route.value.query.conversationId),
 );
 
 // 11. 讀取通知列表
@@ -365,46 +372,59 @@ onMounted(() => {
         </header>
 
         <nav class="notifications-nav">
-          <button
-            type="button"
-            class="notifications-nav__item notifications-nav__item--conversations"
-            :class="activeSection === 'conversations' ? 'active' : ''"
-            @click="enterConversations"
-          >
-            <div class="notifications-nav__item-content">
-              <AppIcon
-                name="message"
-                :size="20"
-              />
-              <span>{{ t('account.notifications.sectionConversations') }}</span>
-            </div>
-          </button>
+          <section class="notifications-nav__group">
+            <button
+              type="button"
+              class="notifications-nav__item"
+              :class="activeSection === 'conversations' ? 'active' : ''"
+              @click="enterConversations"
+            >
+              <span class="notifications-nav__item-content">
+                <AppIcon
+                  name="message"
+                  :size="18"
+                />
+                <span>{{ t('chat.allMessages') }}</span>
+              </span>
+              <span
+                v-if="totalUnreadChats > 0"
+                class="notifications-nav__badge brand"
+              >
+                {{ totalUnreadChats }}
+              </span>
+            </button>
+          </section>
 
           <div class="notifications-nav__divider" />
 
-          <button
-            v-for="panel in panels"
-            :key="panel.key"
-            type="button"
-            class="notifications-nav__item"
-            :class="activeSection === 'notifications' && activeFilter === panel.key ? 'active' : ''"
-            @click="selectNotificationPanel(panel.key)"
-          >
-            <div class="notifications-nav__item-content">
-              <AppIcon
-                :name="panel.icon"
-                :size="18"
-              />
-              <span>{{ panel.navLabel }}</span>
+          <section class="notifications-nav__group">
+            <div class="notifications-nav__group-label">
+              {{ t('account.notifications.sectionNotifications') }}
             </div>
-            <span
-              v-if="panel.chipCount !== undefined"
-              class="notifications-nav__badge"
-              :class="panel.chipTone"
+            <button
+              v-for="panel in panels"
+              :key="panel.key"
+              type="button"
+              class="notifications-nav__item"
+              :class="activeSection === 'notifications' && activeFilter === panel.key ? 'active' : ''"
+              @click="selectNotificationPanel(panel.key)"
             >
-              {{ panel.chipCount }}
-            </span>
-          </button>
+              <span class="notifications-nav__item-content">
+                <AppIcon
+                  :name="panel.icon"
+                  :size="16"
+                />
+                <span>{{ panel.navLabel }}</span>
+              </span>
+              <span
+                v-if="panel.unreadCount > 0"
+                class="notifications-nav__badge"
+                :class="panel.chipTone === 'warn' ? 'warn' : 'brand'"
+              >
+                {{ panel.unreadCount }}
+              </span>
+            </button>
+          </section>
         </nav>
       </aside>
 
@@ -420,12 +440,19 @@ onMounted(() => {
         >
           <header class="notifications-panel__header">
             <div>
-              <div class="notifications-panel__kicker">{{ panel.kicker }}</div>
-              <h2 class="notifications-panel__title">{{ panel.title }}</h2>
+              <div class="notifications-panel__title-row">
+                <h2 class="notifications-panel__title">{{ panel.title }}</h2>
+                <span
+                  v-if="panel.unreadCount > 0"
+                  class="notifications-panel__unread"
+                >
+                  {{ panel.unreadCount }} {{ t('account.notifications.unread') }}
+                </span>
+              </div>
               <p class="notifications-panel__desc">{{ panel.desc }}</p>
             </div>
             <button
-              v-if="panel.showMarkAllRead && panel.chipCount"
+              v-if="panel.showMarkAllRead && panel.unreadCount > 0"
               type="button"
               class="notifications-action"
               @click="markAllRead(panel)"
@@ -470,9 +497,10 @@ onMounted(() => {
                 {{ t(`account.notifications.groups.${group.title}`) }}
               </h3>
               <div class="notifications-list">
-                <article
+                <button
                   v-for="item in group.items"
                   :key="item.id"
+                  type="button"
                   class="notification-card"
                   :class="item.unread ? 'notification-card--unread' : ''"
                   @click="handleItemClick(item)"
@@ -484,7 +512,13 @@ onMounted(() => {
                     <p class="notification-card__desc">{{ item.description }}</p>
                   </div>
                   <time class="notification-card__time">{{ formatNoticeTime(item.createdAt) }}</time>
-                </article>
+                  <AppIcon
+                    v-if="item.targetPath"
+                    name="arrow-right"
+                    :size="18"
+                    class="notification-card__arrow"
+                  />
+                </button>
               </div>
             </section>
           </div>
@@ -494,8 +528,9 @@ onMounted(() => {
       <main
         v-else
         class="notifications-chat"
+        :class="isThreadActive ? 'notifications-chat--thread' : ''"
       >
-        <MarketplaceChatPage />
+        <MarketplaceChatPage @unread-count-change="handleUnreadCountChange" />
       </main>
     </div>
   </div>
@@ -559,6 +594,20 @@ onMounted(() => {
   margin: 8px 0;
 }
 
+.notifications-nav__group {
+  display: grid;
+  gap: 2px;
+}
+
+.notifications-nav__group-label {
+  padding: 12px 2px 4px;
+  color: rgb(var(--color-text-muted));
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .notifications-nav__item {
   position: relative;
   display: flex;
@@ -576,11 +625,11 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 600;
   text-align: left;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .notifications-nav__item:hover {
-  background: rgb(var(--color-primary) / 0.08);
+  background: transparent;
   color: rgb(var(--color-text));
 }
 
@@ -611,12 +660,14 @@ onMounted(() => {
 
 .notifications-nav__item:focus-visible {
   color: rgb(var(--color-primary));
+  box-shadow: inset 0 0 0 1px rgb(var(--color-primary) / 0.65);
   outline: none;
 }
 
 .notifications-nav__item.active:hover,
 .notifications-nav__item:focus-visible:hover {
-  background: rgb(var(--color-primary) / 0.08);
+  background: transparent;
+  color: rgb(var(--color-primary));
 }
 
 .notifications-nav__item-content {
@@ -660,6 +711,13 @@ onMounted(() => {
   min-width: 0;
 }
 
+.notifications-panel__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .notifications-panel {
   display: none;
 }
@@ -679,16 +737,6 @@ onMounted(() => {
   border-bottom: 2px solid rgb(var(--color-border));
 }
 
-.notifications-panel__kicker {
-  margin-bottom: 6px;
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
 .notifications-panel__title {
   margin: 0;
   color: rgb(var(--color-text));
@@ -696,6 +744,19 @@ onMounted(() => {
   font-size: 26px;
   font-weight: 600;
   line-height: 1.3;
+}
+
+.notifications-panel__unread {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid rgb(var(--color-primary) / 0.2);
+  border-radius: 999px;
+  background: rgb(var(--color-surface));
+  padding: 3px 9px;
+  color: rgb(var(--color-primary));
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .notifications-panel__desc {
@@ -782,7 +843,7 @@ onMounted(() => {
 .notification-card {
   position: relative;
   display: grid;
-  grid-template-columns: 4px 48px minmax(0, 1fr) auto;
+  grid-template-columns: 4px 48px minmax(0, 1fr) auto 18px;
   gap: 14px;
   align-items: start;
   border: 1px solid rgb(var(--color-border));
@@ -790,6 +851,9 @@ onMounted(() => {
   background: rgb(var(--color-surface));
   padding: 16px 18px;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
@@ -802,8 +866,14 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
+.notification-card:focus-visible {
+  border-color: rgb(var(--color-primary));
+  outline: 3px solid rgb(var(--color-primary) / 0.2);
+  outline-offset: 2px;
+}
+
 .notification-card--unread {
-  background: rgb(var(--color-primary) / 0.03);
+  background: rgb(var(--color-surface));
   border-color: rgb(var(--color-primary) / 0.2);
 }
 
@@ -861,6 +931,18 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.notification-card__arrow {
+  align-self: center;
+  color: rgb(var(--color-text-muted));
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.notification-card:hover .notification-card__arrow,
+.notification-card:focus-visible .notification-card__arrow {
+  color: rgb(var(--color-primary));
+  transform: translateX(3px);
+}
+
 .notifications-chat {
   min-width: 0;
   background: transparent;
@@ -890,11 +972,74 @@ onMounted(() => {
     padding-bottom: calc(var(--app-mobile-content-bottom) + 16px);
   }
 
+  .notifications-shell:has(.notifications-chat--thread) .notifications-sidebar {
+    display: none;
+  }
+
   .notifications-sidebar {
     position: static;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .notifications-sidebar__header {
+    padding: 0 0 12px;
+    border-bottom: 0;
+  }
+
+  .notifications-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 0 4px;
+    scrollbar-width: none;
+  }
+
+  .notifications-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .notifications-nav__group {
+    display: contents;
+  }
+
+  .notifications-nav__group-toggle {
+    display: none;
+  }
+
+  .notifications-nav__children {
+    display: flex;
+    gap: 8px;
+    padding-left: 0;
+  }
+
+  .notifications-nav__divider {
+    display: none;
   }
 
   .notifications-nav__item {
+    min-height: 42px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 8px 2px;
+    white-space: nowrap;
+  }
+
+  .notifications-nav__item.active {
+    background: transparent;
+    color: rgb(var(--color-primary));
+  }
+
+  .notifications-nav__item::after {
+    display: block;
+  }
+
+  .notifications-nav__group-toggle {
     min-height: 48px;
   }
 }
@@ -911,10 +1056,10 @@ onMounted(() => {
   }
 
   .notification-card {
-    grid-template-columns: 4px 40px minmax(0, 1fr);
+    grid-template-columns: 4px 40px minmax(0, 1fr) 18px;
     grid-template-areas:
-      "indicator icon content"
-      "indicator icon time";
+      "indicator icon content arrow"
+      "indicator icon time arrow";
     gap: 12px;
     padding: 14px 16px;
   }
@@ -937,6 +1082,10 @@ onMounted(() => {
   .notification-card__time {
     grid-area: time;
     justify-self: start;
+  }
+
+  .notification-card__arrow {
+    grid-area: arrow;
   }
 }
 

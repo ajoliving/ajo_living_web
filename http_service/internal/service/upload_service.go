@@ -67,18 +67,21 @@ type UploadCallbackResult struct {
 
 // 6. CompleteUploadResult defines the upload complete output.
 type CompleteUploadResult struct {
-	MediaAssetID    string    `json:"media_asset_id"`
-	StorageProvider string    `json:"storage_provider"`
-	BucketName      string    `json:"bucket_name"`
-	ObjectKey       string    `json:"object_key"`
-	MimeType        string    `json:"mime_type"`
-	Width           *int      `json:"width"`
-	Height          *int      `json:"height"`
-	FileSize        int64     `json:"file_size"`
-	ChecksumSHA256  string    `json:"checksum_sha256"`
-	URL             string    `json:"url"`
-	InUse           bool      `json:"in_use"`
-	CreatedAt       time.Time `json:"created_at"`
+	MediaAssetID     string    `json:"media_asset_id"`
+	StorageProvider  string    `json:"storage_provider"`
+	BucketName       string    `json:"bucket_name"`
+	ObjectKey        string    `json:"object_key"`
+	MimeType         string    `json:"mime_type"`
+	Width            *int      `json:"width"`
+	Height           *int      `json:"height"`
+	FileSize         int64     `json:"file_size"`
+	ChecksumSHA256   string    `json:"checksum_sha256"`
+	URL              string    `json:"url"`
+	InUse            bool      `json:"in_use"`
+	CreatedAt        time.Time `json:"created_at"`
+	ProcessingStatus string    `json:"processing_status"`
+	ScanStatus       string    `json:"scan_status"`
+	RejectionReason  string    `json:"rejection_reason,omitempty"`
 }
 
 type uploadTokenClaims struct {
@@ -86,8 +89,11 @@ type uploadTokenClaims struct {
 	ObjectKey string `json:"object_key"`
 	MimeType  string `json:"mime_type"`
 	FileSize  int64  `json:"file_size"`
+	UploadID  string `json:"upload_id,omitempty"`
 	ExpiresAt int64  `json:"exp"`
 }
+
+const maxChatAttachmentSize int64 = 50 * 1024 * 1024
 
 // 7. NewUploadService creates an upload service instance.
 func NewUploadService(runtime *Runtime) *UploadService {
@@ -98,6 +104,9 @@ func NewUploadService(runtime *Runtime) *UploadService {
 func (s *UploadService) Presign(ctx context.Context, params PresignParams) (*PresignUploadResult, error) {
 	if strings.TrimSpace(params.FileName) == "" || strings.TrimSpace(params.MimeType) == "" || params.FileSize <= 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "invalid upload payload")
+	}
+	if err := validateChatAttachmentSize(params.FileSize, params.ObjectPrefix); err != nil {
+		return nil, err
 	}
 
 	if !isSupportedPresignUpload(params.MimeType, params.ObjectPrefix) {
@@ -130,11 +139,22 @@ func (s *UploadService) Presign(ctx context.Context, params PresignParams) (*Pre
 	return result, nil
 }
 
+// 8.1 validateChatAttachmentSize enforces the chat attachment size limit for all upload paths.
+func validateChatAttachmentSize(fileSize int64, objectPrefix string) error {
+	if normalizeMediaObjectPrefix(objectPrefix) == chatMediaObjectPrefix && fileSize > maxChatAttachmentSize {
+		return errcode.New(errcode.CodeValidationError, "chat attachment exceeds 50 MB")
+	}
+	return nil
+}
+
 // 9. isSupportedPresignUpload validates browser direct upload media types and target directory.
 func isSupportedPresignUpload(mimeType string, objectPrefix string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(mimeType))
 	if strings.HasPrefix(normalized, "image/") {
 		return true
+	}
+	if normalizeMediaObjectPrefix(objectPrefix) == chatMediaObjectPrefix {
+		return isSupportedChatMime(normalized)
 	}
 	return strings.HasPrefix(normalized, "video/") && normalizeMediaObjectPrefix(objectPrefix) == advertisementVideoObjectPrefix
 }
@@ -183,16 +203,21 @@ func (s *UploadService) CompleteUpload(ctx context.Context, params CompleteUploa
 	}
 
 	media := model.MediaAsset{
-		PublicID:        utils.NewPublicID(),
-		StorageProvider: s.runtime.Config.StorageProvider,
-		BucketName:      s.runtime.Config.StorageBucket,
-		ObjectKey:       params.ObjectKey,
-		MimeType:        params.MimeType,
-		Width:           params.Width,
-		Height:          params.Height,
-		FileSize:        params.FileSize,
-		ChecksumSHA256:  params.ChecksumSHA256,
-		CreatedBy:       &params.UserID,
+		PublicID:         utils.NewPublicID(),
+		StorageProvider:  s.runtime.Config.StorageProvider,
+		BucketName:       s.runtime.Config.StorageBucket,
+		ObjectKey:        params.ObjectKey,
+		MimeType:         params.MimeType,
+		Width:            params.Width,
+		Height:           params.Height,
+		FileSize:         params.FileSize,
+		ChecksumSHA256:   params.ChecksumSHA256,
+		CreatedBy:        &params.UserID,
+		ProcessingStatus: mediaProcessingReady,
+		ScanStatus:       mediaScanPending,
+	}
+	if strings.HasPrefix(strings.ToLower(params.MimeType), "video/") && strings.HasPrefix(params.ObjectKey, chatMediaObjectPrefix) {
+		media.ProcessingStatus = mediaProcessingProcessing
 	}
 
 	if err := s.runtime.DB.WithContext(ctx).Create(&media).Error; err != nil {
@@ -240,7 +265,15 @@ func isSupportedCompleteUpload(mimeType string, objectKey string) bool {
 	if strings.HasPrefix(normalized, "image/") {
 		return true
 	}
+	if strings.HasPrefix(strings.TrimSpace(objectKey), chatMediaObjectPrefix) {
+		return isSupportedChatMime(normalized)
+	}
 	return strings.HasPrefix(normalized, "video/") && strings.HasPrefix(strings.TrimSpace(objectKey), advertisementVideoObjectPrefix)
+}
+
+// 12.1 isSupportedChatMime limits chat attachments to browser-friendly media and documents.
+func isSupportedChatMime(mimeType string) bool {
+	return strings.HasPrefix(mimeType, "video/") || mimeType == "application/pdf" || mimeType == "text/plain"
 }
 
 // 13. signUploadToken signs the expected upload completion values.

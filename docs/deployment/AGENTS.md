@@ -12,7 +12,7 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - AJO 部署以 `docs/deployment/server-deployment-ai-prompt.md` 和根目錄部署腳本為準；不得依賴舊 `doc copy` 路徑作為最新來源。
 - AJO Redis 與 PostgreSQL 由同一份伺服器 Docker Compose 管理，只綁定應用伺服器 `127.0.0.1`；Redis 只保存可重建快取，不配置持久化 volume。
 - POS 大廈與單位共用目錄使用 Redis 快取 5 分鐘；部署環境以 `POS_DIRECTORY_CACHE_TTL` 控制，會員權限、綁定、目前物業及 relay token 不得進入共用快取。
-- iSmart 意見提供及維修個案的提交、列表與詳情使用獨立 `ISMART_SERVICE_CASE_API_BASE_URL`；部署腳本須固定注入目前 `clouddev` 測試地址，且不得影響其他 iSmart 生產接口。
+- iSmart 意見提供及維修個案的提交、列表與詳情使用獨立 `ISMART_SERVICE_CASE_API_BASE_URL`，目前指向 `clouddev`。iSmart 副戶列表、授權與撤銷使用獨立 `ISMART_SUBACCOUNT_API_BASE_URL`，目前暫時指向生產 iSmart。
 - AJO 測試環境使用 `test.ajoliving.skylinedances.com` 單一同源入口、獨立目錄、Supervisor、Docker Compose project、PostgreSQL volume、Redis 與密鑰；測試庫只可透過顯式確認由生產邏輯快照重建。
 - 測試環境目前公開直接訪問並保持 `noindex`；`noindex` 不等同存取控制。外部服務預設沿用生產配置，只有產品明確指定的接口才隔離；測試資料庫、Redis、JWT 與加密密鑰維持獨立。
 - 生產快照恢復至測試庫後，保留的應用密文必須使用測試獨立 `ENCRYPTION_KEY` 重加密；工具不得輸出明文或密鑰，且不得修改生產資料庫。
@@ -21,6 +21,9 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
 
 ## 變更日誌
+2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源；POS 目錄快取維持不變。
+2026-09-10: 副戶列表、授權與撤銷改為暫時走生產 `ISMART_SUBACCOUNT_API_BASE_URL`，方便本機驗證住戶授權。
+2026-09-10: 記錄 iSmart 副戶列表、授權與撤銷使用獨立 `ISMART_SUBACCOUNT_API_BASE_URL` 指向 `clouddev`，授權前分別核對手機號與電郵的 `user_id`，且不得回退生產接口。
 2026-07-08: 建立部署 prompt 目錄記憶，固定部署前讀取與驗證邊界。
 2026-07-08: 補充 POS iSmart relay v2 的實際部署鏈路、Supervisor 名稱、端口與驗證規則。
 2026-07-08: 補充 AJO 後端 iSmart integration 與 legacy external app API 並存的生產環境變數。

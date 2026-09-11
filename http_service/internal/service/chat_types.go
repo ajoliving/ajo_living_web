@@ -68,12 +68,26 @@ type ChatMember struct {
 
 // 6. MessageResponse defines a chat message payload.
 type MessageResponse struct {
-	MessageID    string `json:"message_id"`
-	SenderUserID string `json:"sender_user_id"`
-	Content      string `json:"content"`
-	MessageType  string `json:"message_type"`
-	ActionLabel  string `json:"action_label,omitempty"`
-	ActionURL    string `json:"action_url,omitempty"`
-	Status       string `json:"status"`
-	CreatedAt    string `json:"created_at"`
+	MessageID    string                      `json:"message_id"`
+	SenderUserID string                      `json:"sender_user_id"`
+	Content      string                      `json:"content"`
+	MessageType  string                      `json:"message_type"`
+	ActionLabel  string                      `json:"action_label,omitempty"`
+	ActionURL    string                      `json:"action_url,omitempty"`
+	Status       string                      `json:"status"`
+	CreatedAt    string                      `json:"created_at"`
+	Attachments  []MessageAttachmentResponse `json:"attachments,omitempty"`
+}
+
+// 7. MessageAttachmentResponse exposes one chat media attachment.
+type MessageAttachmentResponse struct {
+	MediaAssetID     string `json:"media_asset_id"`
+	MimeType         string `json:"mime_type"`
+	FileSize         int64  `json:"file_size"`
+	Width            *int   `json:"width,omitempty"`
+	Height           *int   `json:"height,omitempty"`
+	URL              string `json:"url"`
+	ProcessingStatus string `json:"processing_status"`
+	ScanStatus       string `json:"scan_status"`
+	RejectionReason  string `json:"rejection_reason,omitempty"`
 }

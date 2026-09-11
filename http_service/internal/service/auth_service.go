@@ -27,6 +27,7 @@ import (
 
 const (
 	accessTokenTTL          = 2 * time.Hour
+	realtimeTokenTTL        = 90 * time.Second
 	passwordResetEmailScene = "password_reset"
 )
 
@@ -161,6 +162,13 @@ type VerifyOTPResult struct {
 	User         AuthUserResponse `json:"user"`
 }
 
+// 12.1 RefreshTokenResult defines the rotated session tokens returned without repeating member profile data.
+type RefreshTokenResult struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+}
+
 // 13. AuthUserResponse defines the auth response user payload.
 type AuthUserResponse struct {
 	PublicID         string         `json:"public_id"`
@@ -201,8 +209,9 @@ type accessTokenClaims struct {
 }
 
 const (
-	tokenTypeAccess  = "access"
-	tokenTypeRefresh = "refresh"
+	tokenTypeAccess   = "access"
+	tokenTypeRefresh  = "refresh"
+	tokenTypeRealtime = "realtime"
 )
 
 // 16. NewAuthService creates an auth service instance.
@@ -394,7 +403,7 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 			isReceiveEmail = *params.IsReceiveEmail
 		}
 		ismartMessage, err = NewIsmartExternalService(s.runtime).RegisterDirectAccount(ctx, IsmartDirectRegistrationParams{
-			Phone:          phoneNumber,
+			Phone:          joinPhone(phoneCountryCode, phoneNumber),
 			Email:          email,
 			EngName:        engName,
 			ChiName:        strings.TrimSpace(params.ChiName),
@@ -903,8 +912,43 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 		return nil, errcode.New(errcode.CodeAuthRequired, "invalid access token")
 	}
 
+	return s.authenticateUserID(ctx, claims.UserID)
+}
+
+// 28.1 RefreshTokens verifies a refresh token and rotates the browser session tokens.
+func (s *AuthService) RefreshTokens(ctx context.Context, tokenString string) (*RefreshTokenResult, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &accessTokenClaims{}, func(token *jwt.Token) (any, error) {
+		return []byte(s.runtime.Config.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errcode.New(errcode.CodeAuthRequired, "invalid refresh token")
+	}
+
+	claims, ok := token.Claims.(*accessTokenClaims)
+	if !ok || claims.TokenType != tokenTypeRefresh {
+		return nil, errcode.New(errcode.CodeAuthRequired, "invalid refresh token")
+	}
+
+	identity, err := s.authenticateUserID(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	accessToken, refreshToken, err := s.issueTokens(identity.UserID, identity.MemberType, identity.IsStaff)
+	if err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to refresh session")
+	}
+
+	return &RefreshTokenResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int(accessTokenTTL.Seconds()),
+	}, nil
+}
+
+// 28.2 authenticateUserID loads the current identity for access, refresh, and realtime tokens.
+func (s *AuthService) authenticateUserID(ctx context.Context, userID int64) (*AuthIdentity, error) {
 	var user model.User
-	if err := s.runtime.DB.WithContext(ctx).First(&user, claims.UserID).Error; err != nil {
+	if err := s.runtime.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errcode.New(errcode.CodeAuthRequired, "invalid access token")
 		}
@@ -912,7 +956,7 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 	}
 
 	var profile model.UserProfile
-	err = s.runtime.DB.WithContext(ctx).Where("user_id = ?", user.ID).First(&profile).Error
+	err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", user.ID).First(&profile).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load current user profile")
 	}
@@ -943,6 +987,41 @@ func (s *AuthService) AuthenticateToken(ctx context.Context, tokenString string)
 		PrimaryCommunityID: profile.PrimaryCommunityID,
 		AccountType:        normalizeAccountType(profile.AccountType),
 	}, nil
+}
+
+// 28.3 IssueRealtimeTicket creates a short-lived token for WebSocket handshakes.
+func (s *AuthService) IssueRealtimeTicket(userID int64) (string, int, error) {
+	var user model.User
+	if err := s.runtime.DB.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", 0, errcode.New(errcode.CodeAuthRequired, "login required")
+		}
+		return "", 0, errcode.New(errcode.CodeInternalError, "failed to load current user")
+	}
+	if user.MemberStatus != "active" {
+		return "", 0, errcode.New(errcode.CodeAuthForbidden, "active membership is required")
+	}
+
+	ticket, err := s.signToken(user.ID, user.MemberType, user.IsStaff, tokenTypeRealtime, realtimeTokenTTL)
+	if err != nil {
+		return "", 0, errcode.New(errcode.CodeInternalError, "failed to issue realtime ticket")
+	}
+	return ticket, int(realtimeTokenTTL.Seconds()), nil
+}
+
+// 28.4 AuthenticateRealtimeToken validates a short-lived WebSocket ticket.
+func (s *AuthService) AuthenticateRealtimeToken(ctx context.Context, tokenString string) (*AuthIdentity, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &accessTokenClaims{}, func(token *jwt.Token) (any, error) {
+		return []byte(s.runtime.Config.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errcode.New(errcode.CodeAuthRequired, "invalid realtime ticket")
+	}
+	claims, ok := token.Claims.(*accessTokenClaims)
+	if !ok || claims.TokenType != tokenTypeRealtime {
+		return nil, errcode.New(errcode.CodeAuthRequired, "invalid realtime ticket")
+	}
+	return s.authenticateUserID(ctx, claims.UserID)
 }
 
 // 28.1 normalizeRegistrationAccountType validates public registration account types.

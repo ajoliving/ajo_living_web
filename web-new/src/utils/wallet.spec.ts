@@ -2,10 +2,11 @@
  * AJO Point 錢包工具測試。
  * 1. 驗證積分流水來源的繁中與英文顯示。
  * 2. 驗證未知歷史值保留原始代碼。
+ * 3. 驗證展示廣告公開投放時段。
  */
 import { describe, expect, it } from 'vitest';
 
-import { formatWalletTransactionSource } from './wallet';
+import { formatWalletTransactionSource, isPublicDisplayAdActive } from './wallet';
 
 const zhHKMessages: Record<string, string> = {
   'account.wallet.transactionModules.propertySale': '樓盤放售',
@@ -38,5 +39,23 @@ describe('formatWalletTransactionSource', () => {
   it('keeps unknown historical transaction codes readable', () => {
     expect(formatWalletTransactionSource({ biz_module: 'legacy_module', action_type: 'legacy_action' }, translate(zhHKMessages)))
       .toBe('legacy_module · legacy_action');
+  });
+});
+
+describe('isPublicDisplayAdActive', () => {
+  const now = Date.parse('2026-08-29T12:00:00Z');
+
+  it('accepts active ads inside the configured delivery period', () => {
+    expect(isPublicDisplayAdActive({
+      is_active: true,
+      starts_at: '2026-08-29T11:00:00Z',
+      ends_at: '2026-08-29T13:00:00Z',
+    }, now)).toBe(true);
+  });
+
+  it('rejects inactive, future, and expired ads', () => {
+    expect(isPublicDisplayAdActive({ is_active: false }, now)).toBe(false);
+    expect(isPublicDisplayAdActive({ is_active: true, starts_at: '2026-08-29T13:00:00Z' }, now)).toBe(false);
+    expect(isPublicDisplayAdActive({ is_active: true, ends_at: '2026-08-29T11:00:00Z' }, now)).toBe(false);
   });
 });

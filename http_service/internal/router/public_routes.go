@@ -26,6 +26,7 @@ func registerPublicRoutes(
 ) {
 	// 1.1 Health and channel metadata routes.
 	api.GET("/health", healthHandler.Check)
+	api.GET("/health/ready", healthHandler.Ready)
 	api.GET("/channel-home/overview", optionalAuth, userHandler.ChannelHomeOverview)
 	api.GET("/meta/communities", userHandler.ListCommunities)
 

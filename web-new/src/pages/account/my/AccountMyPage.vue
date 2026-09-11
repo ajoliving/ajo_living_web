@@ -4,6 +4,7 @@
  * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
+ * 5. 在帳戶資料提供 iSmart 密碼更新彈窗。
 -->
 <script setup lang="ts">
 /*
@@ -12,6 +13,7 @@
  * 2. 當前面板狀態與切換方法。
  * 3. 帳號管理、提示設定、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
  * 4. 退出登入後返回登入頁。
+ * 5. 提交 iSmart 密碼更新並顯示結果。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -26,7 +28,7 @@ import {
   fetchPosBuildingUnits,
   submitMemberIsmartOwnerBindingRequest,
 } from '@/httpapis/building';
-import { updateMemberIsmartProfile, updateMe } from '@/httpapis/me';
+import { changeMemberIsmartPassword, updateMemberIsmartProfile, updateMe } from '@/httpapis/me';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -156,6 +158,7 @@ const syncActivePanelFromRoute = (path: string) => {
 interface AccountDisplayField {
   label: string;
   value: string;
+  action?: 'change-password';
 }
 
 const unsetText = computed(() => t('account.center.common.unset'));
@@ -189,6 +192,13 @@ interface IsmartEditFormState {
 
 const ismartEditOpen = ref(false);
 const ismartEditSaving = ref(false);
+const ismartPasswordOpen = ref(false);
+const ismartPasswordSaving = ref(false);
+const ismartPasswordForm = reactive({
+  old_password: '',
+  new_password: '',
+  new_password_confirm: '',
+});
 const ismartEditForm = reactive<IsmartEditFormState>({
   account_email: '',
   account_phone: '',
@@ -247,7 +257,51 @@ const closeIsmartEdit = (): void => {
   }
 };
 
-// 7.6 儲存 iSmart 資料
+// 7.6 開啟 iSmart 密碼更新彈窗
+const openIsmartPassword = (): void => {
+  ismartPasswordForm.old_password = '';
+  ismartPasswordForm.new_password = '';
+  ismartPasswordForm.new_password_confirm = '';
+  ismartPasswordOpen.value = true;
+};
+
+// 7.7 關閉 iSmart 密碼更新彈窗
+const closeIsmartPassword = (): void => {
+  if (!ismartPasswordSaving.value) {
+    ismartPasswordOpen.value = false;
+  }
+};
+
+// 7.8 提交 iSmart 密碼更新
+const handleSaveIsmartPassword = async (): Promise<void> => {
+  if (ismartPasswordSaving.value) {
+    return;
+  }
+  if (ismartPasswordForm.new_password.length < 8) {
+    feedbackStore.pushToast(t('account.center.account.passwordTooShort'), 'error');
+    return;
+  }
+  if (ismartPasswordForm.new_password !== ismartPasswordForm.new_password_confirm) {
+    feedbackStore.pushToast(t('account.center.account.passwordMismatch'), 'error');
+    return;
+  }
+
+  ismartPasswordSaving.value = true;
+  try {
+    await changeMemberIsmartPassword({ ...ismartPasswordForm });
+    ismartPasswordOpen.value = false;
+    feedbackStore.pushToast(t('account.center.account.passwordSaved'), 'success');
+  } catch (error) {
+    feedbackStore.pushToast(
+      readAccountApiErrorMessage(error, t('account.center.account.passwordSaveError')),
+      'error',
+    );
+  } finally {
+    ismartPasswordSaving.value = false;
+  }
+};
+
+// 7.9 儲存 iSmart 資料
 const handleSaveIsmartProfile = async (): Promise<void> => {
   if (ismartEditSaving.value) {
     return;
@@ -310,6 +364,7 @@ const ajoAccountData = computed<AccountDisplayField[]>(() => [
   {
     label: t('account.profile.localPassword'),
     value: sessionStore.me ? t('account.center.account.passwordManaged') : unsetText.value,
+    action: 'change-password',
   },
   {
     label: t('auth.publisherIdentityType'),
@@ -321,7 +376,10 @@ const ajoAccountData = computed<AccountDisplayField[]>(() => [
     } as Record<string, string>)[sessionStore.me?.account_type ?? 'personal'] ?? 'Personal'}`),
   },
   { label: t('account.profile.districtCode'), value: displayText(sessionStore.me?.district_code) },
-  { label: t('account.center.account.residentUnits'), value: residentUnitNameText.value },
+  {
+    label: t('account.center.account.residentUnits'),
+    value: residentUnitNameText.value,
+  },
 ]);
 
 interface BindOption {
@@ -1685,7 +1743,17 @@ watch(activePanel, () => {
                   class="work-account-field"
                 >
                   <span>{{ item.label }}</span>
-                  <strong>{{ item.value }}</strong>
+                  <div class="work-account-field__value">
+                    <strong>{{ item.value }}</strong>
+                    <button
+                      v-if="item.action === 'change-password'"
+                      type="button"
+                      class="work-action work-compact-action"
+                      @click="openIsmartPassword"
+                    >
+                      {{ t('account.center.account.changeIsmartPassword') }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1728,6 +1796,91 @@ watch(activePanel, () => {
               </div>
             </section>
           </div>
+
+          <Teleport to="body">
+            <div
+              v-if="ismartPasswordOpen"
+              class="work-ismart-modal"
+              role="presentation"
+              @click.self="closeIsmartPassword"
+            >
+              <form
+                class="work-ismart-dialog work-password-dialog"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="t('account.center.account.changeIsmartPassword')"
+                @submit.prevent="handleSaveIsmartPassword"
+              >
+                <header class="work-ismart-dialog__header">
+                  <div>
+                    <div class="work-kicker">{{ t('account.center.account.accountInfo') }}</div>
+                    <h2 class="work-title">{{ t('account.center.account.changeIsmartPassword') }}</h2>
+                    <p class="work-card-sub">{{ t('account.center.account.changeIsmartPasswordDescription') }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="work-ismart-dialog__close"
+                    :aria-label="t('marketplace.myProfile.closeEdit')"
+                    :disabled="ismartPasswordSaving"
+                    @click="closeIsmartPassword"
+                  />
+                </header>
+                <div class="work-ismart-dialog__body">
+                  <div class="work-password-form">
+                    <label class="acct-field">
+                      <span>{{ t('account.center.account.currentPassword') }}</span>
+                      <input
+                        v-model="ismartPasswordForm.old_password"
+                        class="acct-input"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                      >
+                    </label>
+                    <label class="acct-field">
+                      <span>{{ t('account.center.account.newPassword') }}</span>
+                      <input
+                        v-model="ismartPasswordForm.new_password"
+                        class="acct-input"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="8"
+                        required
+                      >
+                    </label>
+                    <label class="acct-field">
+                      <span>{{ t('account.center.account.confirmNewPassword') }}</span>
+                      <input
+                        v-model="ismartPasswordForm.new_password_confirm"
+                        class="acct-input"
+                        type="password"
+                        autocomplete="new-password"
+                        minlength="8"
+                        required
+                      >
+                    </label>
+                  </div>
+                </div>
+                <footer class="work-ismart-edit-actions">
+                  <button
+                    type="button"
+                    class="work-action work-compact-action secondary"
+                    :disabled="ismartPasswordSaving"
+                    @click="closeIsmartPassword"
+                  >
+                    {{ t('account.center.common.cancel') }}
+                  </button>
+                  <button
+                    type="submit"
+                    class="work-action work-compact-action"
+                    :disabled="ismartPasswordSaving"
+                  >
+                    {{ ismartPasswordSaving ? t('account.center.common.saving') : t('account.center.account.savePassword') }}
+                  </button>
+                </footer>
+              </form>
+            </div>
+          </Teleport>
 
           <section class="work-card work-ismart-section">
             <div class="work-section-heading">
@@ -2745,6 +2898,18 @@ watch(activePanel, () => {
   word-break: break-word;
 }
 
+.work-account-field__value {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.work-account-field__value strong {
+  min-width: 0;
+}
+
 /* 8. 綁定單位 */
 .work-bind-wrap {
   display: grid;
@@ -2852,6 +3017,10 @@ watch(activePanel, () => {
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 24px 72px rgb(0 0 0 / 0.25);
+}
+
+.work-password-dialog {
+  width: min(100%, 460px);
 }
 
 .work-ismart-dialog__header {
@@ -2963,6 +3132,11 @@ watch(activePanel, () => {
 
 .work-ismart-edit-grid {
   margin-top: 0;
+}
+
+.work-password-form {
+  display: grid;
+  gap: 14px;
 }
 
 .work-ismart-edit-actions {

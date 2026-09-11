@@ -11,6 +11,7 @@ import {
   loginWithIsmart,
   loginWithPhone,
   loginWithUsername,
+  refreshTokens,
   logout,
   registerWithEmail,
   requestEmailPasswordReset,
@@ -22,6 +23,7 @@ import {
 } from '@/httpapis/auth';
 import {
   clearStoredTokens,
+  isAccessTokenExpired,
   readStoredAccessToken,
   readStoredRefreshToken,
   writeStoredTokens,
@@ -99,6 +101,14 @@ export const useSessionStore = defineStore('session', {
         this.isHydrating = true;
 
         try {
+          if (this.accessToken && isAccessTokenExpired(this.accessToken)) {
+            if (!this.refreshToken) {
+              this.clearSession();
+              return;
+            }
+            const { data } = await refreshTokens(this.refreshToken);
+            this.setTokens(data.data.access_token, data.data.refresh_token);
+          }
           if (this.accessToken) {
             await this.loadCurrentUser();
           }

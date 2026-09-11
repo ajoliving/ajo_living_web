@@ -291,6 +291,7 @@ const fetchList = async () => { ... };
 - UI prompt 落地前先讀 `src/pages/AGENTS.md`、相關 page 目錄與 `docs/prompts/`，不要只按 prompt 重新發明頁面結構。
 
 ## 變更日誌
+2026-09-11: 管理中心新增管理員不再選擇角色目錄；會員列表只顯示 `is_staff`，並移除未使用的二手訂單 API。
 2026-07-08: 補充前端 page 目錄記憶入口，連接 UI prompt 與實際頁面邊界。
 2026-07-09: 補充 body 層 Teleport 彈窗的手機端基線要求。
 2026-07-09: 補充登入狀態 hydrate 需支援路由守衛並發等待，避免 staff 頁面誤退回會員中心。

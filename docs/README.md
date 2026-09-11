@@ -8,6 +8,8 @@
 - `PROMPT_INDEX.md`: AI prompt、agent 規則、工具描述與維護協議索引。
 - `architecture/`: 系統架構與模組邊界文件。
 - `development/`: Vue、React、Go 與 API 文件生成等開發規範。
+- `architecture/realtime-chat-guidance.md`: 平台級即時聊天、跨實例廣播與媒體附件架構指導。
+- `development/realtime-chat-progress.md`: 即時聊天分階段實施進度與驗收清單。
 - `deployment/`: 部署、運維與環境交付文件。
 - `integrations/`: 外部 App、舊系統與 AJO 模組映射文件。
 - `data/`: 地址表、參考資料與配置資料。

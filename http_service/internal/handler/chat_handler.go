@@ -18,11 +18,14 @@ import (
 // 1. ChatHandler handles chat endpoints.
 type ChatHandler struct {
 	chatService *service.ChatService
+	realtimeHub *RealtimeHub
 }
 
 // 2. messageRequest defines the send message payload.
 type messageRequest struct {
-	Content string `json:"content" binding:"required"`
+	Content         string   `json:"content"`
+	AttachmentIDs   []string `json:"attachment_ids"`
+	ClientMessageID string   `json:"client_message_id"`
 }
 
 // 2. buildingChatJoinRequestPayload defines a join request payload.
@@ -44,8 +47,12 @@ type buildingChatModerationPayload struct {
 }
 
 // 3. NewChatHandler creates a chat handler instance.
-func NewChatHandler(chatService *service.ChatService) *ChatHandler {
-	return &ChatHandler{chatService: chatService}
+func NewChatHandler(chatService *service.ChatService, realtimeHub ...*RealtimeHub) *ChatHandler {
+	var hub *RealtimeHub
+	if len(realtimeHub) > 0 {
+		hub = realtimeHub[0]
+	}
+	return &ChatHandler{chatService: chatService, realtimeHub: hub}
 }
 
 // 4. CreateOrReuse creates or reuses a secondhand listing chat.
@@ -136,6 +143,24 @@ func (h *ChatHandler) ListMessages(c *gin.Context) {
 	}
 
 	page, pageSize := parsePagination(c)
+	if afterMessageID := strings.TrimSpace(c.Query("after_message_id")); afterMessageID != "" {
+		items, pagination, err := h.chatService.ListMessagesAfter(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), afterMessageID, pageSize)
+		if err != nil {
+			errcode.WriteError(c, err)
+			return
+		}
+		errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+		return
+	}
+	if c.Query("latest") == "true" {
+		items, pagination, err := h.chatService.ListRecentMessages(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), pageSize)
+		if err != nil {
+			errcode.WriteError(c, err)
+			return
+		}
+		errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+		return
+	}
 	items, pagination, err := h.chatService.ListMessages(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), page, pageSize)
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -159,10 +184,13 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	result, err := h.chatService.SendMessage(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content))
+	result, err := h.chatService.SendMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID))
 	if err != nil {
 		errcode.WriteError(c, err)
 		return
+	}
+	if h.realtimeHub != nil {
+		h.realtimeHub.PublishMessage(c.Request.Context(), strings.TrimSpace(c.Param("chatId")), *result, strings.TrimSpace(request.ClientMessageID))
 	}
 
 	errcode.Success(c, result)
@@ -267,6 +295,24 @@ func (h *ChatHandler) ListBuildingChatMessages(c *gin.Context) {
 		return
 	}
 	page, pageSize := parsePagination(c)
+	if afterMessageID := strings.TrimSpace(c.Query("after_message_id")); afterMessageID != "" {
+		items, pagination, err := h.chatService.ListBuildingChatMessagesAfter(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), afterMessageID, pageSize)
+		if err != nil {
+			errcode.WriteError(c, err)
+			return
+		}
+		errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+		return
+	}
+	if c.Query("latest") == "true" {
+		items, pagination, err := h.chatService.ListRecentBuildingChatMessages(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), pageSize)
+		if err != nil {
+			errcode.WriteError(c, err)
+			return
+		}
+		errcode.Success(c, gin.H{"items": items, "pagination": pagination})
+		return
+	}
 	items, pagination, err := h.chatService.ListBuildingChatMessages(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), page, pageSize)
 	if err != nil {
 		errcode.WriteError(c, err)
@@ -287,10 +333,13 @@ func (h *ChatHandler) SendBuildingChatMessage(c *gin.Context) {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
 		return
 	}
-	result, err := h.chatService.SendBuildingChatMessage(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content))
+	result, err := h.chatService.SendBuildingChatMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID))
 	if err != nil {
 		errcode.WriteError(c, err)
 		return
+	}
+	if h.realtimeHub != nil {
+		h.realtimeHub.PublishMessage(c.Request.Context(), strings.TrimSpace(c.Param("chatId")), *result, strings.TrimSpace(request.ClientMessageID))
 	}
 	errcode.Success(c, result)
 }

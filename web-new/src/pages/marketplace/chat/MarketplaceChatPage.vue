@@ -1,50 +1,87 @@
 <!--
  * 聊天頁。
- * 1. 串接真實會話列表、詳情、訊息與已讀流程。
- * 2. 左側會話列表採用與通知導航一致的按鈕樣式。
- * 3. 頂部提供群聊/私聊篩選器。
- * 4. 默認自動打開第一個對話。
+ * 1. 串接真實會話列表、詳情、訊息與已讀流程，一對一與大廈群聊共用同一佈局。
+ * 2. 中間會話列表與通信中心導航共用一致的選中與聚焦樣式，列表項之間以留白分隔線區分。
+ * 3. 大廈群聊於標題欄提供「更多」選單，收納成員名單與離開群組操作。
 -->
 <script setup lang="ts">
+import { ref, watch } from 'vue';
+
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
-import BaseButton from '@/shared/components/base/BaseButton.vue';
 import BaseTextarea from '@/shared/components/base/BaseTextarea.vue';
 import BaseEmpty from '@/shared/components/feedback/BaseEmpty.vue';
 
 import { useMarketplaceChatPage } from './chat';
 import MessageBubble from './widgets/MessageBubble.vue';
+import GroupMembersDialog from './widgets/GroupMembersDialog.vue';
+
+const emit = defineEmits<{
+  (event: 'unread-count-change', count: number): void;
+}>();
 
 const {
   activeConversation,
-  activeMembers,
-  activeJoinRequests,
   activeReferencePrice,
   activeMessages,
   canSendMessage,
-  canManageGroup,
-  conversationFilter,
+  conversations,
   draftMessage,
-  filteredConversations,
   formatPrice,
+  groupMembers,
+  groupMembersOpen,
   handleBackToChats,
+  handleCloseGroupMembers,
+  handleLeaveBuildingChat,
+  handleOpenGroupMembers,
   handleSelectChat,
   handleSendByEnter,
   handleSendMessage,
-  handleLeaveBuildingChat,
-  handleModerateBuildingMember,
-  handleReviewBuildingChatJoin,
+  handleSelectAttachment,
+  leaveConfirmOpen,
+  leavingGroup,
   loadingConversations,
+  loadingGroupMembers,
   loadingMessages,
   messageMaxLength,
   preferenceStore,
   selectedChatId,
-  setConversationFilter,
   setMessageContainerRef,
   sendingMessage,
+  uploadingAttachment,
   sessionStore,
   t,
+  totalUnreadCount,
 } = useMarketplaceChatPage();
+
+const moreMenuOpen = ref(false);
+
+// 1. 關閉群聊更多選單
+const closeMoreMenu = (): void => {
+  moreMenuOpen.value = false;
+};
+
+// 2. 從更多選單開啟成員名單
+const openGroupMembers = async (): Promise<void> => {
+  closeMoreMenu();
+  await handleOpenGroupMembers();
+};
+
+// 3. 從更多選單開啟離開群組確認
+const openLeaveConfirm = (): void => {
+  closeMoreMenu();
+  leaveConfirmOpen.value = true;
+};
+
+// 4. 上報會話未讀總數給通信中心導航
+watch(
+  totalUnreadCount,
+  (count) => {
+    emit('unread-count-change', count);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -53,30 +90,9 @@ const {
       <div
         v-if="sessionStore.isAuthenticated"
         class="chat-layout"
+        :class="activeConversation ? 'chat-layout--thread-open' : ''"
       >
         <div class="chat-sidebar">
-          <header class="chat-sidebar__header">
-            <h2>{{ t('chat.title') }}</h2>
-            <div class="chat-filter-tabs">
-              <button
-                type="button"
-                class="chat-filter-tab"
-                :class="conversationFilter === 'all' ? 'active' : ''"
-                @click="setConversationFilter('all')"
-              >
-                {{ t('chat.filterAll') }}
-              </button>
-              <button
-                type="button"
-                class="chat-filter-tab"
-                :class="conversationFilter === 'building_group' ? 'active' : ''"
-                @click="setConversationFilter('building_group')"
-              >
-                {{ t('chat.filterBuilding') }}
-              </button>
-            </div>
-          </header>
-
           <div
             v-if="loadingConversations"
             class="chat-sidebar__loading"
@@ -85,7 +101,7 @@ const {
           </div>
 
           <div
-            v-else-if="filteredConversations.length === 0"
+            v-else-if="conversations.length === 0"
             class="chat-sidebar__empty"
           >
             <p>{{ t('chat.noConversationsTitle') }}</p>
@@ -97,7 +113,7 @@ const {
             class="chat-conversation-list"
           >
             <button
-              v-for="conversation in filteredConversations"
+              v-for="conversation in conversations"
               :key="conversation.id"
               type="button"
               class="chat-nav-item"
@@ -106,14 +122,30 @@ const {
             >
               <div class="chat-nav-item__avatar">
                 <BaseAvatar
+                  v-if="conversation.type === 'direct_listing_chat'"
                   :src="conversation.peer.avatar_url"
                   :name="conversation.peer.display_name"
                   :size="40"
                 />
+                <div
+                  v-else
+                  class="chat-nav-item__building-icon"
+                >
+                  <AppIcon
+                    name="building"
+                    :size="20"
+                  />
+                </div>
               </div>
               <div class="chat-nav-item__content">
                 <div class="chat-nav-item__header">
-                  <h4 class="chat-nav-item__title">{{ conversation.title }}</h4>
+                  <h4 class="chat-nav-item__title">
+                    <span
+                      v-if="conversation.type === 'building_group'"
+                      class="chat-nav-item__group-badge"
+                    >{{ t('chat.buildingGroupBadge') }}</span>
+                    <span class="chat-nav-item__title-text">{{ conversation.title }}</span>
+                  </h4>
                   <span
                     v-if="conversation.unread_count > 0"
                     class="chat-nav-item__badge"
@@ -122,12 +154,25 @@ const {
                   </span>
                 </div>
                 <p
-                  v-if="conversation.peer.role_in_chat"
+                  v-if="conversation.type === 'building_group'"
+                  class="chat-nav-item__subtitle chat-nav-item__subtitle--group"
+                >
+                  <AppIcon
+                    name="user"
+                    :size="12"
+                  />
+                  {{ conversation.member_count }} {{ t('chat.members') }}
+                </p>
+                <p
+                  v-else-if="conversation.peer.role_in_chat"
                   class="chat-nav-item__role"
                 >
                   {{ conversation.peer.role_in_chat }}
                 </p>
-                <p class="chat-nav-item__subtitle">
+                <p
+                  v-if="conversation.type === 'direct_listing_chat'"
+                  class="chat-nav-item__subtitle"
+                >
                   {{ conversation.subtitle }}
                 </p>
                 <p class="chat-nav-item__message">
@@ -158,108 +203,89 @@ const {
               </button>
               <div class="chat-thread-info">
                 <h3 class="chat-thread-title">{{ activeConversation.title }}</h3>
-                <p class="chat-thread-subtitle">{{ activeConversation.subtitle }}</p>
+                <p
+                  v-if="activeConversation.type === 'building_group'"
+                  class="chat-thread-subtitle"
+                >
+                  <AppIcon
+                    name="user"
+                    :size="12"
+                  />
+                  {{ activeConversation.member_count }} {{ t('chat.members') }}
+                </p>
+                <p
+                  v-else
+                  class="chat-thread-subtitle"
+                >
+                  {{ activeConversation.subtitle }}
+                </p>
               </div>
             </div>
-            <div
-              v-if="activeReferencePrice > 0"
-              class="chat-listing-price"
-            >
-              <span class="chat-listing-price__label">{{ t('chat.listingPrice') }}</span>
-              <strong class="chat-listing-price__value">
-                {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
-              </strong>
-            </div>
-          </header>
-
-          <div
-            v-if="activeConversation.type === 'building_group'"
-            class="chat-group-panel"
-          >
-            <div class="chat-group-panel__header">
-              <span>{{ t('chat.groupMembers') }} {{ activeMembers.length }}</span>
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click="handleLeaveBuildingChat"
-              >
-                {{ t('chat.leaveGroup') }}
-              </BaseButton>
-            </div>
-            <div class="chat-group-members">
+            <div class="chat-header-actions">
               <div
-                v-for="member in activeMembers"
-                :key="member.user_id"
-                class="chat-group-member"
+                v-if="activeConversation.type === 'direct_listing_chat' && activeReferencePrice > 0"
+                class="chat-listing-price"
               >
-                <div class="chat-group-member__info">
-                  <strong>{{ member.display_name }}</strong>
-                  <span>{{ member.role_in_chat }} · {{ member.membership_status }}</span>
-                </div>
+                <span class="chat-listing-price__label">{{ t('chat.listingPrice') }}</span>
+                <strong class="chat-listing-price__value">
+                  {{ formatPrice(activeReferencePrice, preferenceStore.locale) }}
+                </strong>
+              </div>
+
+              <div
+                v-if="activeConversation.type === 'building_group'"
+                class="chat-more"
+              >
+                <button
+                  type="button"
+                  class="chat-more__button"
+                  :class="moreMenuOpen ? 'open' : ''"
+                  :aria-label="t('chat.moreActions')"
+                  :aria-expanded="moreMenuOpen"
+                  @click="moreMenuOpen = !moreMenuOpen"
+                >
+                  <AppIcon
+                    name="more"
+                    :size="20"
+                  />
+                </button>
+                <Teleport to="body">
+                  <div
+                    v-if="moreMenuOpen"
+                    class="chat-more__backdrop"
+                    @click="closeMoreMenu"
+                  />
+                </Teleport>
                 <div
-                  v-if="canManageGroup"
-                  class="chat-group-member__actions"
+                  v-if="moreMenuOpen"
+                  class="chat-more__menu"
                 >
                   <button
-                    v-if="member.membership_status === 'active' && !member.muted_until"
                     type="button"
-                    @click="handleModerateBuildingMember(member.user_id, 'mute')"
+                    class="chat-more__menu-item"
+                    @click="openGroupMembers"
                   >
-                    {{ t('chat.mute') }}
+                    <AppIcon
+                      name="user"
+                      :size="16"
+                    />
+                    {{ t('chat.viewMembers') }}
                   </button>
                   <button
-                    v-if="member.membership_status === 'active' && member.muted_until"
                     type="button"
-                    @click="handleModerateBuildingMember(member.user_id, 'unmute')"
+                    class="chat-more__menu-item chat-more__menu-item--danger"
+                    @click="openLeaveConfirm"
                   >
-                    {{ t('chat.unmute') }}
-                  </button>
-                  <button
-                    v-if="member.membership_status === 'active'"
-                    type="button"
-                    @click="handleModerateBuildingMember(member.user_id, 'kick')"
-                  >
-                    {{ t('chat.kick') }}
-                  </button>
-                  <button
-                    v-if="member.membership_status === 'active'"
-                    type="button"
-                    @click="handleModerateBuildingMember(member.user_id, 'ban')"
-                  >
-                    {{ t('chat.ban') }}
-                  </button>
-                  <button
-                    v-if="member.membership_status === 'banned'"
-                    type="button"
-                    @click="handleModerateBuildingMember(member.user_id, 'unban')"
-                  >
-                    {{ t('chat.unban') }}
+                    <AppIcon
+                      name="logout"
+                      :size="16"
+                    />
+                    {{ t('chat.leaveGroup') }}
                   </button>
                 </div>
               </div>
             </div>
-            <div
-              v-if="canManageGroup && activeJoinRequests.length"
-              class="chat-group-requests"
-            >
-              <strong>{{ t('chat.joinRequests') }}</strong>
-              <div
-                v-for="request in activeJoinRequests"
-                :key="request.request_id"
-                class="chat-group-request"
-              >
-                <span>{{ request.user_id }}<template v-if="request.reason"> · {{ request.reason }}</template></span>
-                <div class="chat-group-member__actions">
-                  <button type="button" @click="handleReviewBuildingChatJoin(request.request_id, 'approved')">
-                    {{ t('chat.approve') }}
-                  </button>
-                  <button type="button" @click="handleReviewBuildingChatJoin(request.request_id, 'rejected')">
-                    {{ t('chat.reject') }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          </header>
 
           <div
             :ref="setMessageContainerRef"
@@ -275,40 +301,46 @@ const {
               v-for="messageItem in activeMessages"
               :key="messageItem.id"
               :message="messageItem"
+              :show-sender-name="activeConversation.type === 'building_group'"
             />
           </div>
 
           <div class="chat-composer">
-            <div class="chat-composer__meta">
-              <span>{{ t('chat.replying') }}</span>
-              <span>{{ draftMessage.length }}/{{ messageMaxLength }}</span>
-            </div>
-            <div class="chat-composer__row">
+            <div class="chat-composer__surface">
               <BaseTextarea
                 :model-value="draftMessage"
-                :rows="2"
+                :rows="3"
                 :maxlength="messageMaxLength"
                 class="chat-composer__textarea"
                 :placeholder="t('chat.composePlaceholder')"
                 @update:model-value="draftMessage = $event"
                 @keydown.enter="handleSendByEnter"
               />
-              <div class="chat-composer__actions">
-                <BaseButton
-                  variant="primary"
-                  size="sm"
+              <div class="chat-composer__toolbar">
+                <label
+                  class="chat-attachment-button"
+                  :class="uploadingAttachment ? 'chat-attachment-button--disabled' : ''"
+                  :title="t('chat.attachments')"
+                >
+                  <AppIcon name="plus" :size="22" />
+                  <input
+                    type="file"
+                    accept="image/*,video/*,application/pdf,text/plain"
+                    multiple
+                    :disabled="uploadingAttachment"
+                    @change="handleSelectAttachment"
+                  >
+                </label>
+                <button
+                  type="button"
                   class="chat-send-button"
-                  :disabled="!canSendMessage"
+                  :disabled="!canSendMessage || uploadingAttachment"
+                  :aria-label="sendingMessage ? t('chat.sending') : t('common.action.send')"
+                  :title="sendingMessage ? t('chat.sending') : t('common.action.send')"
                   @click="handleSendMessage"
                 >
-                  <template #leading>
-                    <AppIcon
-                      name="send"
-                      :size="16"
-                    />
-                  </template>
-                  {{ sendingMessage ? t('chat.sending') : t('common.action.send') }}
-                </BaseButton>
+                  <AppIcon name="send" :size="18" />
+                </button>
               </div>
             </div>
           </div>
@@ -323,6 +355,26 @@ const {
             :description="t('chat.emptyThreadDescription')"
           />
         </div>
+
+        <GroupMembersDialog
+          :open="groupMembersOpen"
+          :loading="loadingGroupMembers"
+          :members="groupMembers"
+          :title="activeConversation?.title || t('chat.groupMembers')"
+          :member-count-label="`${groupMembers.length} ${t('chat.members')}`"
+          @close="handleCloseGroupMembers"
+        />
+
+        <AppActionConfirmDialog
+          :open="leaveConfirmOpen"
+          :title="t('chat.leaveGroup')"
+          :description="t('chat.leaveGroupConfirmDescription')"
+          :cancel-label="t('common.action.cancel')"
+          :confirm-label="t('chat.leaveGroup')"
+          :confirming="leavingGroup"
+          @cancel="leaveConfirmOpen = false"
+          @confirm="handleLeaveBuildingChat"
+        />
       </div>
 
       <BaseEmpty
@@ -351,65 +403,21 @@ const {
   gap: 18px;
   width: 100%;
   max-width: none;
+  height: calc(100svh - 116px);
+  min-height: 480px;
   align-items: stretch;
 }
 
 .chat-sidebar {
   display: flex;
   flex-direction: column;
+  align-self: start;
+  height: 50svh;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   background: rgb(var(--color-surface));
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
   overflow: hidden;
-}
-
-.chat-sidebar__header {
-  padding: 16px 18px;
-  border-bottom: 1px solid rgb(var(--color-border));
-}
-
-.chat-sidebar__header h2 {
-  margin: 0 0 12px;
-  color: rgb(var(--color-text));
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.chat-filter-tabs {
-  display: flex;
-  gap: 6px;
-  border-radius: 6px;
-  background: rgb(var(--color-surface-raised));
-  padding: 4px;
-}
-
-.chat-filter-tab {
-  flex: 1;
-  min-height: 32px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  padding: 6px 10px;
-  color: rgb(var(--color-text-muted));
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.chat-filter-tab:hover {
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
-}
-
-.chat-filter-tab.active {
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
 }
 
 .chat-sidebar__loading,
@@ -437,42 +445,107 @@ const {
 }
 
 .chat-conversation-list {
-  display: grid;
-  gap: 2px;
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 8px 10px;
   overflow-y: auto;
 }
 
 .chat-nav-item {
+  position: relative;
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
-  min-height: 68px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 96px;
+  min-height: 96px;
+  max-height: 96px;
+  flex: 0 0 96px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
-  padding: 12px;
-  color: rgb(var(--color-text));
+  padding: 10px 4px;
+  color: rgb(var(--color-text-muted));
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  overflow: hidden;
   transition:
     background-color 0.2s ease,
     transform 0.1s ease;
 }
 
-.chat-nav-item:hover {
-  background: rgb(var(--color-surface-raised));
+.chat-nav-item::before {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 1px;
+  background: rgb(var(--color-border) / 0.55);
+}
+
+.chat-nav-item:last-child::before {
+  display: none;
+}
+
+.chat-nav-item::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 2px;
+  background: rgb(var(--color-primary));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.24s ease;
+}
+
+.chat-nav-item:hover,
+.chat-nav-item:focus-visible {
+  background: rgb(var(--color-primary) / 0.08);
+  color: rgb(var(--color-text));
+  outline: none;
 }
 
 .chat-nav-item.active {
-  background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
+  background: transparent;
+  color: rgb(var(--color-primary));
+  font-weight: 700;
+}
+
+.chat-nav-item.active:hover {
+  background: rgb(var(--color-primary) / 0.08);
+}
+
+.chat-nav-item.active::after,
+.chat-nav-item:focus-visible::after {
+  transform: scaleX(1);
 }
 
 .chat-nav-item__content {
   min-width: 0;
+  overflow: hidden;
+}
+
+.chat-nav-item__avatar {
+  flex-shrink: 0;
+}
+
+.chat-nav-item__building-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgb(var(--color-primary) / 0.1);
+  color: rgb(var(--color-primary));
 }
 
 .chat-nav-item__header {
@@ -484,6 +557,9 @@ const {
 }
 
 .chat-nav-item__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -491,8 +567,26 @@ const {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-nav-item__title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-nav-item__group-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: rgb(var(--color-primary) / 0.12);
+  color: rgb(var(--color-primary));
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 5px;
 }
 
 .chat-nav-item__badge {
@@ -511,7 +605,7 @@ const {
 }
 
 .chat-nav-item.active .chat-nav-item__badge {
-  background: rgb(var(--color-primary-contrast));
+  background: rgb(var(--color-primary) / 0.15);
   color: rgb(var(--color-primary));
 }
 
@@ -535,6 +629,15 @@ const {
   white-space: nowrap;
 }
 
+.chat-nav-item__subtitle--group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgb(var(--color-primary));
+  font-weight: 600;
+  opacity: 0.9;
+}
+
 .chat-nav-item__message {
   margin: 0;
   overflow: hidden;
@@ -549,12 +652,12 @@ const {
 
 .chat-main {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   background: rgb(var(--color-surface));
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
-  min-height: clamp(500px, calc(100svh - 200px), 700px);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -570,7 +673,7 @@ const {
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid rgb(var(--color-border));
-  padding: 16px 20px;
+  padding: 14px 20px;
 }
 
 .chat-thread-identity {
@@ -618,6 +721,9 @@ const {
 }
 
 .chat-thread-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 4px 0 0;
   color: rgb(var(--color-text-muted));
   font-size: 12px;
@@ -627,11 +733,17 @@ const {
   white-space: nowrap;
 }
 
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
 .chat-listing-price {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex-shrink: 0;
   text-align: right;
 }
 
@@ -651,117 +763,95 @@ const {
   line-height: 1.2;
 }
 
-.chat-group-panel {
-  border-bottom: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-surface-raised));
-  padding: 12px 20px;
+.chat-more {
+  position: relative;
 }
 
-.chat-group-panel__header {
-  display: flex;
+.chat-more__button {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.chat-group-members {
-  display: grid;
-  gap: 8px;
-}
-
-.chat-group-member {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: 4px;
-  background: rgb(var(--color-surface));
-  padding: 10px 12px;
-}
-
-.chat-group-member__info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.chat-group-member__info strong {
-  color: rgb(var(--color-text));
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.chat-group-member__info span {
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
-}
-
-.chat-group-member__actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.chat-group-member__actions button {
-  min-height: 28px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   border: 1px solid rgb(var(--color-border));
-  border-radius: 4px;
+  border-radius: 6px;
   background: rgb(var(--color-surface));
-  padding: 4px 10px;
   color: rgb(var(--color-text));
   cursor: pointer;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
   transition:
     border-color 0.2s ease,
     background-color 0.2s ease;
 }
 
-.chat-group-member__actions button:hover {
+.chat-more__button:hover,
+.chat-more__button.open,
+.chat-more__button:focus-visible {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary) / 0.05);
+  outline: none;
 }
 
-.chat-group-requests {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgb(var(--color-border));
+.chat-more__backdrop {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
 }
 
-.chat-group-requests strong {
-  display: block;
-  margin-bottom: 8px;
-  color: rgb(var(--color-text));
-  font-size: 12px;
-  font-weight: 700;
+.chat-more__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 111;
+  display: grid;
+  min-width: 176px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.14);
+  overflow: hidden;
 }
 
-.chat-group-request {
+.chat-more__menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: 4px;
-  background: rgb(var(--color-surface));
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  gap: 10px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 10px 14px;
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.chat-group-request span {
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
+.chat-more__menu-item:hover,
+.chat-more__menu-item:focus-visible {
+  background: rgb(var(--color-primary) / 0.06);
+  color: rgb(var(--color-primary));
+  outline: none;
+}
+
+.chat-more__menu-item--danger {
+  color: rgb(185 28 28);
+}
+
+.chat-more__menu-item--danger:hover,
+.chat-more__menu-item--danger:focus-visible {
+  background: rgb(239 68 68 / 0.08);
+  color: rgb(185 28 28);
 }
 
 .chat-message-scroll {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px;
   background: rgb(var(--color-surface-muted));
@@ -779,48 +869,114 @@ const {
 .chat-composer {
   border-top: 1px solid rgb(var(--color-border));
   background: rgb(var(--color-surface));
-  padding: 16px 20px;
+  padding: 12px 16px;
 }
 
-.chat-composer__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.chat-composer__row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
+.chat-composer__surface {
+  display: grid;
+  grid-template-rows: minmax(84px, 1fr) 44px;
+  min-height: 132px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface-raised));
+  overflow: hidden;
 }
 
 .chat-composer__textarea {
-  flex: 1;
   min-width: 0;
 }
 
-.chat-composer__actions {
-  flex-shrink: 0;
+.chat-composer__textarea :deep(.app-textarea) {
+  width: 100%;
+  min-height: 84px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+  padding: 14px 14px 6px;
+  box-shadow: none;
+}
+
+.chat-composer__textarea :deep(.app-textarea:focus) {
+  box-shadow: none;
+}
+
+.chat-composer__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 4px 8px 8px;
+}
+
+.chat-attachment-button,
+.chat-send-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgb(var(--color-text-muted));
+  cursor: pointer;
+}
+
+.chat-attachment-button:hover,
+.chat-attachment-button:focus-within {
+  background: rgb(var(--color-primary) / 0.08);
+  color: rgb(var(--color-primary));
+}
+
+.chat-attachment-button input {
+  display: none;
+}
+
+.chat-attachment-button--disabled,
+.chat-send-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chat-send-button {
-  min-height: 40px;
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
 }
+
+.chat-send-button:not(:disabled):hover,
+.chat-send-button:not(:disabled):focus-visible {
+  background: rgb(var(--color-primary) / 0.88);
+  outline: none;
+}
+
 
 @media (max-width: 1023px) {
   .chat-layout {
     grid-template-columns: 1fr;
     gap: 0;
+    height: auto;
+    min-height: 0;
+  }
+
+  .chat-layout--thread-open .chat-sidebar {
+    display: none;
+  }
+
+  .chat-layout:not(.chat-layout--thread-open) .chat-main {
+    display: none;
   }
 
   .chat-sidebar {
     border-radius: 0;
     border-left: 0;
     border-right: 0;
+    height: 50svh;
+  }
+
+  .chat-layout--thread-open {
+    height: calc(100svh - var(--app-mobile-content-bottom) - 92px);
+    min-height: 420px;
   }
 
   .chat-main {
@@ -830,8 +986,8 @@ const {
     border-top: 0;
   }
 
-  .chat-back-button {
-    display: none;
+  .chat-more__menu {
+    right: 0;
   }
 }
 
@@ -845,19 +1001,17 @@ const {
     text-align: left;
   }
 
-  .chat-composer__row {
-    flex-direction: column;
-    align-items: stretch;
+  .chat-message-scroll {
+    padding: 14px;
   }
 
-  .chat-send-button {
-    width: 100%;
+  .chat-composer__textarea :deep(.app-textarea) {
+    min-height: 84px;
   }
 }
 
 :deep(.app-button),
-:deep(.app-input-shell),
-:deep(.app-textarea-shell) {
+:deep(.app-input-shell) {
   border-radius: 6px;
 }
 </style>

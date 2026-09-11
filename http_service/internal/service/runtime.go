@@ -23,6 +23,8 @@ type Runtime struct {
 	OTPProvider     OTPProvider
 	MailSender      MailSender
 	StorageProvider StorageProvider
+	MediaProcessor  MediaProcessor
+	MediaScanner    MediaScanner
 	CacheStore      CacheStore
 	OTPStore        *OTPStore
 	WalletService   *WalletService

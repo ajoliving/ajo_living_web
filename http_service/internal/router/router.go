@@ -20,6 +20,7 @@ import (
 // 1. Dependencies groups objects required to build the router.
 type Dependencies struct {
 	Config                       *config.Config
+	Runtime                      *service.Runtime
 	Logger                       *slog.Logger
 	AuthService                  *service.AuthService
 	UserService                  *service.UserService
@@ -36,10 +37,10 @@ type Dependencies struct {
 	PropertyService              *service.PropertyService
 	AgencyCompanyService         *service.AgencyCompanyService
 	ChatService                  *service.ChatService
-	OrderService                 *service.OrderService
 	NotificationService          *service.NotificationService
 	SupermarketOfferService      *service.SupermarketOfferService
 	MarketTrendService           *service.MarketTrendService
+	RealtimeBroker               service.RealtimeBroker
 }
 
 // 2. New builds and returns the gin engine.
@@ -56,7 +57,7 @@ func New(deps *Dependencies) *gin.Engine {
 	engine.Use(middleware.Recovery(deps.Logger))
 	engine.Use(middleware.AccessLog(deps.Logger))
 
-	healthHandler := handler.NewHealthHandler()
+	healthHandler := handler.NewHealthHandler(deps.Runtime)
 	authHandler := handler.NewAuthHandler(deps.AuthService)
 	userHandler := handler.NewUserHandler(deps.UserService)
 	staffHandler := handler.NewStaffHandler(deps.StaffService)
@@ -73,8 +74,9 @@ func New(deps *Dependencies) *gin.Engine {
 	propertyHandler := handler.NewPropertyHandler(deps.PropertyService)
 	agencyCompanyHandler := handler.NewAgencyCompanyHandler(deps.AgencyCompanyService)
 	staffListingHandler := handler.NewStaffListingHandler(deps.SecondhandService, deps.PropertyService)
-	chatHandler := handler.NewChatHandler(deps.ChatService)
-	orderHandler := handler.NewOrderHandler(deps.OrderService)
+	realtimeHub := handler.NewRealtimeHub(deps.RealtimeBroker, deps.ChatService)
+	chatHandler := handler.NewChatHandler(deps.ChatService, realtimeHub)
+	realtimeHandler := handler.NewRealtimeHandler(deps.AuthService, deps.ChatService, realtimeHub, deps.Config)
 	notificationHandler := handler.NewNotificationHandler(deps.NotificationService)
 	supermarketOfferHandler := handler.NewSupermarketOfferHandler(deps.SupermarketOfferService)
 	marketTrendHandler := handler.NewMarketTrendHandler(deps.MarketTrendService)
@@ -84,7 +86,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerPublicPOSPaymentRoutes(api, posBuildingHandler, walletHandler)
 	registerPublicIsmartIntegrationRoutes(api, ismartHandler)
 	registerAuthRoutes(api, authHandler, requireAuth, limiter)
-	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, orderHandler, requireAuth, requireActive)
+	registerMemberRoutes(api, userHandler, secondhandHandler, propertyHandler, requireAuth, requireActive)
 	registerAgencyCompanyMemberRoutes(api, agencyCompanyHandler, requireAuth)
 	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireActive)
 	registerIsmartRoutes(api, ismartHandler, requireActive)
@@ -96,7 +98,7 @@ func New(deps *Dependencies) *gin.Engine {
 	registerPropertyRoutes(api, propertyHandler, requireActive, limiter)
 	registerContactRoutes(api, secondhandHandler, propertyHandler, chatHandler, requireActive, limiter)
 	registerChatRoutes(api, chatHandler, requireActive, limiter)
-	registerOrderRoutes(api, orderHandler, requireActive)
+	registerRealtimeRoutes(api, realtimeHandler, requireActive)
 	registerNotificationRoutes(api, notificationHandler, requireActive)
 	registerSupermarketMemberRoutes(api, supermarketOfferHandler, requireActive)
 	registerStaffRoutes(api, staffHandler, staffWalletHandler, staffListingHandler, homeContentHandler, secondhandHandler, chatHandler, requireStaff)

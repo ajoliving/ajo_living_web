@@ -14,7 +14,13 @@ import (
 	"ajoliving_web/http_service/internal/middleware"
 )
 
-// 1. registerChatRoutes registers authenticated chat routes.
+// 1. registerRealtimeRoutes registers the ticket and WebSocket endpoints.
+func registerRealtimeRoutes(api *gin.RouterGroup, realtimeHandler *handler.RealtimeHandler, requireActive gin.HandlerFunc) {
+	api.GET("/realtime/ticket", requireActive, realtimeHandler.IssueTicket)
+	api.GET("/realtime/ws", realtimeHandler.HandleWebSocket)
+}
+
+// 2. registerChatRoutes registers authenticated chat routes.
 func registerChatRoutes(
 	api *gin.RouterGroup,
 	chatHandler *handler.ChatHandler,

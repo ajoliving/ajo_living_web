@@ -34,6 +34,7 @@ go run ./http_service/cmd/server
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
 | 1 | /api/v1/health | GET | 服務健康檢查 | 無 |
+| 1.1 | /api/v1/health/ready | GET | PostgreSQL readiness 檢查 | 無 |
 
 ### 基礎資料模組
 
@@ -73,6 +74,7 @@ go run ./http_service/cmd/server
 | 73.12 | /api/v1/me/building-authorizations/{authorizationId} | DELETE | 撤銷大廈副戶授權 | 會員 |
 | 73.13 | /api/v1/auth/building-authorizations/accept | POST | 受邀副戶設定用戶 ID 及密碼 | 無 |
 | 6 | /api/v1/auth/logout | POST | 登出目前會員 | 會員 |
+| 6.1 | /api/v1/auth/refresh | POST | 使用 refresh token 輪換 access token；不需 access token | 無 |
 | 7 | /api/v1/me | GET | 取得目前會員資料，並受控刷新已綁定 iSmart ClientTbl 資料 | 會員 |
 | 8 | /api/v1/me/profile | PATCH | 更新會員資料 | 會員 |
 | 9 | /api/v1/me/secondhand/listings | GET | 取得我的二手帖子 | 會員 |
@@ -103,14 +105,18 @@ go run ./http_service/cmd/server
 | 96 | /api/v1/me/payments/pos/accounting/clear | POST | 所屬屋苑多選清機 | 會員 |
 | 97 | /api/v1/me/payments/pos/accounting/records | GET | 查詢所屬屋苑清機歷史 | 會員 |
 | 98 | /api/v1/me/payments/pos/accounting/records/{recordId} | GET | 查詢所屬屋苑清機詳情 | 會員 |
-| 33 | /api/v1/me/orders | GET | 取得我的訂單列表 | 會員 |
 
 ### OSS 模組
 
 | 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
 | --- | --- | --- | --- | --- |
-| 10 | /api/v1/oss/presign | POST | 申請圖片上傳位址 | 會員 |
-| 11 | /api/v1/oss/complete | POST | 登記上傳完成媒體 | 會員 |
+| 10 | /api/v1/oss/presign | POST | 申請圖片或聊天附件上傳位址；聊天附件使用 `purpose=chat_attachment` | 會員 |
+| 11 | /api/v1/oss/complete | POST | 登記上傳完成媒體；聊天消息再以 `attachment_ids` 引用 | 會員 |
+| 11.1 | /api/v1/oss/multipart/initiate | POST | 建立可續傳分片上傳會話 | 會員 |
+| 11.2 | /api/v1/oss/multipart/part | POST | 取得單個分片預簽名位址 | 會員 |
+| 11.3 | /api/v1/oss/multipart/parts | POST | 查詢已上傳分片，供斷線續傳 | 會員 |
+| 11.4 | /api/v1/oss/multipart/complete | POST | 完成分片並登記媒體資產 | 會員 |
+| 11.5 | /api/v1/oss/multipart/abort | POST | 取消未完成分片上傳 | 會員 |
 | 30 | /api/v1/oss/assets | GET | 查詢我的媒體資產列表 | 會員 |
 | 31 | /api/v1/oss/assets/{mediaAssetId} | GET | 查詢單一媒體資產詳情 | 會員 |
 | 32 | /api/v1/oss/assets/{mediaAssetId} | DELETE | 刪除未被帖子引用的媒體資產 | 會員 |
@@ -156,33 +162,25 @@ go run ./http_service/cmd/server
 | 21 | /api/v1/listings/{listingId}/chats | POST | 建立或重用聊天 | 會員 |
 | 22 | /api/v1/chats | GET | 查詢聊天會話列表 | 會員 |
 | 23 | /api/v1/chats/{chatId} | GET | 查詢聊天會話詳情 | 會員 |
-| 24 | /api/v1/chats/{chatId}/messages | GET | 查詢聊天訊息列表 | 會員 |
-| 25 | /api/v1/chats/{chatId}/messages | POST | 傳送聊天訊息 | 會員 |
+| 24 | /api/v1/chats/{chatId}/messages | GET | 查詢聊天訊息列表；`latest=true` 返回最近一頁並維持時間正序 | 會員 |
+| 25 | /api/v1/chats/{chatId}/messages | POST | 傳送聊天訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "..." }` | 會員 |
 | 26 | /api/v1/chats/{chatId}/read | POST | 標記聊天已讀 | 會員 |
 | 26.1 | /api/v1/building-chats | GET | 查詢目前會員可見大廈的群聊摘要及未讀數 | 會員 |
 | 26.2 | /api/v1/buildings/{buildingId}/chat | POST | 建立或加入指定大廈群聊；首次進入會建立成員記錄 | 會員 |
 | 26.3 | /api/v1/building-chats/{chatId} | GET | 查詢大廈群聊詳情、成員摘要及管理權限 | 群聊成員 |
 | 26.4 | /api/v1/building-chats/{chatId}/members | GET | 查詢大廈群聊成員及禁言、封禁狀態 | 群聊成員 |
-| 26.5 | /api/v1/building-chats/{chatId}/messages | GET | 分頁查詢大廈群聊文字訊息 | 群聊成員 |
-| 26.6 | /api/v1/building-chats/{chatId}/messages | POST | 傳送大廈群聊文字訊息，請求體 `{ "content": "..." }` | 有效群聊成員 |
+| 26.5 | /api/v1/building-chats/{chatId}/messages | GET | 分頁查詢大廈群聊文字訊息；`latest=true` 返回最近一頁並維持時間正序 | 群聊成員 |
+| 26.6 | /api/v1/building-chats/{chatId}/messages | POST | 傳送大廈群聊訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "..." }` | 有效群聊成員 |
 | 26.7 | /api/v1/building-chats/{chatId}/read | POST | 標記大廈群聊已讀 | 群聊成員 |
 | 26.8 | /api/v1/building-chats/{chatId}/leave | POST | 退出大廈群聊；之後可重新申請加入 | 群聊成員 |
 | 26.9 | /api/v1/building-chats/{chatId}/join-requests | POST | 提交加入申請，請求體可帶 `{ "reason": "..." }` | 有大廈訪問權限的會員 |
 | 26.10 | /api/v1/building-chat-join-requests/{requestId}/review | POST | 審核加入申請，請求體 `{ "status": "approved\|rejected" }` | 所屬大廈管理員 / Staff |
 | 26.11 | /api/v1/building-chats/{chatId}/join-requests | GET | 查詢待審核加入申請 | 所屬大廈管理員 / Staff |
 | 26.12 | /api/v1/building-chats/{chatId}/members/moderate | POST | 禁言、解除禁言、剔除、群內封禁或解除封禁；請求體含 `user_id`、`action`、可選 `duration_minutes`、`reason` | 所屬大廈管理員 / Staff |
+| 26.13 | /api/v1/realtime/ticket | GET | 取得短時 WebSocket 連線 ticket | 有效會員 |
+| 26.14 | /api/v1/realtime/ws | GET (WebSocket) | 建立指定聊天的即時消息連線 | 有效會員 ticket |
 
 大廈群聊管理動作 `action` 支援：`mute`、`unmute`、`kick`、`ban`、`unban`。大廈管理員只能操作其有效授權所屬的大廈，Staff 可作全局違規處理。群聊成員由有效大廈綁定或授權關係決定；退出後保留成員記錄，重新加入需再次通過大廈訪問權限與加入流程。
-
-### Order 模組
-
-| 編號 | 介面 | 方法 | 簡介/功能 | 權限 |
-| --- | --- | --- | --- | --- |
-| 34 | /api/v1/listings/{listingId}/orders | POST | 建立訂單請求 | 會員 |
-| 35 | /api/v1/orders/{orderId} | GET | 查詢訂單詳情 | 會員 |
-| 36 | /api/v1/orders/{orderId}/confirm | POST | 賣家確認訂單 | 會員 |
-| 37 | /api/v1/orders/{orderId}/cancel | POST | 取消訂單 | 會員 |
-| 38 | /api/v1/orders/{orderId}/complete | POST | 完成訂單 | 會員 |
 
 ### Notification 模組
 
@@ -200,8 +198,6 @@ go run ./http_service/cmd/server
 | 27 | /api/v1/staff/me | GET | 取得目前 staff 帳號摘要 | Staff |
 | 28 | /api/v1/staff/users | GET | 查詢會員與 staff 清單 | Staff |
 | 29 | /api/v1/staff/users | POST | 新增管理員帳戶 | Staff |
-| 30 | /api/v1/staff/users/{userId}/role | PATCH | 更新目標帳號角色 | Staff |
-| 42 | /api/v1/staff/roles | GET | 查詢可用角色與權限矩陣 | Staff |
 | 99 | /api/v1/staff/system-notices | POST | 發布全站系統通知 | Staff |
 | 57 | /api/v1/staff/wallet/transactions | GET | 查詢平台積分流水 | Staff |
 | 58 | /api/v1/staff/wallet/grants | POST | 手動發放 AJO Point | Staff |
@@ -265,6 +261,10 @@ curl -X GET "http://127.0.0.1:8080/api/v1/health"
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/health" -Method GET
 ```
+
+### 1.1 /api/v1/health/ready [GET]
+- **簡介**: PostgreSQL readiness 檢查；依賴不可用時返回 HTTP 503。
+- **回應**: `data.status=ready` 並包含 `dependencies.database=ok`。
 
 ---
 
@@ -441,16 +441,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/otp/request" -Method P
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": false
     }
   },
@@ -552,16 +544,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/request" -Me
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": false
     }
   },
@@ -642,7 +626,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
   "residence_unit": "08" // 選填
 }
 ```
-- **iSmart 同步**: 註冊會先呼叫 iSmart `/api/v1/integration/auth/register/`，並以相同密碼建立 iSmart 帳戶；`individual_agent` 與 `agency_company` 固定傳送 `legal_entity=LE`，其餘帳戶傳送 `NA`。iSmart 建立失敗時不會建立本地 AJO 帳戶。
+- **iSmart 同步**: 註冊會先呼叫 iSmart `/api/v1/integration/auth/register/`，並以相同密碼建立 iSmart 帳戶；電話傳送完整國際號碼（例如 `+85261234567` 或 `+8615666823185`），`individual_agent` 與 `agency_company` 固定傳送 `legal_entity=LE`，其餘帳戶傳送 `NA`。iSmart 建立失敗時不會建立本地 AJO 帳戶。
 - **物業綁定申請**: 個人帳戶同時提交 `primary_community_id`、`residence_floor`、`residence_unit` 時，AJO 會在本地帳戶及 iSmart 關聯建立後，按 POS 單位清單解析 `unit_id` 並提交 OwnerReg 審批申請。iSmart HTTP `2xx` 即視為申請已受理，不等待審批；回應 `/me.residence_binding_status` 為 `pending`，且 `bound_building_ids`、`bound_flat_unit_ids` 保持空。申請失敗時回應 `account created but property binding request failed`，帳戶及 iSmart 關聯會保留，會員可登入後重新申請。
 - **回應參數**
 ```json
@@ -659,16 +643,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": true
     }
   },
@@ -764,16 +740,8 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/login" \
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": false
     }
   },
@@ -916,16 +884,8 @@ curl -X POST "http://127.0.0.1:8080/api/v1/auth/password/email/reset" \
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": false
     }
   },
@@ -984,16 +944,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/phone/login" -Method P
       "member_type": "user",
       "is_staff": false,
       "role": "user",
-      "roles": ["member"],
-      "permissions": [
-        "account.profile.read",
-        "account.profile.write",
-        "listing.own.manage",
-        "chat.use",
-        "order.create",
-        "order.own.manage",
-        "notification.read"
-      ],
+      "roles": ["user"],
+      "permissions": [],
       "profile_completed": false,
       "ismart_msg": {
         "user_id": 410,
@@ -1090,16 +1042,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
     "member_type": "user",
     "is_staff": false,
     "role": "user",
-    "roles": ["member"],
-    "permissions": [
-      "account.profile.read",
-      "account.profile.write",
-      "listing.own.manage",
-      "chat.use",
-      "order.create",
-      "order.own.manage",
-      "notification.read"
-    ],
+    "roles": ["user"],
+    "permissions": [],
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
     "district_code": "hk_east",
@@ -1192,16 +1136,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
     "member_type": "user",
     "is_staff": false,
     "role": "user",
-    "roles": ["member"],
-    "permissions": [
-      "account.profile.read",
-      "account.profile.write",
-      "listing.own.manage",
-      "chat.use",
-      "order.create",
-      "order.own.manage",
-      "notification.read"
-    ],
+    "roles": ["user"],
+    "permissions": [],
     "display_name": "Neighbour User",
     "publisher_identity_type": "owner",
     "publisher_identity_type": "owner",
@@ -1303,7 +1239,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 - **通告**: `GET /api/v1/me/ismart/notices?building_id=<building_id>`。`building_id` 可省略，由後端選取目前會員可見大廈；回應含 `selected_building_id`、`building_options` 與有效通告 `result`。
 - **業主綁定**: `POST /api/v1/me/ismart/owner-binding-requests`。請求使用 `building_id`、`ownedflat` 陣列，並可選 `cli_role`、`ownernote`、`is_receive_email`、`reg_tel`、`reg_email`、`cli_name`、`cli_id_card`、`cli_tel`。成功只代表 iSmart 已建立 `OwnerReg` 待審申請，不會建立有效 AJO 物業綁定。
 - **本地大廈副戶授權接口（歷史兼容）**: `GET /api/v1/me/building-authorizations/permissions`、`GET|POST /api/v1/me/building-authorizations` 及 `DELETE /api/v1/me/building-authorizations/{authorizationId}` 保留兼容既有資料，不再由「我的大廈」住戶授權頁使用；目前頁面改用 iSmart 單位級授權接口。
-- **單位授權接口**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`、`POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke` 直接代理 iSmart 單位授權。授予請求使用 `unit_id`、`target_phone`、`target_email`；AJO 先呼叫 iSmart `/auth/check-contact/` 解析 `target_user_id`，再提交原始 `subaccounts/grant/`。iSmart 副戶為單位級完整授權，包含遙距開門及查看通告，不提供獨立功能勾選；撤銷使用 `unit_id` 與 `target_user_id`。
+- **單位授權接口**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`、`POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke` 直接代理 iSmart 單位授權。授予請求使用 `unit_id`、`target_phone`、`target_email`。AJO 先分別以手機號與電郵呼叫 iSmart `/auth/check-contact/`；電話會兼容提交值、本地號碼及常見區號舊格式，兩邊對上同一個 `user_id` 才作為 `target_user_id`，再提交原始 `subaccounts/grant/`。上游使用 `ISMART_SUBACCOUNT_API_BASE_URL`，本機目前指向生產 iSmart。現行生產 iSmart 在寫入授權歷史時讀取 `IFlatTbl.building`，該模型實際只有 `building_id`，因此 list/grant/revoke 可能回傳 `'IFlatTbl' object has no attribute 'building'`；AJO 只轉發上游錯誤，不修改 `ajo_ismart` 倉庫。iSmart 副戶為單位級完整授權，包含遙距開門及查看通告，不提供獨立功能勾選；撤銷使用 `unit_id` 與 `target_user_id`。
 - **安全邊界**: 瀏覽器不得提交 iSmart `user_id`。AJO 後端從目前 JWT 與 `UserIsmartAccount` 注入上游身份，並維持 AJO 穩定回應結構。
 - **服務個案提交**: `POST /api/v1/me/ismart/building-comments` 支援 `comment_type`、`comment` 與 `content` 的已註冊兼容分類，也保留 `request_type`、`category`、`subcategory` 的新 taxonomy 欄位。AJO 會員頁目前只提交 `門卡報失`、`冷氣滴水`、`嘈音滋擾`、`樓梯雜物`、`水質問題`、`渠務問題`、`保安事宜`、`清潔衛生`、`增加服務`、`電力問題` 或 `其他事宜` 作為 `comment_type`，並可選 `subject`、`location_text`、`unit_id`、`contact_name`、`contact_phone`。`building_id` 必須等於會員 `BoundBuildingIDs` 的目前正式綁定大廈；沒有綁定時不得提交。`unit_id` 非空時必須同時屬於 `BoundFlatUnitIDs`、目前會員 iSmart 可見單位及同一 `building_id`。上游固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `POST /buildings/comments/`，目前指向 `clouddev` 測試環境，失敗時不得回退生產接口。
 - **服務個案查詢**: `GET /api/v1/me/ismart/service-cases?building_id=&status=&request_type=` 固定查詢目前會員本人個案；`GET /api/v1/me/ismart/service-cases/{caseId}?building_id=` 返回個案內容、非內部訊息與附件。兩者固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `/buildings/service-cases/...`，目前指向 `clouddev` 測試環境，不設生產接口回退，也不快取動態處理狀態或訊息紀錄。
@@ -1358,64 +1294,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/secondhand/listings?page
 
 ---
 
-### 33. /api/v1/me/orders [GET]
-- **簡介**: 取得我的訂單列表
-- **請求參數**
-```json
-{
-  "page": 1, // 可選
-  "page_size": 20, // 可選
-  "status": "confirmed", // 可選
-  "role": "buyer" // 可選，buyer / seller
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "order_id": "01KORDER001",
-        "listing_id": "01KLISTING001",
-        "listing_title": "九成新洗衣機",
-        "order_status": "confirmed",
-        "role_in_order": "buyer",
-        "buyer_note": "Can pick up tonight.",
-        "handover_method": "lobby_pickup",
-        "cancel_reason": "",
-        "created_at": "2026-04-17T05:40:00Z",
-        "updated_at": "2026-04-17T05:45:00Z",
-        "confirmed_at": "2026-04-17T05:45:00Z",
-        "peer": {
-          "public_id": "01KUSERSELLER001",
-          "display_name": "Owner Seller",
-          "role_in_order": "seller"
-        }
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "page_size": 20,
-      "total": 1
-    }
-  }
-}
-```
-
----
-
 ## OSS 模組
 
 ### 10. /api/v1/oss/presign [POST]
-- **簡介**: 申請圖片上傳位址
+- **簡介**: 申請圖片或聊天附件上傳位址；聊天附件使用 `purpose=chat_attachment`，單檔上限 50 MB
 - **請求參數**
 ```json
 {
   "file_name": "cover.webp", // 必填
   "mime_type": "image/webp", // 必填
-  "file_size": 182736 // 必填
+  "file_size": 182736, // 必填
+  "purpose": "chat_attachment" // 聊天附件必填
 }
 ```
 - **回應參數**
@@ -1458,6 +1347,38 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/oss/presign" -Method POST -
 
 ---
 
+### 10.1 /api/v1/oss/multipart/initiate [POST]
+- **簡介**: 為較大聊天媒體建立可續傳上傳會話；聊天附件仍受單檔 50 MB 限制。
+- **請求參數**
+```json
+{
+  "file_name": "clip.mp4",
+  "mime_type": "video/mp4",
+  "file_size": 10485760,
+  "purpose": "chat_attachment"
+}
+```
+- **回應**: `upload_id`、`object_key`、`upload_token`、`part_size`、`part_count`、`expires_at`。
+
+### 10.2 /api/v1/oss/multipart/part [POST]
+- **簡介**: 使用 initiate 回傳的 token，取得指定 `part_number` 的 OSS PUT 位址。
+- **請求參數**: `object_key`、`upload_id`、`upload_token`、`mime_type`、`file_size`、`part_number`。
+- **回應**: `upload_url`、`headers` 及分片識別欄位；上傳成功後保存 OSS `ETag`。
+
+### 10.3 /api/v1/oss/multipart/parts [POST]
+- **簡介**: 驗證 token 後返回已存在的 `{part_number, etag}`，客戶端可跳過已完成分片。
+- **請求參數**: `object_key`、`upload_id`、`upload_token`、`mime_type`、`file_size`。
+
+### 10.4 /api/v1/oss/multipart/complete [POST]
+- **簡介**: 提交全部分片 ETag，服務端完成 OSS multipart 並按既有 `/oss/complete` 流程登記媒體。
+- **請求參數**: initiate 欄位加 `parts` 陣列，以及可選 `width`、`height`、`checksum_sha256`。
+
+### 10.5 /api/v1/oss/multipart/abort [POST]
+- **簡介**: 取消指定 upload session 並清理 OSS 未完成分片。
+- **請求參數**: `object_key`、`upload_id`、`upload_token`、`mime_type`、`file_size`。
+
+---
+
 ### 11. /api/v1/oss/complete [POST]
 - **簡介**: 登記上傳完成媒體
 - **請求參數**
@@ -1488,6 +1409,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/oss/presign" -Method POST -
     "checksum_sha256": "abc123",
     "url": "https://ajo-living.oss-cn-hongkong.aliyuncs.com/ajo_living/01kupload.webp",
     "in_use": false,
+    "processing_status": "ready",
+    "scan_status": "passed",
     "created_at": "2026-04-17T05:19:00Z"
   },
   "request_id": "01KPCXEXAMPLE",
@@ -2524,7 +2447,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
 {
   "chatId": "01KCHAT001", // 路徑參數
   "page": 1, // 可選
-  "page_size": 20 // 可選
+  "page_size": 20, // 可選
+  "after_message_id": "01KMESSAGE001", // 可選；只返回游標之後的新消息
+  "latest": true // 可選；返回最近一頁消息，回應仍按時間正序排列
 }
 ```
 - **回應參數**
@@ -2540,7 +2465,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
         "content": "你好，請問仍可交易嗎？",
         "message_type": "text",
         "status": "sent",
-        "created_at": "2026-04-17T05:32:00Z"
+        "created_at": "2026-04-17T05:32:00Z",
+        "attachments": []
       }
     ],
     "pagination": {
@@ -2572,7 +2498,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages?p
 ```json
 {
   "chatId": "01KCHAT001", // 路徑參數
-  "content": "你好，請問仍可交易嗎？" // 必填，最多 1000 字
+  "content": "你好，請問仍可交易嗎？", // 可選；最多 1000 字，與附件至少一項
+  "attachment_ids": ["01KMEDIA001"], // 可選；最多 5 個已完成聊天上傳
+  "client_message_id": "web-uuid-001" // 必填建議；同一會話/發送者重試保持幂等
 }
 ```
 - **回應參數**
@@ -2584,9 +2512,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages?p
     "message_id": "01KMESSAGE001",
     "sender_user_id": "2",
     "content": "你好，請問仍可交易嗎？",
-    "message_type": "text",
-    "status": "sent",
-    "created_at": "2026-04-17T05:33:00Z"
+        "message_type": "text",
+        "status": "sent",
+        "created_at": "2026-04-17T05:33:00Z",
+        "attachments": []
   },
   "request_id": "01KPCXEXAMPLE",
   "timestamp": "2026-04-17T05:33:00Z"
@@ -2643,6 +2572,82 @@ curl -X POST "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" \
 $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Method POST -Headers $headers
 ```
+
+---
+
+### 26.13. /api/v1/realtime/ticket [GET]
+- **簡介**: 取得短時 WebSocket 連線 ticket；ticket 有效期為 90 秒，只供建立即時聊天連線使用。
+- **請求參數**
+```json
+{}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "ticket": "eyJhbGciOiJIUzI1NiJ9...",
+    "expires_in": 90
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:35:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X GET "http://127.0.0.1:8080/api/v1/realtime/ticket" \
+  -H "Authorization: Bearer $token"
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $token"}
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/realtime/ticket" -Method GET -Headers $headers
+```
+
+---
+
+### 26.14. /api/v1/realtime/ws [GET (WebSocket)]
+- **簡介**: 建立指定聊天的即時消息連線；WebSocket 只傳送 JSON 消息事件，不承載附件二進制。
+- **請求參數**
+```json
+{
+  "ticket": "短時 WebSocket ticket", // 查詢參數，必填
+  "chat_id": "01KCHAT001" // 查詢參數，必填
+}
+```
+- **回應參數**
+```json
+{
+  "type": "message",
+  "chat_id": "01KCHAT001",
+  "message": {
+    "message_id": "01KMESSAGE002",
+    "sender_user_id": "2",
+    "content": "你好",
+    "message_type": "text",
+    "status": "sent",
+    "created_at": "2026-04-17T05:36:00Z"
+  }
+}
+```
+- **Curl測試**
+```bash
+curl --http1.1 -i "http://127.0.0.1:8080/api/v1/realtime/ws?ticket=$realtime_ticket&chat_id=01KCHAT001" \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=="
+```
+- **Powershell測試**
+```powershell
+$uri = "ws://127.0.0.1:8080/api/v1/realtime/ws?ticket=$realtime_ticket&chat_id=01KCHAT001"
+$socket = [System.Net.WebSockets.ClientWebSocket]::new()
+$socket.ConnectAsync([Uri]$uri, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+$socket.State
+```
+
+---
 
 ---
 
@@ -3012,23 +3017,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Met
     "member_type": "user",
     "is_staff": true,
     "role": "staff",
-    "roles": ["super_admin", "member"],
-    "permissions": [
-      "account.profile.read",
-      "account.profile.write",
-      "listing.own.manage",
-      "chat.use",
-      "order.create",
-      "order.own.manage",
-      "notification.read",
-      "staff.console.access",
-      "staff.user.read",
-      "staff.user.manage",
-      "staff.role.read",
-      "staff.role.manage",
-      "staff.review.manage",
-      "staff.support.manage"
-    ],
+    "roles": ["staff"],
+    "permissions": [],
     "display_name": "Staff Operator",
     "publisher_identity_type": "owner",
     "district_code": "hk_east",
@@ -3069,8 +3059,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
   "page_size": 20, // 可選
   "keyword": "9123", // 可選
   "status": "active", // 可選
-  "member_type": "pro_user", // 可選，user / pro_user
-  "role_code": "member", // 可選
   "is_staff": false // 可選
 }
 ```
@@ -3087,19 +3075,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
         "phone_country_code": "+852",
         "phone_number": "91239999",
         "member_status": "active",
-        "member_type": "pro_user",
+        "member_type": "user",
         "is_staff": false,
-        "role": "pro_user",
-        "roles": ["member"],
-        "permissions": [
-          "account.profile.read",
-          "account.profile.write",
-          "listing.own.manage",
-          "chat.use",
-          "order.create",
-          "order.own.manage",
-          "notification.read"
-        ],
+        "role": "user",
+        "roles": ["user"],
+        "permissions": [],
         "display_name": "Pro Seller",
         "publisher_identity_type": "owner",
         "district_code": "hk_east",
@@ -3119,19 +3099,19 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/me" -Method GET -Head
 ```
 - **Curl測試**
 ```bash
-curl -X GET "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member" \
+curl -X GET "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20" \
   -H "Authorization: Bearer $staff_token"
 ```
 - **Powershell測試**
 ```powershell
 $headers=@{"Authorization"="Bearer $staff_token"}
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20&member_type=pro_user&role_code=member" -Method GET -Headers $headers
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_size=20" -Method GET -Headers $headers
 ```
 
 ---
 
 ### 29. /api/v1/staff/users [POST]
-- **簡介**: 新增可登入的管理員帳戶，並套用指定 staff 角色。
+- **簡介**: 新增可登入的管理員帳戶，建立後 `is_staff=true`。
 - **請求參數**
 ```json
 {
@@ -3139,139 +3119,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_siz
   "password": "staffpass123",
   "display_name": "Operations Staff",
   "phone_country_code": "+852",
-  "phone_number": "91237777",
-  "member_type": "user",
-  "role_codes": ["staff"]
+  "phone_number": "91237777"
 }
 ```
-- `role_codes` 必須包含 staff 範圍角色，例如 `staff` 或 `super_admin`。
 - **回應參數**: 與 `/api/v1/staff/users` 列表項相同。
-
----
-
-### 30. /api/v1/staff/users/{userId}/role [PATCH]
-- **簡介**: 更新目標帳號角色
-- **請求參數**
-```json
-{
-  "userId": "01KUSERPRO001", // 路徑參數
-  "member_type": "pro_user", // 可選，user / pro_user
-  "role_codes": ["member"], // 可選
-  "is_staff": false // 可選
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "public_id": "01KUSERPRO001",
-    "member_status": "active",
-    "member_type": "pro_user",
-    "is_staff": false,
-    "role": "pro_user",
-    "roles": ["member"],
-    "permissions": [
-      "account.profile.read",
-      "account.profile.write",
-      "listing.own.manage",
-      "chat.use",
-      "order.create",
-      "order.own.manage",
-      "notification.read"
-    ],
-    "updated_at": "2026-04-17T06:20:00Z"
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T06:20:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X PATCH "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/role" \
-  -H "Authorization: Bearer $staff_token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "member_type": "pro_user",
-    "role_codes": ["member"],
-    "is_staff": false
-  }'
-```
-- **Powershell測試**
-```powershell
-$headers=@{"Authorization"="Bearer $staff_token";"Content-Type"="application/json"}
-$body=@{
-  member_type="pro_user"
-  role_codes=@("member")
-  is_staff=$false
-}|ConvertTo-Json
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/role" -Method PATCH -Headers $headers -Body $body
-```
-
----
-
-### 42. /api/v1/staff/roles [GET]
-- **簡介**: 查詢可用角色與權限矩陣
-- **請求參數**
-```json
-{}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "code": "super_admin",
-        "scope": "staff",
-        "name": "Super Admin",
-        "description": "Full back-office access.",
-        "permissions": [
-          "staff.console.access",
-          "staff.user.read",
-          "staff.user.manage",
-          "staff.role.read",
-          "staff.role.manage",
-          "staff.review.manage",
-          "staff.support.manage"
-        ]
-      },
-      {
-        "code": "staff",
-        "scope": "staff",
-        "name": "Staff",
-        "description": "Day-to-day back-office access.",
-        "permissions": [
-          "staff.console.access",
-          "staff.user.read",
-          "staff.user.manage",
-          "staff.role.read",
-          "staff.review.manage",
-          "staff.support.manage"
-        ]
-      },
-      {
-        "code": "member",
-        "scope": "member",
-        "name": "Member",
-        "description": "Baseline member access.",
-        "permissions": [
-          "account.profile.read",
-          "account.profile.write",
-          "listing.own.manage",
-          "chat.use",
-          "order.create",
-          "order.own.manage",
-          "notification.read"
-        ]
-      }
-    ]
-  }
-}
-```
 
 ---
 
@@ -3567,7 +3418,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 ```
 - **草稿與發布收費規則**: `POST` 與草稿狀態的 `PATCH` 可保存未完成資料，讓會員稍後繼續填寫；草稿不會出現在公開列表。會員首次明確儲存草稿時，前端以 `charge_draft=true` 查詢參數提交，建立或更新成功會在同一交易預扣 600 AJO Points；同一樓盤後續草稿保存不重複扣款。正式發布總費為 1,000 AJO Points，後端會按該樓盤既有草稿扣款抵扣差額，例如已扣 600 時發布只扣 400；歷史草稿已扣超過 1,000 時發布不再扣款。餘額不足時資料與扣款均不生效。正式發布流程內部的暫存請求不帶此參數。
 - **物業資料修改規則**: `publication_status=draft` 時可修改物業分類、地區、地址、面積、樓層、單位及相關物業屬性。正式發布後的 `active`、`hidden`、`expired` 更新仍可保存標題、描述、價格、聯絡資料及圖片等既有可編輯內容，但後端會保留原有物業資料，忽略請求內對上述鎖定欄位的修改。
-- **歷史草稿扣費更正**: 既有錢包流水不可修改或刪除。僅限仍為草稿的指定放售樓盤，可使用 `go run ./cmd/reconcile-property-draft-charge -listing-id <listing_id>` 預覽；確認後加上 `-apply` 以新增一筆 `property_sale · draft_charge_correction` 退款流水。命令使用穩定幂等鍵，重複執行不重複退款；草稿抵扣會以原草稿扣款減去更正退款計算。
+- **歷史草稿扣費更正**: 既有錢包流水不可修改或刪除。若帳本已有 `property_sale · draft_charge_correction` 退款，草稿抵扣以原草稿扣款減去該更正退款計算。不再提供維護命令入口。
 - **欄位錯誤規則**: 樓盤校驗失敗時，回應使用既有 `errors` 陣列返回穩定欄位名與可讀原因，例如 `{"field":"images","reason":"發布前至少需要一張相片"}`。前端應以 `field` 定位相應輸入項；公開訪客只可在詳情取得逐樓盤聯絡人姓名，不會取得原始電話、WhatsApp、Wechat 或 Email。
 - **發布者身份規則**: 會員建立、更新、發布或重新發布樓盤時，後端按 `user_profiles.account_type`、已批准代理資料及公司子帳戶歸屬派生身份並忽略請求中的 `publisher_identity_type`；發布及重新發布只刷新當時有效的代理公開展示快照，不覆蓋樓盤已保存的聯絡人資料。
 - **樓層規則**: `floor_raw` 保存會員輸入的實際樓層，`floor_zone` 保存 `low`、`middle` 或 `high` 公開樓層；公開列表及詳情同時返回兩個欄位供卡片顯示。
@@ -3724,385 +3575,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users/01KUSERPRO001/r
 
 ---
 
-## Order 模組
-
-### 34. /api/v1/listings/{listingId}/orders [POST]
-- **簡介**: 建立訂單請求
-- **請求參數**
-```json
-{
-  "listingId": "01KLISTING001", // 路徑參數
-  "buyer_note": "Can pick up tonight.", // 可選
-  "handover_method": "lobby_pickup" // 可選，face_to_face / lobby_pickup / courier
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "order_id": "01KORDER001",
-    "listing_id": "01KLISTING001",
-    "listing_title": "九成新洗衣機",
-    "order_status": "pending_confirm",
-    "role_in_order": "buyer",
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup",
-    "cancel_reason": "",
-    "created_at": "2026-04-17T05:40:00Z",
-    "updated_at": "2026-04-17T05:40:00Z",
-    "cover_image": {
-      "media_asset_id": "01KMEDIA001",
-      "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
-      "sort_order": 1,
-      "is_cover": true
-    },
-    "peer": {
-      "public_id": "01KUSERSELLER001",
-      "display_name": "Owner Seller",
-      "role_in_order": "seller"
-    },
-    "logs": [
-      {
-        "action_type": "create_order",
-        "from_status": "",
-        "to_status": "pending_confirm",
-        "operator_user_id": "10001",
-        "note": "Can pick up tonight.",
-        "created_at": "2026-04-17T05:40:00Z"
-      }
-    ]
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T05:40:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X POST "http://127.0.0.1:8080/api/v1/listings/01KLISTING001/orders" \
-  -H "Authorization: Bearer $token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup"
-  }'
-```
-- **Powershell測試**
-```powershell
-$headers=@{
-  "Authorization"="Bearer $token"
-  "Content-Type"="application/json"
-}
-$body=@{
-  buyer_note="Can pick up tonight."
-  handover_method="lobby_pickup"
-} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/listings/01KLISTING001/orders" -Method POST -Headers $headers -Body $body
-```
-
-### 35. /api/v1/orders/{orderId} [GET]
-- **簡介**: 查詢訂單詳情
-- **請求參數**
-```json
-{
-  "orderId": "01KORDER001" // 路徑參數
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "order_id": "01KORDER001",
-    "listing_id": "01KLISTING001",
-    "listing_title": "九成新洗衣機",
-    "order_status": "confirmed",
-    "role_in_order": "buyer",
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup",
-    "cancel_reason": "",
-    "created_at": "2026-04-17T05:40:00Z",
-    "updated_at": "2026-04-17T05:45:00Z",
-    "confirmed_at": "2026-04-17T05:45:00Z",
-    "cover_image": {
-      "media_asset_id": "01KMEDIA001",
-      "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
-      "sort_order": 1,
-      "is_cover": true
-    },
-    "peer": {
-      "public_id": "01KUSERSELLER001",
-      "display_name": "Owner Seller",
-      "role_in_order": "seller"
-    },
-    "logs": [
-      {
-        "action_type": "create_order",
-        "from_status": "",
-        "to_status": "pending_confirm",
-        "operator_user_id": "10001",
-        "note": "Can pick up tonight.",
-        "created_at": "2026-04-17T05:40:00Z"
-      },
-      {
-        "action_type": "confirm_order",
-        "from_status": "pending_confirm",
-        "to_status": "confirmed",
-        "operator_user_id": "10002",
-        "note": "",
-        "created_at": "2026-04-17T05:45:00Z"
-      }
-    ]
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T05:45:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X GET "http://127.0.0.1:8080/api/v1/orders/01KORDER001" \
-  -H "Authorization: Bearer $token"
-```
-- **Powershell測試**
-```powershell
-$headers=@{"Authorization"="Bearer $token"}
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001" -Method GET -Headers $headers
-```
-
-### 36. /api/v1/orders/{orderId}/confirm [POST]
-- **簡介**: 賣家確認訂單
-- **請求參數**
-```json
-{
-  "orderId": "01KORDER001" // 路徑參數
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "order_id": "01KORDER001",
-    "listing_id": "01KLISTING001",
-    "listing_title": "九成新洗衣機",
-    "order_status": "confirmed",
-    "role_in_order": "seller",
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup",
-    "cancel_reason": "",
-    "created_at": "2026-04-17T05:40:00Z",
-    "updated_at": "2026-04-17T05:45:00Z",
-    "confirmed_at": "2026-04-17T05:45:00Z",
-    "cover_image": {
-      "media_asset_id": "01KMEDIA001",
-      "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
-      "sort_order": 1,
-      "is_cover": true
-    },
-    "peer": {
-      "public_id": "01KUSERBUYER001",
-      "display_name": "Neighbour Buyer",
-      "role_in_order": "buyer"
-    },
-    "logs": [
-      {
-        "action_type": "create_order",
-        "from_status": "",
-        "to_status": "pending_confirm",
-        "operator_user_id": "10001",
-        "note": "Can pick up tonight.",
-        "created_at": "2026-04-17T05:40:00Z"
-      },
-      {
-        "action_type": "confirm_order",
-        "from_status": "pending_confirm",
-        "to_status": "confirmed",
-        "operator_user_id": "10002",
-        "note": "",
-        "created_at": "2026-04-17T05:45:00Z"
-      }
-    ]
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T05:45:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X POST "http://127.0.0.1:8080/api/v1/orders/01KORDER001/confirm" \
-  -H "Authorization: Bearer $token"
-```
-- **Powershell測試**
-```powershell
-$headers=@{"Authorization"="Bearer $token"}
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001/confirm" -Method POST -Headers $headers
-```
-
-### 37. /api/v1/orders/{orderId}/cancel [POST]
-- **簡介**: 取消訂單
-- **請求參數**
-```json
-{
-  "orderId": "01KORDER001", // 路徑參數
-  "reason": "Need to reschedule." // 可選
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "order_id": "01KORDER001",
-    "listing_id": "01KLISTING001",
-    "listing_title": "九成新洗衣機",
-    "order_status": "cancelled",
-    "role_in_order": "buyer",
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup",
-    "cancel_reason": "Need to reschedule.",
-    "created_at": "2026-04-17T05:40:00Z",
-    "updated_at": "2026-04-17T05:50:00Z",
-    "cancelled_at": "2026-04-17T05:50:00Z",
-    "cover_image": {
-      "media_asset_id": "01KMEDIA001",
-      "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
-      "sort_order": 1,
-      "is_cover": true
-    },
-    "peer": {
-      "public_id": "01KUSERSELLER001",
-      "display_name": "Owner Seller",
-      "role_in_order": "seller"
-    },
-    "logs": [
-      {
-        "action_type": "create_order",
-        "from_status": "",
-        "to_status": "pending_confirm",
-        "operator_user_id": "10001",
-        "note": "Can pick up tonight.",
-        "created_at": "2026-04-17T05:40:00Z"
-      },
-      {
-        "action_type": "cancel_order",
-        "from_status": "pending_confirm",
-        "to_status": "cancelled",
-        "operator_user_id": "10001",
-        "note": "Need to reschedule.",
-        "created_at": "2026-04-17T05:50:00Z"
-      }
-    ]
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T05:50:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X POST "http://127.0.0.1:8080/api/v1/orders/01KORDER001/cancel" \
-  -H "Authorization: Bearer $token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reason": "Need to reschedule."
-  }'
-```
-- **Powershell測試**
-```powershell
-$headers=@{
-  "Authorization"="Bearer $token"
-  "Content-Type"="application/json"
-}
-$body=@{
-  reason="Need to reschedule."
-} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001/cancel" -Method POST -Headers $headers -Body $body
-```
-
-### 38. /api/v1/orders/{orderId}/complete [POST]
-- **簡介**: 完成訂單
-- **請求參數**
-```json
-{
-  "orderId": "01KORDER001" // 路徑參數
-}
-```
-- **回應參數**
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "order_id": "01KORDER001",
-    "listing_id": "01KLISTING001",
-    "listing_title": "九成新洗衣機",
-    "order_status": "completed",
-    "role_in_order": "buyer",
-    "buyer_note": "Can pick up tonight.",
-    "handover_method": "lobby_pickup",
-    "cancel_reason": "",
-    "created_at": "2026-04-17T05:40:00Z",
-    "updated_at": "2026-04-17T06:00:00Z",
-    "confirmed_at": "2026-04-17T05:45:00Z",
-    "completed_at": "2026-04-17T06:00:00Z",
-    "cover_image": {
-      "media_asset_id": "01KMEDIA001",
-      "url": "http://localhost:9000/local-bucket/ajo_living/01kupload.webp",
-      "sort_order": 1,
-      "is_cover": true
-    },
-    "peer": {
-      "public_id": "01KUSERSELLER001",
-      "display_name": "Owner Seller",
-      "role_in_order": "seller"
-    },
-    "logs": [
-      {
-        "action_type": "create_order",
-        "from_status": "",
-        "to_status": "pending_confirm",
-        "operator_user_id": "10001",
-        "note": "Can pick up tonight.",
-        "created_at": "2026-04-17T05:40:00Z"
-      },
-      {
-        "action_type": "confirm_order",
-        "from_status": "pending_confirm",
-        "to_status": "confirmed",
-        "operator_user_id": "10002",
-        "note": "",
-        "created_at": "2026-04-17T05:45:00Z"
-      },
-      {
-        "action_type": "complete_order",
-        "from_status": "confirmed",
-        "to_status": "completed",
-        "operator_user_id": "10001",
-        "note": "",
-        "created_at": "2026-04-17T06:00:00Z"
-      }
-    ]
-  },
-  "request_id": "01KPCXEXAMPLE",
-  "timestamp": "2026-04-17T06:00:00Z"
-}
-```
-- **Curl測試**
-```bash
-curl -X POST "http://127.0.0.1:8080/api/v1/orders/01KORDER001/complete" \
-  -H "Authorization: Bearer $token"
-```
-- **Powershell測試**
-```powershell
-$headers=@{"Authorization"="Bearer $token"}
-Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001/complete" -Method POST -Headers $headers
-```
-
----
-
 ## Notification 模組
 
 ### 39. /api/v1/notifications [GET]
@@ -4124,11 +3596,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/orders/01KORDER001/complete
     "items": [
       {
         "notification_id": "01KNOTIFY001",
-        "category": "order_confirmed",
-        "title": "Order confirmed",
-        "body": "The seller has confirmed your order request.",
-        "related_type": "order",
-        "related_public_id": "01KORDER001",
+        "category": "system_notice",
+        "title": "Account notice",
+        "body": "Your account is ready.",
+        "related_type": "notification",
+        "related_public_id": "",
         "is_read": false,
         "created_at": "2026-04-17T05:45:00Z"
       },

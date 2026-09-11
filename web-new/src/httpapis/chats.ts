@@ -4,7 +4,7 @@
  * 2. 提供聊天詳情與已讀能力。
  */
 import httpClient from '@/httpapis';
-import type { ApiResponse, PaginatedResult } from '@/model/api';
+import type { ApiListData, ApiResponse, PaginatedResult } from '@/model/api';
 import type { MessageResponse } from '@/httpapis/messages';
 
 export interface ChatPeerSummaryResponse {
@@ -75,6 +75,8 @@ export interface BuildingChatJoinRequestResponse {
   request_id: string;
   chat_id: string;
   user_id: string;
+  user_public_id: string;
+  display_name: string;
   status: string;
   reason?: string;
   created_at: string;
@@ -104,6 +106,8 @@ export interface ChatDetailResponse {
 interface FetchChatsParams {
   page?: number;
   page_size?: number;
+  after_message_id?: string;
+  latest?: boolean;
 }
 
 export type PropertyChatChannel = 'sale' | 'serviced';
@@ -153,7 +157,7 @@ export const fetchBuildingChatMessages = (chatId: string, params: FetchChatsPara
   );
 
 // 10. 發送大廈群聊訊息
-export const sendBuildingChatMessage = (chatId: string, payload: { content: string }) =>
+export const sendBuildingChatMessage = (chatId: string, payload: { content: string; attachment_ids?: string[]; client_message_id?: string }) =>
   httpClient.post<ApiResponse<MessageResponse>>(
     `/building-chats/${chatId}/messages`,
     payload,
@@ -182,7 +186,12 @@ export const reviewBuildingChatJoin = (requestId: string, status: 'approved' | '
 // 16. 管理大廈群聊成員
 export const moderateBuildingChatMember = (
   chatId: string,
-  payload: { user_id: number; action: string; duration_minutes?: number; reason?: string },
+  payload: {
+    user_id: number;
+    action: 'mute' | 'unmute' | 'kick' | 'ban' | 'unban';
+    duration_minutes?: number;
+    reason?: string;
+  },
 ) => httpClient.post<ApiResponse<{ chat_id: string; user_id: string; action: string }>>(
   `/building-chats/${chatId}/members/moderate`,
   payload,
@@ -194,4 +203,4 @@ export const leaveBuildingChat = (chatId: string) =>
 
 // 18. Staff 查看所有大廈群聊
 export const fetchStaffBuildingChats = () =>
-  httpClient.get<ApiResponse<PaginatedResult<BuildingChatSummaryResponse>>>('/staff/building-chats');
+  httpClient.get<ApiResponse<ApiListData<BuildingChatSummaryResponse>>>('/staff/building-chats');

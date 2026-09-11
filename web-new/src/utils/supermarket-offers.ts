@@ -193,7 +193,16 @@ export const supermarketSecondPriceAdvantageRate = (stores: SupermarketStorePric
   return ((prices[1] - prices[0]) / prices[1]) * 100;
 };
 
-// 12. 取得有折扣的商店價格排序
+// 13. 取得可顯示第二低價優勢的唯一最低價門店。
+export const supermarketSecondPriceAdvantageStore = (
+  stores: SupermarketStorePrice[],
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice | null => {
+  const sortedStores = supermarketCurrentStorePrices(stores, locale);
+  return supermarketSecondPriceAdvantageRate(sortedStores) > 0 ? sortedStores[0] ?? null : null;
+};
+
+// 14. 取得有折扣的商店價格排序
 export const supermarketDiscountStorePrices = (
   stores: SupermarketStorePrice[],
   locale: AppLocale = 'zh-HK',
@@ -208,7 +217,7 @@ export const supermarketDiscountStorePrices = (
       return a.effectiveUnitPrice - b.effectiveUnitPrice;
     });
 
-// 13. 取得最低價商店
+// 15. 取得最低價商店
 export const supermarketBestStorePrices = (
   product: SupermarketProduct,
   locale: AppLocale = 'zh-HK',
@@ -218,14 +227,14 @@ export const supermarketBestStorePrices = (
   return prices.filter((item) => item.effectiveUnitPrice === lowestPrice);
 };
 
-// 14. 取得主要顯示價格
+// 16. 取得主要顯示價格
 export const supermarketPrimaryPrice = (
   product: SupermarketProduct,
   locale: AppLocale = 'zh-HK',
 ): SupermarketStorePrice =>
   supermarketBestStorePrices(product, locale)[0] ?? supermarketFallbackStorePrice(product);
 
-// 15. 取得最優惠商店
+// 17. 取得最優惠商店
 export const supermarketBestDealStorePrices = (
   stores: SupermarketStorePrice[],
   locale: AppLocale = 'zh-HK',
@@ -240,7 +249,7 @@ export const supermarketBestDealStorePrices = (
   return discountedStores.filter((item) => Math.abs(supermarketPriceDiscountRate(item) - bestRate) < 0.0001);
 };
 
-// 16. 取得商品優惠文字
+// 18. 取得商品優惠文字
 export const supermarketOfferTexts = (
   product: SupermarketProduct,
   locale: AppLocale = 'zh-HK',
@@ -252,7 +261,7 @@ export const supermarketOfferTexts = (
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 };
 
-// 17. 判斷純減價或原價貨品標籤。
+// 19. 判斷純減價或原價貨品標籤。
 export const supermarketIsSimpleOffer = (value: string): boolean => {
   const normalized = value.trim().toLocaleLowerCase();
   return normalized.includes('純減價')
@@ -261,7 +270,7 @@ export const supermarketIsSimpleOffer = (value: string): boolean => {
     || normalized.includes('regular price');
 };
 
-// 18. 移除沒有實際資訊的價格說明文字。
+// 20. 移除沒有實際資訊的價格說明文字。
 export const supermarketOfferDisplayText = (value: string): string => value
   .split(/[\r\n|]+/)
   .map((item) => item.trim())

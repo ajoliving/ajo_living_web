@@ -7,9 +7,9 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-import { createStaffUser, fetchStaffRoles, fetchStaffUsers } from '@/httpapis/staff';
+import { createStaffUser, fetchStaffUsers } from '@/httpapis/staff';
 import { grantStaffWalletPoints } from '@/httpapis/wallet';
-import type { RoleCatalogItem, StaffUserSummary } from '@/model/user';
+import type { StaffUserSummary } from '@/model/user';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -28,7 +28,6 @@ const page = ref(1);
 const pageSize = 20;
 const total = ref(0);
 const items = ref<StaffUserSummary[]>([]);
-const roleOptions = ref<RoleCatalogItem[]>([]);
 const isCreateDialogOpen = ref(false);
 const creating = ref(false);
 const grantTarget = ref<StaffUserSummary | null>(null);
@@ -39,8 +38,6 @@ const createForm = ref({
   displayName: '',
   phoneCountryCode: '+852',
   phoneNumber: '',
-  memberType: 'user',
-  roleCode: 'staff',
 });
 const grantForm = ref({
   amount: 100,
@@ -48,15 +45,11 @@ const grantForm = ref({
 });
 const hasPrevious = computed(() => page.value > 1);
 const hasNext = computed(() => page.value * pageSize < total.value);
-const staffRoleOptions = computed(() =>
-  roleOptions.value.filter((role) => role.scope === 'staff'),
-);
 const canCreateMember = computed(() =>
   createForm.value.email.trim().length > 0 &&
   createForm.value.password.trim().length >= 8 &&
   createForm.value.phoneCountryCode.trim().length > 0 &&
-  createForm.value.phoneNumber.trim().length > 0 &&
-  createForm.value.roleCode.trim().length > 0,
+  createForm.value.phoneNumber.trim().length > 0,
 );
 const canGrantPoints = computed(() =>
   grantTarget.value !== null &&
@@ -86,37 +79,27 @@ const loadMembers = async (targetPage = page.value): Promise<void> => {
   }
 };
 
-// 2. 讀取角色列表
-const loadRoles = async (): Promise<void> => {
-  try {
-    const { data } = await fetchStaffRoles();
-    roleOptions.value = data.data.items;
-  } catch {
-    feedbackStore.pushToast(t('marketplace.management.loadRolesError'), 'error');
-  }
-};
-
-// 3. 搜尋會員
+// 2. 搜尋會員
 const search = async (): Promise<void> => {
   await loadMembers(1);
 };
 
-// 4. 格式化會員名稱
+// 3. 格式化會員名稱
 const formatMemberName = (member: StaffUserSummary): string =>
   member.display_name?.trim() || member.email || member.phone_number || '-';
 
-// 5. 格式化會員電話
+// 4. 格式化會員電話
 const formatPhone = (member: StaffUserSummary): string =>
   member.phone_number ? `${member.phone_country_code} ${member.phone_number}`.trim() : '-';
 
-// 6. 格式化會員電郵
+// 5. 格式化會員電郵
 const formatEmail = (member: StaffUserSummary): string => member.email?.trim() || '-';
 
-// 7. 格式化會員角色
-const formatRoles = (member: StaffUserSummary): string =>
-  member.roles.filter((role) => role !== 'member').join(', ') || '-';
+// 6. 格式化管理員標記
+const formatStaffFlag = (member: StaffUserSummary): string =>
+  member.is_staff ? t('marketplace.management.staffYes') : t('marketplace.management.staffNo');
 
-// 8. 開啟新增帳戶彈窗
+// 7. 開啟新增帳戶彈窗
 const openCreateDialog = (): void => {
   createForm.value = {
     email: '',
@@ -124,20 +107,18 @@ const openCreateDialog = (): void => {
     displayName: '',
     phoneCountryCode: '+852',
     phoneNumber: '',
-    memberType: 'user',
-    roleCode: 'staff',
   };
   isCreateDialogOpen.value = true;
 };
 
-// 9. 關閉新增帳戶彈窗
+// 8. 關閉新增帳戶彈窗
 const closeCreateDialog = (): void => {
   if (!creating.value) {
     isCreateDialogOpen.value = false;
   }
 };
 
-// 10. 新增 Staff 帳戶
+// 9. 新增 Staff 帳戶
 const submitCreateMember = async (): Promise<void> => {
   if (!canCreateMember.value) {
     feedbackStore.pushToast(t('marketplace.management.createMemberRequired'), 'error');
@@ -152,8 +133,6 @@ const submitCreateMember = async (): Promise<void> => {
       display_name: createForm.value.displayName.trim(),
       phone_country_code: createForm.value.phoneCountryCode.trim(),
       phone_number: createForm.value.phoneNumber.trim(),
-      member_type: createForm.value.memberType,
-      role_codes: [createForm.value.roleCode],
     });
     feedbackStore.pushToast(t('marketplace.management.createMemberSuccess'), 'success');
     isCreateDialogOpen.value = false;
@@ -165,7 +144,7 @@ const submitCreateMember = async (): Promise<void> => {
   }
 };
 
-// 11. 開啟積分發放彈窗
+// 10. 開啟積分發放彈窗
 const openGrantDialog = (member: StaffUserSummary): void => {
   grantTarget.value = member;
   grantForm.value = {
@@ -174,14 +153,14 @@ const openGrantDialog = (member: StaffUserSummary): void => {
   };
 };
 
-// 12. 關閉積分發放彈窗
+// 11. 關閉積分發放彈窗
 const closeGrantDialog = (): void => {
   if (!granting.value) {
     grantTarget.value = null;
   }
 };
 
-// 13. 發放積分
+// 12. 發放積分
 const submitGrantPoints = async (): Promise<void> => {
   if (!grantTarget.value || !canGrantPoints.value) {
     feedbackStore.pushToast(t('marketplace.management.walletGrantRequired'), 'error');
@@ -210,7 +189,6 @@ watch(status, () => {
 
 onMounted(() => {
   void loadMembers(1);
-  void loadRoles();
 });
 </script>
 
@@ -297,8 +275,7 @@ onMounted(() => {
             <tr>
               <th>{{ t('marketplace.management.columnMember') }}</th>
               <th>{{ t('marketplace.management.columnContact') }}</th>
-              <th>{{ t('marketplace.management.columnMemberType') }}</th>
-              <th>{{ t('marketplace.management.columnRoles') }}</th>
+              <th>{{ t('marketplace.management.columnStaff') }}</th>
               <th>{{ t('common.label.status') }}</th>
               <th>{{ t('marketplace.management.columnCommunity') }}</th>
               <th>{{ t('marketplace.management.columnUpdatedAt') }}</th>
@@ -319,8 +296,7 @@ onMounted(() => {
                   <small>{{ formatEmail(member) }}</small>
                 </div>
               </td>
-              <td>{{ member.member_type || '-' }}</td>
-              <td>{{ formatRoles(member) }}</td>
+              <td>{{ formatStaffFlag(member) }}</td>
               <td>
                 <span class="management-status-pill">{{ member.member_status || '-' }}</span>
               </td>
@@ -428,29 +404,6 @@ onMounted(() => {
                   />
                 </label>
               </div>
-              <label class="management-dialog-field">
-                <span>{{ t('marketplace.management.createMemberTypeField') }}</span>
-                <select v-model="createForm.memberType">
-                  <option value="user">
-                    {{ t('marketplace.management.memberTypeUser') }}
-                  </option>
-                  <option value="pro_user">
-                    {{ t('marketplace.management.memberTypeProUser') }}
-                  </option>
-                </select>
-              </label>
-              <label class="management-dialog-field">
-                <span>{{ t('marketplace.management.createRoleField') }}</span>
-                <select v-model="createForm.roleCode">
-                  <option
-                    v-for="role in staffRoleOptions"
-                    :key="role.code"
-                    :value="role.code"
-                  >
-                    {{ role.name }}
-                  </option>
-                </select>
-              </label>
               <p class="management-dialog-hint">
                 {{ t('marketplace.management.createMemberHint') }}
               </p>

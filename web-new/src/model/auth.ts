@@ -43,10 +43,17 @@ export interface AuthLoginUser {
 
 // 5. OTP 驗證結果
 export interface VerifyOtpResult {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: AuthLoginUser;
+	access_token: string;
+	refresh_token: string;
+	expires_in: number;
+	user: AuthLoginUser;
+}
+
+// 5.1 Session refresh response
+export interface RefreshTokenResult {
+	access_token: string;
+	refresh_token: string;
+	expires_in: number;
 }
 
 // 6. 郵箱驗證碼認證請求

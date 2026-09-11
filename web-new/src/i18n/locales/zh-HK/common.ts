@@ -16,6 +16,8 @@ export default {
     revealContact: '查看聯絡方式',
     openChat: '站內訊息',
     send: '送出',
+    cancel: '取消',
+    search: '搜尋',
     saveDraft: '儲存草稿',
     signIn: '登入',
     signOut: '登出帳戶',

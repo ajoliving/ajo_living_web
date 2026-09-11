@@ -23,7 +23,10 @@ const (
 	chatTypeDirectListing  = "direct_listing_chat"
 	chatTypeSystemNotice   = "system_notice"
 	messageTypeText        = "text"
+	messageTypeAttachment  = "attachment"
+	messageTypeMixed       = "mixed"
 	messageContentMaxRunes = 1000
+	messageAttachmentMax   = 5
 )
 
 // 1. ChatService handles listing chats and messages.
@@ -259,6 +262,16 @@ func (s *ChatService) GetChat(ctx context.Context, userID int64, chatPublicID st
 
 // 9. ListMessages returns messages for a chat the current user belongs to.
 func (s *ChatService) ListMessages(ctx context.Context, userID int64, chatPublicID string, page int, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	return s.listMessages(ctx, userID, chatPublicID, page, pageSize, false)
+}
+
+// 9.1 ListRecentMessages returns the most recent message page in chronological order.
+func (s *ChatService) ListRecentMessages(ctx context.Context, userID int64, chatPublicID string, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	return s.listMessages(ctx, userID, chatPublicID, 1, pageSize, true)
+}
+
+// 9.2 listMessages keeps legacy pagination while supporting the current chat tail.
+func (s *ChatService) listMessages(ctx context.Context, userID int64, chatPublicID string, page int, pageSize int, newest bool) ([]MessageResponse, *model.Pagination, error) {
 	chat, _, _, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
 	if err != nil {
 		return nil, nil, err
@@ -273,31 +286,86 @@ func (s *ChatService) ListMessages(ctx context.Context, userID int64, chatPublic
 	}
 
 	var messages []model.Message
-	if err := baseQuery.Order("created_at asc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&messages).Error; err != nil {
+	messageQuery := baseQuery
+	if newest {
+		messageQuery = baseQuery.Order("created_at desc, id desc").Limit(pageSize)
+	} else {
+		messageQuery = baseQuery.Order("created_at asc, id asc").Offset((page - 1) * pageSize).Limit(pageSize)
+	}
+	if err := messageQuery.Find(&messages).Error; err != nil {
 		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load messages")
 	}
-
-	items := make([]MessageResponse, 0, len(messages))
-	for _, message := range messages {
-		items = append(items, MessageResponse{
-			MessageID:    message.PublicID,
-			SenderUserID: fmtInt64(message.SenderUserID),
-			Content:      message.ContentText,
-			MessageType:  message.MessageType,
-			ActionLabel:  message.ActionLabel,
-			ActionURL:    message.ActionURL,
-			Status:       message.MessageStatus,
-			CreatedAt:    message.CreatedAt.UTC().Format(time.RFC3339),
-		})
+	if newest {
+		reverseMessages(messages)
 	}
 
+	items, err := s.buildMessageResponses(ctx, messages)
+	if err != nil {
+		return nil, nil, err
+	}
 	return items, &model.Pagination{Page: page, PageSize: pageSize, Total: total}, nil
 }
 
-// 10. SendMessage creates a new text message in the target chat.
+// 9.3 reverseMessages restores chronological order after querying the latest page descending.
+func reverseMessages(messages []model.Message) {
+	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
+		messages[left], messages[right] = messages[right], messages[left]
+	}
+}
+
+// 10.1 ListMessagesAfter returns messages created after one known message.
+func (s *ChatService) ListMessagesAfter(ctx context.Context, userID int64, chatPublicID string, afterMessageID string, pageSize int) ([]MessageResponse, *model.Pagination, error) {
+	chat, _, _, err := s.loadAuthorizedChat(ctx, userID, chatPublicID)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, pageSize = normalizePagination(1, pageSize)
+	var anchor model.Message
+	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ? AND chat_id = ?", strings.TrimSpace(afterMessageID), chat.ID).First(&anchor).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, &model.Pagination{Page: 1, PageSize: pageSize, Total: 0}, nil
+		}
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load message cursor")
+	}
+	query := s.runtime.DB.WithContext(ctx).Model(&model.Message{}).Where("chat_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))", chat.ID, anchor.CreatedAt, anchor.CreatedAt, anchor.ID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to count messages")
+	}
+	var messages []model.Message
+	if err := query.Order("created_at asc, id asc").Limit(pageSize).Find(&messages).Error; err != nil {
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load messages")
+	}
+	items, err := s.buildMessageResponses(ctx, messages)
+	if err != nil {
+		return nil, nil, err
+	}
+	return items, &model.Pagination{Page: 1, PageSize: pageSize, Total: total}, nil
+}
+
+// 11. SendMessage creates a new text message in the target chat.
 func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicID string, content string) (*MessageResponse, error) {
+	return s.SendMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, nil, "")
+}
+
+// 11.1 SendMessageWithAttachments creates a text, attachment, or mixed message.
+func (s *ChatService) SendMessageWithAttachments(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string) (*MessageResponse, error) {
+	return s.SendMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, attachmentIDs, "")
+}
+
+// 11.2 SendMessageWithAttachmentsAndClientID adds client retry idempotency.
+func (s *ChatService) SendMessageWithAttachmentsAndClientID(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string, clientMessageID string) (*MessageResponse, error) {
 	content = strings.TrimSpace(content)
-	if content == "" {
+	var attachmentErr error
+	attachmentIDs, attachmentErr = normalizeAttachmentIDs(attachmentIDs)
+	if attachmentErr != nil {
+		return nil, attachmentErr
+	}
+	clientMessageID = strings.TrimSpace(clientMessageID)
+	if len([]rune(clientMessageID)) > 80 {
+		return nil, errcode.New(errcode.CodeValidationError, "client_message_id is too long")
+	}
+	if content == "" && len(attachmentIDs) == 0 {
 		return nil, errcode.New(errcode.CodeValidationError, "message content is required")
 	}
 	if len([]rune(content)) > messageContentMaxRunes {
@@ -311,25 +379,75 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	if listing.PublicationStatus != "active" || listing.ModerationStatus != "approved" || listing.BusinessStatus != "available" {
 		return nil, errcode.New(errcode.CodeAuthForbidden, "listing is not available for messaging")
 	}
-
-	message := model.Message{
-		PublicID:      utils.NewPublicID(),
-		ChatID:        chat.ID,
-		SenderUserID:  userID,
-		MessageType:   messageTypeText,
-		ContentText:   content,
-		MessageStatus: "sent",
-		CreatedAt:     s.runtime.Now(),
+	if clientMessageID != "" {
+		var existing model.Message
+		if err := s.runtime.DB.WithContext(ctx).Where("chat_id = ? AND sender_user_id = ? AND client_message_id = ?", chat.ID, userID, clientMessageID).First(&existing).Error; err == nil {
+			items, buildErr := s.buildMessageResponses(ctx, []model.Message{existing})
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			return &items[0], nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load message retry")
+		}
+	}
+	assets, err := s.loadChatAttachmentAssets(ctx, userID, attachmentIDs)
+	if err != nil {
+		return nil, err
+	}
+	messageType := messageTypeText
+	if len(assets) > 0 && content == "" {
+		messageType = messageTypeAttachment
+	} else if len(assets) > 0 {
+		messageType = messageTypeMixed
+	}
+	preview := content
+	if preview == "" {
+		preview = "[Attachment]"
 	}
 
+	message := model.Message{
+		PublicID:        utils.NewPublicID(),
+		ChatID:          chat.ID,
+		SenderUserID:    userID,
+		ClientMessageID: optionalString(clientMessageID),
+		MessageType:     messageType,
+		ContentText:     content,
+		MessageStatus:   "sent",
+		CreatedAt:       s.runtime.Now(),
+	}
+	eventPayload, payloadErr := buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+	if payloadErr != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare realtime event")
+	}
+	outboxEnabled := s.runtime.DB.Migrator().HasTable(&model.RealtimeOutbox{})
+
 	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		assets, err = s.loadChatAttachmentAssetsWithDB(ctx, tx, userID, attachmentIDs, true)
+		if err != nil {
+			return err
+		}
+		eventPayload, payloadErr = buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+		if payloadErr != nil {
+			return payloadErr
+		}
 		if err := tx.Create(&message).Error; err != nil {
 			return err
+		}
+		for index, asset := range assets {
+			if err := tx.Create(&model.MessageAttachment{MessageID: message.ID, MediaAssetID: asset.ID, SortOrder: index}).Error; err != nil {
+				return err
+			}
+		}
+		if outboxEnabled {
+			if err := tx.Create(&model.RealtimeOutbox{EventType: "message", AggregateID: message.PublicID, Payload: eventPayload, Status: "pending", NextAttemptAt: message.CreatedAt, CreatedAt: message.CreatedAt}).Error; err != nil {
+				return err
+			}
 		}
 
 		now := s.runtime.Now()
 		if err := tx.Model(&model.Chat{}).Where("id = ?", chat.ID).Updates(map[string]any{
-			"last_message_preview": content,
+			"last_message_preview": preview,
 			"last_message_at":      now,
 			"updated_at":           now,
 		}).Error; err != nil {
@@ -350,7 +468,7 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 				UserID:          recipient.UserID,
 				Category:        "chat_message",
 				Title:           "新訊息",
-				Body:            content,
+				Body:            preview,
 				RelatedType:     "chat",
 				RelatedPublicID: chat.PublicID,
 			}); err != nil {
@@ -365,15 +483,11 @@ func (s *ChatService) SendMessage(ctx context.Context, userID int64, chatPublicI
 	}); err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to send message")
 	}
-
-	return &MessageResponse{
-		MessageID:    message.PublicID,
-		SenderUserID: fmtInt64(message.SenderUserID),
-		Content:      message.ContentText,
-		MessageType:  message.MessageType,
-		Status:       message.MessageStatus,
-		CreatedAt:    message.CreatedAt.UTC().Format(time.RFC3339),
-	}, nil
+	items, err := s.buildMessageResponses(ctx, []model.Message{message})
+	if err != nil {
+		return nil, err
+	}
+	return &items[0], nil
 }
 
 // 11. MarkRead clears unread count for the current participant.
@@ -401,7 +515,49 @@ func (s *ChatService) MarkRead(ctx context.Context, userID int64, chatPublicID s
 	return nil
 }
 
-// 12. loadAuthorizedChat loads a chat and validates membership.
+// 12. ValidateChatAccess validates a realtime connection's chat scope.
+func (s *ChatService) ValidateChatAccess(ctx context.Context, userID int64, chatPublicID string) error {
+	var chat model.Chat
+	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", strings.TrimSpace(chatPublicID)).First(&chat).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errcode.New(errcode.CodeNotFound, "chat not found")
+		}
+		return errcode.New(errcode.CodeInternalError, "failed to load chat")
+	}
+	if chat.ChatType == chatTypeBuildingGroup {
+		_, _, err := s.loadAuthorizedBuildingChat(ctx, userID, chat.PublicID, true)
+		return err
+	}
+	_, _, _, err := s.loadAuthorizedChat(ctx, userID, chat.PublicID)
+	return err
+}
+
+// 13. SendRealtimeMessage routes one WebSocket text command through the existing chat services.
+func (s *ChatService) SendRealtimeMessage(ctx context.Context, userID int64, chatPublicID string, content string) (*MessageResponse, error) {
+	return s.SendRealtimeMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, nil, "")
+}
+
+// 13.1 SendRealtimeMessageWithAttachments routes a WebSocket message with uploads.
+func (s *ChatService) SendRealtimeMessageWithAttachments(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string) (*MessageResponse, error) {
+	return s.SendRealtimeMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, attachmentIDs, "")
+}
+
+// 14.2 SendRealtimeMessageWithAttachmentsAndClientID routes an idempotent WebSocket message.
+func (s *ChatService) SendRealtimeMessageWithAttachmentsAndClientID(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string, clientMessageID string) (*MessageResponse, error) {
+	var chat model.Chat
+	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", strings.TrimSpace(chatPublicID)).First(&chat).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcode.New(errcode.CodeNotFound, "chat not found")
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load chat")
+	}
+	if chat.ChatType == chatTypeBuildingGroup {
+		return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chat.PublicID, content, attachmentIDs, clientMessageID)
+	}
+	return s.SendMessageWithAttachmentsAndClientID(ctx, userID, chat.PublicID, content, attachmentIDs, clientMessageID)
+}
+
+// 14. loadAuthorizedChat loads a chat and validates membership.
 func (s *ChatService) loadAuthorizedChat(ctx context.Context, userID int64, chatPublicID string) (*model.Chat, *model.Listing, *model.ChatParticipant, error) {
 	var chat model.Chat
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", chatPublicID).First(&chat).Error; err != nil {

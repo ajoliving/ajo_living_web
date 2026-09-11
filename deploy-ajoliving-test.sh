@@ -369,6 +369,21 @@ server {
         return 301 https://\$host\$request_uri;
     }
 
+    location ^~ /api/v1/realtime/ws {
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_set_header X-AJO-Forwarded-Proto \$http_x_ajo_forwarded_proto;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:$APP_PORT;
         proxy_set_header Host \$host;

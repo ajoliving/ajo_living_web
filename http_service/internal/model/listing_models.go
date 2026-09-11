@@ -60,18 +60,25 @@ type ListingContact struct {
 
 // 3. MediaAsset stores uploaded media metadata.
 type MediaAsset struct {
-	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	PublicID        string    `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
-	StorageProvider string    `gorm:"type:varchar(32);not null" json:"storage_provider"`
-	BucketName      string    `gorm:"type:varchar(120);not null;uniqueIndex:idx_media_assets_bucket_object" json:"bucket_name"`
-	ObjectKey       string    `gorm:"type:varchar(500);not null;uniqueIndex:idx_media_assets_bucket_object" json:"object_key"`
-	MimeType        string    `gorm:"type:varchar(100);not null" json:"mime_type"`
-	Width           *int      `json:"width"`
-	Height          *int      `json:"height"`
-	FileSize        int64     `json:"file_size"`
-	ChecksumSHA256  string    `gorm:"type:varchar(128)" json:"checksum_sha256"`
-	CreatedBy       *int64    `gorm:"index" json:"created_by"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                 int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID           string     `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	StorageProvider    string     `gorm:"type:varchar(32);not null" json:"storage_provider"`
+	BucketName         string     `gorm:"type:varchar(120);not null;uniqueIndex:idx_media_assets_bucket_object" json:"bucket_name"`
+	ObjectKey          string     `gorm:"type:varchar(500);not null;uniqueIndex:idx_media_assets_bucket_object" json:"object_key"`
+	MimeType           string     `gorm:"type:varchar(100);not null" json:"mime_type"`
+	Width              *int       `json:"width"`
+	Height             *int       `json:"height"`
+	FileSize           int64      `json:"file_size"`
+	ChecksumSHA256     string     `gorm:"type:varchar(128)" json:"checksum_sha256"`
+	ProcessingStatus   string     `gorm:"type:varchar(24);not null;default:ready;index" json:"processing_status"`
+	ScanStatus         string     `gorm:"type:varchar(24);not null;default:pending;index" json:"scan_status"`
+	RejectionReason    string     `gorm:"type:varchar(500)" json:"rejection_reason,omitempty"`
+	ThumbnailObjectKey string     `gorm:"type:varchar(500)" json:"thumbnail_object_key,omitempty"`
+	PlaybackObjectKey  string     `gorm:"type:varchar(500)" json:"playback_object_key,omitempty"`
+	WorkerClaimToken   string     `gorm:"type:varchar(26);index" json:"-"`
+	WorkerClaimedAt    *time.Time `gorm:"index" json:"-"`
+	CreatedBy          *int64     `gorm:"index" json:"created_by"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 // 4. ListingImage stores listing image order and cover state.
