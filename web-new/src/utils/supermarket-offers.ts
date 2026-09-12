@@ -184,23 +184,37 @@ export const supermarketCurrentStorePrices = (
 export const supermarketPriceDiscountRate = (price: SupermarketStorePrice): number =>
   price.listPrice > 0 ? Math.max(0, ((price.listPrice - price.effectiveUnitPrice) / price.listPrice) * 100) : 0;
 
-// 12. 計算最低價相對第二低價的優勢百分比。
+// 12. 計算最低價相對下一個不同價格的優勢百分比。
 export const supermarketSecondPriceAdvantageRate = (stores: SupermarketStorePrice[]): number => {
-  const prices = supermarketCurrentStorePrices(stores)
-    .map((item) => item.effectiveUnitPrice)
-    .filter((value) => Number.isFinite(value) && value >= 0);
-  if (prices.length < 2 || prices[1] <= 0 || prices[1] <= prices[0]) return 0;
+  const prices = [...new Set(
+    supermarketCurrentStorePrices(stores)
+      .map((item) => item.effectiveUnitPrice)
+      .filter((value) => Number.isFinite(value) && value > 0),
+  )].sort((a, b) => a - b);
+  if (prices.length < 2) return 0;
   return ((prices[1] - prices[0]) / prices[1]) * 100;
 };
 
-// 13. 取得可顯示第二低價優勢的唯一最低價門店。
+// 13. 取得可顯示第二低價優勢的最低價門店。
+export const supermarketSecondPriceAdvantageStores = (
+  stores: SupermarketStorePrice[],
+  locale: AppLocale = 'zh-HK',
+): SupermarketStorePrice[] => {
+  const sortedStores = supermarketCurrentStorePrices(stores, locale)
+    .filter((item) => Number.isFinite(item.effectiveUnitPrice) && item.effectiveUnitPrice > 0);
+  if (Math.round(supermarketSecondPriceAdvantageRate(sortedStores)) < 1) {
+    return [];
+  }
+  const lowestPrice = sortedStores[0]?.effectiveUnitPrice;
+  return sortedStores.filter((item) => item.effectiveUnitPrice === lowestPrice);
+};
+
+// 13. 回傳其中一個可顯示第二低價優勢的最低價門店。
 export const supermarketSecondPriceAdvantageStore = (
   stores: SupermarketStorePrice[],
   locale: AppLocale = 'zh-HK',
-): SupermarketStorePrice | null => {
-  const sortedStores = supermarketCurrentStorePrices(stores, locale);
-  return supermarketSecondPriceAdvantageRate(sortedStores) > 0 ? sortedStores[0] ?? null : null;
-};
+): SupermarketStorePrice | null =>
+  supermarketSecondPriceAdvantageStores(stores, locale)[0] ?? null;
 
 // 14. 取得有折扣的商店價格排序
 export const supermarketDiscountStorePrices = (

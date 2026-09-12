@@ -10,6 +10,7 @@ import type { SupermarketProduct, SupermarketStorePrice } from '@/model/supermar
 import {
   supermarketSecondPriceAdvantageRate,
   supermarketSecondPriceAdvantageStore,
+  supermarketSecondPriceAdvantageStores,
   supermarketStorePrices,
 } from './supermarket-offers';
 
@@ -53,7 +54,7 @@ describe('supermarketStorePrices', () => {
   });
 });
 
-// 2. 驗證第二低價優勢標籤對應的唯一最低價門店。
+// 2. 驗證第二低價優勢標籤對應最低價門店。
 describe('supermarketSecondPriceAdvantageStore', () => {
   const prices: SupermarketStorePrice[] = [
     {
@@ -75,12 +76,42 @@ describe('supermarketSecondPriceAdvantageStore', () => {
     expect(supermarketSecondPriceAdvantageRate(prices)).toBeCloseTo((10 / 188) * 100, 8);
   });
 
-  it('does not return a store when the lowest price is tied', () => {
-    expect(supermarketSecondPriceAdvantageStore([
+  it('still marks every lowest-priced store when the cheapest price is tied', () => {
+    const tiedPrices = [
       ...prices,
       {
         store: 'AEON', listPrice: 178, effectiveUnitPrice: 178, offer: '', parseStatus: 'none', snapshotDate: '2026-08-29',
       },
-    ])).toBeNull();
+    ];
+    expect(supermarketSecondPriceAdvantageStores(tiedPrices).map((item) => item.store).sort()).toEqual(['AEON', 'LUNGFUNG']);
+    expect(supermarketSecondPriceAdvantageRate(tiedPrices)).toBeCloseTo((10 / 188) * 100, 8);
+  });
+
+  it('does not mark a store when every current price is the same', () => {
+    expect(supermarketSecondPriceAdvantageStores([
+      {
+        store: 'JASONS', listPrice: 43.5, effectiveUnitPrice: 43.5, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+      {
+        store: 'PARKNSHOP', listPrice: 43.5, effectiveUnitPrice: 43.5, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+      {
+        store: 'WELLCOME', listPrice: 43.5, effectiveUnitPrice: 43.5, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+    ])).toEqual([]);
+  });
+
+  it('ignores invalid zero prices when comparing current stores', () => {
+    expect(supermarketSecondPriceAdvantageStore([
+      {
+        store: 'AEON', listPrice: 0, effectiveUnitPrice: 0, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+      {
+        store: 'LUNGFUNG', listPrice: 92, effectiveUnitPrice: 92, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+      {
+        store: 'MANNINGS', listPrice: 340, effectiveUnitPrice: 340, offer: '', parseStatus: 'none', snapshotDate: '2026-09-12',
+      },
+    ])?.store).toBe('LUNGFUNG');
   });
 });

@@ -62,6 +62,8 @@ export default {
     offer: '優惠',
     effectivePrice: '優惠後',
     originalPriceHeading: '原價',
+    perItem: '/件',
+    savedPercentage: '省左 {rate}%',
   },
   detail: {
     noProductCode: '未提供商品編號。',
@@ -132,9 +134,10 @@ export default {
     noHistory: '未有歷史資料。',
     formula: '口味／配方',
     package: '包裝規格',
-    secondPriceAdvantage: '比第二低價低 {rate}%',
+    secondPriceAdvantage: '省左 {rate}%',
+    savedPercentage: '省左 {rate}%',
     sameBrand: '同品牌產品',
     sameCategory: '同分類產品',
-    perItem: '/ 件',
+    perItem: '/件',
   },
 };

@@ -33,7 +33,6 @@ import {
   formatSupermarketDate,
   formatSupermarketHKPrice,
   resolveSupermarketProductBrand,
-  resolveSupermarketProductCategory,
   resolveSupermarketProductFullTitle,
   resolveSupermarketProductName,
   resolveSupermarketProductUnit,
@@ -42,8 +41,10 @@ import {
   supermarketOfferTexts,
   supermarketIsSimpleOffer,
   supermarketOfferDisplayText,
+  supermarketPriceDiscountRate,
+  normalizeSupermarketStoreCode,
   supermarketSecondPriceAdvantageRate,
-  supermarketSecondPriceAdvantageStore,
+  supermarketSecondPriceAdvantageStores,
   supermarketPrimaryPrice,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
@@ -149,12 +150,13 @@ const returnListQuery = computed(() => {
 // 6. 取得所有最新商店對比卡，避免只顯示單一商店。
 const latestStoreCards = computed<SupermarketStorePrice[]>(() => latestStorePrices.value);
 
-// 6.1 取得唯一可顯示第二低價優勢的最低價門店。
-const secondPriceAdvantageStore = computed<SupermarketStorePrice | null>(() =>
-  supermarketSecondPriceAdvantageStore(latestStoreCards.value, preferenceStore.locale),
-);
+// 6.1 取得可顯示第二低價優勢的最低價門店代碼。
+const secondPriceAdvantageStoreCodes = computed(() => new Set(
+  supermarketSecondPriceAdvantageStores(latestStoreCards.value, preferenceStore.locale)
+    .map((item) => normalizeSupermarketStoreCode(item.store)),
+));
 
-// 6.2 取得最低價相對第二低價的優勢百分比。
+// 6.2 取得最低價相對下一個不同價格的優勢百分比。
 const secondPriceAdvantageRate = computed<number>(() =>
   supermarketSecondPriceAdvantageRate(latestStoreCards.value),
 );
@@ -333,6 +335,14 @@ const trendHover = computed(() => {
 // 20. 取得關聯商品價格
 const relatedProductPriceText = (item: SupermarketProduct): string =>
   formatOfferPrice(supermarketPrimaryPrice(item, preferenceStore.locale).effectiveUnitPrice);
+
+// 20.1 顯示關聯商品節省百分比
+const relatedProductSavingText = (item: SupermarketProduct): string => {
+  const rate = supermarketPriceDiscountRate(supermarketPrimaryPrice(item, preferenceStore.locale));
+  return rate >= 1
+    ? t('offers.detail.savedPercentage', { rate: rate.toFixed(0) })
+    : '';
+};
 
 // 21. 取得關聯商品門店
 const relatedProductStoreText = (item: SupermarketProduct): string =>
@@ -745,21 +755,15 @@ const formatOfferPrice = (value: number | null | undefined): string =>
 
 // 39. 格式化商品名稱
 const formatProductName = (item: SupermarketProduct): string =>
-  resolveSupermarketProductName(item);
+  [resolveSupermarketProductName(item), resolveSupermarketProductUnit(item)]
+    .filter(Boolean)
+    .join(' ');
 
 // 40. 格式化商品品牌
 const formatProductBrand = (item: SupermarketProduct): string =>
   resolveSupermarketProductBrand(item);
 
-// 41. 格式化商品規格
-const formatProductUnit = (item: SupermarketProduct): string =>
-  resolveSupermarketProductUnit(item);
-
-// 42. 格式化商品分類
-const formatProductCategory = (item: SupermarketProduct): string =>
-  resolveSupermarketProductCategory(item);
-
-// 43. 格式化完整商品標題
+// 41. 格式化完整商品標題
 const formatProductTitle = (item: SupermarketProduct): string =>
   resolveSupermarketProductFullTitle(item);
 
@@ -852,10 +856,6 @@ onBeforeUnmount(() => {
               </button>
               <div class="gp-detail-title">{{ formatProductName(product) }}</div>
             </div>
-            <div
-              v-if="formatProductUnit(product)"
-              class="gp-product-unit"
-            >{{ formatProductUnit(product) }}</div>
             <div class="gp-product-cat">
               <button
                 v-for="category in productCategories"
@@ -1035,7 +1035,7 @@ onBeforeUnmount(() => {
                 {{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) }}
               </div>
               <div
-                v-if="price === secondPriceAdvantageStore"
+                v-if="secondPriceAdvantageStoreCodes.has(normalizeSupermarketStoreCode(price.store))"
                 class="gp-compare-badge"
               >
                 {{ t('offers.detail.secondPriceAdvantage', { rate: secondPriceAdvantageRate.toFixed(0) }) }}
@@ -1288,22 +1288,18 @@ onBeforeUnmount(() => {
               </div>
               <div class="gp-related-body">
                 <div class="gp-related-title-row">
-                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
                   <span
                     v-if="formatProductBrand(item)"
                     class="gp-related-brand-chip"
                   >{{ formatProductBrand(item) }}</span>
+                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
                 </div>
-                <div
-                  v-if="formatProductUnit(item)"
-                  class="gp-related-unit"
-                >{{ formatProductUnit(item) }}</div>
-                <div
-                  v-if="formatProductCategory(item)"
-                  class="gp-related-category"
-                >{{ formatProductCategory(item) }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
+                <div class="gp-related-price">{{ relatedProductPriceText(item) }}{{ t('offers.detail.perItem') }}</div>
+                <div
+                  v-if="relatedProductSavingText(item)"
+                  class="gp-related-saving"
+                >{{ relatedProductSavingText(item) }}</div>
               </div>
             </button>
           </div>
@@ -1339,22 +1335,18 @@ onBeforeUnmount(() => {
               </div>
               <div class="gp-related-body">
                 <div class="gp-related-title-row">
-                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
                   <span
                     v-if="formatProductBrand(item)"
                     class="gp-related-brand-chip"
                   >{{ formatProductBrand(item) }}</span>
+                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
                 </div>
-                <div
-                  v-if="formatProductUnit(item)"
-                  class="gp-related-unit"
-                >{{ formatProductUnit(item) }}</div>
-                <div
-                  v-if="formatProductCategory(item)"
-                  class="gp-related-category"
-                >{{ formatProductCategory(item) }}</div>
                 <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }} {{ t('offers.detail.perItem') }}</div>
+                <div class="gp-related-price">{{ relatedProductPriceText(item) }}{{ t('offers.detail.perItem') }}</div>
+                <div
+                  v-if="relatedProductSavingText(item)"
+                  class="gp-related-saving"
+                >{{ relatedProductSavingText(item) }}</div>
               </div>
             </button>
           </div>
@@ -1566,7 +1558,7 @@ onBeforeUnmount(() => {
 .gp-detail-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 10px;
 }
 
@@ -1577,17 +1569,10 @@ onBeforeUnmount(() => {
   color: var(--brand);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 5px 10px;
-}
-
-.gp-product-unit {
-  margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
+  line-height: 1.25;
+  padding: 0 8px;
 }
 
 .gp-product-cat {
@@ -1835,7 +1820,7 @@ onBeforeUnmount(() => {
   color: var(--ink);
   font-size: 13px;
   font-weight: 800;
-  padding-right: 46px;
+  padding-right: 92px;
 }
 
 .gp-compare-price {
@@ -2182,7 +2167,7 @@ onBeforeUnmount(() => {
 .gp-related-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 8px;
 }
 
@@ -2193,25 +2178,10 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--sur-2);
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 3px 8px;
-}
-
-.gp-related-unit,
-.gp-related-category {
-  color: var(--ink-3);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.gp-related-unit {
-  margin-top: 5px;
-}
-
-.gp-related-category {
-  margin-top: 2px;
+  line-height: 1.35;
+  padding: 0 8px;
 }
 
 .gp-related-offer {
@@ -2226,6 +2196,14 @@ onBeforeUnmount(() => {
   color: var(--brand);
   font-size: 13px;
   font-weight: 800;
+}
+
+.gp-related-saving {
+  margin-top: 3px;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 /* 14. 狀態訊息 */

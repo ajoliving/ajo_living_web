@@ -68,6 +68,7 @@ No direct prompt regression test currently guards prompt wording or localization
 
 ## Change Log
 
+2026-09-12: Good Price product detail keeps the second-lowest-price advantage when multiple stores share the lowest current price, comparing against the next distinct current price.
 2026-09-12: Disabled Redis caching for iSmart client profile, building info, and notices; these reads currently always origin-fetch. POS directory caching is unchanged.
 2026-09-11: Cleared `http_service/internal/handler` unit tests and merged property translation plus POS payment extension handlers into their owning files.
 
@@ -218,6 +219,7 @@ No direct prompt regression test currently guards prompt wording or localization
 2026-08-17: Recorded the Good Price image-report contract: a public product-code submission creates one globally deduplicated AJO record after trim-and-uppercase normalization, and duplicate submissions still return success.
 2026-08-17: Recorded the Good Price detail-list continuity contract: return navigation restores the originating search state, and the detail price view merges product store records with detail prices so no recorded store is hidden.
 2026-08-17: Superseded the Good Price `brand + name` heading rule with the split heading contract: product name stays on the first line, brand sits to its right, unit text moves to the next left-aligned line, and category stays below across suggestions, cards, detail, related items, and favorites.
+2026-09-12: Updated Good Price display per product review: brand precedes the product name, unit data is included in the displayed name, related cards hide category labels, and store prices show per-item values with savings percentages.
 2026-08-17: Recorded the Good Price unit-extraction contract: daily CSV imports split explicit trailing size, weight, capacity, count, and pack expressions into `subtitle`; reviewed subtitles remain authoritative, and the historical backfill is limited to the latest two snapshot dates.
 2026-08-17: Recorded the Good Price unit-extraction production release: the database and prior binary were backed up, the running service and AJO testing proxy return independent subtitles, and routing, TLS, and database connection settings were unchanged.
 2026-08-18: Recorded the iSmart resident-subaccount contract: AJO resolves `target_user_id` through iSmart `auth/check-contact/` using the submitted phone and email, delegates the unit-level grant and revoke to iSmart, and presents the resulting full access scope without separate door or notice permission toggles.

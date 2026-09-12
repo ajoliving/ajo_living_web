@@ -23,6 +23,7 @@ import type {
   SupermarketProduct,
   SupermarketSearchParams,
   SupermarketSearchResult,
+  SupermarketStorePrice,
   SupermarketSummary,
   SupermarketValueCount,
 } from '@/model/supermarket-offers';
@@ -31,6 +32,7 @@ import {
   displaySupermarketStore,
   formatSupermarketDate,
   formatSupermarketHKPrice,
+  supermarketPriceDiscountRate,
   supermarketOfferTexts,
   supermarketOfferDisplayText,
   supermarketPrimaryPrice,
@@ -541,23 +543,33 @@ const productOfferTexts = (product: SupermarketProduct): string[] =>
 
 // 45. 顯示商品主標題名稱
 const productDisplayName = (product: SupermarketProduct): string =>
-  resolveSupermarketProductName(product);
+  [resolveSupermarketProductName(product), resolveSupermarketProductUnit(product)]
+    .filter(Boolean)
+    .join(' ');
 
 // 46. 顯示商品品牌
 const productDisplayBrand = (product: SupermarketProduct): string =>
   resolveSupermarketProductBrand(product);
 
-// 47. 顯示商品規格
-const productDisplayUnit = (product: SupermarketProduct): string =>
-  resolveSupermarketProductUnit(product);
-
-// 48. 顯示商品完整標題
+// 47. 顯示商品完整標題
 const productDisplayTitle = (product: SupermarketProduct): string =>
   resolveSupermarketProductFullTitle(product);
 
-// 49. 顯示商品完整分類。
+// 48. 顯示商品完整分類。
 const productCategoryText = (product: SupermarketProduct): string =>
   resolveSupermarketProductCategory(product);
+
+// 49. 顯示單位價格
+const formatOfferUnitPrice = (value: number | null | undefined): string =>
+  `${formatOfferPrice(value)}${t('offers.list.perItem')}`;
+
+// 50. 顯示商品節省百分比
+const productSavingText = (price: SupermarketStorePrice): string => {
+  const rate = supermarketPriceDiscountRate(price);
+  return rate >= 1
+    ? t('offers.list.savedPercentage', { rate: rate.toFixed(0) })
+    : '';
+};
 
 // 35. 還原由商品詳情頁帶回的搜尋條件。
 const restoreSearchState = (): void => {
@@ -761,16 +773,12 @@ onBeforeUnmount(() => {
               @mousedown.prevent="selectSearchSuggestion(product)"
             >
               <span class="gp-search-suggestion-head">
-                <span class="gp-search-suggestion-name">{{ productDisplayName(product) }}</span>
                 <span
                   v-if="productDisplayBrand(product)"
                   class="gp-search-suggestion-chip"
                 >{{ productDisplayBrand(product) }}</span>
+                <span class="gp-search-suggestion-name">{{ productDisplayName(product) }}</span>
               </span>
-              <span
-                v-if="productDisplayUnit(product)"
-                class="gp-search-suggestion-unit"
-              >{{ productDisplayUnit(product) }}</span>
               <span
                 v-if="productCategoryText(product)"
                 class="gp-search-suggestion-category"
@@ -1043,10 +1051,6 @@ onBeforeUnmount(() => {
                 >{{ productDisplayBrand(product) }}</span>
                 <div class="gp-card-name">{{ productDisplayName(product) }}</div>
               </div>
-              <div
-                v-if="productDisplayUnit(product)"
-                class="gp-card-subtitle"
-              >{{ productDisplayUnit(product) }}</div>
             </div>
             <div class="gp-card-prices">
               <div
@@ -1059,7 +1063,11 @@ onBeforeUnmount(() => {
                   <small>{{ supermarketOfferDisplayText(price.offer) || productOfferTexts(product).join(' / ') || '-' }}</small>
                 </div>
                 <div>
-                  <b>{{ formatOfferPrice(price.effectiveUnitPrice) }}</b>
+                  <b>{{ formatOfferUnitPrice(price.effectiveUnitPrice) }}</b>
+                  <span
+                    v-if="productSavingText(price)"
+                    class="gp-price-row-saving"
+                  >{{ productSavingText(price) }}</span>
                 </div>
               </div>
             </div>
@@ -1097,13 +1105,12 @@ onBeforeUnmount(() => {
                     >{{ productDisplayBrand(product) }}</span>
                     <strong>{{ productDisplayName(product) }}</strong>
                   </div>
-                  <span v-if="productDisplayUnit(product)">{{ productDisplayUnit(product) }}</span>
                   <span>{{ productCategoryText(product) || formatCategory(product.category1 || '') }}</span>
                 </div>
               </td>
               <td>{{ formatStore(productPrimaryPrice(product).store) }}</td>
               <td>{{ productOfferTexts(product).join(' / ') || '-' }}</td>
-              <td>{{ formatOfferPrice(productPrimaryPrice(product).effectiveUnitPrice) }}</td>
+              <td>{{ formatOfferUnitPrice(productPrimaryPrice(product).effectiveUnitPrice) }}</td>
               <td>
                 <button
                   type="button"
@@ -1327,7 +1334,7 @@ onBeforeUnmount(() => {
 
 .gp-search-suggestion-head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 8px;
 }
 
@@ -1338,6 +1345,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .gp-search-suggestion-chip {
@@ -1347,10 +1355,10 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--sur-2);
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
-  padding: 2px 8px;
+  padding: 0 8px;
 }
 
 .gp-search-suggestion-name {
@@ -1358,17 +1366,12 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.gp-search-suggestion-unit,
 .gp-search-suggestion-category,
 .gp-search-suggestion-state {
   display: block;
   color: var(--ink-3);
   font-size: 12px;
   line-height: 1.45;
-}
-
-.gp-search-suggestion-unit {
-  margin-top: 4px;
 }
 
 .gp-search-suggestion-category {
@@ -1683,13 +1686,6 @@ onBeforeUnmount(() => {
   -webkit-line-clamp: 2;
 }
 
-.gp-card-subtitle {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .gp-card-brand-chip {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1699,10 +1695,10 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   background: rgb(22 119 255 / 0.08);
   color: #1677ff;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 3px 7px;
+  line-height: 1.38;
+  padding: 0 7px;
 }
 
 .gp-card-prices {
@@ -1719,7 +1715,7 @@ onBeforeUnmount(() => {
 .gp-table-product-head {
   display: flex;
   flex-wrap: nowrap;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
 }
 
@@ -1736,7 +1732,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--sur-2);
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
   padding: 2px 8px;
@@ -1776,6 +1772,17 @@ onBeforeUnmount(() => {
   color: var(--accent);
   font-size: 14px;
   font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gp-price-row-saving {
+  display: block;
+  margin-top: 4px;
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
   text-align: right;
   white-space: nowrap;
 }
@@ -1837,6 +1844,9 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   align-self: center;
   margin-top: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 0 8px;
   white-space: nowrap;
 }
 

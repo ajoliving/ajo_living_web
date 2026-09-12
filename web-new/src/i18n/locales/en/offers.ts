@@ -62,6 +62,8 @@ export default {
     offer: 'Offer',
     effectivePrice: 'Effective',
     originalPriceHeading: 'Original',
+    perItem: '/item',
+    savedPercentage: 'Saved {rate}%',
   },
   detail: {
     noProductCode: 'Product code is missing.',
@@ -132,9 +134,10 @@ export default {
     noHistory: 'No historical data.',
     formula: 'Flavor / formula',
     package: 'Pack size',
-    secondPriceAdvantage: '{rate}% below the second-lowest price',
+    secondPriceAdvantage: 'Saved {rate}%',
+    savedPercentage: 'Saved {rate}%',
     sameBrand: 'Products from the same brand',
     sameCategory: 'Products in the same category',
-    perItem: '/ item',
+    perItem: '/item',
   },
 };
