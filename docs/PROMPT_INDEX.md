@@ -68,6 +68,8 @@ No direct prompt regression test currently guards prompt wording or localization
 
 ## Change Log
 
+2026-09-12: Good Price list cards use a left-image layout with a featured lowest-price panel in system theme colors.
+2026-09-12: Good Price list cards enlarge only while hovering the left image panel, including its white background; the favorite control stays on that panel's top-right.
 2026-09-12: Good Price product detail keeps the second-lowest-price advantage when multiple stores share the lowest current price, comparing against the next distinct current price.
 2026-09-12: Disabled Redis caching for iSmart client profile, building info, and notices; these reads currently always origin-fetch. POS directory caching is unchanged.
 2026-09-11: Cleared `http_service/internal/handler` unit tests and merged property translation plus POS payment extension handlers into their owning files.

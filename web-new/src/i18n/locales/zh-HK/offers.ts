@@ -64,6 +64,13 @@ export default {
     originalPriceHeading: '原價',
     perItem: '/件',
     savedPercentage: '省左 {rate}%',
+    lowestAcrossStores: '全場最低',
+    offerApplied: '已計優惠',
+    paidUnitPrice: '實付單價',
+    currentPrice: '現價',
+    currentPriceNoExtra: '現價 · 無需加購',
+    otherStorePrice: '他店 {price}',
+    otherStoreUpTo: '他店高至 {price}',
   },
   detail: {
     noProductCode: '未提供商品編號。',

@@ -64,6 +64,13 @@ export default {
     originalPriceHeading: 'Original',
     perItem: '/item',
     savedPercentage: 'Saved {rate}%',
+    lowestAcrossStores: 'Lowest price',
+    offerApplied: 'Offer applied',
+    paidUnitPrice: 'unit price paid',
+    currentPrice: 'Current price',
+    currentPriceNoExtra: 'Current price · no extra purchase',
+    otherStorePrice: 'Others {price}',
+    otherStoreUpTo: 'Others up to {price}',
   },
   detail: {
     noProductCode: 'Product code is missing.',

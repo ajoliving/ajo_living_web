@@ -54,12 +54,30 @@ const createSearchResponse = (query = '', itemCount = 1) => ({
             bestEffectiveUnitPrice: 24.9,
             discountAmount: 0,
             discountRate: 0,
-            stores: [],
-            hasOffer: false,
-            bestStore: '',
-            offerType: 'none',
+            stores: ['PARKNSHOP', 'WELLCOME'],
+            storePrices: [
+              {
+                store: 'PARKNSHOP',
+                listPrice: 64,
+                effectiveUnitPrice: 39,
+                offer: '買2件慳$50.00',
+                parseStatus: 'parsed',
+                snapshotDate: '2026-09-12',
+              },
+              {
+                store: 'WELLCOME',
+                listPrice: 164.5,
+                effectiveUnitPrice: 164.5,
+                offer: '',
+                parseStatus: 'none',
+                snapshotDate: '2026-09-12',
+              },
+            ],
+            hasOffer: true,
+            bestStore: 'PARKNSHOP',
+            offerType: 'buy_n_save_amount',
             offerPattern: 'none',
-            parseStatus: 'none',
+            parseStatus: 'parsed',
           }))
         : [],
       total: query ? itemCount : 0,
@@ -145,8 +163,8 @@ describe('SupermarketOffersPage search', () => {
     }));
   });
 
-  // 4. 商品卡片必須在圖片下方顯示品牌及包含規格的商品名稱。
-  it('shows brand and the unit-inclusive product name below the image', async () => {
+  // 4. 商品卡片必須在左側圖片旁顯示品牌、含單位名稱、最低價主卡及其他門店。
+  it('shows brand, unit-inclusive name, and a featured lowest-price panel', async () => {
     const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
     await flushPromises();
 
@@ -154,8 +172,13 @@ describe('SupermarketOffersPage search', () => {
     await wrapper.find('.gp-search-row').trigger('submit');
     await flushPromises();
 
-    expect(wrapper.find('.gp-card-name').text()).toBe('花生醬 - 幼滑裝 340克');
+    expect(wrapper.find('.gp-card-name').text().replace(/\s+/g, ' ').trim()).toContain('花生醬 - 幼滑裝');
+    expect(wrapper.find('.gp-card-unit').text()).toBe('340克');
     expect(wrapper.find('.gp-card-brand-chip').text()).toBe('Meadows');
+    expect(wrapper.find('.gp-card-best-badge').text()).toContain('全場最低');
+    expect(wrapper.find('.gp-card-best-store').text()).toBe('百佳');
+    expect(wrapper.find('.gp-card-best-compare').text()).toContain('原價');
+    expect(wrapper.find('.gp-card-other-row').text()).toContain('惠康');
   });
 
   // 5. 搜尋建議預設顯示 6 項，點選後可展開至 12 項。
