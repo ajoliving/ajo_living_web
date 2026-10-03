@@ -16,9 +16,11 @@ import {
   removeSupermarketFavorite,
   searchSupermarketProducts,
 } from '@/httpapis/supermarket-offers';
+import { fetchPublicDisplayAds } from '@/httpapis/wallet';
 import { readStoredAccessToken } from '@/httpapis/auth-session';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { usePreferenceStore } from '@/stores/preferences';
+import type { PublicDisplayAdResponse } from '@/model/wallet';
 import type {
   SupermarketProduct,
   SupermarketSearchParams,
@@ -57,6 +59,13 @@ interface SortOption {
   value: string;
 }
 
+interface CategoryTile {
+  id: string;
+  labelKey: string;
+  icon: 'shield' | 'plus' | 'home' | 'tag' | 'star' | 'smile';
+  keywords: string[];
+}
+
 interface PageButton {
   label: string | number;
   key: string;
@@ -73,6 +82,7 @@ const pageSize = 20;
 const summary = ref<SupermarketSummary | null>(null);
 const searchResult = ref<SupermarketSearchResult | null>(null);
 const favorites = ref<SupermarketProduct[]>([]);
+const bannerAds = ref<PublicDisplayAdResponse[]>([]);
 const summaryLoading = ref(false);
 const searchLoading = ref(false);
 const favoritesLoading = ref(false);
@@ -122,6 +132,19 @@ const categoryPills = computed<FilterPill[]>(() => [
   ),
 ]);
 
+const categoryTiles: CategoryTile[] = [
+  { id: 'care', labelKey: 'offers.list.tileCare', icon: 'shield', keywords: ['個人護理', '護理', 'personal care'] },
+  { id: 'health', labelKey: 'offers.list.tileHealth', icon: 'plus', keywords: ['保健', '健康', 'health'] },
+  { id: 'home', labelKey: 'offers.list.tileHome', icon: 'home', keywords: ['家居', 'household'] },
+  { id: 'grocery', labelKey: 'offers.list.tileGrocery', icon: 'tag', keywords: ['米', '雜貨', '粉麵', 'grocery', 'rice', 'noodle'] },
+  { id: 'dairy', labelKey: 'offers.list.tileDairy', icon: 'star', keywords: ['奶類', '乳品', '乳', 'dairy', 'milk'] },
+  { id: 'snack', labelKey: 'offers.list.tileSnack', icon: 'smile', keywords: ['零食', '飲品', '糖果', 'snack', 'drink'] },
+];
+
+// 2.1 取得電腦端與手機端已投放廣告。
+const desktopBanner = computed(() => bannerAds.value.find((item) => item.slot_index === 1) ?? null);
+const mobileBanner = computed(() => bannerAds.value.find((item) => item.slot_index === 2) ?? null);
+
 // 4. 建立商店篩選項
 const storePills = computed<FilterPill[]>(() => [
   { label: t('offers.list.allStores'), value: '' },
@@ -131,6 +154,18 @@ const storePills = computed<FilterPill[]>(() => [
     9,
   ),
 ]);
+
+// 4.1 建立工具列使用的完整分類與商店選項。
+const categoryOptions = computed<FilterPill[]>(() =>
+  (summary.value?.categories ?? [])
+    .map((item) => ({ label: displaySupermarketCategory(item.value, preferenceStore.locale), value: item.value }))
+    .filter((item) => item.value),
+);
+const storeOptions = computed<FilterPill[]>(() =>
+  (summary.value?.stores ?? [])
+    .map((item) => ({ label: displaySupermarketStore(item.value, preferenceStore.locale), value: item.value }))
+    .filter((item) => item.value),
+);
 
 // 5. 建立品牌篩選項
 const brandOptions = computed<string[]>(() => searchResult.value?.brands ?? []);
@@ -214,6 +249,20 @@ const loadSummary = async (): Promise<void> => {
     summaryError.value = t('offers.list.summaryError');
   } finally {
     summaryLoading.value = false;
+  }
+};
+
+// 12.1 載入價格情報網已設定的橫額廣告。
+const loadBanners = async (): Promise<void> => {
+  try {
+    const { data } = await fetchPublicDisplayAds({
+      channel: 'supermarket',
+      placement: 'banner',
+      limit: 2,
+    });
+    bannerAds.value = data.data.items;
+  } catch {
+    bannerAds.value = [];
   }
 };
 
@@ -354,22 +403,37 @@ const selectCategory = (category: string): void => {
   void loadSearch();
 };
 
+// 23.1 判斷分類是否屬於某個入口。
+const categoryMatchesTile = (category: string, tile: CategoryTile): boolean => {
+  const raw = category.toLowerCase();
+  const label = displaySupermarketCategory(category, preferenceStore.locale).toLowerCase();
+  return tile.keywords.some((keyword) => raw.includes(keyword.toLowerCase()) || label.includes(keyword.toLowerCase()));
+};
+
+// 23.2 以分類入口篩選第一個相符的實際分類。
+const selectCategoryTile = (tileId: string): void => {
+  const tile = categoryTiles.find((item) => item.id === tileId);
+  if (!tile) {
+    return;
+  }
+  if (categoryMatchesTile(activeCategory.value, tile)) {
+    selectCategory('');
+    return;
+  }
+  const matched = categoryOptions.value.find((item) => categoryMatchesTile(item.value, tile));
+  selectCategory(matched?.value ?? '');
+};
+
+const activeCategoryTileId = computed(() =>
+  categoryTiles.find((tile) => categoryMatchesTile(activeCategory.value, tile))?.id ?? '',
+);
+
 // 24. 切換商店
 const selectStore = (store: string): void => {
   activeStore.value = store;
   showFavoritesOnly.value = false;
   currentPage.value = 1;
   void loadSearch();
-};
-
-// 25. 套用手機端快捷篩選
-const handleMobileQuickFilter = (filter: 'category' | 'store', event: Event): void => {
-  const value = (event.target as HTMLSelectElement).value;
-  if (filter === 'category') {
-    selectCategory(value);
-    return;
-  }
-  selectStore(value);
 };
 
 // 26. 開關手機端篩選彈窗
@@ -649,6 +713,7 @@ onMounted(() => {
   restoreSearchState();
   void loadSummary();
   void loadSearch();
+  void loadBanners();
 });
 
 onBeforeUnmount(() => {
@@ -793,16 +858,55 @@ onBeforeUnmount(() => {
 
     <!-- 1. 超市情報標題 -->
     <section class="gp-hero">
-      <div class="gp-hero-left">
-        <div class="gp-hero-label">{{ t('offers.list.heroEyebrow') }}</div>
-        <div class="gp-hero-title">{{ t('offers.list.heroTitle') }}</div>
-        <div class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</div>
-      </div>
-      <div class="gp-hero-note">{{ t('offers.list.heroNote') }}</div>
+      <h1 class="gp-hero-title">{{ t('offers.list.heroTitle') }}</h1>
+      <p class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</p>
     </section>
 
     <!-- 2. 控制欄 -->
     <section class="gp-controls">
+      <div
+        class="gp-ad-banner"
+        :aria-label="t('offers.list.adSlotTitle')"
+      >
+        <a
+          v-if="desktopBanner"
+          class="gp-ad-frame gp-ad-desktop"
+          :href="desktopBanner.target_url || undefined"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <img
+            :src="desktopBanner.media_url || desktopBanner.cover_url"
+            :alt="desktopBanner.display_title || desktopBanner.title"
+          >
+        </a>
+        <div
+          v-else
+          class="gp-ad-frame gp-ad-placeholder gp-ad-desktop"
+        >
+          <strong>{{ t('offers.list.adSlotTitle') }}</strong>
+          <span>{{ t('offers.list.adSlotSizeDesktop') }}</span>
+        </div>
+        <a
+          v-if="mobileBanner"
+          class="gp-ad-frame gp-ad-mobile"
+          :href="mobileBanner.target_url || undefined"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <img
+            :src="mobileBanner.media_url || mobileBanner.cover_url"
+            :alt="mobileBanner.display_title || mobileBanner.title"
+          >
+        </a>
+        <div
+          v-else
+          class="gp-ad-frame gp-ad-placeholder gp-ad-mobile"
+        >
+          <strong>{{ t('offers.list.adSlotTitle') }}</strong>
+          <span>{{ t('offers.list.adSlotSizeMobile') }}</span>
+        </div>
+      </div>
       <form
         class="gp-search-row"
         @submit.prevent="submitSearch"
@@ -894,32 +998,6 @@ onBeforeUnmount(() => {
             :value="option.value"
           >{{ option.label }}</option>
         </select>
-        <select
-          :value="activeCategory"
-          class="gp-mobile-filter-select"
-          :aria-label="t('offers.list.category')"
-          @change="handleMobileQuickFilter('category', $event)"
-        >
-          <option value="">{{ t('offers.list.category') }}</option>
-          <option
-            v-for="category in categoryPills.slice(1)"
-            :key="`mobile-category-${category.value}`"
-            :value="category.value"
-          >{{ category.label }}</option>
-        </select>
-        <select
-          :value="activeStore"
-          class="gp-mobile-filter-select"
-          :aria-label="t('offers.list.store')"
-          @change="handleMobileQuickFilter('store', $event)"
-        >
-          <option value="">{{ t('offers.list.store') }}</option>
-          <option
-            v-for="store in storePills.slice(1)"
-            :key="`mobile-store-${store.value}`"
-            :value="store.value"
-          >{{ store.label }}</option>
-        </select>
         <button
           type="button"
           class="gp-mobile-filter-button mobile-filter-button"
@@ -958,28 +1036,20 @@ onBeforeUnmount(() => {
           @click="resetFilters"
         >{{ t('offers.list.reset') }}</button>
       </div>
-      <div class="gp-filter-pills">
+      <div class="gp-cat-nav">
         <button
-          v-for="category in categoryPills"
-          :key="category.value || 'all-category'"
+          v-for="tile in categoryTiles"
+          :key="tile.id"
           type="button"
-          class="gp-fpill"
-          :class="activeCategory === category.value ? 'on' : ''"
-          @click="selectCategory(category.value)"
+          class="gp-cat-tile"
+          :class="activeCategoryTileId === tile.id ? 'on' : ''"
+          @click="selectCategoryTile(tile.id)"
         >
-          {{ category.label }}
-        </button>
-      </div>
-      <div class="gp-store-pills">
-        <button
-          v-for="store in storePills"
-          :key="store.value || 'all-store'"
-          type="button"
-          class="gp-spill"
-          :class="activeStore === store.value ? 'on' : ''"
-          @click="selectStore(store.value)"
-        >
-          {{ store.label }}
+          <AppIcon
+            :name="tile.icon"
+            :size="22"
+          />
+          <span>{{ t(tile.labelKey) }}</span>
         </button>
       </div>
     </section>
@@ -993,6 +1063,32 @@ onBeforeUnmount(() => {
             : t('offers.list.offerCount', { count: formatInteger(totalCount) }) }}
         </span>
         <div class="gp-toolbar">
+          <select
+            v-model="activeCategory"
+            class="gp-sort gp-category-select"
+            :aria-label="t('offers.list.category')"
+            @change="selectCategory(activeCategory)"
+          >
+            <option value="">{{ t('offers.list.category') }}</option>
+            <option
+              v-for="category in categoryOptions"
+              :key="`toolbar-category-${category.value}`"
+              :value="category.value"
+            >{{ category.label }}</option>
+          </select>
+          <select
+            v-model="activeStore"
+            class="gp-sort gp-store-select"
+            :aria-label="t('offers.list.store')"
+            @change="selectStore(activeStore)"
+          >
+            <option value="">{{ t('offers.list.store') }}</option>
+            <option
+              v-for="store in storeOptions"
+              :key="`toolbar-store-${store.value}`"
+              :value="store.value"
+            >{{ store.label }}</option>
+          </select>
           <select
             v-model="activeBrand"
             class="gp-sort gp-brand-select"
@@ -1247,17 +1343,15 @@ onBeforeUnmount(() => {
 
 /* 2. 超市情報標題 */
 .gp-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 150px;
+  display: block;
+  min-height: 0;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 34px 38px;
-  border-bottom: 1px solid var(--bdr);
-  background: var(--brand);
-  color: #fff;
+  padding: 28px 28px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: center;
 }
 
 .gp-hero-left {
@@ -1270,20 +1364,18 @@ onBeforeUnmount(() => {
 }
 
 .gp-hero-title {
-  margin-top: 0;
-  font-family: var(--font-serif);
-  font-size: 34px;
-  font-weight: 400;
-  line-height: 1.12;
-  color: #fff;
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
 }
 
 .gp-hero-sub {
-  margin-top: 8px;
-  max-width: 480px;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
-  line-height: 1.6;
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .gp-hero-note {
@@ -1337,6 +1429,80 @@ onBeforeUnmount(() => {
   background: rgb(var(--color-surface));
 }
 
+.gp-ad-banner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1120 / 280;
+  margin: 0 0 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--sur-2);
+  color: var(--ink-3);
+}
+
+.gp-ad-frame,
+.gp-ad-placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gp-ad-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gp-ad-placeholder {
+  border: 1px dashed var(--bdr);
+  font-size: 12px;
+}
+
+.gp-ad-placeholder strong {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gp-ad-mobile {
+  display: none;
+}
+
+.gp-cat-nav {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.gp-cat-tile {
+  display: flex;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gp-cat-tile.on {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
 .gp-search-row {
   display: flex;
   align-items: stretch;
@@ -1353,7 +1519,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   flex: 0 1 520px;
   border: 1px solid var(--bdr);
-  border-radius: 3px;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
   padding: 0 13px;
 }
@@ -1492,7 +1658,7 @@ onBeforeUnmount(() => {
 .gp-fav-btn,
 .gp-view-btn {
   border: 1px solid var(--bdr);
-  border-radius: 3px;
+  border-radius: 8px;
   background: rgb(var(--color-surface));
   color: var(--ink);
   cursor: pointer;
@@ -1555,7 +1721,7 @@ onBeforeUnmount(() => {
 .gp-content {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 26px 0 44px;
+  padding: 8px 28px 44px;
   background: var(--sur);
 }
 
@@ -1565,7 +1731,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
-  padding: 0 28px;
+  padding: 0;
 }
 
 .gp-count {
@@ -2052,8 +2218,7 @@ onBeforeUnmount(() => {
   .gp-store-pills,
   .gp-search-row .gp-fav-btn,
   .gp-brand-select,
-  .gp-view-toggle,
-  .gp-toolbar {
+  .gp-view-toggle {
     display: none;
   }
 
@@ -2075,6 +2240,39 @@ onBeforeUnmount(() => {
 
   .gp-controls {
     padding: 12px;
+  }
+
+  .gp-ad-banner {
+    width: 100%;
+    aspect-ratio: 390 / 160;
+    margin-bottom: 12px;
+  }
+
+  .gp-ad-desktop {
+    display: none;
+  }
+
+  .gp-ad-mobile {
+    display: flex;
+  }
+
+  .gp-cat-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gp-content-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gp-toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .gp-toolbar .gp-sort {
+    max-width: none;
+    flex: 1 1 140px;
   }
 
   .gp-search-row {

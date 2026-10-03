@@ -81,7 +81,7 @@ export const fetchStaffRewardAds = (params: {
   page_size?: number;
   keyword?: string;
   is_active?: boolean;
-  ad_type?: 'reward' | 'display' | 'display_short' | 'display_long';
+  ad_type?: 'reward' | 'display' | 'display_short' | 'display_long' | 'price_desktop' | 'price_mobile';
   display_channel?: string;
 } = {}) =>
   httpClient.get<ApiResponse<PaginatedResult<StaffRewardAdResponse>>>(
@@ -90,14 +90,14 @@ export const fetchStaffRewardAds = (params: {
   );
 
 // 10. Staff 查詢展示廣告位設定
-export const fetchDisplayAdSettings = (channel: 'property_sale' | 'serviced_apartment' | 'furniture') =>
+export const fetchDisplayAdSettings = (channel: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket') =>
   httpClient.get<ApiResponse<DisplayAdChannelSettingsResponse>>('/staff/wallet/display-ad-settings', {
     params: { channel },
   });
 
 // 11. Staff 儲存展示廣告位設定
 export const saveDisplayAdSettings = (
-  channel: 'property_sale' | 'serviced_apartment' | 'furniture',
+  channel: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket',
   slots: DisplayAdSlotSaveItem[],
 ) =>
   httpClient.put<ApiResponse<DisplayAdChannelSettingsResponse>>(
@@ -120,8 +120,8 @@ export const updateStaffRewardAd = (taskId: string, payload: StaffRewardAdPayloa
 
 // 15. 取得公開展示廣告
 export const fetchPublicDisplayAds = (params: {
-  channel: 'property_sale' | 'serviced_apartment' | 'furniture';
-  placement?: 'listing_side';
+  channel: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket';
+  placement?: 'listing_side' | 'banner';
   limit?: number;
 }) =>
   httpClient.get<ApiResponse<ApiListData<PublicDisplayAdResponse>>>('/public/ads', {

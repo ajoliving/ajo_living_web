@@ -203,6 +203,38 @@ const bestDealPrices = computed<SupermarketStorePrice[]>(() =>
   supermarketBestDealStorePrices(latestStorePrices.value, preferenceStore.locale),
 );
 
+// 9.1 判斷門店是否屬於目前最低實付價。
+const isBestDealStore = (price: SupermarketStorePrice): boolean =>
+  bestDealPrices.value.some((item) =>
+    normalizeSupermarketStoreCode(item.store) === normalizeSupermarketStoreCode(price.store),
+  );
+
+// 9.2 取得首屏最低價的優惠說明。
+const bestDealOfferText = computed(() => {
+  const price = bestDealPrices.value[0];
+  if (!price) {
+    return '';
+  }
+  return simpleOfferTrendLabel(price) || priceOfferDisplayText(price) || t('offers.list.currentPrice');
+});
+
+// 9.3 取得首屏最低價標籤。
+const bestDealBadgeText = computed(() => {
+  const price = bestDealPrices.value[0];
+  if (!price) {
+    return '';
+  }
+  const label = bestDealPrices.value.length > 1
+    ? t('offers.detail.tiedLowest')
+    : t('offers.list.lowestAcrossStores');
+  return priceOfferDisplayText(price)
+    ? `${label} · ${t('offers.list.offerApplied')}`
+    : label;
+});
+
+// 9.4 取得最近的一間最優惠門市。
+const nearestStore = computed(() => nearbyStores.value[0] ?? null);
+
 // 7. 建立最優惠門店摘要文字
 const bestDealSummaryText = computed(() =>
   bestDealPrices.value.length > 0
@@ -624,6 +656,12 @@ const requestBestDealLocation = (): void => {
   );
 };
 
+// 29.1 定位並帶到最近門市區。
+const focusNearestStores = (): void => {
+  requestBestDealLocation();
+  document.getElementById('offers-nearest-stores')?.scrollIntoView({ block: 'nearest' });
+};
+
 // 30. 取得定位錯誤文字
 const geolocationErrorMessage = (error: GeolocationPositionError): string => {
   if (error.code === error.PERMISSION_DENIED) return t('offers.detail.permissionDenied');
@@ -914,9 +952,35 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+            <div
+              v-if="bestDealPrices.length > 0"
+              class="gp-best-hero"
+            >
+              <div>
+                <div class="gp-best-hero-stores">
+                  <strong
+                    v-for="price in bestDealPrices"
+                    :key="`best-${price.store}`"
+                  >{{ formatStore(price.store) }}</strong>
+                </div>
+                <p>{{ bestDealOfferText }}</p>
+                <span>{{ bestDealBadgeText }}</span>
+              </div>
+              <div class="gp-best-hero-price">{{ formatOfferPrice(bestDealPrices[0]?.effectiveUnitPrice) }}</div>
+            </div>
           </div>
           <div class="gp-detail-actions">
             <div class="gp-detail-primary-actions">
+              <button
+                type="button"
+                class="gp-detail-action gp-detail-action-primary"
+                :disabled="nearbyStatus === 'requesting' || bestDealPrices.length === 0"
+                @click="focusNearestStores"
+              >
+                {{ nearbyStatus === 'requesting'
+                  ? t('offers.detail.locating')
+                  : t('offers.detail.nearestStoreAction') }}
+              </button>
               <button
                 type="button"
                 class="gp-detail-action"
@@ -1020,28 +1084,40 @@ onBeforeUnmount(() => {
         <!-- 4. 超市優惠與門店地址 -->
         <div class="gp-detail-card gp-section-block">
           <h3>{{ t('offers.detail.offersAndStores') }}</h3>
-          <div class="gp-compare-grid">
-            <div
-              v-for="price in latestStoreCards"
-              :key="`${price.store}-${price.effectiveUnitPrice}`"
-              class="gp-compare-card"
-            >
-              <div class="gp-compare-store">{{ formatStore(price.store) }}</div>
-              <div class="gp-compare-price">{{ formatOfferPrice(price.effectiveUnitPrice) }}</div>
-              <div
-                v-if="simpleOfferTrendLabel(price) || priceOfferDisplayText(price)"
-                class="gp-compare-offer"
-              >
-                {{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) }}
-              </div>
-              <div
-                v-if="secondPriceAdvantageStoreCodes.has(normalizeSupermarketStoreCode(price.store))"
-                class="gp-compare-badge"
-              >
-                {{ t('offers.detail.secondPriceAdvantage', { rate: secondPriceAdvantageRate.toFixed(0) }) }}
-              </div>
-            </div>
+          <div class="gp-detail-split">
+          <div class="gp-price-table-wrap">
+            <table class="gp-price-table">
+              <thead>
+                <tr>
+                  <th>{{ t('offers.detail.supermarket') }}</th>
+                  <th>{{ t('offers.detail.priceNote') }}</th>
+                  <th>{{ t('offers.detail.paidUnitPrice') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="price in latestStoreCards"
+                  :key="`${price.store}-${price.effectiveUnitPrice}`"
+                  :class="isBestDealStore(price) ? 'is-best' : ''"
+                >
+                  <td>
+                    {{ formatStore(price.store) }}
+                    <span
+                      v-if="isBestDealStore(price)"
+                      class="gp-best-pill"
+                    >{{ t('offers.detail.bestDealPill') }}</span>
+                    <span
+                      v-if="secondPriceAdvantageStoreCodes.has(normalizeSupermarketStoreCode(price.store))"
+                      class="gp-saving-pill"
+                    >{{ t('offers.detail.secondPriceAdvantage', { rate: secondPriceAdvantageRate.toFixed(0) }) }}</span>
+                  </td>
+                  <td>{{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) || t('offers.list.currentPrice') }}</td>
+                  <td class="gp-price-unit">{{ formatOfferPrice(price.effectiveUnitPrice) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          <div>
           <div class="gp-best-shop">
             <div>
               <strong>{{ t('offers.detail.bestStoreAddress') }}</strong>
@@ -1058,10 +1134,28 @@ onBeforeUnmount(() => {
                 : t('offers.detail.findBestStore') }}
             </button>
           </div>
-          <h3 class="gp-shop-block-title">{{ t('offers.detail.nearestBestStoreAddress') }}</h3>
+          <h3
+            id="offers-nearest-stores"
+            class="gp-shop-block-title"
+          >{{ t('offers.detail.nearestBestStoreAddress') }}</h3>
           <div class="gp-detail-subtitle">{{ nearbyMessage || t('offers.detail.latestSnapshot', {
             date: latestSnapshotText,
           }) }}</div>
+          <article
+            v-if="nearestStore"
+            class="gp-nearest-card"
+          >
+            <div>
+              <strong>{{ nearestStore.name }}</strong>
+              <p>{{ nearestStore.address }}</p>
+              <p>{{ formatSupermarketDistanceKm(nearestStore.distanceKm) }} · {{ nearestStore.hours || '-' }}</p>
+            </div>
+            <a
+              :href="supermarketDirectionsUrl(nearestStore)"
+              target="_blank"
+              rel="noreferrer"
+            >{{ t('offers.detail.openRoute') }}</a>
+          </article>
           <div
             v-if="nearbyStores.length > 0"
             class="gp-shop-table-wrap"
@@ -1111,6 +1205,8 @@ onBeforeUnmount(() => {
             </table>
           </div>
         </div>
+          </div>
+          </div>
 
         <!-- 5. 價格摘要 + 走勢 -->
         <div class="gp-price-layout">
@@ -1581,6 +1677,45 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.gp-best-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border-radius: 8px;
+  background: var(--brand-light);
+  padding: 12px;
+}
+
+.gp-best-hero-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gp-best-hero p {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.gp-best-hero span {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gp-best-hero-price {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .gp-filter-link {
   border: 0;
   background: transparent;
@@ -1675,6 +1810,11 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-action.on {
+  background: var(--brand);
+  color: #fff;
+}
+
+.gp-detail-action-primary {
   background: var(--brand);
   color: #fff;
 }
@@ -1798,6 +1938,107 @@ onBeforeUnmount(() => {
 }
 
 /* 8. 對比卡 */
+.gp-price-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+}
+
+.gp-detail-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.gp-price-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.gp-price-table th {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.gp-price-table td {
+  border-top: 1px solid var(--bdr);
+  padding: 10px 8px;
+  vertical-align: middle;
+}
+
+.gp-price-table tr.is-best td {
+  background: var(--brand-light);
+}
+
+.gp-price-unit {
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gp-best-pill,
+.gp-saving-pill {
+  display: inline-block;
+  margin-left: 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 2px 6px;
+}
+
+.gp-best-pill {
+  background: var(--brand);
+  color: #fff;
+}
+
+.gp-saving-pill {
+  border: 1px solid var(--bdr);
+  background: var(--sur);
+  color: var(--brand);
+}
+
+.gp-nearest-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--sur);
+  padding: 12px;
+}
+
+.gp-nearest-card strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.gp-nearest-card p {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.gp-nearest-card a {
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .gp-compare-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2258,6 +2499,16 @@ onBeforeUnmount(() => {
 
   .gp-best-shop {
     grid-template-columns: 1fr;
+  }
+
+  .gp-detail-split {
+    grid-template-columns: 1fr;
+  }
+
+  .gp-best-hero,
+  .gp-nearest-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .gp-price-layout {

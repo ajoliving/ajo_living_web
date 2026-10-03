@@ -87,7 +87,7 @@ func (s *WalletService) ListDisplayAdSettings(ctx context.Context, channel strin
 
 	var assignments []model.DisplayAdSlotAssignment
 	if err := s.runtime.DB.WithContext(ctx).
-		Where("display_channel = ? AND display_placement = ?", normalizedChannel, displayAdPlacementListingSide).
+		Where("display_channel = ? AND display_placement = ?", normalizedChannel, displayAdPlacementForChannel(normalizedChannel)).
 		Order("slot_index asc, sort_order asc, id asc").
 		Find(&assignments).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ad settings")
@@ -112,7 +112,7 @@ func (s *WalletService) SaveDisplayAdSettings(ctx context.Context, operatorUserI
 	if normalizedChannel == "" {
 		return nil, errcode.New(errcode.CodeValidationError, "display ad channel is invalid")
 	}
-	normalizedInputs, adTaskIDs, err := normalizeDisplayAdSlotInputs(inputs)
+	normalizedInputs, adTaskIDs, err := normalizeDisplayAdSlotInputs(normalizedChannel, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -122,18 +122,22 @@ func (s *WalletService) SaveDisplayAdSettings(ctx context.Context, operatorUserI
 	}
 
 	err = s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("display_channel = ? AND display_placement = ?", normalizedChannel, displayAdPlacementListingSide).Delete(&model.DisplayAdSlotAssignment{}).Error; err != nil {
+		placement := displayAdPlacementForChannel(normalizedChannel)
+		if err := tx.Where("display_channel = ? AND display_placement = ?", normalizedChannel, placement).Delete(&model.DisplayAdSlotAssignment{}).Error; err != nil {
 			return errcode.New(errcode.CodeInternalError, "failed to clear display ad settings")
 		}
 		for _, input := range normalizedInputs {
 			for index, slotAd := range input.Ads {
 				ad := adMap[slotAd.AdTaskID]
-				if !displayAdTypeMatchesSlot(ad.AdType, input.SlotIndex) || normalizedDisplayAdLayout(ad.DisplayLayout) != displayAdLayoutForSlot(input.SlotIndex) {
+				if !displayAdTypeMatchesChannelSlot(normalizedChannel, ad.AdType, input.SlotIndex) {
+					return errcode.New(errcode.CodeValidationError, "display ad layout does not match slot")
+				}
+				if normalizedChannel != displayAdChannelSupermarket && normalizedDisplayAdLayout(ad.DisplayLayout) != displayAdLayoutForSlot(input.SlotIndex) {
 					return errcode.New(errcode.CodeValidationError, "display ad layout does not match slot")
 				}
 				assignment := model.DisplayAdSlotAssignment{
 					DisplayChannel:   normalizedChannel,
-					DisplayPlacement: displayAdPlacementListingSide,
+					DisplayPlacement: placement,
 					SlotIndex:        input.SlotIndex,
 					RewardAdID:       ad.ID,
 					SortOrder:        index + 1,
@@ -196,6 +200,7 @@ func (s *WalletService) CreateStaffRewardAd(ctx context.Context, operatorUserID 
 		CreatedBy:        &operatorUserID,
 		UpdatedBy:        &operatorUserID,
 	}
+	normalizePriceBannerAd(&ad)
 	ad.CreatedAt = now
 	ad.UpdatedAt = now
 	if err := s.runtime.DB.WithContext(ctx).Create(&ad).Error; err != nil {
@@ -215,6 +220,7 @@ func (s *WalletService) UpdateStaffRewardAd(ctx context.Context, operatorUserID 
 	if err := applyRewardAdUpdates(ad, params, operatorUserID, s.runtime.Now()); err != nil {
 		return nil, err
 	}
+	normalizePriceBannerAd(ad)
 	if err := validateRewardAdState(*ad); err != nil {
 		return nil, err
 	}
@@ -254,6 +260,7 @@ func validateRewardAdCreate(params RewardAdCreateParams) error {
 		StartsAt:         params.StartsAt,
 		EndsAt:           params.EndsAt,
 	}
+	normalizePriceBannerAd(&ad)
 	if ad.AdType == rewardAdTypeReward {
 		if params.RetentionDays <= 0 {
 			return errcode.New(errcode.CodeValidationError, "reward ad retention days must be positive")
@@ -299,6 +306,9 @@ func validateRewardAdState(ad model.RewardAd) error {
 		if normalizedRewardAdMediaType(ad.MediaType) != rewardAdMediaTypeImage {
 			return errcode.New(errcode.CodeValidationError, "display ad media must be image")
 		}
+	}
+	if isPriceBannerAdType(adType) && (normalizedRewardAdMediaType(ad.MediaType) != rewardAdMediaTypeImage || ad.DisplayChannel != displayAdChannelSupermarket || ad.DisplayPlacement != displayAdPlacementBanner || ad.DisplayLayout != displayAdLayoutImageFull) {
+		return errcode.New(errcode.CodeValidationError, "price banner placement is invalid")
 	}
 	if ad.StartsAt != nil && ad.EndsAt != nil && !ad.EndsAt.After(*ad.StartsAt) {
 		return errcode.New(errcode.CodeValidationError, "reward ad end time must be later than start time")
@@ -452,6 +462,10 @@ func normalizedRewardAdType(value string) string {
 		return rewardAdTypeDisplayShort
 	case rewardAdTypeDisplayLong:
 		return rewardAdTypeDisplayLong
+	case rewardAdTypePriceDesktop:
+		return rewardAdTypePriceDesktop
+	case rewardAdTypePriceMobile:
+		return rewardAdTypePriceMobile
 	default:
 		return ""
 	}
@@ -476,6 +490,8 @@ func normalizedDisplayAdChannel(value string) string {
 		return displayAdChannelServicedApartment
 	case displayAdChannelFurniture:
 		return displayAdChannelFurniture
+	case displayAdChannelSupermarket:
+		return displayAdChannelSupermarket
 	default:
 		return ""
 	}
@@ -486,6 +502,8 @@ func normalizedDisplayAdPlacement(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case displayAdPlacementListingSide:
 		return displayAdPlacementListingSide
+	case displayAdPlacementBanner:
+		return displayAdPlacementBanner
 	default:
 		return ""
 	}
@@ -522,6 +540,75 @@ func displayAdTypes() []string {
 	return []string{rewardAdTypeDisplay, rewardAdTypeDisplayShort, rewardAdTypeDisplayLong}
 }
 
+// 15.1.1 priceBannerAdTypes returns supermarket banner ad types.
+func priceBannerAdTypes() []string {
+	return []string{rewardAdTypePriceDesktop, rewardAdTypePriceMobile}
+}
+
+// 15.1.1.1 displayAdTypesForChannel returns ad types that can fill one channel.
+func displayAdTypesForChannel(channel string) []string {
+	if channel == displayAdChannelSupermarket {
+		return priceBannerAdTypes()
+	}
+	return displayAdTypes()
+}
+
+// 15.1.1.2 displayAdLayoutForChannelSlot returns the layout stored for one slot.
+func displayAdLayoutForChannelSlot(channel string, slotIndex int) string {
+	if channel == displayAdChannelSupermarket {
+		return displayAdLayoutImageFull
+	}
+	return displayAdLayoutForSlot(slotIndex)
+}
+
+// 15.1.2 isPriceBannerAdType reports a supermarket banner ad type.
+func isPriceBannerAdType(value string) bool {
+	switch normalizedRewardAdType(value) {
+	case rewardAdTypePriceDesktop, rewardAdTypePriceMobile:
+		return true
+	default:
+		return false
+	}
+}
+
+// 15.1.3 normalizePriceBannerAd fixes channel, placement and media for banner ads.
+func normalizePriceBannerAd(ad *model.RewardAd) {
+	if ad == nil || !isPriceBannerAdType(ad.AdType) {
+		return
+	}
+	ad.AdType = normalizedRewardAdType(ad.AdType)
+	ad.DisplayChannel = displayAdChannelSupermarket
+	ad.DisplayPlacement = displayAdPlacementBanner
+	ad.DisplayLayout = displayAdLayoutImageFull
+	ad.MediaType = rewardAdMediaTypeImage
+	ad.RewardPoints = 0
+	ad.WatchSeconds = 0
+}
+
+// 15.1.4 displayAdSlotCountForChannel returns the fixed slot count for one channel.
+func displayAdSlotCountForChannel(channel string) int {
+	if channel == displayAdChannelSupermarket {
+		return supermarketBannerSlotCount
+	}
+	return displayAdSlotCount
+}
+
+// 15.1.5 displayAdPlacementForChannel returns the placement saved for one channel.
+func displayAdPlacementForChannel(channel string) string {
+	if channel == displayAdChannelSupermarket {
+		return displayAdPlacementBanner
+	}
+	return displayAdPlacementListingSide
+}
+
+// 15.1.6 priceBannerTypeForSlot returns the banner type allowed in one supermarket slot.
+func priceBannerTypeForSlot(slotIndex int) string {
+	if slotIndex == 2 {
+		return rewardAdTypePriceMobile
+	}
+	return rewardAdTypePriceDesktop
+}
+
 // 15.2 displayAdTypeMatchesSlot validates short and long display ad placement.
 func displayAdTypeMatchesSlot(adType string, slotIndex int) bool {
 	normalizedType := normalizedDisplayAdType(adType)
@@ -533,6 +620,14 @@ func displayAdTypeMatchesSlot(adType string, slotIndex int) bool {
 	default:
 		return false
 	}
+}
+
+// 15.2.1 displayAdTypeMatchesChannelSlot validates an ad against one channel slot.
+func displayAdTypeMatchesChannelSlot(channel string, adType string, slotIndex int) bool {
+	if channel == displayAdChannelSupermarket {
+		return normalizedRewardAdType(adType) == priceBannerTypeForSlot(slotIndex)
+	}
+	return displayAdTypeMatchesSlot(adType, slotIndex)
 }
 
 // 15.3 displayAdTypeMatchesLayout validates display ad type and visual layout.
@@ -552,11 +647,12 @@ func displayAdTypeMatchesLayout(adType string, layout string) bool {
 }
 
 // 16. normalizeDisplayAdSlotInputs validates fixed listing-side ad slots.
-func normalizeDisplayAdSlotInputs(inputs []DisplayAdSlotInput) ([]DisplayAdSlotInput, []string, error) {
+func normalizeDisplayAdSlotInputs(channel string, inputs []DisplayAdSlotInput) ([]DisplayAdSlotInput, []string, error) {
+	slotCount := displayAdSlotCountForChannel(channel)
 	slotMap := map[int]DisplayAdSlotInput{}
 	adTaskIDs := []string{}
 	for _, input := range inputs {
-		if input.SlotIndex < 1 || input.SlotIndex > displayAdSlotCount {
+		if input.SlotIndex < 1 || input.SlotIndex > slotCount {
 			return nil, nil, errcode.New(errcode.CodeValidationError, "display ad slot is invalid")
 		}
 		seenTaskIDs := map[string]bool{}
@@ -587,8 +683,8 @@ func normalizeDisplayAdSlotInputs(inputs []DisplayAdSlotInput) ([]DisplayAdSlotI
 		}
 	}
 
-	result := make([]DisplayAdSlotInput, 0, displayAdSlotCount)
-	for slotIndex := 1; slotIndex <= displayAdSlotCount; slotIndex++ {
+	result := make([]DisplayAdSlotInput, 0, slotCount)
+	for slotIndex := 1; slotIndex <= slotCount; slotIndex++ {
 		input, exists := slotMap[slotIndex]
 		if !exists {
 			input = DisplayAdSlotInput{SlotIndex: slotIndex, Ads: []DisplayAdSlotAdInput{}}
@@ -609,7 +705,7 @@ func (s *WalletService) loadDisplayAdPublicIDMap(ctx context.Context, channel st
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("public_id IN ?", taskIDs).
-		Where("ad_type IN ?", displayAdTypes()).
+		Where("ad_type IN ?", displayAdTypesForChannel(channel)).
 		Where("media_type = ?", rewardAdMediaTypeImage).
 		Where("display_channel = ?", channel).
 		Find(&ads).Error; err != nil {
@@ -636,7 +732,7 @@ func (s *WalletService) loadDisplayAdMap(ctx context.Context, channel string, ad
 	var ads []model.RewardAd
 	if err := s.runtime.DB.WithContext(ctx).
 		Where("id IN ?", adIDs).
-		Where("ad_type IN ?", displayAdTypes()).
+		Where("ad_type IN ?", displayAdTypesForChannel(channel)).
 		Where("media_type = ?", rewardAdMediaTypeImage).
 		Find(&ads).Error; err != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load image ads")
@@ -654,8 +750,9 @@ func buildDisplayAdSettingsResponse(channel string, assignments []model.DisplayA
 		slotAssignments[assignment.SlotIndex] = append(slotAssignments[assignment.SlotIndex], assignment)
 	}
 
-	slots := make([]DisplayAdSlotResponse, 0, displayAdSlotCount)
-	for slotIndex := 1; slotIndex <= displayAdSlotCount; slotIndex++ {
+	slotCount := displayAdSlotCountForChannel(channel)
+	slots := make([]DisplayAdSlotResponse, 0, slotCount)
+	for slotIndex := 1; slotIndex <= slotCount; slotIndex++ {
 		assignmentsForSlot := slotAssignments[slotIndex]
 		sort.SliceStable(assignmentsForSlot, func(left int, right int) bool {
 			return assignmentsForSlot[left].SortOrder < assignmentsForSlot[right].SortOrder
@@ -672,7 +769,7 @@ func buildDisplayAdSettingsResponse(channel string, assignments []model.DisplayA
 		}
 		slots = append(slots, DisplayAdSlotResponse{
 			SlotIndex: slotIndex,
-			Layout:    displayAdLayoutForSlot(slotIndex),
+			Layout:    displayAdLayoutForChannelSlot(channel, slotIndex),
 			Ads:       ads,
 		})
 	}

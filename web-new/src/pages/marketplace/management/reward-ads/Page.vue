@@ -75,6 +75,8 @@ const adTypeOptions = computed<Array<{ label: string; value: StaffRewardAdType |
   { label: t('marketplace.management.walletAdTypeReward'), value: 'reward' },
   { label: t('marketplace.management.walletAdTypeDisplayShort'), value: 'display_short' },
   { label: t('marketplace.management.walletAdTypeDisplayLong'), value: 'display_long' },
+  { label: t('marketplace.management.walletAdTypePriceDesktop'), value: 'price_desktop' },
+  { label: t('marketplace.management.walletAdTypePriceMobile'), value: 'price_mobile' },
 ]);
 
 // 2. 格式化廣告狀態
@@ -94,6 +96,12 @@ const formatAdType = (ad: StaffRewardAdResponse): string => {
   }
   if (ad.ad_type === 'display_long' || ad.ad_type === 'display') {
     return t('marketplace.management.walletAdTypeDisplayLong');
+  }
+  if (ad.ad_type === 'price_desktop') {
+    return t('marketplace.management.walletAdTypePriceDesktop');
+  }
+  if (ad.ad_type === 'price_mobile') {
+    return t('marketplace.management.walletAdTypePriceMobile');
   }
   return t('marketplace.management.walletAdTypeReward');
 };

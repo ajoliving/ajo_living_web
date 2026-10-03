@@ -21,7 +21,7 @@ import { useFeedbackStore } from '@/stores/feedback';
 import { isPublicDisplayAdActive } from '@/utils/wallet';
 
 type DisplayAdChannel = PublicDisplayAdResponse['display_channel'];
-type DisplaySlotKind = 'long' | 'short';
+type DisplaySlotKind = 'long' | 'short' | 'desktop' | 'mobile';
 
 interface DisplayAdSlotForm {
   slotIndex: number;
@@ -45,6 +45,7 @@ const channelOptions = computed<Array<{ label: string; value: DisplayAdChannel }
   { label: t('marketplace.settings.displayAdChannelPropertySale'), value: 'property_sale' },
   { label: t('marketplace.settings.displayAdChannelFurniture'), value: 'furniture' },
   { label: t('marketplace.settings.displayAdChannelServicedApartment'), value: 'serviced_apartment' },
+  { label: t('marketplace.settings.displayAdChannelSupermarket'), value: 'supermarket' },
 ]);
 
 const longAds = computed(() => availableAds.value.filter((ad) => ad.ad_type === 'display_long' || ad.ad_type === 'display'));
@@ -52,7 +53,12 @@ const shortAds = computed(() =>
   availableAds.value.filter((ad) => ad.ad_type === 'display_short' || ad.ad_type === 'display'));
 
 // 1. 建立固定右側廣告位表單
-const createEmptySlots = (): DisplayAdSlotForm[] => [
+const createEmptySlots = (): DisplayAdSlotForm[] => selectedChannel.value === 'supermarket'
+  ? [
+      { slotIndex: 1, kind: 'desktop', adTaskId: '', displayTitle: '', displayText: '', targetURL: '' },
+      { slotIndex: 2, kind: 'mobile', adTaskId: '', displayTitle: '', displayText: '', targetURL: '' },
+    ]
+  : [
   {
     slotIndex: 1,
     kind: 'short',
@@ -100,6 +106,15 @@ const loadAvailableAds = async (): Promise<void> => {
   loadingAds.value = true;
 
   try {
+    if (selectedChannel.value === 'supermarket') {
+      const [desktop, mobile] = await Promise.all([
+        fetchStaffRewardAds({ page: 1, page_size: 80, ad_type: 'price_desktop', is_active: true }),
+        fetchStaffRewardAds({ page: 1, page_size: 80, ad_type: 'price_mobile', is_active: true }),
+      ]);
+      availableAds.value = [...desktop.data.data.items, ...mobile.data.data.items]
+        .filter((ad) => isPublicDisplayAdActive(ad));
+      return;
+    }
     const { data } = await fetchStaffRewardAds({
       page: 1,
       page_size: 80,
@@ -148,7 +163,11 @@ const loadSettings = async (): Promise<void> => {
 
 // 4. 取得目前 slot 可用廣告
 const adsForSlot = (slot: DisplayAdSlotForm): StaffRewardAdResponse[] =>
-  slot.kind === 'long' ? longAds.value : shortAds.value;
+  slot.kind === 'desktop'
+    ? availableAds.value.filter((ad) => ad.ad_type === 'price_desktop')
+    : slot.kind === 'mobile'
+      ? availableAds.value.filter((ad) => ad.ad_type === 'price_mobile')
+      : slot.kind === 'long' ? longAds.value : shortAds.value;
 
 // 5. 切換廣告時套用預設文案
 const applySelectedAd = (slot: DisplayAdSlotForm): void => {
@@ -167,9 +186,30 @@ const applySelectedAd = (slot: DisplayAdSlotForm): void => {
 
 // 6. 輸出版位規格
 const resolveSlotSize = (slot: DisplayAdSlotForm): string =>
-  slot.kind === 'long'
-    ? t('marketplace.management.walletAdDisplayLongSize')
-    : t('marketplace.management.walletAdDisplayShortSize');
+  slot.kind === 'desktop'
+    ? t('marketplace.management.walletAdPriceDesktopSize')
+    : slot.kind === 'mobile'
+      ? t('marketplace.management.walletAdPriceMobileSize')
+      : slot.kind === 'long'
+        ? t('marketplace.management.walletAdDisplayLongSize')
+        : t('marketplace.management.walletAdDisplayShortSize');
+
+// 6.1 顯示廣告類型名稱
+const adTypeLabel = (adType: StaffRewardAdResponse['ad_type']): string => {
+  if (adType === 'price_desktop') return t('marketplace.management.walletAdTypePriceDesktop');
+  if (adType === 'price_mobile') return t('marketplace.management.walletAdTypePriceMobile');
+  if (adType === 'display_short') return t('marketplace.management.walletAdTypeDisplayShort');
+  return t('marketplace.management.walletAdTypeDisplayLong');
+};
+
+// 6.2 顯示廣告位類型名稱
+const slotKindLabel = (kind: DisplaySlotKind): string => {
+  if (kind === 'desktop') return t('marketplace.management.walletAdTypePriceDesktop');
+  if (kind === 'mobile') return t('marketplace.management.walletAdTypePriceMobile');
+  return kind === 'long'
+    ? t('marketplace.management.walletAdTypeDisplayLong')
+    : t('marketplace.management.walletAdTypeDisplayShort');
+};
 
 // 7. 保存廣告位設定
 const saveSettings = async (): Promise<void> => {
@@ -279,7 +319,7 @@ onMounted(() => {
             <div class="ad-source-body">
               <div class="ad-source-title">{{ item.title }}</div>
               <div class="ad-source-meta">
-                {{ item.ad_type === 'display_short' ? t('marketplace.management.walletAdTypeDisplayShort') : t('marketplace.management.walletAdTypeDisplayLong') }}
+                {{ adTypeLabel(item.ad_type) }}
               </div>
               <span class="ad-source-status good">
                 {{ item.is_active ? t('common.state.active') : t('common.state.hidden') }}
@@ -311,7 +351,7 @@ onMounted(() => {
                 <div class="ad-slot-name">{{ t('marketplace.settings.displayAdSlotLabel', { index: slot.slotIndex }) }}</div>
                 <strong>{{ resolveSlotSize(slot) }}</strong>
               </div>
-              <span>{{ slot.kind === 'long' ? t('marketplace.management.walletAdTypeDisplayLong') : t('marketplace.management.walletAdTypeDisplayShort') }}</span>
+              <span>{{ slotKindLabel(slot.kind) }}</span>
             </div>
 
             <label class="ad-field">

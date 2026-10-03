@@ -9,6 +9,8 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import {
   displayLayoutForAdType,
   isDisplayRewardAdType,
+  isImageOnlyAdType,
+  isPriceBannerAdType,
   type RewardAdDisplayChannel,
   type RewardAdForm,
   type RewardAdType,
@@ -18,6 +20,8 @@ const adTypeOptions: Array<{ labelKey: string; value: RewardAdType }> = [
   { labelKey: 'marketplace.management.walletAdTypeReward', value: 'reward' },
   { labelKey: 'marketplace.management.walletAdTypeDisplayShort', value: 'display_short' },
   { labelKey: 'marketplace.management.walletAdTypeDisplayLong', value: 'display_long' },
+  { labelKey: 'marketplace.management.walletAdTypePriceDesktop', value: 'price_desktop' },
+  { labelKey: 'marketplace.management.walletAdTypePriceMobile', value: 'price_mobile' },
 ];
 
 const displayChannelOptions: Array<{ labelKey: string; value: Exclude<RewardAdDisplayChannel, ''> }> = [
@@ -51,9 +55,13 @@ const handleMediaFileChange = (event: Event): void => {
 
 // 2. 輸出展示廣告尺寸文字
 const resolveDisplayAdSizeLabel = (adType: RewardAdType, t: (key: string) => string): string =>
-  adType === 'display_long'
-    ? t('marketplace.management.walletAdDisplayLongSize')
-    : t('marketplace.management.walletAdDisplayShortSize');
+  adType === 'price_desktop'
+    ? t('marketplace.management.walletAdPriceDesktopSize')
+    : adType === 'price_mobile'
+      ? t('marketplace.management.walletAdPriceMobileSize')
+      : adType === 'display_long'
+        ? t('marketplace.management.walletAdDisplayLongSize')
+        : t('marketplace.management.walletAdDisplayShortSize');
 </script>
 
 <template>
@@ -109,7 +117,7 @@ const resolveDisplayAdSizeLabel = (adType: RewardAdType, t: (key: string) => str
       </div>
 
       <label class="wallet-settings-field">
-        <span>{{ isDisplayRewardAdType(adForm.adType) ? t('marketplace.settings.displayAdTextField') : t('marketplace.management.walletAdSummaryField') }}</span>
+        <span>{{ isImageOnlyAdType(adForm.adType) ? t('marketplace.settings.displayAdTextField') : t('marketplace.management.walletAdSummaryField') }}</span>
         <textarea
           v-model="adForm.summary"
           rows="3"
@@ -123,7 +131,7 @@ const resolveDisplayAdSizeLabel = (adType: RewardAdType, t: (key: string) => str
           <span>{{ t('marketplace.management.walletAdMediaTypeField') }}</span>
           <select
             v-model="adForm.mediaType"
-            :disabled="isDisplayRewardAdType(adForm.adType)"
+            :disabled="isImageOnlyAdType(adForm.adType)"
           >
             <option value="image">
               {{ t('marketplace.management.walletAdMediaTypeImage') }}
@@ -145,12 +153,21 @@ const resolveDisplayAdSizeLabel = (adType: RewardAdType, t: (key: string) => str
       </div>
 
       <div
-        v-if="isDisplayRewardAdType(adForm.adType)"
+        v-if="isDisplayRewardAdType(adForm.adType) || isPriceBannerAdType(adForm.adType)"
         class="wallet-settings-three-column"
       >
         <label class="wallet-settings-field">
           <span>{{ t('marketplace.management.walletAdDisplayChannelField') }}</span>
-          <select v-model="adForm.displayChannel">
+          <input
+            v-if="isPriceBannerAdType(adForm.adType)"
+            :value="t('marketplace.settings.displayAdChannelSupermarket')"
+            type="text"
+            readonly
+          />
+          <select
+            v-else
+            v-model="adForm.displayChannel"
+          >
             <option
               v-for="option in displayChannelOptions"
               :key="option.value"

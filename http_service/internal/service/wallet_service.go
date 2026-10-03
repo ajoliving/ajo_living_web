@@ -503,6 +503,9 @@ func (s *WalletService) ListRewardAdTasks(ctx context.Context, userID int64) ([]
 // 23. ListPublicDisplayAds returns active display ads for listing-side rails.
 func (s *WalletService) ListPublicDisplayAds(ctx context.Context, filters PublicDisplayAdFilters) ([]PublicDisplayAdResponse, error) {
 	channel := normalizedDisplayAdChannel(filters.Channel)
+	if channel == displayAdChannelSupermarket {
+		return s.listPublicSupermarketBannerAds(ctx, filters.Limit)
+	}
 	placement := normalizedDisplayAdPlacement(filters.Placement)
 	limit := filters.Limit
 	if limit <= 0 || limit > 10 {
@@ -521,6 +524,78 @@ func (s *WalletService) ListPublicDisplayAds(ctx context.Context, filters Public
 	}
 
 	return s.listPublicLegacyDisplayAds(ctx, channel, placement, limit)
+}
+
+// 23.0 listPublicSupermarketBannerAds returns assigned desktop and mobile price banners.
+func (s *WalletService) listPublicSupermarketBannerAds(ctx context.Context, limit int) ([]PublicDisplayAdResponse, error) {
+	if limit <= 0 || limit > supermarketBannerSlotCount {
+		limit = supermarketBannerSlotCount
+	}
+	var assignments []model.DisplayAdSlotAssignment
+	if err := s.runtime.DB.WithContext(ctx).
+		Where("display_channel = ? AND display_placement = ?", displayAdChannelSupermarket, displayAdPlacementBanner).
+		Order("slot_index asc, sort_order asc, id asc").
+		Find(&assignments).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load display ad slots")
+	}
+
+	adIDs := make([]int64, 0, len(assignments))
+	slotMap := map[int][]model.DisplayAdSlotAssignment{}
+	for _, assignment := range assignments {
+		if assignment.SlotIndex < 1 || assignment.SlotIndex > supermarketBannerSlotCount {
+			continue
+		}
+		adIDs = append(adIDs, assignment.RewardAdID)
+		slotMap[assignment.SlotIndex] = append(slotMap[assignment.SlotIndex], assignment)
+	}
+
+	now := s.runtime.Now()
+	adMap := map[int64]model.RewardAd{}
+	if len(adIDs) > 0 {
+		var ads []model.RewardAd
+		if err := s.runtime.DB.WithContext(ctx).
+			Where("id IN ?", adIDs).
+			Where("ad_type IN ?", priceBannerAdTypes()).
+			Where("media_type = ? AND is_active = ?", rewardAdMediaTypeImage, true).
+			Where("(starts_at IS NULL OR starts_at <= ?)", now).
+			Where("(ends_at IS NULL OR ends_at >= ?)", now).
+			Find(&ads).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load display ads")
+		}
+		for _, ad := range ads {
+			adMap[ad.ID] = ad
+		}
+	}
+
+	items := make([]PublicDisplayAdResponse, 0, limit)
+	randomSource := rand.New(rand.NewSource(now.UnixNano()))
+	for slotIndex := 1; slotIndex <= supermarketBannerSlotCount && len(items) < limit; slotIndex++ {
+		candidates := make([]model.DisplayAdSlotAssignment, 0, len(slotMap[slotIndex]))
+		for _, assignment := range slotMap[slotIndex] {
+			ad, exists := adMap[assignment.RewardAdID]
+			if exists && displayAdTypeMatchesChannelSlot(displayAdChannelSupermarket, ad.AdType, slotIndex) {
+				candidates = append(candidates, assignment)
+			}
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		assignment := candidates[randomSource.Intn(len(candidates))]
+		item := toPublicDisplayAdResponse(adMap[assignment.RewardAdID])
+		item.SlotIndex = slotIndex
+		item.DisplayLayout = displayAdLayoutImageFull
+		if title := strings.TrimSpace(assignment.DisplayTitle); title != "" {
+			item.DisplayTitle = title
+		}
+		if text := strings.TrimSpace(assignment.DisplayText); text != "" {
+			item.DisplayText = text
+		}
+		if targetURL := strings.TrimSpace(assignment.TargetURL); targetURL != "" {
+			item.TargetURL = targetURL
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 // 23.1 listPublicConfiguredDisplayAds returns one random active ad per configured slot.

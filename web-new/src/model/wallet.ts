@@ -125,7 +125,7 @@ export interface StaffWalletGrantResponse {
 }
 
 // 12. 定義 Staff 廣告任務類型
-export type StaffRewardAdType = 'reward' | 'display' | 'display_short' | 'display_long';
+export type StaffRewardAdType = 'reward' | 'display' | 'display_short' | 'display_long' | 'price_desktop' | 'price_mobile';
 
 // 13. 定義 Staff 廣告任務
 export interface StaffRewardAdResponse {
@@ -137,8 +137,8 @@ export interface StaffRewardAdResponse {
   media_url: string;
   media_type: 'image' | 'video';
   target_url: string;
-  display_channel: 'property_sale' | 'serviced_apartment' | 'furniture' | '';
-  display_placement: 'listing_side' | '';
+  display_channel: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket' | '';
+  display_placement: 'listing_side' | 'banner' | '';
   display_layout: 'image_full' | 'image_text' | 'text_compact';
   slot_display_title: string;
   display_text: string;
@@ -169,8 +169,8 @@ export interface StaffRewardAdPayload {
   media_url?: string;
   media_type?: 'image' | 'video';
   target_url?: string;
-  display_channel?: 'property_sale' | 'serviced_apartment' | 'furniture' | '';
-  display_placement?: 'listing_side' | '';
+  display_channel?: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket' | '';
+  display_placement?: 'listing_side' | 'banner' | '';
   display_layout?: 'image_full' | 'image_text' | 'text_compact';
   sort_order?: number;
   reward_points?: number;
@@ -193,8 +193,8 @@ export interface PublicDisplayAdResponse {
   media_url: string;
   media_type: 'image' | 'video';
   target_url: string;
-  display_channel: 'property_sale' | 'serviced_apartment' | 'furniture';
-  display_placement: 'listing_side';
+  display_channel: 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket';
+  display_placement: 'listing_side' | 'banner';
   display_layout: 'image_full' | 'image_text' | 'text_compact';
   sort_order: number;
   slot_index: number;

@@ -35,8 +35,8 @@ import { formatAjoPoints } from '@/utils/wallet';
 type WalletDirectionFilter = '' | 'credit' | 'debit';
 export type RewardAdType = Exclude<StaffRewardAdType, 'display'>;
 export type RewardAdMediaType = 'image' | 'video';
-export type RewardAdDisplayChannel = 'property_sale' | 'serviced_apartment' | 'furniture' | '';
-export type RewardAdDisplayPlacement = 'listing_side' | '';
+export type RewardAdDisplayChannel = 'property_sale' | 'serviced_apartment' | 'furniture' | 'supermarket' | '';
+export type RewardAdDisplayPlacement = 'listing_side' | 'banner' | '';
 export type RewardAdDisplayLayout = 'image_full' | 'image_text' | 'text_compact';
 
 export interface GrantForm {
@@ -236,7 +236,7 @@ export const useRewardAdEditorPage = () => {
   };
 
   const stageRewardAdMedia = (file: File): void => {
-    const expectedType = isDisplayRewardAdType(adForm.adType) ? 'image' : adForm.mediaType;
+    const expectedType = isImageOnlyAdType(adForm.adType) ? 'image' : adForm.mediaType;
     if (expectedType === 'image' && !file.type.startsWith('image/')) {
       feedbackStore.pushToast(t('marketplace.management.walletAdImageRequired'), 'error');
       return;
@@ -293,7 +293,7 @@ export const useRewardAdEditorPage = () => {
       if (loadingAd.value) {
         return;
       }
-      if (isDisplayRewardAdType(adForm.adType)) {
+      if (isImageOnlyAdType(adForm.adType)) {
         adForm.mediaType = 'image';
         return;
       }
@@ -310,7 +310,7 @@ export const useRewardAdEditorPage = () => {
       if (loadingAd.value) {
         return;
       }
-      if (isDisplayRewardAdType(adForm.adType)) {
+      if (isImageOnlyAdType(adForm.adType)) {
         adForm.mediaType = 'image';
         adForm.displayPlacement = 'listing_side';
         adForm.displayLayout = displayLayoutForAdType(adForm.adType);
@@ -482,14 +482,18 @@ const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffReward
   summary: form.summary.trim(),
   cover_url: '',
   media_url: mediaURL.trim(),
-  media_type: isDisplayRewardAdType(form.adType) ? 'image' : form.mediaType,
+  media_type: isImageOnlyAdType(form.adType) ? 'image' : form.mediaType,
   target_url: form.targetURL.trim(),
-  display_channel: isDisplayRewardAdType(form.adType) ? form.displayChannel : '',
-  display_placement: isDisplayRewardAdType(form.adType) ? 'listing_side' : '',
-  display_layout: isDisplayRewardAdType(form.adType) ? displayLayoutForAdType(form.adType) : 'image_text',
+  display_channel: isPriceBannerAdType(form.adType)
+    ? 'supermarket'
+    : isDisplayRewardAdType(form.adType) ? form.displayChannel : '',
+  display_placement: isPriceBannerAdType(form.adType)
+    ? 'banner'
+    : isDisplayRewardAdType(form.adType) ? 'listing_side' : '',
+  display_layout: isImageOnlyAdType(form.adType) ? displayLayoutForAdType(form.adType) : 'image_text',
   sort_order: Number(form.sortOrder),
-  reward_points: isDisplayRewardAdType(form.adType) ? 0 : Number(form.rewardPoints),
-  watch_seconds: isDisplayRewardAdType(form.adType) ? 0 : Number(form.watchSeconds),
+  reward_points: isImageOnlyAdType(form.adType) ? 0 : Number(form.rewardPoints),
+  watch_seconds: isImageOnlyAdType(form.adType) ? 0 : Number(form.watchSeconds),
   total_budget: 0,
   retention_days: Number(form.retentionDays),
   is_active: form.isActive,
@@ -498,10 +502,10 @@ const buildRewardAdPayload = (form: RewardAdForm, mediaURL: string): StaffReward
 // 8. 判斷廣告表單是否可提交
 const isRewardAdFormValid = (form: RewardAdForm, isEditingAd: boolean): boolean =>
   form.title.trim().length > 0 &&
-  (isDisplayRewardAdType(form.adType) || form.summary.trim().length > 0) &&
-  (isDisplayRewardAdType(form.adType) || (Number.isFinite(Number(form.rewardPoints)) && Number(form.rewardPoints) > 0)) &&
-  (isDisplayRewardAdType(form.adType) || (Number.isFinite(Number(form.watchSeconds)) && Number(form.watchSeconds) > 0)) &&
-  (form.adType === 'reward' || (form.displayChannel.length > 0 && form.displayPlacement.length > 0 && form.displayLayout.length > 0)) &&
+  (isImageOnlyAdType(form.adType) || form.summary.trim().length > 0) &&
+  (isImageOnlyAdType(form.adType) || (Number.isFinite(Number(form.rewardPoints)) && Number(form.rewardPoints) > 0)) &&
+  (isImageOnlyAdType(form.adType) || (Number.isFinite(Number(form.watchSeconds)) && Number(form.watchSeconds) > 0)) &&
+  (form.adType === 'reward' || isPriceBannerAdType(form.adType) || (form.displayChannel.length > 0 && form.displayPlacement.length > 0 && form.displayLayout.length > 0)) &&
   Number.isFinite(Number(form.retentionDays)) &&
   Number(form.retentionDays) > 0 &&
   (Boolean(form.mediaFile) || (isEditingAd && form.mediaURL.trim().length > 0));
@@ -562,8 +566,19 @@ const resolveRetentionDays = (endsAt?: string): number => {
 export const isDisplayRewardAdType = (adType: RewardAdType): boolean =>
   adType === 'display_short' || adType === 'display_long';
 
+// 12.1 判斷是否為價格情報網橫額廣告
+export const isPriceBannerAdType = (adType: RewardAdType): boolean =>
+  adType === 'price_desktop' || adType === 'price_mobile';
+
+// 12.2 判斷是否必須使用圖片素材
+export const isImageOnlyAdType = (adType: RewardAdType): boolean =>
+  isDisplayRewardAdType(adType) || isPriceBannerAdType(adType);
+
 // 13. 標準化編輯頁廣告類型
 const normalizeEditorAdType = (adType: StaffRewardAdType): RewardAdType => {
+  if (adType === 'price_desktop' || adType === 'price_mobile') {
+    return adType;
+  }
   if (adType === 'display_short') {
     return 'display_short';
   }
@@ -575,7 +590,7 @@ const normalizeEditorAdType = (adType: StaffRewardAdType): RewardAdType => {
 
 // 14. 依廣告類型固定展示樣式
 export const displayLayoutForAdType = (adType: RewardAdType): RewardAdDisplayLayout =>
-  adType === 'display_long' ? 'image_full' : 'image_text';
+  adType === 'display_long' || isPriceBannerAdType(adType) ? 'image_full' : 'image_text';
 
 // 15. 解析 API 錯誤訊息
 const readErrorMessage = (error: unknown, fallback: string): string =>
