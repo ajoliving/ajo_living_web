@@ -42,10 +42,17 @@ export interface ChatMessageView {
   sender_name: string;
   body: string;
   message_type: string;
+  status: string;
   action_label?: string;
   action_url?: string;
   sent_at: string;
   attachments: Array<{ media_asset_id: string; mime_type: string; file_size: number; url: string; width?: number | null; height?: number | null; processing_status: string; scan_status: string; rejection_reason?: string }>;
+  reply?: {
+    message_id: string;
+    sender_name: string;
+    content: string;
+    recalled: boolean;
+  };
 }
 
 // 7. 定義聊天列表商品摘要
@@ -65,6 +72,7 @@ export interface ChatPeerView {
   public_id: string;
   display_name: string;
   avatar_url: string;
+  avatar_key?: string;
   role_in_chat: string;
 }
 
@@ -75,6 +83,8 @@ export interface ChatConversationView {
   title: string;
   subtitle: string;
   building_id?: string;
+  building_name?: string;
+  building_name_en?: string;
   member_count?: number;
   listing: ChatListingView;
   peer: ChatPeerView;
@@ -87,6 +97,7 @@ export interface ChatConversationView {
 export interface BuildingChatMemberView {
   user_id: string;
   display_name: string;
+  avatar_key?: string;
   role_in_chat: string;
   membership_status: string;
   muted_until?: string | null;

@@ -6,10 +6,11 @@
  * 4. 驗證抽屜遮罩點擊可關閉。
  * 5. 驗證主題選單提供六十組主題色並可套用選定色彩。
  * 6. 驗證共用導航文案全部經由 i18n 資源輸出。
+ * 7. 驗證主題入口關閉時不渲染主題選擇器。
  */
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -104,6 +105,10 @@ describe('AppHeader mobile navigation', () => {
     routeState.path = '/';
     routeState.fullPath = '/';
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('keeps a login entry in mobile navigation when signed out', () => {
@@ -202,6 +207,17 @@ describe('AppHeader mobile navigation', () => {
     expect(preferenceStore.theme).toBe('jade');
     expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('13 139 100');
     expect(wrapper.find('.theme-menu').exists()).toBe(false);
+  });
+
+  it('hides the theme picker when the theme entry is disabled', () => {
+    vi.stubEnv('VITE_ENABLE_THEME_PICKER', '0');
+
+    const wrapper = mountHeader();
+
+    expect(wrapper.find('.theme-picker').exists()).toBe(false);
+    expect(wrapper.find('.theme-toggle').exists()).toBe(false);
+    expect(wrapper.find('.nav-login').exists()).toBe(true);
+    expect(wrapper.find('.locale-toggle').exists()).toBe(true);
   });
 
   it('closes the mobile drawer when the backdrop is tapped', async () => {

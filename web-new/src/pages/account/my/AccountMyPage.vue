@@ -4,7 +4,8 @@
  * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
- * 5. 在帳戶資料提供 iSmart 密碼更新彈窗。
+ * 5. 在已連結物業登記資料提供密碼更新彈窗。
+ * 6. 點擊帳戶頭像即可更換靜態預設頭像。
 -->
 <script setup lang="ts">
 /*
@@ -13,7 +14,8 @@
  * 2. 當前面板狀態與切換方法。
  * 3. 帳號管理、提示設定、物業綁定、錢包、樓盤入口、住宅、家具與收藏資料。
  * 4. 退出登入後返回登入頁。
- * 5. 提交 iSmart 密碼更新並顯示結果。
+ * 5. 提交密碼更新並顯示結果。
+ * 6. 點擊帳戶頭像選擇靜態預設頭像。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -22,20 +24,27 @@ import { RouterView, useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { isIntegrationBusinessAuthError } from '@/httpapis';
 import {
+  fetchMemberIsmartFlatBindings,
+  fetchMemberIsmartOwnerBindingRequests,
   fetchMemberPosBuildings,
   fetchMemberPosBuildingUnits,
   fetchPosBuildings,
   fetchPosBuildingUnits,
   submitMemberIsmartOwnerBindingRequest,
 } from '@/httpapis/building';
+import type {
+  IsmartFlatBindingRow,
+  IsmartOwnerBindingRequestRow,
+  IsmartOwnerBindingRequestStatus,
+} from '@/httpapis/building';
 import { changeMemberIsmartPassword, updateMemberIsmartProfile, updateMe } from '@/httpapis/me';
+import { avatarKeyFromSeed, presetAvatarOptions, resolveAvatarSrc } from '@/constants/presetAvatars';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
 import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
-import { resolveResidentUnitDisplays } from './composables/unit-display';
 
 const route = useRoute();
 const router = useRouter();
@@ -158,8 +167,25 @@ const syncActivePanelFromRoute = (path: string) => {
 interface AccountDisplayField {
   label: string;
   value: string;
-  action?: 'change-password';
 }
+
+interface AccountDisplayColumn {
+  key: string;
+  fields: AccountDisplayField[];
+}
+
+interface LinkedPropertyFunctionRow {
+  key: string;
+  unitID: string;
+  property: string;
+  showProperty: boolean;
+  functionName: string;
+  enabled: boolean;
+  canBind: boolean;
+  canUnbind: boolean;
+}
+
+type PropertyOwnershipCode = 'sole' | 'joint' | 'tenancy' | '';
 
 const unsetText = computed(() => t('account.center.common.unset'));
 
@@ -171,7 +197,7 @@ const displayText = (value: unknown, fallback = unsetText.value): string => {
 
 const ismartProfile = computed(() => sessionStore.me?.ismart_account_profile ?? null);
 
-// 7.1 iSmart 資料編輯
+// 7.1 已連結物業登記資料編輯
 interface IsmartEditFormState {
   account_email: string;
   account_phone: string;
@@ -194,6 +220,8 @@ const ismartEditOpen = ref(false);
 const ismartEditSaving = ref(false);
 const ismartPasswordOpen = ref(false);
 const ismartPasswordSaving = ref(false);
+const avatarPickerOpen = ref(false);
+const isSavingAvatar = ref(false);
 const ismartPasswordForm = reactive({
   old_password: '',
   new_password: '',
@@ -217,7 +245,7 @@ const ismartEditForm = reactive<IsmartEditFormState>({
   billing_address_zh: '',
 });
 
-// 7.2 同步 iSmart 編輯表單
+// 7.2 同步已連結物業登記資料編輯表單
 const syncIsmartEditForm = (): void => {
   const profile = ismartProfile.value;
   ismartEditForm.account_email = profile?.account_email?.trim() ?? sessionStore.me?.ismart_msg?.email?.trim() ?? '';
@@ -237,10 +265,10 @@ const syncIsmartEditForm = (): void => {
   ismartEditForm.billing_address_zh = profile?.billing_address_zh?.trim() ?? '';
 };
 
-// 7.3 判斷是否可修改 iSmart 資料
+// 7.3 判斷是否可修改已連結物業登記資料
 const canEditIsmartProfile = computed(() => Boolean(ismartProfile.value || sessionStore.me?.ismart_linked));
 
-// 7.4 開啟 iSmart 編輯
+// 7.4 開啟已連結物業登記資料編輯
 const openIsmartEdit = (): void => {
   if (!canEditIsmartProfile.value) {
     feedbackStore.pushToast(t('account.center.account.ismartProfileUnavailable'), 'error');
@@ -250,14 +278,14 @@ const openIsmartEdit = (): void => {
   ismartEditOpen.value = true;
 };
 
-// 7.5 關閉 iSmart 編輯
+// 7.5 關閉已連結物業登記資料編輯
 const closeIsmartEdit = (): void => {
   if (!ismartEditSaving.value) {
     ismartEditOpen.value = false;
   }
 };
 
-// 7.6 開啟 iSmart 密碼更新彈窗
+// 7.6 開啟密碼更新彈窗
 const openIsmartPassword = (): void => {
   ismartPasswordForm.old_password = '';
   ismartPasswordForm.new_password = '';
@@ -265,14 +293,14 @@ const openIsmartPassword = (): void => {
   ismartPasswordOpen.value = true;
 };
 
-// 7.7 關閉 iSmart 密碼更新彈窗
+// 7.7 關閉密碼更新彈窗
 const closeIsmartPassword = (): void => {
   if (!ismartPasswordSaving.value) {
     ismartPasswordOpen.value = false;
   }
 };
 
-// 7.8 提交 iSmart 密碼更新
+// 7.8 提交密碼更新
 const handleSaveIsmartPassword = async (): Promise<void> => {
   if (ismartPasswordSaving.value) {
     return;
@@ -301,7 +329,7 @@ const handleSaveIsmartPassword = async (): Promise<void> => {
   }
 };
 
-// 7.9 儲存 iSmart 資料
+// 7.9 儲存已連結物業登記資料
 const handleSaveIsmartProfile = async (): Promise<void> => {
   if (ismartEditSaving.value) {
     return;
@@ -345,7 +373,63 @@ const readAccountApiErrorMessage = (error: unknown, fallback: string): string =>
     : fallback;
 
 const accountDisplayName = computed(() => displayText(sessionStore.me?.display_name, sessionStore.currentUser.display_name));
-const accountAvatarText = computed(() => accountDisplayName.value.trim().slice(0, 1).toUpperCase() || 'A');
+
+// 8. 目前頭像來源
+const accountAvatarSrc = computed(() => resolveAvatarSrc({
+  avatarKey: sessionStore.me?.avatar_key,
+  avatarUrl: sessionStore.me?.avatar_url,
+  seed: sessionStore.me?.public_id || sessionStore.currentUser.public_id,
+}));
+
+// 8.1 目前已選或映射的頭像編號
+const currentAvatarKey = computed(() => {
+  const selectedKey = String(sessionStore.me?.avatar_key ?? '').trim();
+  if (selectedKey) {
+    return selectedKey;
+  }
+  if (sessionStore.me?.avatar_url) {
+    return '';
+  }
+  return avatarKeyFromSeed(sessionStore.me?.public_id || sessionStore.currentUser.public_id);
+});
+
+// 8.2 開啟頭像選擇彈窗
+const openAvatarPicker = (): void => {
+  if (!isSavingAvatar.value) {
+    avatarPickerOpen.value = true;
+  }
+};
+
+// 8.3 關閉頭像選擇彈窗
+const closeAvatarPicker = (): void => {
+  if (!isSavingAvatar.value) {
+    avatarPickerOpen.value = false;
+  }
+};
+
+// 8.4 選擇靜態預設頭像
+const handleSelectAvatar = async (avatarKey: string): Promise<void> => {
+  if (!avatarKey || isSavingAvatar.value) {
+    return;
+  }
+  if (avatarKey === currentAvatarKey.value) {
+    avatarPickerOpen.value = false;
+    return;
+  }
+
+  isSavingAvatar.value = true;
+  try {
+    const { data } = await updateMe({ avatar_key: avatarKey });
+    sessionStore.me = data.data;
+    avatarPickerOpen.value = false;
+    feedbackStore.pushToast(t('account.profile.avatarUpdateSuccess'), 'success');
+  } catch (error) {
+    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.profile.avatarUpdateError')), 'error');
+  } finally {
+    isSavingAvatar.value = false;
+  }
+};
+
 const memberPhoneText = computed(() => {
   const member = sessionStore.me;
   if (!member) {
@@ -359,13 +443,34 @@ const memberPhoneText = computed(() => {
   return displayText([countryCode, phoneNumber].filter(Boolean).join(' '));
 });
 
-// 9. 帳號管理 AJO 專屬資料
+// 9. 帳號管理登記資料
+const registeredNameText = computed(() =>
+  displayText(
+    ismartProfile.value?.account_name
+    || ismartProfile.value?.owner_name_zh
+    || ismartProfile.value?.owner_name_en
+    || sessionStore.me?.display_name,
+  ),
+);
+
+const registeredUsernameText = computed(() =>
+  displayText(
+    sessionStore.me?.username
+    || sessionStore.me?.ismart_username
+    || sessionStore.me?.ismart_msg?.username
+    || ismartProfile.value?.account_code,
+  ),
+);
+
+const registeredEmailText = computed(() =>
+  displayText(
+    sessionStore.me?.email
+    || ismartProfile.value?.account_email
+    || sessionStore.me?.ismart_msg?.email,
+  ),
+);
+
 const ajoAccountData = computed<AccountDisplayField[]>(() => [
-  {
-    label: t('account.profile.localPassword'),
-    value: sessionStore.me ? t('account.center.account.passwordManaged') : unsetText.value,
-    action: 'change-password',
-  },
   {
     label: t('auth.publisherIdentityType'),
     value: t(`auth.accountType${({
@@ -375,11 +480,32 @@ const ajoAccountData = computed<AccountDisplayField[]>(() => [
       agency_company_subaccount: 'AgencyCompanySubaccount',
     } as Record<string, string>)[sessionStore.me?.account_type ?? 'personal'] ?? 'Personal'}`),
   },
-  { label: t('account.profile.districtCode'), value: displayText(sessionStore.me?.district_code) },
   {
-    label: t('account.center.account.residentUnits'),
-    value: residentUnitNameText.value,
+    label: t('account.center.account.registeredUsername'),
+    value: registeredUsernameText.value,
   },
+  {
+    label: t('account.center.account.registeredName'),
+    value: registeredNameText.value,
+  },
+  {
+    label: t('account.center.account.identityCardNumber'),
+    value: displayText(ismartProfile.value?.identity_number),
+  },
+  {
+    label: t('account.center.account.registeredPhone'),
+    value: memberPhoneText.value,
+  },
+  {
+    label: t('account.center.account.registeredEmail'),
+    value: registeredEmailText.value,
+  },
+]);
+
+const ajoAccountDataColumns = computed<AccountDisplayColumn[]>(() => [
+  { key: 'account', fields: ajoAccountData.value.slice(0, 2) },
+  { key: 'identity', fields: ajoAccountData.value.slice(2, 4) },
+  { key: 'contact', fields: ajoAccountData.value.slice(4, 6) },
 ]);
 
 interface BindOption {
@@ -486,12 +612,74 @@ const normalizeBindFlatUnitPermissions = (values: string[] | undefined): string[
   return result;
 };
 
+// 6.5 取得 iSmart 即時綁定資料
+// 1. flat-bindings 是已審批綁定的權威來源，取代只在登入時更新的本地快照。
+// 2. owner-binding-requests 提供審批狀態，避免待審批鎖死或已拒絕無法重提。
+const ismartFlatBindings = ref<IsmartFlatBindingRow[]>([]);
+const ismartOwnerBindingRequests = ref<IsmartOwnerBindingRequestRow[]>([]);
+let ismartBindingQueried = false;
+
+// 6.5.1 取得 iSmart 即時單位綁定對應的單位碼
+const liveBindUnitIDs = computed<string[]>(() => {
+  const result: string[] = [];
+  ismartFlatBindings.value.forEach((row) => {
+    const unitID = getBindDigitsOnly(row.unit_id ?? '');
+    if (unitID.length < 11) {
+      return;
+    }
+
+    const normalizedUnitID = unitID.slice(0, 11);
+    if (!result.includes(normalizedUnitID)) {
+      result.push(normalizedUnitID);
+    }
+  });
+  return result;
+});
+
+// 6.5.2 由 iSmart 申請記錄推導目前審批狀態，最新一筆為準
+const liveResidenceBindingStatus = computed<IsmartOwnerBindingRequestStatus | ''>(() => {
+  const rows = ismartOwnerBindingRequests.value;
+  if (rows.some((row) => row.status === 'pending_approval')) {
+    return 'pending_approval';
+  }
+
+  const latest = rows[0];
+  if (latest?.status === 'approved' || latest?.status === 'rejected') {
+    return latest.status;
+  }
+  return '';
+});
+
+// 6.5.3 取得 iSmart 綁定查詢結果
+const loadIsmartBindingSnapshot = async (): Promise<void> => {
+  if (ismartBindingQueried) {
+    return;
+  }
+  ismartBindingQueried = true;
+
+  const [bindings, requests] = await Promise.allSettled([
+    fetchMemberIsmartFlatBindings(),
+    fetchMemberIsmartOwnerBindingRequests(),
+  ]);
+  if (bindings.status === 'fulfilled') {
+    ismartFlatBindings.value = bindings.value.items ?? [];
+  }
+  if (requests.status === 'fulfilled') {
+    ismartOwnerBindingRequests.value = requests.value.items ?? [];
+  }
+};
+
 // 6.6 取得住戶有效單位權限
-const bindAllowedUnitIDs = computed(() =>
-  normalizeBindFlatUnitPermissions(
+// iSmart 即時綁定優先；查無資料時沿用登入快照，不讓舊行為退化。
+const bindAllowedUnitIDs = computed(() => {
+  const live = liveBindUnitIDs.value;
+  if (live.length > 0) {
+    return live;
+  }
+  return normalizeBindFlatUnitPermissions(
     sessionStore.me?.ismart_msg?.client_building_flat_units_permissions ?? sessionStore.me?.bound_flat_unit_ids,
-  ),
-);
+  );
+});
 
 // 6.7 從住戶單位權限取得所屬屋苑
 const bindResidentBuildingIDs = computed(() => {
@@ -514,18 +702,6 @@ const bindBuildingNameMap = computed<Record<string, string>>(() =>
     }
     return result;
   }, {}),
-);
-
-// 6.11 顯示住戶所屬屋苑、樓層與單位
-const residentUnitNameText = computed(() =>
-  displayText(
-    resolveResidentUnitDisplays(bindAllowedUnitIDs.value, residentUnitDetails.value).map(({ buildingID, floor, unit }) => {
-      const floorLabel = floor || t('account.center.common.unassignedFloor');
-      const buildingName = bindBuildingNameMap.value[buildingID]
-        || t('account.center.common.buildingCodeLabel', { id: buildingID });
-      return [buildingName, floorLabel, unit].filter(Boolean).join(' / ');
-    }).join(', '),
-  ),
 );
 
 // 6.14 判斷 POS 單位是否可選
@@ -758,10 +934,62 @@ const bindSelectedUnit = computed(() =>
 const bindSelectedProperty = computed(() =>
   bindPropertyOptions.value.find((item) => item.value === bindUnitID.value),
 );
-const bindCurrent = computed(() =>
-  bindSelectedProperty.value?.label || t('account.center.common.noUnitSelected'),
-);
 const canSaveBindUnit = computed(() => Boolean(bindSelectedProperty.value && bindSelectedUnit.value));
+
+// 6.23 已連結物業功能列
+const linkedPropertyFunctionRows = computed<LinkedPropertyFunctionRow[]>(() => {
+  const functions = [
+    { key: 'building', name: t('account.center.account.propertyFunctionBuilding'), enabled: true },
+    { key: 'rental', name: t('account.center.account.propertyFunctionRental'), enabled: false },
+    { key: 'home', name: t('account.center.account.propertyFunctionHome'), enabled: false },
+  ];
+  const currentUnitID = bindUnitID.value;
+  return bindPropertyOptions.value.flatMap((property) =>
+    functions.map((item, index) => ({
+      key: `${property.value}-${item.key}`,
+      unitID: property.value,
+      property: property.label,
+      showProperty: index === 0,
+      functionName: item.name,
+      enabled: item.enabled,
+      canBind: item.key === 'building' && property.value !== currentUnitID,
+      canUnbind: item.key === 'building' && property.value === currentUnitID,
+    })),
+  );
+});
+
+// 6.24 顯示目前已連結物業的擁有權
+const propertyOwnershipLabel = computed(() => {
+  const raw = String(ismartProfile.value?.legal_entity ?? '').trim().toUpperCase();
+  const ownershipMap: Record<string, PropertyOwnershipCode> = {
+    SOLE: 'sole',
+    JOINT: 'joint',
+    TIC: 'tenancy',
+    TENANCY: 'tenancy',
+  };
+  const code = ownershipMap[raw];
+  if (code === 'sole') {
+    return t('account.center.account.propertyOwnershipSole');
+  }
+  if (code === 'joint') {
+    return t('account.center.account.propertyOwnershipJoint');
+  }
+  if (code === 'tenancy') {
+    return t('account.center.account.propertyOwnershipTenancy');
+  }
+  return unsetText.value;
+});
+
+// 6.25 將指定已連結物業設為目前使用單位
+const handleBindProperty = async (unitID: string): Promise<void> => {
+  bindUnitID.value = unitID;
+  await handleSaveBindUnit();
+};
+
+// 6.26 解除綁定目前只影響 AJO 本地目前使用物業
+const handleUnbindProperty = (): void => {
+  feedbackStore.pushToast(t('account.center.account.unbindUnavailable'), 'error');
+};
 
 // 6.6 同步會員已保存單位
 const syncBindFromProfile = (): void => {
@@ -906,21 +1134,10 @@ const handleSaveBindUnit = async (): Promise<void> => {
     const buildingName = bindBuildingNameMap.value[selectedProperty.buildingID]
       || selectedProperty.buildingID;
     const { data } = await updateMe({
-      display_name: sessionStore.me?.display_name ?? sessionStore.currentUser.display_name,
-      ...(sessionStore.me?.email ? { email: sessionStore.me.email } : {}),
-      ...(isSystemPhonePlaceholder(sessionStore.me?.phone_country_code)
-        ? {}
-        : {
-            phone_country_code: sessionStore.me?.phone_country_code ?? '',
-            phone_number: sessionStore.me?.phone_number ?? '',
-          }),
       primary_community_id: selectedProperty.buildingID,
       primary_community_name: buildingName,
-      bound_building_ids: [selectedProperty.buildingID],
-      bound_flat_unit_ids: [bindUnitID.value],
       residence_floor: selectedProperty.floor === bindUnassignedFloor ? '' : selectedProperty.floor,
       residence_unit: selectedProperty.unit,
-      district_code: sessionStore.me?.district_code ?? '',
     });
     sessionStore.me = data.data;
     feedbackStore.pushToast(t('account.center.account.unitSaved'), 'success');
@@ -932,7 +1149,7 @@ const handleSaveBindUnit = async (): Promise<void> => {
 };
 
 const ismartHouseholdData = computed<AccountDisplayField[]>(() => [
-  { label: t('account.center.account.legalEntity'), value: displayText(ismartProfile.value?.legal_entity) },
+  { label: t('account.center.account.legalEntity'), value: propertyOwnershipLabel.value },
   { label: t('account.center.account.clientType'), value: displayText(ismartProfile.value?.client_type) },
   { label: t('account.center.account.gender'), value: displayText(ismartProfile.value?.gender) },
   { label: t('account.center.account.birthDate'), value: displayText(ismartProfile.value?.birth_date) },
@@ -1245,7 +1462,7 @@ interface BindingStatusItem {
   title: string;
   meta: string;
   chip: string;
-  chipType: 'good' | 'warn' | 'brand';
+  chipType: 'good' | 'warn' | 'brand' | 'bad';
 }
 
 // 8. 物業綁定申請
@@ -1361,7 +1578,13 @@ const bindingCurrent = computed(() =>
 const bindingRoleLabel = computed(() =>
   bindingRoleOptions.value.find((role) => role.value === bindingRole.value)?.label ?? bindingRole.value,
 );
-const hasPendingResidenceBinding = computed(() => sessionStore.me?.residence_binding_status === 'pending');
+const hasPendingResidenceBinding = computed(() => {
+  const live = liveResidenceBindingStatus.value;
+  if (live) {
+    return live === 'pending_approval';
+  }
+  return sessionStore.me?.residence_binding_status === 'pending';
+});
 const canSubmitOwnerBinding = computed(() =>
   bindingBuildingID.value.length > 0 &&
   bindingFloor.value.length > 0 &&
@@ -1534,6 +1757,103 @@ const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
   }
 };
 
+// 8.12 格式化綁定申請日期
+const formatBindingStatusDate = (value?: string | null): string => {
+  const text = (value ?? '').trim();
+  if (!text) {
+    return '';
+  }
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) {
+    return text;
+  }
+  return date.toLocaleDateString(preferenceStore.locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+// 8.13 以頁面統一格式顯示綁定申請單位，優先使用 AJO 大廈名稱而非上游英文 unit_display
+const formatOwnerBindingUnitLabel = (unitID: string, buildingName?: string): string => {
+  const normalizedUnitID = getBindDigitsOnly(unitID).slice(0, 11);
+  if (normalizedUnitID.length < 11) {
+    return '';
+  }
+
+  const liveBinding = ismartFlatBindings.value.find(
+    (item) => getBindDigitsOnly(item.unit_id ?? '').slice(0, 11) === normalizedUnitID,
+  );
+  const buildingID = (liveBinding?.building_id ?? normalizedUnitID.slice(0, 7)).trim();
+  const resolvedBuildingName = bindBuildingNameMap.value[buildingID]
+    || liveBinding?.building_name
+    || buildingName
+    || t('account.center.common.buildingCodeLabel', { id: buildingID });
+  const floor = (liveBinding?.floor ?? '').trim();
+  const unit = (liveBinding?.unit ?? '').trim();
+
+  return [resolvedBuildingName, floor ? formatBindFloorLabel(floor) : '', unit].filter(Boolean).join(' / ');
+};
+
+// 8.14 由 iSmart 申請記錄組裝申請狀態列表
+const buildOwnerBindingStatusList = (rows: IsmartOwnerBindingRequestRow[]): BindingStatusItem[] =>
+  rows.slice(0, 5).map((row, index) => {
+    const unitLabels = (row.ownedflat ?? [])
+      .map((unitID) => formatOwnerBindingUnitLabel(unitID, row.building_name))
+      .filter(Boolean);
+    const title = unitLabels.join('、')
+      || [row.building_name, row.building_id].filter(Boolean).join(' / ');
+    const role = row.cli_role?.trim() || bindingRoleLabel.value;
+    const submittedAt = formatBindingStatusDate(row.created_date);
+    const approvedAt = formatBindingStatusDate(row.approval_date);
+    const key = `ismart-request-${row.owner_reg_id ?? index}`;
+
+    if (row.status === 'approved') {
+      return {
+        key,
+        title,
+        meta: approvedAt
+          ? t('account.center.binding.statusApprovedMeta', { role, date: approvedAt })
+          : role,
+        chip: t('account.center.binding.approved'),
+        chipType: 'good' as const,
+      };
+    }
+    if (row.status === 'rejected') {
+      return {
+        key,
+        title,
+        meta: approvedAt
+          ? t('account.center.binding.statusRejectedMeta', { role, date: approvedAt })
+          : role,
+        chip: t('account.center.binding.rejected'),
+        chipType: 'bad' as const,
+      };
+    }
+    return {
+      key,
+      title,
+      meta: submittedAt
+        ? t('account.center.binding.statusMeta', { role, date: submittedAt })
+        : role,
+      chip: t('account.center.binding.pending'),
+      chipType: 'warn' as const,
+    };
+  }).filter((item) => item.title.length > 0);
+
+// 8.15 將 iSmart 申請記錄寫入申請狀態列表
+const syncOwnerBindingStatusFromIsmart = (): void => {
+  bindingStatusList.value = buildOwnerBindingStatusList(ismartOwnerBindingRequests.value);
+};
+
+// 8.16 僅在沒有 iSmart 申請記錄可顯示時，才回退顯示通用待審批提示
+const showGenericPendingNotice = computed(() =>
+  hasPendingResidenceBinding.value
+  && !ismartOwnerBindingRequests.value.some((row) => row.status === 'pending_approval')
+  && bindingStatusList.value.length === 0,
+);
+
 // 9. 住宅 mock 資料
 const homeListings = computed(() => [
   {
@@ -1613,12 +1933,15 @@ onMounted(async () => {
       await sessionStore.loadCurrentUser();
     }
     syncBindFromProfile();
+    await loadIsmartBindingSnapshot();
     await loadBindBuildings();
     await loadResidentUnitDetails();
     if (bindBuildingID.value) {
       await loadBindUnits(bindBuildingID.value);
       syncBindUnitFromProfile();
     }
+    // 大廈名稱載入後才組裝申請狀態標題，避免退回上游英文名稱
+    syncOwnerBindingStatusFromIsmart();
     await ensureActivePanelLoaded();
   } finally {
     isSyncingBindProfile = false;
@@ -1713,7 +2036,18 @@ watch(activePanel, () => {
             <div class="work-account-topbar">
               <div class="work-account-head">
                 <div class="work-account-user">
-                  <div class="work-account-avatar">{{ accountAvatarText }}</div>
+                  <button
+                    type="button"
+                    class="work-account-avatar"
+                    :aria-label="t('account.center.account.changeAvatar')"
+                    :disabled="isSavingAvatar"
+                    @click="openAvatarPicker"
+                  >
+                    <img
+                      :src="accountAvatarSrc"
+                      alt=""
+                    >
+                  </button>
                   <div>
                     <div class="work-account-name">{{ accountDisplayName }}</div>
                     <div class="work-account-sub">{{ t('account.center.account.personalProfile') }}</div>
@@ -1738,21 +2072,19 @@ watch(activePanel, () => {
               <div class="work-account-card">
                 <div class="work-card-title">{{ t('account.center.account.accountInfo') }}</div>
                 <div
-                  v-for="item in ajoAccountData"
-                  :key="item.label"
-                  class="work-account-field"
+                  v-for="column in ajoAccountDataColumns"
+                  :key="column.key"
+                  class="work-account-group"
                 >
-                  <span>{{ item.label }}</span>
-                  <div class="work-account-field__value">
-                    <strong>{{ item.value }}</strong>
-                    <button
-                      v-if="item.action === 'change-password'"
-                      type="button"
-                      class="work-action work-compact-action"
-                      @click="openIsmartPassword"
-                    >
-                      {{ t('account.center.account.changeIsmartPassword') }}
-                    </button>
+                  <div
+                    v-for="item in column.fields"
+                    :key="item.label"
+                    class="work-account-field"
+                  >
+                    <span>{{ item.label }}</span>
+                    <div class="work-account-field__value">
+                      <strong>{{ item.value }}</strong>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1761,41 +2093,114 @@ watch(activePanel, () => {
             <section class="work-card work-bind-section">
               <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
               <div class="work-bind-wrap">
-                <div class="work-bind-current">{{ bindCurrent }}</div>
-                <div class="work-bind-control-row">
-                  <div class="work-bind-grid work-bind-grid--single">
-                    <div class="work-bind-field">
-                      <label class="work-bind-label">{{ t('building.context.property') }}</label>
-                      <select
-                        v-model="bindUnitID"
-                        class="work-bind-select"
-                        :disabled="bindLoading || bindUnitsLoading || bindPropertyOptions.length === 0"
+                <div class="work-property-table-wrap">
+                  <table class="work-property-table">
+                    <thead>
+                      <tr>
+                        <th>{{ t('account.center.account.linkedPropertyName') }}</th>
+                        <th>{{ t('account.center.account.functionName') }}</th>
+                        <th>{{ t('account.center.account.staffEnabled') }}</th>
+                        <th>{{ t('account.center.account.unbindProperty') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="linkedPropertyFunctionRows.length === 0">
+                        <td colspan="4">{{ t('account.center.account.propertyFunctionsEmpty') }}</td>
+                      </tr>
+                      <tr
+                        v-for="row in linkedPropertyFunctionRows"
+                        :key="row.key"
                       >
-                        <option value="">{{ bindLoading || bindUnitsLoading ? t('account.center.common.loading') : t('building.context.selectProperty') }}</option>
-                        <option
-                          v-for="item in bindPropertyOptions"
-                          :key="item.value"
-                          :value="item.value"
-                        >
-                          {{ item.label }}
-                        </option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="work-bind-actions">
-                    <button
-                      type="button"
-                      class="work-action work-compact-action"
-                      :disabled="!canSaveBindUnit || bindSaving"
-                      @click="handleSaveBindUnit"
-                    >
-                      {{ bindSaving ? t('account.center.common.saving') : t('account.profile.saveUnit') }}
-                    </button>
-                  </div>
+                        <td>{{ row.showProperty ? row.property : '' }}</td>
+                        <td>{{ row.functionName }}</td>
+                        <td>
+                          <span
+                            class="work-chip"
+                            :class="row.enabled ? 'good' : 'warn'"
+                          >
+                            {{ row.enabled ? t('account.center.account.propertyFunctionEnabled') : t('account.center.account.propertyFunctionDisabled') }}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            v-if="row.canBind"
+                            type="button"
+                            class="work-action work-compact-action"
+                            :disabled="bindSaving"
+                            @click="handleBindProperty(row.unitID)"
+                          >
+                            {{ bindSaving ? t('account.center.common.saving') : t('account.center.account.bindProperty') }}
+                          </button>
+                          <button
+                            v-else-if="row.canUnbind"
+                            type="button"
+                            class="work-action work-compact-action secondary"
+                            @click="handleUnbindProperty"
+                          >
+                            {{ t('account.center.account.unbindProperty') }}
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </section>
           </div>
+
+          <Teleport to="body">
+            <div
+              v-if="avatarPickerOpen"
+              class="work-ismart-modal"
+              role="presentation"
+              @click.self="closeAvatarPicker"
+            >
+              <div
+                class="work-ismart-dialog work-avatar-dialog"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="t('account.center.account.changeAvatar')"
+              >
+                <header class="work-ismart-dialog__header">
+                  <div>
+                    <div class="work-kicker">{{ t('account.center.account.personalProfile') }}</div>
+                    <h2 class="work-title">{{ t('account.center.account.changeAvatar') }}</h2>
+                    <p class="work-card-sub">{{ t('account.center.account.changeAvatarDescription') }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="work-ismart-dialog__close"
+                    :aria-label="t('marketplace.myProfile.closeEdit')"
+                    :disabled="isSavingAvatar"
+                    @click="closeAvatarPicker"
+                  />
+                </header>
+                <div class="work-ismart-dialog__body">
+                  <div
+                    class="work-avatar-picker"
+                    role="listbox"
+                    :aria-label="t('account.center.account.changeAvatar')"
+                  >
+                    <button
+                      v-for="option in presetAvatarOptions"
+                      :key="option.key"
+                      type="button"
+                      class="work-avatar-picker__item"
+                      :class="currentAvatarKey === option.key ? 'is-active' : ''"
+                      :aria-pressed="currentAvatarKey === option.key"
+                      :disabled="isSavingAvatar"
+                      @click="handleSelectAvatar(option.key)"
+                    >
+                      <img
+                        :src="option.url"
+                        alt=""
+                      >
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Teleport>
 
           <Teleport to="body">
             <div
@@ -1888,14 +2293,24 @@ watch(activePanel, () => {
                 <div class="work-card-title">{{ t('account.center.account.ismartData') }}</div>
                 <p>{{ t('account.center.account.ismartProfileDescription') }}</p>
               </div>
-              <button
-                type="button"
-                class="work-action work-compact-action"
-                :disabled="ismartEditSaving || !canEditIsmartProfile"
-                @click="openIsmartEdit"
-              >
-                {{ t('account.center.account.editIsmartProfile') }}
-              </button>
+              <div class="work-section-heading__actions">
+                <button
+                  type="button"
+                  class="work-action work-compact-action secondary"
+                  :disabled="ismartPasswordSaving"
+                  @click="openIsmartPassword"
+                >
+                  {{ t('account.center.account.changeIsmartPassword') }}
+                </button>
+                <button
+                  type="button"
+                  class="work-action work-compact-action"
+                  :disabled="ismartEditSaving || !canEditIsmartProfile"
+                  @click="openIsmartEdit"
+                >
+                  {{ t('account.center.account.editIsmartProfile') }}
+                </button>
+              </div>
             </div>
             <div class="work-ismart-grid">
               <div class="work-ismart-group">
@@ -2396,7 +2811,7 @@ watch(activePanel, () => {
           <section class="work-card">
             <div class="work-card-title">{{ t('account.center.binding.applicationStatus') }}</div>
             <div class="binding-status-list">
-              <div v-if="hasPendingResidenceBinding" class="binding-status-item">
+              <div v-if="showGenericPendingNotice" class="binding-status-item">
                 <div>
                   <div class="binding-status-title">{{ t('account.center.binding.pendingTitle') }}</div>
                   <div class="binding-status-meta">{{ t('account.center.binding.pendingDescription') }}</div>
@@ -2764,12 +3179,30 @@ watch(activePanel, () => {
   height: 42px;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  padding: 0;
   border-radius: 50%;
   background: #fff0eb;
   border: 1px solid #eadbd4;
-  color: var(--brand);
-  font-size: 14px;
-  font-weight: 800;
+  appearance: none;
+  cursor: pointer;
+}
+
+.work-account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.work-account-avatar:hover,
+.work-account-avatar:focus-visible {
+  border-color: var(--brand);
+  outline: none;
+}
+
+.work-account-avatar:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .work-account-name {
@@ -2846,8 +3279,12 @@ watch(activePanel, () => {
 }
 
 .work-account-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
   background: #fff;
   overflow: hidden;
+  padding: 18px 20px;
 }
 
 .work-account-card:first-child {
@@ -2863,23 +3300,28 @@ watch(activePanel, () => {
 }
 
 .work-account-card .work-card-title {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 14px 16px 12px;
+  padding: 0 0 8px;
   color: var(--brand);
   font-size: 14px;
   font-weight: 800;
 }
 
-.work-account-field {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 12px;
-  border-top: 1px solid var(--sur-3);
-  padding: 10px 16px;
+.work-account-group {
+  min-width: 0;
 }
 
-.work-account-field:first-child {
-  border-top: 0;
+.work-account-group + .work-account-group {
+  border-left: 1px solid var(--bdr);
+  padding-left: 24px;
+}
+
+.work-account-field {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px 0;
 }
 
 .work-account-field span {
@@ -2899,11 +3341,7 @@ watch(activePanel, () => {
 }
 
 .work-account-field__value {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .work-account-field__value strong {
@@ -2928,43 +3366,42 @@ watch(activePanel, () => {
   gap: 12px;
 }
 
-.work-bind-grid--single {
-  grid-template-columns: minmax(0, 1fr);
+.work-bind-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.work-bind-control-row {
-  display: grid;
-  grid-template-columns: minmax(0, 680px) auto;
-  align-items: end;
-  gap: 12px;
+.work-property-table-wrap {
+  overflow: auto;
 }
 
-.work-bind-field {
-  display: grid;
-  gap: 8px;
+.work-property-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
 }
 
-.work-bind-label {
+.work-property-table th,
+.work-property-table td {
+  border-top: 1px solid var(--sur-3);
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.work-property-table th {
   color: var(--ink-3);
   font-size: 12px;
   font-weight: 700;
 }
 
-.work-bind-select {
-  width: 100%;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: #fff;
+.work-property-table td {
   color: var(--ink);
-  font-family: inherit;
-  font-size: 14px;
   font-weight: 700;
-  padding: 14px 16px;
 }
 
-.work-bind-actions {
-  display: flex;
-  justify-content: flex-end;
+.work-property-table tbody tr:first-child td {
+  border-top: 1px solid var(--bdr);
 }
 
 /* 9. iSmart 卡片 */
@@ -2984,6 +3421,13 @@ watch(activePanel, () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+}
+
+.work-section-heading__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .work-section-heading .work-card-title {
@@ -3019,8 +3463,47 @@ watch(activePanel, () => {
   box-shadow: 0 24px 72px rgb(0 0 0 / 0.25);
 }
 
-.work-password-dialog {
+.work-password-dialog,
+.work-avatar-dialog {
   width: min(100%, 460px);
+}
+
+.work-avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.work-avatar-picker__item {
+  display: flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--bdr);
+  border-radius: 50%;
+  background: #fff;
+  appearance: none;
+  cursor: pointer;
+}
+
+.work-avatar-picker__item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.work-avatar-picker__item.is-active,
+.work-avatar-picker__item:focus-visible {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgb(196 92 46 / 0.18);
+  outline: none;
+}
+
+.work-avatar-picker__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .work-ismart-dialog__header {
@@ -3296,6 +3779,11 @@ watch(activePanel, () => {
 .work-chip.warn {
   background: var(--warning-bg);
   color: var(--warning);
+}
+
+.work-chip.bad {
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .work-chip.brand {
@@ -3692,6 +4180,21 @@ watch(activePanel, () => {
     border-bottom: 1px solid var(--bdr);
   }
 
+  .work-account-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .work-account-card .work-card-title {
+    grid-column: 1;
+  }
+
+  .work-account-group + .work-account-group {
+    border-top: 1px solid var(--bdr);
+    border-left: 0;
+    padding-top: 18px;
+    padding-left: 0;
+  }
+
   .acct-form-grid {
     grid-template-columns: 1fr;
   }
@@ -3729,12 +4232,18 @@ watch(activePanel, () => {
     grid-template-columns: 1fr;
   }
 
-  .work-bind-control-row {
-    grid-template-columns: 1fr;
-  }
-
   .work-bind-actions,
   .work-bind-actions .work-action {
+    width: 100%;
+  }
+
+  .work-section-heading,
+  .work-section-heading__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .work-section-heading__actions .work-action {
     width: 100%;
   }
 
@@ -3752,6 +4261,10 @@ watch(activePanel, () => {
   .work-ismart-dialog__close {
     top: 12px;
     right: 16px;
+  }
+
+  .work-avatar-picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .work-ismart-edit-actions {

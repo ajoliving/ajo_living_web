@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Lamp">
+  <circle cx="40" cy="40" r="40" fill="#C27800"/>
+  <circle cx="40" cy="40" r="35.5" fill="none" stroke="#FFF8E8" stroke-width="1.25" opacity="0.2"/>
+  <path fill="#FFF8E8" d="M26 28c0-8 6.5-14 14-14s14 6 14 14H26z"/>
+  <path fill="#FFF8E8" d="M37 28h6v16h-6z"/>
+  <rect x="30" y="44" width="20" height="4" rx="2" fill="#FFF8E8"/>
+  <circle cx="40" cy="54" r="4" fill="#FFF8E8"/>
+</svg>

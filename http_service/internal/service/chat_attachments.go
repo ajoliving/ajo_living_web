@@ -8,6 +8,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -35,6 +36,25 @@ func buildRealtimeMessagePayload(chatID string, message MessageResponse, clientM
 	return string(payload), nil
 }
 
+// 2.1 buildRealtimeRecalledPayload serializes a durable recall event without original content.
+func buildRealtimeRecalledPayload(chatID string, message MessageResponse) (string, error) {
+	payload, err := json.Marshal(map[string]any{"type": realtimeEventMessageRecalled, "chat_id": chatID, "message": message})
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
+// 2.2 recalledOutboxAggregateID keeps recall events distinct from the original message outbox row.
+func recalledOutboxAggregateID(messagePublicID string) string {
+	return strings.TrimSpace(messagePublicID) + ":recalled"
+}
+
+// 2.3 recalledMessageResponse hides original text and attachment URLs after recall.
+func recalledMessageResponse(message model.Message) MessageResponse {
+	return MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(message.SenderUserID), Content: "", MessageType: message.MessageType, Status: messageStatusRecalled, CreatedAt: message.CreatedAt.UTC().Format(time.RFC3339)}
+}
+
 // 3. messageResponseFromAssets builds the event response before transaction commit.
 func messageResponseFromAssets(message model.Message, assets []model.MediaAsset, baseURL string) MessageResponse {
 	attachments := make([]MessageAttachmentResponse, 0, len(assets))
@@ -42,6 +62,13 @@ func messageResponseFromAssets(message model.Message, assets []model.MediaAsset,
 		attachments = append(attachments, MessageAttachmentResponse{MediaAssetID: asset.PublicID, MimeType: asset.MimeType, FileSize: asset.FileSize, Width: asset.Width, Height: asset.Height, URL: chatAttachmentURL(baseURL, asset), ProcessingStatus: normalizedProcessingStatus(asset), ScanStatus: normalizedScanStatus(asset), RejectionReason: asset.RejectionReason})
 	}
 	return MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(message.SenderUserID), Content: message.ContentText, MessageType: message.MessageType, Status: message.MessageStatus, CreatedAt: message.CreatedAt.UTC().Format(time.RFC3339), Attachments: attachments}
+}
+
+// 3.1 realtimeMessagePayload attaches reply preview before outbox serialization.
+func realtimeMessagePayload(chatPublicID string, message model.Message, assets []model.MediaAsset, baseURL string, replyTo *MessageReplyPreview, clientMessageID string) (string, error) {
+	response := messageResponseFromAssets(message, assets, baseURL)
+	response.ReplyTo = replyTo
+	return buildRealtimeMessagePayload(chatPublicID, response, clientMessageID)
 }
 
 // 4. chatAttachmentURL only exposes media after processing and safety checks pass.
@@ -149,19 +176,143 @@ func (s *ChatService) loadMessageAttachmentMap(ctx context.Context, messageIDs [
 	return result, nil
 }
 
-// 8. buildMessageResponses maps persisted messages and attachments.
+// 8. buildMessageResponses maps persisted messages, attachments, and reply previews.
 func (s *ChatService) buildMessageResponses(ctx context.Context, messages []model.Message) ([]MessageResponse, error) {
 	messageIDs := make([]int64, 0, len(messages))
+	replyIDs := make([]int64, 0, len(messages))
 	for _, message := range messages {
-		messageIDs = append(messageIDs, message.ID)
+		if message.MessageStatus != messageStatusRecalled {
+			messageIDs = append(messageIDs, message.ID)
+		}
+		if message.ReplyToMessageID != nil && *message.ReplyToMessageID > 0 {
+			replyIDs = append(replyIDs, *message.ReplyToMessageID)
+		}
 	}
 	attachmentMap, err := s.loadMessageAttachmentMap(ctx, messageIDs)
 	if err != nil {
 		return nil, err
 	}
+	replyMap, err := s.loadReplyPreviewMap(ctx, replyIDs)
+	if err != nil {
+		return nil, err
+	}
 	items := make([]MessageResponse, 0, len(messages))
 	for _, message := range messages {
-		items = append(items, MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(message.SenderUserID), Content: message.ContentText, MessageType: message.MessageType, ActionLabel: message.ActionLabel, ActionURL: message.ActionURL, Status: message.MessageStatus, CreatedAt: message.CreatedAt.UTC().Format(time.RFC3339), Attachments: attachmentMap[message.ID]})
+		var replyTo *MessageReplyPreview
+		if message.ReplyToMessageID != nil {
+			replyTo = replyMap[*message.ReplyToMessageID]
+		}
+		if message.MessageStatus == messageStatusRecalled {
+			redacted := recalledMessageResponse(message)
+			redacted.ReplyTo = replyTo
+			items = append(items, redacted)
+			continue
+		}
+		items = append(items, MessageResponse{MessageID: message.PublicID, SenderUserID: fmtInt64(message.SenderUserID), Content: message.ContentText, MessageType: message.MessageType, ActionLabel: message.ActionLabel, ActionURL: message.ActionURL, Status: message.MessageStatus, CreatedAt: message.CreatedAt.UTC().Format(time.RFC3339), Attachments: attachmentMap[message.ID], ReplyTo: replyTo})
 	}
 	return items, nil
+}
+
+// 8.1 resolveReplyTarget loads a same-chat original for a new reply.
+func (s *ChatService) resolveReplyTarget(ctx context.Context, chatID int64, replyToPublicID string) (*int64, *MessageReplyPreview, error) {
+	replyToPublicID = strings.TrimSpace(replyToPublicID)
+	if replyToPublicID == "" {
+		return nil, nil, nil
+	}
+	var target model.Message
+	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", replyToPublicID).First(&target).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, errcode.New(errcode.CodeValidationError, "reply target not found")
+		}
+		return nil, nil, errcode.New(errcode.CodeInternalError, "failed to load reply target")
+	}
+	if target.ChatID != chatID {
+		return nil, nil, errcode.New(errcode.CodeValidationError, "reply target is not in this chat")
+	}
+	previews, err := s.loadReplyPreviewMap(ctx, []int64{target.ID})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &target.ID, previews[target.ID], nil
+}
+
+// 8.2 loadReplyPreviewMap batches reply originals and sender display names.
+func (s *ChatService) loadReplyPreviewMap(ctx context.Context, messageIDs []int64) (map[int64]*MessageReplyPreview, error) {
+	result := make(map[int64]*MessageReplyPreview)
+	if len(messageIDs) == 0 {
+		return result, nil
+	}
+	seen := make(map[int64]struct{}, len(messageIDs))
+	uniqueIDs := make([]int64, 0, len(messageIDs))
+	for _, messageID := range messageIDs {
+		if messageID <= 0 {
+			continue
+		}
+		if _, exists := seen[messageID]; exists {
+			continue
+		}
+		seen[messageID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, messageID)
+	}
+	if len(uniqueIDs) == 0 {
+		return result, nil
+	}
+	var messages []model.Message
+	if err := s.runtime.DB.WithContext(ctx).Where("id IN ?", uniqueIDs).Find(&messages).Error; err != nil {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load reply targets")
+	}
+	senderIDs := make([]int64, 0, len(messages))
+	senderSeen := make(map[int64]struct{}, len(messages))
+	for _, message := range messages {
+		if _, exists := senderSeen[message.SenderUserID]; exists {
+			continue
+		}
+		senderSeen[message.SenderUserID] = struct{}{}
+		senderIDs = append(senderIDs, message.SenderUserID)
+	}
+	nameMap := make(map[int64]string, len(senderIDs))
+	if len(senderIDs) > 0 {
+		var profiles []model.UserProfile
+		if err := s.runtime.DB.WithContext(ctx).Where("user_id IN ?", senderIDs).Find(&profiles).Error; err != nil {
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load reply authors")
+		}
+		for _, profile := range profiles {
+			nameMap[profile.UserID] = strings.TrimSpace(profile.DisplayName)
+		}
+	}
+	for _, message := range messages {
+		preview := buildReplyPreview(message, nameMap[message.SenderUserID])
+		result[message.ID] = &preview
+	}
+	return result, nil
+}
+
+// 8.3 buildReplyPreview maps one original message into a quote snippet.
+func buildReplyPreview(message model.Message, senderName string) MessageReplyPreview {
+	recalled := message.MessageStatus == messageStatusRecalled
+	content := recalledMessagePreview
+	if !recalled {
+		content = strings.TrimSpace(message.ContentText)
+		if content == "" {
+			content = "[Attachment]"
+		} else {
+			content = truncateReplyContent(content)
+		}
+	}
+	return MessageReplyPreview{
+		MessageID:    message.PublicID,
+		SenderUserID: fmtInt64(message.SenderUserID),
+		SenderName:   senderName,
+		Content:      content,
+		Recalled:     recalled,
+	}
+}
+
+// 8.4 truncateReplyContent keeps quote snippets short for list and bubble display.
+func truncateReplyContent(content string) string {
+	runes := []rune(content)
+	if len(runes) <= replyPreviewMaxRunes {
+		return content
+	}
+	return string(runes[:replyPreviewMaxRunes])
 }

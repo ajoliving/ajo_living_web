@@ -303,6 +303,12 @@
   -webkit-user-drag: none;
 }
 
+#app :where(.message-bubble-row, .message-menu, .message-menu__item) {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /*
  * 手機端 App 基線。
  * 1. 對齊 iPhone 安全區與底部主導航。
@@ -416,6 +422,24 @@
     font-size: 16px;
   }
 
+  html #app :where(.chat-composer__tool, .chat-send-button) {
+    min-height: 36px;
+    min-width: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  html #app :where(.message-menu__item, .chat-composer__quote-clear, .message-bubble__quote) {
+    min-height: 32px;
+    min-width: 0;
+    width: auto;
+    height: auto;
+  }
+
+  html #app .chat-composer__input {
+    min-height: 96px;
+  }
+
   html #app :where(.nav-logo, .bc-link, .app-footer__link) {
     display: inline-flex;
     min-height: 40px;
@@ -471,6 +495,24 @@
 
   html #app :where(input, select, textarea) {
     font-size: 16px;
+  }
+
+  html #app :where(.chat-composer__tool, .chat-send-button) {
+    min-height: 36px;
+    min-width: 36px;
+    width: 36px;
+    height: 36px;
+  }
+
+  html #app :where(.message-menu__item, .chat-composer__quote-clear, .message-bubble__quote) {
+    min-height: 32px;
+    min-width: 0;
+    width: auto;
+    height: auto;
+  }
+
+  html #app .chat-composer__input {
+    min-height: 96px;
   }
 
   html #app :where(.section-shell, .home-section) {
@@ -637,7 +679,7 @@
   }
 
   html #app .work-account-card .work-card-title {
-    padding: 12px;
+    padding: 0 0 8px;
   }
 
   html #app .saved-toolbar {

@@ -1,12 +1,12 @@
 <!--
  * 我的大廈頁。
- * 1. 高保真還原 HTML 設計稿 page-affairs 雙欄布局（左側大廈導航 + 右側面板）。
- * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控八個面板。
+ * 1. 左側目前物業與模組導航，右側對應業務面板。
+ * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控與住戶授權。
  * 3. 意見提供面板使用 iSmart 服務個案 API 提交、讀取及查看處理紀錄。
  * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
 -->
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -20,7 +20,8 @@ import {
   fetchMemberIsmartManagementFees,
   fetchMemberIsmartBuildingNotices,
   fetchMemberIsmartSubaccounts,
-  grantMemberIsmartSubaccount,
+  checkMemberIsmartSubaccountContacts,
+  registerAndGrantMemberIsmartSubaccount,
   revokeMemberIsmartSubaccount,
   fetchMemberIsmartOtherFees,
   fetchMemberIsmartServiceCase,
@@ -44,6 +45,7 @@ import {
   type IsmartServiceCaseDetailResponse,
   type IsmartServiceCaseListResponse,
   type IsmartSubaccountRow,
+  type IsmartSubaccountContactCheckResponse,
 } from '@/httpapis/building';
 import type { PosBuilding } from '@/model/community';
 import {
@@ -181,7 +183,10 @@ const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-// 2.1 建立日期查詢預設值
+// 2.1 手機切換面板時捲動到內容區
+const workMainEl = ref<HTMLElement | null>(null);
+
+// 2.2 建立日期查詢預設值
 const formatDateInputValue = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -196,7 +201,7 @@ const currentMonthStart = (): string => {
 
 const currentDateValue = (): string => formatDateInputValue(new Date());
 
-// 2.2 按目前語系格式化日期、數字及金額
+// 2.3 按目前語系格式化日期、數字及金額
 const displayLocale = computed(() => (locale.value === 'en' ? 'en-HK' : 'zh-HK'));
 const translateMessage = (key: string): string => (key ? t(key) : '');
 
@@ -288,7 +293,12 @@ const residentAuthorizations = ref<IsmartSubaccountRow[]>([]);
 const residentAuthorizationPhoneCountryCode = ref('+852');
 const residentAuthorizationPhone = ref('');
 const residentAuthorizationEmail = ref('');
+const residentAuthorizationEnglishName = ref('');
+const residentAuthorizationContactCheck = ref<IsmartSubaccountContactCheckResponse | null>(null);
+const residentAuthorizationContactChecking = ref(false);
+const residentAuthorizationEmailNotice = ref(true);
 const residentAuthorizationSubmitting = ref(false);
+const residentAuthorizationSuccess = ref('');
 const revokingResidentAuthorization = ref('');
 
 const contextPickerUnitID = ref('');
@@ -1071,6 +1081,33 @@ const residentAuthorizationUnitID = computed(() => (
   normalizeOwnerTextList(sessionStore.me?.bound_flat_unit_ids)
     .find((unitID) => ownerDigitsOnly(unitID).slice(0, 7) === selectedBuildingID.value) ?? ''
 ));
+const residentAuthorizationNeedsRegistration = computed(() => {
+  const result = residentAuthorizationContactCheck.value;
+  return Boolean(
+    result
+      && !result.can_authorize
+      && result.email_exists === false
+      && result.phone_exists === false
+      && residentAuthorizationPhone.value.trim()
+      && residentAuthorizationEmail.value.trim(),
+  );
+});
+const residentAuthorizationCanSubmit = computed(() => (
+  Boolean(
+    residentAuthorizationContactCheck.value?.can_authorize
+      || (residentAuthorizationNeedsRegistration.value && residentAuthorizationEnglishName.value.trim()),
+  )
+));
+
+// 10.1 聯絡資料或目前單位變更後要求重新檢查，避免沿用過期的帳戶結果
+watch(
+  [residentAuthorizationPhone, residentAuthorizationEmail, residentAuthorizationUnitID],
+  () => {
+    residentAuthorizationContactCheck.value = null;
+    residentAuthorizationSuccess.value = '';
+  },
+);
+
 const selectedFeedbackBuildingLabel = computed(() => (
   feedbackBuildingID.value ? noticeBuildingLabel(feedbackBuildingID.value) : t('building.common.emptySelection')
 ));
@@ -1476,7 +1513,7 @@ const loadResidentAuthorizations = async (): Promise<void> => {
   }
 };
 
-// 15.2 以電話及電郵解析 iSmart 用戶並授予單位權限
+// 15.2 以電話及電郵解析 iSmart 用戶，必要時註冊後授予單位權限
 const submitResidentAuthorization = async (): Promise<void> => {
   const phone = residentAuthorizationPhone.value.trim();
   const email = residentAuthorizationEmail.value.trim();
@@ -1484,25 +1521,79 @@ const submitResidentAuthorization = async (): Promise<void> => {
     residentAuthorizationError.value = 'building.authorizations.validation';
     return;
   }
+  if (!residentAuthorizationContactCheck.value) {
+    residentAuthorizationError.value = 'building.authorizations.contactValidation';
+    return;
+  }
+  if (residentAuthorizationNeedsRegistration.value && !residentAuthorizationEnglishName.value.trim()) {
+    residentAuthorizationError.value = 'building.authorizations.englishNameRequired';
+    return;
+  }
+  if (!residentAuthorizationCanSubmit.value) {
+    residentAuthorizationError.value = 'building.authorizations.accountNotReady';
+    return;
+  }
   residentAuthorizationSubmitting.value = true;
   residentAuthorizationError.value = '';
+  residentAuthorizationSuccess.value = '';
   try {
     const normalizedPhone = phone.startsWith('+')
       ? phone.replace(/[^\d+]/g, '')
       : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`;
-    await grantMemberIsmartSubaccount({
+    const response = await registerAndGrantMemberIsmartSubaccount({
       unit_id: residentAuthorizationUnitID.value,
-      target_phone: normalizedPhone,
-      target_email: email,
+      phone: normalizedPhone,
+      email,
+      eng_name: residentAuthorizationEnglishName.value.trim(),
+      send_email: residentAuthorizationNeedsRegistration.value || residentAuthorizationEmailNotice.value,
     });
+    const accountCreated = response.account_created === true;
+    const emailSent = response.email_sent === true || response.temporary_password_sent === true;
+    residentAuthorizationSuccess.value = accountCreated
+      ? (!emailSent
+        ? 'building.authorizations.registeredEmailFailed'
+        : 'building.authorizations.registeredSuccess')
+      : (emailSent
+        ? 'building.authorizations.authorizedEmailSent'
+        : 'building.authorizations.authorizedSuccess');
     residentAuthorizationPhone.value = '';
     residentAuthorizationEmail.value = '';
+    residentAuthorizationEnglishName.value = '';
+    residentAuthorizationContactCheck.value = null;
     await loadResidentAuthorizations();
   } catch (error) {
     console.error(error);
     residentAuthorizationError.value = 'building.authorizations.submitError';
   } finally {
     residentAuthorizationSubmitting.value = false;
+  }
+};
+
+// 15.3 預先檢查授權副戶聯絡資料
+const checkResidentAuthorizationContacts = async (): Promise<void> => {
+  const phone = residentAuthorizationPhone.value.trim();
+  const email = residentAuthorizationEmail.value.trim();
+  if (!phone && !email) {
+    residentAuthorizationError.value = 'building.authorizations.contactValidation';
+    return;
+  }
+  residentAuthorizationContactChecking.value = true;
+  residentAuthorizationError.value = '';
+  residentAuthorizationSuccess.value = '';
+  try {
+    const normalizedPhone = phone
+      ? (phone.startsWith('+') ? phone.replace(/[^\d+]/g, '') : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`)
+      : '';
+    residentAuthorizationContactCheck.value = await checkMemberIsmartSubaccountContacts({
+      phone: normalizedPhone,
+      email,
+    });
+  } catch (error) {
+    console.error(error);
+    residentAuthorizationContactCheck.value = null;
+    residentAuthorizationError.value = 'building.authorizations.checkError';
+  } finally {
+    residentAuthorizationContactChecking.value = false;
   }
 };
 
@@ -1526,6 +1617,12 @@ const revokeResidentAuthorization = async (row: IsmartSubaccountRow): Promise<vo
 // 16. 切換主面板
 const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
+  void nextTick(() => {
+    if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 1023px)').matches) {
+      return;
+    }
+    workMainEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   const nextTab = Object.entries(affairsTabQueryMap).find(([, value]) => value === target)?.[0] ?? target;
   if (String(route.query.tab ?? '').trim() !== nextTab) {
     void router.replace({
@@ -1873,27 +1970,17 @@ onMounted(() => {
     class="page"
   >
     <div class="work-shell">
-      <!-- 左側大廈導航 -->
+      <!-- 左側目前物業與大廈導航 -->
       <aside class="work-sidebar">
-        <h1>{{ t('building.pageTitle') }}</h1>
-        <nav class="work-nav">
-          <button
-            v-for="item in navItems"
-            :key="item.target"
-            type="button"
-            class="work-nav-item"
-            :class="{ on: activeTab === item.target }"
-            @click="switchTab(item.target)"
-          >
-            <span class="work-nav-label">{{ item.label }}</span>
-            <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
-          </button>
-        </nav>
+        <div class="work-sidebar-head">
+          <h1>{{ t('building.pageTitle') }}</h1>
+        </div>
         <div class="building-context-switcher">
+          <div class="building-context-label">{{ t('building.context.current') }}</div>
           <div class="building-context-select-wrap">
             <AppIcon
               name="building"
-              :size="17"
+              :size="16"
             />
             <select
               v-model="contextPickerUnitID"
@@ -1915,6 +2002,11 @@ onMounted(() => {
                 {{ item.label }}
               </option>
             </select>
+            <AppIcon
+              class="building-context-chevron"
+              name="chevron-down"
+              :size="14"
+            />
           </div>
           <p
             v-if="contextStatus !== 'idle' || contextErrorKey"
@@ -1927,10 +2019,30 @@ onMounted(() => {
               : t(contextErrorKey || 'building.context.saveError') }}
           </p>
         </div>
+        <nav
+          class="work-nav"
+          :aria-label="t('building.pageTitle')"
+        >
+          <button
+            v-for="item in navItems"
+            :key="item.target"
+            type="button"
+            class="work-nav-item"
+            :class="{ on: activeTab === item.target }"
+            :aria-current="activeTab === item.target ? 'page' : undefined"
+            @click="switchTab(item.target)"
+          >
+            <span class="work-nav-label">{{ item.label }}</span>
+            <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
+          </button>
+        </nav>
       </aside>
 
       <!-- 右側主內容 -->
-      <main class="work-main">
+      <main
+        ref="workMainEl"
+        class="work-main"
+      >
         <section
           v-if="hasPendingResidenceBinding"
           class="work-card building-binding-empty"
@@ -1985,7 +2097,7 @@ onMounted(() => {
                 {{ noticeLoading ? t('building.common.loading') : t('building.common.refresh') }}
               </button>
             </div>
-            <table class="work-table notice-table">
+            <table class="work-table notice-table stack-table">
               <thead>
                 <tr>
                   <th>{{ t('building.notices.code') }}</th>
@@ -2010,12 +2122,12 @@ onMounted(() => {
                     v-for="n in notices"
                     :key="n.key"
                   >
-                    <td>{{ n.code }}</td>
-                    <td>{{ n.title }}</td>
-                    <td>{{ n.type }}</td>
-                    <td>{{ n.publishDate }}</td>
-                    <td>{{ n.expireDate }}</td>
-                    <td>
+                    <td :data-label="t('building.notices.code')">{{ n.code }}</td>
+                    <td :data-label="t('building.common.title')">{{ n.title }}</td>
+                    <td :data-label="t('building.common.type')">{{ n.type }}</td>
+                    <td :data-label="t('building.notices.publishDate')">{{ n.publishDate }}</td>
+                    <td :data-label="t('building.notices.expireDate')">{{ n.expireDate }}</td>
+                    <td :data-label="t('building.common.action')">
                       <div class="notice-table-actions">
                         <button
                           type="button"
@@ -2118,7 +2230,7 @@ onMounted(() => {
             <div class="building-section-head">
               <div class="work-card-title">{{ t('building.profile.documents.forms.title') }}</div>
             </div>
-            <table class="work-table building-file-table">
+            <table class="work-table building-file-table stack-table">
               <colgroup>
                 <col class="building-file-title-col">
                 <col class="building-file-date-col">
@@ -2138,10 +2250,22 @@ onMounted(() => {
                   v-for="file in buildingForms"
                   :key="file.key"
                 >
-                  <td class="building-file-title-cell">{{ file.title }}</td>
-                  <td class="building-file-meta-cell">{{ file.date }}</td>
-                  <td class="building-file-meta-cell">{{ file.month }}</td>
-                  <td class="building-file-action-cell">
+                  <td
+                    class="building-file-title-cell"
+                    :data-label="t('building.common.title')"
+                  >{{ file.title }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.date')"
+                  >{{ file.date }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.month')"
+                  >{{ file.month }}</td>
+                  <td
+                    class="building-file-action-cell"
+                    :data-label="t('building.common.download')"
+                  >
                     <a
                       v-if="file.url"
                       class="building-link"
@@ -2167,7 +2291,7 @@ onMounted(() => {
             <div class="building-section-head">
               <div class="work-card-title">{{ t('building.profile.documents.information.title') }}</div>
             </div>
-            <table class="work-table building-file-table">
+            <table class="work-table building-file-table stack-table">
               <colgroup>
                 <col class="building-file-title-col">
                 <col class="building-file-date-col">
@@ -2187,10 +2311,22 @@ onMounted(() => {
                   v-for="file in buildingInfoFiles"
                   :key="file.key"
                 >
-                  <td class="building-file-title-cell">{{ file.title }}</td>
-                  <td class="building-file-meta-cell">{{ file.date }}</td>
-                  <td class="building-file-meta-cell">{{ file.month }}</td>
-                  <td class="building-file-action-cell">
+                  <td
+                    class="building-file-title-cell"
+                    :data-label="t('building.common.title')"
+                  >{{ file.title }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.date')"
+                  >{{ file.date }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.month')"
+                  >{{ file.month }}</td>
+                  <td
+                    class="building-file-action-cell"
+                    :data-label="t('building.common.download')"
+                  >
                     <a
                       v-if="file.url"
                       class="building-link"
@@ -2216,7 +2352,7 @@ onMounted(() => {
             <div class="building-section-head">
               <div class="work-card-title">{{ t('building.profile.documents.floorPlans.title') }}</div>
             </div>
-            <table class="work-table building-file-table">
+            <table class="work-table building-file-table stack-table">
               <colgroup>
                 <col class="building-file-title-col">
                 <col class="building-file-date-col">
@@ -2236,10 +2372,22 @@ onMounted(() => {
                   v-for="p in floorPlans"
                   :key="p.key"
                 >
-                  <td class="building-file-title-cell">{{ p.title }}</td>
-                  <td class="building-file-meta-cell">{{ p.date }}</td>
-                  <td class="building-file-meta-cell">{{ p.month }}</td>
-                  <td class="building-file-action-cell">
+                  <td
+                    class="building-file-title-cell"
+                    :data-label="t('building.common.title')"
+                  >{{ p.title }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.date')"
+                  >{{ p.date }}</td>
+                  <td
+                    class="building-file-meta-cell"
+                    :data-label="t('building.common.month')"
+                  >{{ p.month }}</td>
+                  <td
+                    class="building-file-action-cell"
+                    :data-label="t('building.common.download')"
+                  >
                     <a
                       v-if="p.url"
                       class="building-link"
@@ -2383,7 +2531,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="acct-table-wrap">
-                  <table class="acct-table finance-other-fee-table">
+                  <table class="acct-table finance-other-fee-table stack-table">
                     <thead>
                       <tr>
                         <th>{{ t('building.finance.columns.invoiceNumber') }}</th>
@@ -2399,12 +2547,15 @@ onMounted(() => {
                         v-for="fee in otherFeePreviewRows"
                         :key="otherFeeRowKey(fee)"
                       >
-                        <td>{{ financeCellText(fee.invoice_no) }}</td>
-                        <td>{{ financeCellText(fee.flat_code) }}</td>
-                        <td>{{ financeCellText(fee.item_id) }}</td>
-                        <td>{{ financeCellText(fee.trs_to) }}</td>
-                        <td class="acct-due">{{ formatOwnerHKD(ownerAmountValue(fee.trs_val)) }}</td>
-                        <td>{{ financeCellText(fee.remark) }}</td>
+                        <td :data-label="t('building.finance.columns.invoiceNumber')">{{ financeCellText(fee.invoice_no) }}</td>
+                        <td :data-label="t('building.finance.columns.unit')">{{ financeCellText(fee.flat_code) }}</td>
+                        <td :data-label="t('building.finance.columns.item')">{{ financeCellText(fee.item_id) }}</td>
+                        <td :data-label="t('building.finance.columns.term')">{{ financeCellText(fee.trs_to) }}</td>
+                        <td
+                          class="acct-due"
+                          :data-label="t('building.finance.columns.amount')"
+                        >{{ formatOwnerHKD(ownerAmountValue(fee.trs_val)) }}</td>
+                        <td :data-label="t('building.finance.columns.remark')">{{ financeCellText(fee.remark) }}</td>
                       </tr>
                       <tr v-if="otherFeePreviewRows.length === 0">
                         <td
@@ -2437,7 +2588,7 @@ onMounted(() => {
                     {{ t('building.common.fileCount', { count: formatLocaleNumber(financialReports.length) }) }}
                   </div>
                 </div>
-                <table class="work-table building-file-table">
+                <table class="work-table building-file-table stack-table">
                   <colgroup>
                     <col class="building-file-title-col">
                     <col class="building-file-date-col">
@@ -2457,10 +2608,22 @@ onMounted(() => {
                       v-for="report in financialReports"
                       :key="report.key"
                     >
-                      <td class="building-file-title-cell">{{ report.title }}</td>
-                      <td class="building-file-meta-cell">{{ report.date }}</td>
-                      <td class="building-file-meta-cell">{{ report.month }}</td>
-                      <td class="building-file-action-cell">
+                      <td
+                        class="building-file-title-cell"
+                        :data-label="t('building.common.title')"
+                      >{{ report.title }}</td>
+                      <td
+                        class="building-file-meta-cell"
+                        :data-label="t('building.finance.uploadDate')"
+                      >{{ report.date }}</td>
+                      <td
+                        class="building-file-meta-cell"
+                        :data-label="t('building.common.month')"
+                      >{{ report.month }}</td>
+                      <td
+                        class="building-file-action-cell"
+                        :data-label="t('building.common.download')"
+                      >
                         <a
                           v-if="report.url"
                           class="building-link"
@@ -2502,7 +2665,7 @@ onMounted(() => {
                     {{ t('building.common.fileCount', { count: formatLocaleNumber(auditReports.length) }) }}
                   </div>
                 </div>
-                <table class="work-table building-file-table">
+                <table class="work-table building-file-table stack-table">
                   <colgroup>
                     <col class="building-file-title-col">
                     <col class="building-file-date-col">
@@ -2522,10 +2685,22 @@ onMounted(() => {
                       v-for="report in auditReports"
                       :key="report.key"
                     >
-                      <td class="building-file-title-cell">{{ report.title }}</td>
-                      <td class="building-file-meta-cell">{{ report.date }}</td>
-                      <td class="building-file-meta-cell">{{ report.month }}</td>
-                      <td class="building-file-action-cell">
+                      <td
+                        class="building-file-title-cell"
+                        :data-label="t('building.common.title')"
+                      >{{ report.title }}</td>
+                      <td
+                        class="building-file-meta-cell"
+                        :data-label="t('building.finance.uploadDate')"
+                      >{{ report.date }}</td>
+                      <td
+                        class="building-file-meta-cell"
+                        :data-label="t('building.common.month')"
+                      >{{ report.month }}</td>
+                      <td
+                        class="building-file-action-cell"
+                        :data-label="t('building.common.download')"
+                      >
                         <a
                           v-if="report.url"
                           class="building-link"
@@ -2614,7 +2789,7 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="acct-table-wrap">
-                  <table class="acct-table owner-account-table">
+                  <table class="acct-table owner-account-table stack-table">
                     <thead>
                       <tr>
                         <th>{{ t('building.ownerAccount.invoiceNumber') }}</th>
@@ -2631,13 +2806,16 @@ onMounted(() => {
                         v-for="(invoice, invoiceIndex) in ownerUnpaidInvoices"
                         :key="ownerUnpaidInvoiceKey(invoice, invoiceIndex)"
                       >
-                        <td>{{ ownerTextValue(invoice.invoice_no) }}</td>
-                        <td>{{ ownerUnitDisplay(invoice.flat_code) }}</td>
-                        <td>{{ ownerTextValue(invoice.item_id) }}</td>
-                        <td>{{ ownerTextValue(invoice.trs_to) }}</td>
-                        <td>{{ formatLocaleDateValue(invoice.bill_dt) }}</td>
-                        <td class="acct-due">{{ formatOwnerHKD(ownerAmountValue(invoice.net_amount)) }}</td>
-                        <td>{{ ownerTextValue(invoice.remark) }}</td>
+                        <td :data-label="t('building.ownerAccount.invoiceNumber')">{{ ownerTextValue(invoice.invoice_no) }}</td>
+                        <td :data-label="t('building.common.unit')">{{ ownerUnitDisplay(invoice.flat_code) }}</td>
+                        <td :data-label="t('building.common.item')">{{ ownerTextValue(invoice.item_id) }}</td>
+                        <td :data-label="t('building.common.term')">{{ ownerTextValue(invoice.trs_to) }}</td>
+                        <td :data-label="t('building.ownerAccount.invoiceDate')">{{ formatLocaleDateValue(invoice.bill_dt) }}</td>
+                        <td
+                          class="acct-due"
+                          :data-label="t('building.common.amount')"
+                        >{{ formatOwnerHKD(ownerAmountValue(invoice.net_amount)) }}</td>
+                        <td :data-label="t('building.common.remark')">{{ ownerTextValue(invoice.remark) }}</td>
                       </tr>
                       <tr v-if="ownerUnpaidInvoices.length === 0">
                         <td
@@ -2723,7 +2901,7 @@ onMounted(() => {
                   <div class="work-card-title acct-toolbar-title">{{ t('building.ownerAccount.recordsTab') }}</div>
                 </div>
                 <div class="acct-table-wrap">
-                  <table class="acct-table owner-record-table">
+                  <table class="acct-table owner-record-table stack-table">
                     <thead>
                       <tr>
                         <th>{{ t('building.ownerAccount.receiptNumber') }}</th>
@@ -2743,16 +2921,19 @@ onMounted(() => {
                         v-for="row in filteredOwnerPaymentRecordRows"
                         :key="row.key"
                       >
-                        <td>{{ row.receiptID }}</td>
-                        <td>{{ row.paymentID }}</td>
-                        <td>{{ row.tranTime }}</td>
-                        <td>{{ row.unit }}</td>
-                        <td>{{ row.item }}</td>
-                        <td>{{ row.term }}</td>
-                        <td>{{ formatOwnerHKD(row.amount) }}</td>
-                        <td>{{ row.payType }}</td>
-                        <td :class="row.statusClass">{{ row.status }}</td>
-                        <td>{{ row.remark }}</td>
+                        <td :data-label="t('building.ownerAccount.receiptNumber')">{{ row.receiptID }}</td>
+                        <td :data-label="t('building.ownerAccount.paymentNumber')">{{ row.paymentID }}</td>
+                        <td :data-label="t('building.ownerAccount.transactionTime')">{{ row.tranTime }}</td>
+                        <td :data-label="t('building.common.unit')">{{ row.unit }}</td>
+                        <td :data-label="t('building.common.item')">{{ row.item }}</td>
+                        <td :data-label="t('building.common.term')">{{ row.term }}</td>
+                        <td :data-label="t('building.ownerAccount.paidAmount')">{{ formatOwnerHKD(row.amount) }}</td>
+                        <td :data-label="t('building.ownerAccount.paymentMethod')">{{ row.payType }}</td>
+                        <td
+                          :class="row.statusClass"
+                          :data-label="t('building.common.status')"
+                        >{{ row.status }}</td>
+                        <td :data-label="t('building.common.remark')">{{ row.remark }}</td>
                       </tr>
                       <tr v-if="filteredOwnerPaymentRecordRows.length === 0">
                         <td
@@ -2783,7 +2964,7 @@ onMounted(() => {
             </div>
           </section>
           <section class="work-card">
-            <table class="work-table">
+            <table class="work-table stack-table">
               <thead>
                 <tr>
                   <th>{{ t('building.common.title') }}</th>
@@ -2795,8 +2976,8 @@ onMounted(() => {
                   v-for="f in forms"
                   :key="f.key"
                 >
-                  <td>{{ f.title }}</td>
-                  <td>
+                  <td :data-label="t('building.common.title')">{{ f.title }}</td>
+                  <td :data-label="t('building.forms.view')">
                     <a
                       v-if="f.url"
                       class="building-link"
@@ -2862,7 +3043,7 @@ onMounted(() => {
               v-if="serviceCaseError"
               class="acct-banner warn"
             >{{ t(serviceCaseError) }}</div>
-            <table class="work-table">
+            <table class="work-table stack-table">
               <thead>
                 <tr>
                   <th>{{ t('building.common.type') }}</th>
@@ -2880,18 +3061,18 @@ onMounted(() => {
                 :key="r.caseID"
               >
                 <tr>
-                  <td>{{ r.type }}</td>
-                  <td>{{ r.building }}</td>
-                  <td>{{ r.subject }}</td>
-                  <td>{{ r.category }}</td>
-                  <td>
+                  <td :data-label="t('building.common.type')">{{ r.type }}</td>
+                  <td :data-label="t('building.common.building')">{{ r.building }}</td>
+                  <td :data-label="t('building.feedback.subject')">{{ r.subject }}</td>
+                  <td :data-label="t('building.feedback.category')">{{ r.category }}</td>
+                  <td :data-label="t('building.common.status')">
                     <span
                       class="work-chip"
                       :class="r.status"
                     >{{ r.statusText }}</span>
                   </td>
-                  <td>{{ r.updatedAt }}</td>
-                  <td>
+                  <td :data-label="t('building.feedback.updatedAt')">{{ r.updatedAt }}</td>
+                  <td :data-label="t('building.common.action')">
                     <button
                       type="button"
                       class="work-mini-btn"
@@ -3302,7 +3483,7 @@ onMounted(() => {
               v-else
               class="access-table-wrap"
             >
-              <table class="work-table access-door-table">
+              <table class="work-table access-door-table stack-table">
                 <thead>
                   <tr>
                     <th>{{ t('building.access.door') }}</th>
@@ -3317,7 +3498,10 @@ onMounted(() => {
                     v-for="door in accessDoors"
                     :key="accessDoorID(door) || accessDoorTitle(door)"
                   >
-                    <td class="access-door-title-cell">
+                    <td
+                      class="access-door-title-cell"
+                      :data-label="t('building.access.door')"
+                    >
                       <strong>{{ accessDoorTitle(door) }}</strong>
                       <span>{{ textValue(door.serial) }}</span>
                       <div class="access-table-tags">
@@ -3331,9 +3515,12 @@ onMounted(() => {
                         >{{ t('building.access.qrCode') }}</span>
                       </div>
                     </td>
-                    <td>{{ accessCameraText(door) }}</td>
-                    <td>{{ accessDoorPasswordText(door) }}</td>
-                    <td class="access-door-period-cell">
+                    <td :data-label="t('building.access.camera')">{{ accessCameraText(door) }}</td>
+                    <td :data-label="t('building.access.password')">{{ accessDoorPasswordText(door) }}</td>
+                    <td
+                      class="access-door-period-cell"
+                      :data-label="t('building.access.validPeriod')"
+                    >
                       <div>
                         <span>{{ t('building.access.passwordShort') }}</span>
                         <strong>{{ accessTimeRange(door.password?.start_time, door.password?.end_time) }}</strong>
@@ -3343,7 +3530,7 @@ onMounted(() => {
                         <strong>{{ accessTimeRange(door.qrcode?.start_time, door.qrcode?.end_time) }}</strong>
                       </div>
                     </td>
-                    <td>
+                    <td :data-label="t('building.common.action')">
                       <div class="access-table-actions">
                         <button
                           type="button"
@@ -3417,7 +3604,7 @@ onMounted(() => {
             <div class="building-section-head">
               <div class="work-card-title">{{ t('building.access.recentRecords') }}</div>
             </div>
-            <table class="work-table access-record-table">
+            <table class="work-table access-record-table stack-table">
               <thead>
                 <tr>
                   <th>{{ t('building.access.door') }}</th>
@@ -3431,10 +3618,10 @@ onMounted(() => {
                   v-for="row in accessRecentRows"
                   :key="row.key"
                 >
-                  <td>{{ row.doorTitle }}</td>
-                  <td>{{ row.openTime }}</td>
-                  <td>{{ row.openType }}</td>
-                  <td>
+                  <td :data-label="t('building.access.door')">{{ row.doorTitle }}</td>
+                  <td :data-label="t('building.common.time')">{{ row.openTime }}</td>
+                  <td :data-label="t('building.access.method')">{{ row.openType }}</td>
+                  <td :data-label="t('building.common.status')">
                     <span
                       class="work-chip"
                       :class="row.status"
@@ -3506,6 +3693,49 @@ onMounted(() => {
                         <AppIcon name="inbox" :size="18" />
                       </div>
                     </label>
+                    <button
+                      type="button"
+                      class="authorization-check-button"
+                      :disabled="residentAuthorizationContactChecking"
+                      @click="checkResidentAuthorizationContacts"
+                    >
+                      {{ residentAuthorizationContactChecking ? t('building.authorizations.checking') : t('building.authorizations.checkContacts') }}
+                    </button>
+                    <p
+                      v-if="residentAuthorizationContactCheck"
+                      class="authorization-contact-result"
+                      :class="{ success: residentAuthorizationContactCheck.can_authorize, warn: !residentAuthorizationContactCheck.can_authorize }"
+                      aria-live="polite"
+                    >
+                      {{
+                        residentAuthorizationContactCheck.can_authorize
+                          ? t('building.authorizations.accountFound')
+                          : residentAuthorizationNeedsRegistration
+                            ? t('building.authorizations.accountNotFound')
+                            : t('building.authorizations.accountNotReady')
+                      }}
+                    </p>
+                    <label
+                      v-if="residentAuthorizationContactCheck"
+                      class="authorization-email-optin"
+                    >
+                      <input
+                        v-model="residentAuthorizationEmailNotice"
+                        type="checkbox"
+                        :disabled="residentAuthorizationNeedsRegistration"
+                      >
+                      <span>{{ t('building.authorizations.emailNoticeOptIn') }}</span>
+                    </label>
+                    <label
+                      v-if="residentAuthorizationNeedsRegistration"
+                      class="authorization-field authorization-name-field"
+                    >
+                      <span>{{ t('building.authorizations.englishName') }}</span>
+                      <div class="authorization-input-shell">
+                        <input v-model="residentAuthorizationEnglishName" type="text" autocomplete="name" :placeholder="t('building.authorizations.englishNamePlaceholder')">
+                        <AppIcon name="user" :size="18" />
+                      </div>
+                    </label>
                   </div>
                 </div>
                 <div class="authorization-form-section authorization-permission-section">
@@ -3520,8 +3750,11 @@ onMounted(() => {
             <p v-if="residentAuthorizationError" class="authorization-error" aria-live="polite">
               {{ t(residentAuthorizationError) }}
             </p>
+            <p v-if="residentAuthorizationSuccess" class="authorization-success" aria-live="polite">
+              {{ t(residentAuthorizationSuccess) }}
+            </p>
             <div class="authorization-form-actions">
-              <button type="submit" class="work-action" :disabled="residentAuthorizationSubmitting">
+              <button type="submit" class="work-action" :disabled="residentAuthorizationSubmitting || !residentAuthorizationCanSubmit">
                 <AppIcon name="send" :size="15" />
                 <span>{{ residentAuthorizationSubmitting ? t('building.authorizations.submitting') : t('building.authorizations.submit') }}</span>
               </button>
@@ -3607,7 +3840,7 @@ onMounted(() => {
             </div>
 
             <div class="icctv-table-wrap">
-              <table class="work-table icctv-table">
+              <table class="work-table icctv-table stack-table">
                 <thead>
                   <tr>
                     <th>{{ t('building.icctv.camera') }}</th>
@@ -3621,11 +3854,11 @@ onMounted(() => {
                     :key="camera.id"
                   >
                     <tr :class="{ expanded: isICCTVCameraExpanded(camera.id) }">
-                      <td>
+                      <td :data-label="t('building.icctv.camera')">
                         <div class="icctv-camera-title">{{ icctvCameraName(camera, index) }}</div>
                         <div class="icctv-camera-channel">{{ camera.channel }}</div>
                       </td>
-                      <td>
+                      <td :data-label="t('building.icctv.status')">
                         <span
                           class="icctv-table-status"
                           :class="camera.is_active && camera.url ? 'on' : 'off'"
@@ -3633,7 +3866,7 @@ onMounted(() => {
                           {{ icctvCameraStatusText(camera) }}
                         </span>
                       </td>
-                      <td>
+                      <td :data-label="t('building.icctv.action')">
                         <div class="icctv-row-actions">
                           <button
                             type="button"
@@ -3733,2192 +3966,4 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
-/* 1. 頁面容器與雙欄布局 */
-#page-affairs {
-  min-height: calc(100svh - var(--nav-h, 52px));
-  background: var(--sur);
-}
-
-.work-shell {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 16px;
-  max-width: var(--layout-page-max-width);
-  margin: 0 auto;
-  padding: 12px 24px 16px;
-  color: var(--ink);
-}
-
-/* 2. 左側大廈導航 */
-.work-sidebar {
-  position: sticky;
-  top: 72px;
-  align-self: start;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 16px;
-}
-
-.work-sidebar h1 {
-  margin: 0;
-  color: var(--accent);
-  font-family: var(--font-serif);
-  font-size: 26px;
-  font-weight: 400;
-  line-height: 1.2;
-}
-
-.work-nav {
-  display: grid;
-  gap: 2px;
-  margin-top: 18px;
-}
-
-.work-nav-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  min-height: 34px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 8px 2px;
-  text-align: left;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.work-nav-label {
-  min-width: 0;
-}
-
-.work-nav-note {
-  flex: 0 0 auto;
-  color: var(--ink-3);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.work-nav-item::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--brand);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.24s ease;
-}
-
-.work-nav-item:hover {
-  background: var(--brand-light);
-  color: var(--ink);
-}
-
-.work-nav-item.on {
-  background: transparent;
-  color: var(--brand);
-  font-weight: 700;
-  outline: none;
-}
-
-.work-nav-item.on:hover {
-  background: var(--brand-light);
-}
-
-.work-nav-item.on::after {
-  transform: scaleX(1);
-}
-
-.building-context-switcher {
-  position: relative;
-  margin-top: 14px;
-  border-top: 1px solid var(--bdr);
-  padding-top: 14px;
-}
-
-.building-context-select-wrap {
-  position: relative;
-}
-
-.building-context-select-wrap > svg {
-  position: absolute;
-  z-index: 1;
-  top: 50%;
-  left: 12px;
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-
-.building-context-select {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink);
-  padding: 0 34px 0 38px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: left;
-}
-
-.building-context-select:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.building-context-status {
-  margin: 8px 2px 0;
-  color: var(--status-success-text, #237804);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.building-context-status.error {
-  color: var(--status-error-text, #b42318);
-}
-
-/* 3. 右側主內容 */
-.work-main {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  align-content: start;
-}
-
-.work-panel {
-  display: none;
-}
-
-.work-panel.on {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-}
-
-/* 4. Hero 區 */
-.work-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  border: 0;
-  border-bottom: 1px solid var(--bdr);
-  border-radius: 0;
-  background: transparent;
-  margin: 0;
-  padding: 0 0 10px;
-}
-
-.work-title {
-  margin: 0;
-  color: var(--ink);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.25;
-}
-
-.work-desc {
-  max-width: 560px;
-  margin: 5px 0 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.work-action {
-  border: 0;
-  border-radius: 6px;
-  background: var(--brand);
-  color: #fff;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 10px 14px;
-  white-space: nowrap;
-}
-
-.work-action.secondary {
-  border: 1px solid var(--bdr);
-  background: var(--sur);
-  color: var(--ink);
-}
-
-.work-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 5. Card */
-.work-card {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 16px;
-}
-
-.work-card-title {
-  margin-bottom: 10px;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.work-card-sub {
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.building-binding-empty {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.building-binding-empty .work-card-title {
-  margin-bottom: 4px;
-}
-
-.work-stat {
-  color: var(--brand);
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.work-stat-label {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 12px;
-}
-
-.work-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid var(--sur-3);
-  padding: 12px 0;
-}
-
-.work-row:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.work-row:last-child {
-  padding-bottom: 0;
-}
-
-.work-row strong {
-  display: block;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.work-row span {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-/* 6. Chip */
-.work-chip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: var(--sur-2);
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 9px;
-  white-space: nowrap;
-}
-
-.work-chip.good {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.work-chip.warn {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.work-chip.brand {
-  background: var(--brand-light);
-  color: var(--accent);
-}
-
-/* 7. Table */
-.work-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.work-table th {
-  border-bottom: 1px solid var(--bdr);
-  color: var(--ink-3);
-  font-weight: 500;
-  padding: 10px;
-  text-align: left;
-}
-
-.work-table td {
-  border-bottom: 1px solid var(--sur-3);
-  padding: 12px 10px;
-  color: var(--ink-2);
-}
-
-.work-table tr:last-child td {
-  border-bottom: 0;
-}
-
-.notice-table-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.work-mini-btn {
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 7px 10px;
-}
-
-.work-mini-btn.primary {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: #fff;
-}
-
-.work-mini-btn:disabled,
-.work-mini-btn.primary:disabled {
-  border-color: var(--bdr);
-  background: var(--sur-3);
-  color: var(--ink-3);
-  cursor: not-allowed;
-  opacity: 1;
-}
-
-.notice-current {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.notice-action-btn {
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 10px;
-}
-
-.notice-action-btn:hover {
-  border-color: var(--brand-mid);
-  color: var(--brand);
-}
-
-.notice-action-btn:disabled,
-.notice-action-btn:disabled:hover {
-  border-color: var(--bdr);
-  background: var(--sur-3);
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
-
-.notice-table {
-  min-width: 780px;
-}
-
-.notice-table td:first-child {
-  max-width: 230px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#page-affairs [data-work-panel="affairs-notices"] .work-card {
-  overflow: auto;
-}
-
-/* 9. Building profile */
-.building-field-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  overflow: hidden;
-}
-
-.building-field {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 12px;
-  border-right: 1px solid var(--sur-3);
-  border-bottom: 1px solid var(--sur-3);
-  padding: 13px 14px;
-}
-
-.building-field:nth-child(2n) {
-  border-right: 0;
-}
-
-.building-field span:first-child {
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.building-field strong {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.building-map-frame {
-  display: block;
-  width: 100%;
-  height: 260px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--sur-2);
-}
-
-.building-doc-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.building-doc-card {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 14px;
-}
-
-.building-doc-card .work-card-title {
-  margin-bottom: 6px;
-}
-
-.building-doc-count {
-  margin-top: 10px;
-  color: var(--brand);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.building-doc-empty {
-  margin-top: 10px;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.building-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.building-section-head .work-card-title {
-  margin: 0;
-}
-
-.building-file-table {
-  table-layout: fixed;
-}
-
-.building-file-title-col {
-  width: auto;
-}
-
-.building-file-date-col,
-.building-file-month-col {
-  width: 128px;
-}
-
-.building-file-action-col {
-  width: 96px;
-}
-
-.building-file-table th:nth-child(2),
-.building-file-table th:nth-child(3),
-.building-file-meta-cell {
-  text-align: center;
-}
-
-.building-file-table th:nth-child(4),
-.building-file-action-cell {
-  text-align: center;
-}
-
-.building-file-title-cell {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.building-file-action-cell {
-  white-space: nowrap;
-}
-
-.building-empty-row {
-  color: var(--ink-3);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.building-link {
-  color: var(--brand);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.building-link:hover {
-  text-decoration: underline;
-}
-
-/* 10. 智能門禁 */
-.access-banner {
-  border: 1px solid var(--success);
-  border-radius: 8px;
-  background: var(--success-bg);
-  color: var(--success);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 11px 14px;
-}
-
-.access-banner.warn {
-  border-color: var(--warning);
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.access-door-section {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 16px;
-}
-
-.access-empty {
-  display: grid;
-  min-height: 120px;
-  place-items: center;
-  border: 1px dashed var(--bdr-2);
-  border-radius: 8px;
-  background: var(--sur-2);
-  color: var(--ink-3);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.access-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-}
-
-.access-door-table {
-  min-width: 820px;
-  table-layout: fixed;
-}
-
-.access-door-table th:nth-child(1) {
-  width: 190px;
-}
-
-.access-door-table th:nth-child(2) {
-  width: 110px;
-}
-
-.access-door-table th:nth-child(3) {
-  width: 110px;
-}
-
-.access-door-table th:nth-child(4) {
-  width: 220px;
-}
-
-.access-door-table th:nth-child(5) {
-  width: 170px;
-}
-
-.access-door-title-cell strong {
-  display: block;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.access-door-title-cell > span {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.access-table-tags,
-.access-table-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.access-door-title-cell .access-table-tags {
-  margin-top: 8px;
-}
-
-.access-door-period-cell {
-  display: grid;
-  gap: 7px;
-}
-
-.access-door-period-cell span,
-.access-qr-meta span {
-  display: block;
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.access-door-period-cell strong,
-.access-qr-meta strong {
-  display: block;
-  margin-top: 4px;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.access-qr-section {
-  overflow: hidden;
-}
-
-.access-qr-layout {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-}
-
-.access-qr-image {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-}
-
-.access-qr-image img {
-  display: block;
-  width: 220px;
-  height: 220px;
-}
-
-.access-qr-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.access-record-table {
-  table-layout: fixed;
-}
-
-.access-record-table th:nth-child(4),
-.access-record-table td:nth-child(4) {
-  width: 110px;
-  text-align: center;
-}
-
-/* 11. Accounting */
-.acct-card-wrap {
-  padding: 0;
-  overflow: hidden;
-}
-
-/* 1. 帳目 tab 列 */
-.acct-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  border-bottom: 1px solid var(--bdr);
-  background: rgb(var(--color-surface));
-}
-
-.acct-tab {
-  border: 0;
-  border-right: 1px solid var(--bdr);
-  background: rgb(var(--color-surface));
-  color: var(--brand);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  padding: 13px 22px;
-}
-
-.acct-tab.on {
-  background: var(--sur);
-  color: var(--ink);
-  box-shadow: inset 0 3px 0 var(--brand);
-}
-
-.acct-body {
-  padding: 16px;
-}
-
-.acct-subpanel {
-  display: none;
-}
-
-.acct-subpanel.on {
-  display: grid;
-  gap: 12px;
-}
-
-/* 2. 帳目提示框 */
-.acct-note {
-  border: 1px solid var(--bdr);
-  border-left: 3px solid var(--brand);
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.7;
-  padding: 12px 14px;
-}
-
-.acct-banner {
-  border: 1px solid var(--success);
-  border-radius: 8px;
-  background: var(--success-bg);
-  color: var(--success);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 11px 14px;
-}
-
-.acct-banner.warn {
-  border-color: var(--warning);
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.acct-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.acct-toolbar-title {
-  margin: 0;
-}
-
-.acct-total {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-/* 3. 帳目搜尋框 */
-.acct-search {
-  max-width: 320px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 9px 12px;
-}
-
-.acct-filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 12px;
-}
-
-.acct-filter-field {
-  display: grid;
-  min-width: 150px;
-  gap: 5px;
-}
-
-.acct-filter-field span {
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.acct-filter-field input,
-.acct-filter-field select {
-  min-height: 32px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 9px;
-}
-
-.acct-secondary-action {
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: var(--ink-2);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  min-height: 32px;
-  padding: 6px 10px;
-}
-
-.acct-secondary-action:hover {
-  border-color: var(--brand-mid);
-  color: var(--brand);
-}
-
-.acct-secondary-action:disabled,
-.acct-secondary-action:disabled:hover {
-  border-color: var(--bdr);
-  background: var(--sur-3);
-  color: var(--ink-3);
-  cursor: not-allowed;
-}
-
-/* 4. 帳目表格 */
-.acct-table-wrap {
-  overflow: auto;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-}
-
-.acct-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.acct-table th {
-  position: sticky;
-  top: 0;
-  background: #C7EAF0;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 900;
-  padding: 11px 12px;
-  text-align: left;
-  z-index: 1;
-}
-
-.acct-table td {
-  border-top: 1px solid var(--sur-3);
-  color: var(--ink-2);
-  font-weight: 700;
-  padding: 10px 12px;
-  white-space: nowrap;
-}
-
-.acct-table tr:nth-child(even) td {
-  background: #FAFAFA;
-}
-
-.owner-account-table {
-  min-width: 900px;
-}
-
-.owner-record-table {
-  min-width: 1120px;
-}
-
-.finance-management-table {
-  min-width: 980px;
-}
-
-.finance-other-fee-table {
-  min-width: 900px;
-}
-
-.finance-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.finance-summary-item {
-  display: grid;
-  gap: 6px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-  padding: 12px;
-}
-
-.finance-summary-item span {
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.finance-summary-item strong {
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 900;
-}
-
-/* 5. 帳目狀態色 */
-.acct-unit-cell {
-  color: var(--ink);
-}
-
-.acct-paid {
-  color: var(--success);
-}
-
-.acct-pending {
-  color: var(--warning);
-}
-
-.acct-error,
-.acct-due {
-  color: var(--error);
-}
-
-/* 6. 帳目下載按鈕 */
-.acct-download {
-  border: 0;
-  border-radius: 6px;
-  background: #18BFE0;
-  color: #041016;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 900;
-  padding: 7px 12px;
-}
-
-/* 7. 開發中佔位 */
-.acct-dev {
-  display: flex;
-  min-height: 280px;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--bdr-2);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-  color: var(--ink-3);
-  font-size: 16px;
-  font-weight: 800;
-}
-
-/* 12. 意見提供入口卡片 */
-.affairs-entry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.affairs-entry-card {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  color: var(--ink);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 16px;
-  text-align: left;
-}
-
-.affairs-entry-card:hover,
-.affairs-entry-card.on {
-  border-color: var(--brand);
-  background: var(--brand-light);
-}
-
-.affairs-entry-card:disabled {
-  border-color: var(--bdr);
-  background: var(--sur);
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.affairs-entry-icon {
-  display: flex;
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: var(--sur-2);
-  color: var(--brand);
-}
-
-.affairs-entry-icon svg {
-  width: 24px;
-  height: 24px;
-  stroke: currentColor;
-}
-
-.affairs-entry-card > span:last-child strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.affairs-entry-card > span:last-child span {
-  display: block;
-  margin-top: 4px;
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-/* 13. 意見提供引導式表單 */
-.affairs-feedback-form {
-  display: grid;
-  gap: 18px;
-}
-
-.affairs-field {
-  display: grid;
-  gap: 7px;
-  max-width: 560px;
-}
-
-.affairs-field label {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.affairs-select,
-.affairs-textarea {
-  width: 100%;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  padding: 10px 12px;
-}
-
-.affairs-textarea {
-  min-height: 160px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.affairs-field-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.affairs-guided-shell {
-  display: grid;
-  gap: 16px;
-}
-
-.affairs-stepper {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.affairs-step-indicator {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur-2);
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 9px 10px;
-}
-
-.affairs-step-indicator b {
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--sur);
-  color: var(--ink-3);
-  font-size: 11px;
-}
-
-.affairs-step-indicator.on {
-  border-color: var(--brand);
-  background: var(--brand-light);
-  color: var(--brand);
-}
-
-.affairs-step-indicator.on b {
-  background: var(--brand);
-  color: #fff;
-}
-
-.affairs-guided-step {
-  display: grid;
-  gap: 14px;
-  min-height: 220px;
-}
-
-.affairs-step-hint {
-  border-left: 3px solid var(--brand);
-  background: var(--brand-light);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.6;
-  padding: 10px 12px;
-}
-
-.affairs-guided-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid var(--sur-3);
-  padding-top: 12px;
-}
-
-.affairs-review-list {
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.affairs-review-row {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 10px;
-  border-bottom: 1px solid var(--sur-3);
-  padding-bottom: 8px;
-  color: var(--ink-2);
-}
-
-.affairs-review-row span:first-child {
-  color: var(--ink-3);
-  font-weight: 700;
-}
-
-.affairs-upload-box {
-  display: grid;
-  gap: 10px;
-  border: 1px dashed var(--bdr-2);
-  border-radius: 8px;
-  background: var(--sur-2);
-  padding: 16px;
-}
-
-.affairs-upload-box strong {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.affairs-upload-box span {
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.affairs-upload-box input {
-  width: 100%;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink-2);
-  font-family: inherit;
-  font-size: 12px;
-  padding: 9px;
-}
-
-.affairs-record-card {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur-2);
-  padding: 12px 14px;
-  color: var(--ink-2);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.affairs-record-card strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.affairs-list-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.affairs-list-actions .affairs-select {
-  width: auto;
-  min-width: 130px;
-}
-
-.affairs-record-message {
-  display: grid;
-  gap: 4px;
-  margin-top: 12px;
-  border-top: 1px solid var(--sur-3);
-  padding-top: 12px;
-}
-
-.affairs-record-message small {
-  color: var(--ink-3);
-}
-
-/* 14. 服務個案提交成功提示框 */
-.affairs-success-dialog {
-  position: fixed;
-  z-index: 130;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgb(15 23 42 / 0.32);
-  padding: 16px;
-}
-
-.affairs-success-dialog__panel {
-  width: min(100%, 28rem);
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
-  padding: 24px;
-  box-shadow: 0 24px 60px rgb(15 23 42 / 0.2);
-  color: var(--ink);
-  text-align: center;
-}
-
-.affairs-success-dialog__icon {
-  display: inline-flex;
-  width: 56px;
-  height: 56px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.affairs-success-dialog__panel h2 {
-  margin: 16px 0 0;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.affairs-success-dialog__panel p {
-  margin: 8px 0 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.affairs-success-dialog__action {
-  display: inline-flex;
-  min-width: 112px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin-top: 20px;
-}
-
-.affairs-success-dialog-enter-active,
-.affairs-success-dialog-leave-active {
-  transition: opacity 0.18s ease;
-}
-
-.affairs-success-dialog-enter-active .affairs-success-dialog__panel,
-.affairs-success-dialog-leave-active .affairs-success-dialog__panel {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.affairs-success-dialog-enter-from,
-.affairs-success-dialog-leave-to {
-  opacity: 0;
-}
-
-.affairs-success-dialog-enter-from .affairs-success-dialog__panel,
-.affairs-success-dialog-leave-to .affairs-success-dialog__panel {
-  opacity: 0;
-  transform: translateY(8px) scale(0.985);
-}
-
-/* 15. ICCTV */
-.icctv-panel-wide {
-  grid-column: 1 / -1;
-}
-
-.icctv-table-card {
-  padding: 0;
-  overflow: hidden;
-}
-
-.icctv-profile-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  border-bottom: 1px solid var(--bdr);
-  background: rgb(var(--color-surface));
-  padding: 18px;
-}
-
-.icctv-profile-head h3 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.35;
-}
-
-.icctv-profile-head p {
-  margin: 6px 0 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
-}
-
-.icctv-enabled-badge {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  border-radius: 999px;
-  background: var(--success-bg);
-  color: var(--success);
-  font-size: 12px;
-  font-weight: 900;
-  padding: 6px 12px;
-  white-space: nowrap;
-}
-
-.icctv-enabled-badge.off {
-  background: var(--sur-2);
-  color: var(--ink-4);
-}
-
-.staff-select {
-  height: 36px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 0 12px;
-}
-
-.icctv-table-wrap {
-  overflow-x: auto;
-}
-
-.icctv-table {
-  min-width: 760px;
-  table-layout: fixed;
-}
-
-.icctv-table th:nth-child(1),
-.icctv-table td:nth-child(1) {
-  width: 44%;
-}
-
-.icctv-table th:nth-child(2),
-.icctv-table td:nth-child(2) {
-  width: 20%;
-}
-
-.icctv-table th:nth-child(3),
-.icctv-table td:nth-child(3) {
-  width: 36%;
-}
-
-.icctv-table tbody tr.expanded > td {
-  background: var(--brand-light);
-}
-
-.icctv-camera-title {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.icctv-camera-channel {
-  margin-top: 4px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.icctv-table-status {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 5px 9px;
-  white-space: nowrap;
-}
-
-.icctv-table-status.on {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.icctv-table-status.off {
-  background: var(--sur-2);
-  color: var(--ink-4);
-}
-
-.icctv-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icctv-expanded-row td {
-  background: rgb(var(--color-surface));
-  padding: 0;
-}
-
-.icctv-inline-viewer {
-  border-top: 1px solid var(--bdr);
-  background: #0F172A;
-}
-
-.icctv-inline-viewer iframe {
-  display: block;
-  width: 100%;
-  height: 520px;
-  border: 0;
-  background: #0F172A;
-}
-
-/* 15.1 住戶授權 */
-.authorization-form-card {
-  display: grid;
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-.authorization-refresh-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-}
-
-.authorization-list-heading p {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.authorization-form-body {
-  padding: 0;
-}
-
-.authorization-phone-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.authorization-form-control,
-.authorization-input-shell {
-  height: 42px;
-  box-sizing: border-box;
-  border: 1px solid var(--bdr);
-  border-radius: 2px;
-  background: #fff;
-  color: var(--ink);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.authorization-form-control {
-  outline: 0;
-  padding: 0 12px;
-  font: inherit;
-  font-size: 13px;
-}
-
-.authorization-country-select {
-  width: 94px;
-  flex: 0 0 94px;
-  cursor: pointer;
-}
-
-.authorization-input-shell {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  padding: 0 14px;
-}
-
-.authorization-input-shell input {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-}
-
-.authorization-input-shell input::placeholder {
-  color: var(--ink-4);
-}
-
-.authorization-input-shell .app-icon {
-  flex: 0 0 auto;
-  margin-left: 10px;
-  color: var(--ink-4);
-  transition: color 160ms ease;
-}
-
-.authorization-form-control:focus,
-.authorization-input-shell:focus-within {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 1px var(--brand);
-}
-
-.authorization-input-shell:focus-within .app-icon {
-  color: var(--brand);
-}
-
-.authorization-form-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.authorization-form-section {
-  display: grid;
-  grid-template-columns: 142px minmax(0, 1fr);
-  align-content: start;
-  gap: 20px;
-  min-width: 0;
-  padding: 20px;
-}
-
-.authorization-form-section + .authorization-form-section {
-  border-top: 1px solid var(--sur-3);
-  background: color-mix(in srgb, var(--sur-2) 62%, #fff);
-}
-
-.authorization-section-kicker {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 42px;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.authorization-section-kicker .app-icon {
-  color: var(--ink-3);
-}
-
-.authorization-field-stack {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.authorization-field {
-  display: grid;
-  gap: 7px;
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.authorization-permission-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.authorization-access-notice {
-  margin: 0;
-  color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.authorization-permission-option {
-  position: relative;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 10px;
-  min-height: 58px;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: #fff;
-  color: var(--ink);
-  cursor: pointer;
-  transition: border-color 160ms ease, background-color 160ms ease;
-}
-
-.authorization-permission-option:has(input:checked) {
-  border-color: var(--brand);
-  box-shadow: inset 3px 0 0 var(--brand);
-}
-
-.authorization-permission-option input {
-  grid-column: 3;
-  grid-row: 1;
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  accent-color: var(--brand);
-}
-
-.authorization-permission-mark {
-  grid-column: 1;
-  grid-row: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 5px;
-  background: var(--sur-2);
-  color: var(--ink-3);
-}
-
-.authorization-permission-option:has(input:checked) .authorization-permission-mark {
-  background: var(--brand-light);
-  color: var(--brand);
-}
-
-.authorization-permission-copy {
-  grid-column: 2;
-  grid-row: 1;
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.authorization-permission-copy strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.authorization-status {
-  display: block;
-  margin-top: 4px;
-  color: var(--ink-3);
-  font-size: 12px;
-}
-
-.authorization-status.active {
-  color: var(--success);
-}
-
-.authorization-status.pending {
-  color: var(--warning);
-}
-
-.authorization-error {
-  margin: 14px 18px 0;
-  border-left: 3px solid var(--danger);
-  padding: 8px 10px;
-  background: var(--danger-bg);
-  color: var(--danger);
-  font-size: 12px;
-}
-
-.authorization-form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  border-top: 1px solid var(--sur-3);
-  padding: 14px 18px;
-}
-
-.authorization-form-actions .work-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-width: 122px;
-}
-
-.authorization-action-hint {
-  margin-right: auto;
-  color: var(--ink-3);
-  font-size: 11px;
-}
-
-.authorization-list-card {
-  padding: 0;
-  overflow: hidden;
-}
-
-.authorization-list-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--sur-3);
-  padding: 16px 18px;
-}
-
-.authorization-list-heading .work-card-title {
-  margin: 0;
-}
-
-.authorization-count-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  box-sizing: border-box;
-  border: 1px solid var(--bdr);
-  border-radius: 5px;
-  background: var(--sur-2);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.authorization-empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-height: 112px;
-  padding: 24px;
-  color: var(--ink-3);
-  text-align: center;
-}
-
-.authorization-empty-state .app-icon {
-  color: var(--ink-4);
-}
-
-.authorization-empty-state strong {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.authorization-record-list {
-  display: grid;
-}
-
-.authorization-record {
-  display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) minmax(200px, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  min-width: 0;
-  border-top: 1px solid var(--sur-3);
-  padding: 14px 18px;
-}
-
-.authorization-record:first-child {
-  border-top: 0;
-}
-
-.authorization-record-person {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.authorization-record-person strong {
-  display: block;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.authorization-record-avatar {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--sur-2);
-  color: var(--ink-3);
-}
-
-.authorization-record-contact {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
-  color: var(--ink-2);
-  font-size: 12px;
-}
-
-.authorization-record-contact span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.authorization-record-contact .app-icon {
-  flex: 0 0 auto;
-  color: var(--ink-4);
-}
-
-.authorization-record-permissions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.authorization-permission-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  border-radius: 4px;
-  padding: 0 8px;
-  background: var(--sur-2);
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.authorization-revoke-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  border-radius: 5px;
-  padding: 7px 8px;
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.authorization-revoke-button:hover {
-  background: var(--danger-bg);
-}
-
-.authorization-revoke-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* 15. 響應式設計 */
-@media (max-width: 1023px) {
-  .work-shell {
-    grid-template-columns: 1fr;
-    padding: 14px;
-  }
-
-  .work-sidebar {
-    position: static;
-  }
-
-  .work-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .affairs-entry-grid,
-  .affairs-field-grid,
-  .affairs-stepper {
-    grid-template-columns: 1fr;
-  }
-
-  .building-doc-grid,
-  .finance-summary-grid,
-  .building-field-grid,
-  .authorization-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .authorization-field-stack,
-  .authorization-permission-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .authorization-form-section {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .authorization-section-kicker {
-    min-height: auto;
-  }
-
-  .authorization-record {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .authorization-record-contact,
-  .authorization-record-permissions {
-    grid-column: 1 / -1;
-  }
-
-  .authorization-revoke-button {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .authorization-form-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .authorization-form-actions .work-action {
-    width: 100%;
-  }
-
-  .authorization-action-hint {
-    margin-right: 0;
-  }
-
-  .authorization-form-control,
-  .authorization-input-shell input {
-    font-size: 16px;
-  }
-
-  .building-field {
-    grid-template-columns: 1fr;
-    border-right: 0;
-  }
-
-  .access-qr-layout,
-  .access-qr-meta {
-    grid-template-columns: 1fr;
-  }
-
-  .acct-tabs {
-    overflow: auto;
-  }
-
-  .acct-tab {
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 767px) {
-  .work-shell {
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .work-nav {
-    grid-template-columns: 1fr;
-  }
-
-  .work-hero {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .building-binding-empty {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .building-binding-empty .work-action {
-    align-self: flex-start;
-  }
-
-  .icctv-profile-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .icctv-table-wrap {
-    overflow-x: visible;
-  }
-
-  .icctv-table {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .icctv-table th:nth-child(1),
-  .icctv-table td:nth-child(1) {
-    width: 42%;
-  }
-
-  .icctv-table th:nth-child(2),
-  .icctv-table td:nth-child(2) {
-    display: none;
-  }
-
-  .icctv-table th:nth-child(3),
-  .icctv-table td:nth-child(3) {
-    width: 58%;
-  }
-
-  .icctv-table th,
-  .icctv-table td {
-    padding: 10px 8px;
-  }
-
-  .icctv-row-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .icctv-row-actions .work-mini-btn {
-    width: 100%;
-    white-space: normal;
-  }
-
-  .icctv-expanded-row td,
-  .icctv-table .building-empty-row {
-    display: table-cell;
-    width: auto;
-  }
-
-  .icctv-inline-viewer iframe {
-    height: 360px;
-  }
-
-  .acct-search {
-    width: 100%;
-    max-width: none;
-  }
-
-  .acct-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .acct-filter-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .acct-filter-field {
-    min-width: 0;
-  }
-
-  .acct-filter-row .notice-action-btn,
-  .acct-secondary-action {
-    width: 100%;
-  }
-
-  .affairs-guided-actions {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-
-  .affairs-guided-actions .work-action {
-    width: 100%;
-  }
-}
-</style>
+<style scoped src="./styles.scss"></style>

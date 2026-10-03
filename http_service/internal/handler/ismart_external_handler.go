@@ -543,17 +543,118 @@ func (h *IsmartExternalHandler) ListSubaccounts(c *gin.Context) {
 	errcode.Success(c, result)
 }
 
-// 19. GrantSubaccount grants one iSmart authorized user.
+// 18.1 ListFlatBindings returns the linked member's approved flat role bindings.
+func (h *IsmartExternalHandler) ListFlatBindings(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.ismartService.ListFlatBindings(c.Request.Context(), user.UserID, service.IsmartFlatBindingQuery{
+		BuildingID: strings.TrimSpace(c.Query("building_id")),
+		Role:       strings.TrimSpace(c.Query("cli_role")),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 18.2 ListOwnerBindingRequests returns the linked member's OwnerReg applications and approval status.
+func (h *IsmartExternalHandler) ListOwnerBindingRequests(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+
+	result, err := h.ismartService.ListOwnerBindingRequests(c.Request.Context(), user.UserID, service.IsmartOwnerBindingRequestQuery{
+		BuildingID: strings.TrimSpace(c.Query("building_id")),
+		Status:     strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 19. CheckSubaccountContacts checks supplied iSmart contacts before authorization.
+func (h *IsmartExternalHandler) CheckSubaccountContacts(c *gin.Context) {
+	if currentUser(c) == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request struct {
+		Phone string `json:"phone"`
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid contact payload"))
+		return
+	}
+	result, err := h.ismartService.CheckSubaccountContacts(c.Request.Context(), service.IsmartSubaccountContactParams{
+		Phone: strings.TrimSpace(request.Phone),
+		Email: strings.TrimSpace(request.Email),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 20. RegisterAndGrantSubaccount creates an account when needed and grants one unit.
+func (h *IsmartExternalHandler) RegisterAndGrantSubaccount(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request struct {
+		UnitID    string `json:"unit_id"`
+		Phone     string `json:"phone"`
+		Email     string `json:"email"`
+		EngName   string `json:"eng_name"`
+		SendEmail *bool  `json:"send_email"`
+		Remark    string `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid register and grant payload"))
+		return
+	}
+	sendEmail := true
+	if request.SendEmail != nil {
+		sendEmail = *request.SendEmail
+	}
+	result, err := h.ismartService.RegisterAndGrantSubaccount(c.Request.Context(), user.UserID, service.IsmartSubaccountRegisterGrantParams{
+		UnitID:    strings.TrimSpace(request.UnitID),
+		Phone:     strings.TrimSpace(request.Phone),
+		Email:     strings.TrimSpace(request.Email),
+		EngName:   strings.TrimSpace(request.EngName),
+		SendEmail: sendEmail,
+		Remark:    strings.TrimSpace(request.Remark),
+	})
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 21. GrantSubaccount grants one iSmart authorized user.
 func (h *IsmartExternalHandler) GrantSubaccount(c *gin.Context) {
 	h.handleSubaccountMutation(c, "grant")
 }
 
-// 20. RevokeSubaccount revokes one iSmart authorized user.
+// 22. RevokeSubaccount revokes one iSmart authorized user.
 func (h *IsmartExternalHandler) RevokeSubaccount(c *gin.Context) {
 	h.handleSubaccountMutation(c, "revoke")
 }
 
-// 21. handleSubaccountMutation handles grant and revoke requests.
+// 23. handleSubaccountMutation handles grant and revoke requests.
 func (h *IsmartExternalHandler) handleSubaccountMutation(c *gin.Context, action string) {
 	user := currentUser(c)
 	if user == nil {

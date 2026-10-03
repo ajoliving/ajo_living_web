@@ -22,18 +22,20 @@ type ChatSummary struct {
 
 // 2. ChatDetail defines the chat detail payload.
 type ChatDetail struct {
-	ChatID       string              `json:"chat_id"`
-	BuildingID   string              `json:"building_id,omitempty"`
-	ListingID    string              `json:"listing_id"`
-	ListingTitle string              `json:"listing_title"`
-	BizModule    string              `json:"biz_module"`
-	ChatType     string              `json:"chat_type"`
-	CreatedAt    string              `json:"created_at"`
-	UnreadCount  int                 `json:"unread_count,omitempty"`
-	CanManage    bool                `json:"can_manage,omitempty"`
-	Peer         *ChatPeerSummary    `json:"peer,omitempty"`
-	Listing      *ChatListingSummary `json:"listing,omitempty"`
-	Participants []ChatMember        `json:"participants"`
+	ChatID         string              `json:"chat_id"`
+	BuildingID     string              `json:"building_id,omitempty"`
+	BuildingName   string              `json:"building_name,omitempty"`
+	BuildingNameEN string              `json:"building_name_en,omitempty"`
+	ListingID      string              `json:"listing_id"`
+	ListingTitle   string              `json:"listing_title"`
+	BizModule      string              `json:"biz_module"`
+	ChatType       string              `json:"chat_type"`
+	CreatedAt      string              `json:"created_at"`
+	UnreadCount    int                 `json:"unread_count,omitempty"`
+	CanManage      bool                `json:"can_manage,omitempty"`
+	Peer           *ChatPeerSummary    `json:"peer,omitempty"`
+	Listing        *ChatListingSummary `json:"listing,omitempty"`
+	Participants   []ChatMember        `json:"participants"`
 }
 
 // 3. ChatPeerSummary defines the opposite-side display payload.
@@ -41,6 +43,7 @@ type ChatPeerSummary struct {
 	UserID      string `json:"user_id"`
 	PublicID    string `json:"public_id"`
 	DisplayName string `json:"display_name"`
+	AvatarKey   string `json:"avatar_key,omitempty"`
 	RoleInChat  string `json:"role_in_chat"`
 }
 
@@ -62,11 +65,21 @@ type ChatMember struct {
 	UserID           string `json:"user_id"`
 	PublicID         string `json:"public_id"`
 	DisplayName      string `json:"display_name"`
+	AvatarKey        string `json:"avatar_key,omitempty"`
 	RoleInChat       string `json:"role_in_chat"`
 	MembershipStatus string `json:"membership_status,omitempty"`
 }
 
-// 6. MessageResponse defines a chat message payload.
+// 6. MessageReplyPreview is the quoted original shown on a reply.
+type MessageReplyPreview struct {
+	MessageID    string `json:"message_id"`
+	SenderUserID string `json:"sender_user_id"`
+	SenderName   string `json:"sender_name"`
+	Content      string `json:"content"`
+	Recalled     bool   `json:"recalled"`
+}
+
+// 6.1 MessageResponse defines a chat message payload.
 type MessageResponse struct {
 	MessageID    string                      `json:"message_id"`
 	SenderUserID string                      `json:"sender_user_id"`
@@ -77,6 +90,7 @@ type MessageResponse struct {
 	Status       string                      `json:"status"`
 	CreatedAt    string                      `json:"created_at"`
 	Attachments  []MessageAttachmentResponse `json:"attachments,omitempty"`
+	ReplyTo      *MessageReplyPreview        `json:"reply_to,omitempty"`
 }
 
 // 7. MessageAttachmentResponse exposes one chat media attachment.

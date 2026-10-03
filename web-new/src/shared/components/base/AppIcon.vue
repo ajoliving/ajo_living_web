@@ -42,6 +42,7 @@ export type IconName =
   | 'search'
   | 'send'
   | 'shield'
+  | 'smile'
   | 'star'
   | 'settings'
   | 'tag'
@@ -106,6 +107,7 @@ const iconMap: Record<IconName, string> = {
   send: 'M22 2 11 13 M22 2l-7 20-4-9-9-4z',
   settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 12h2 M18 12h2 M12 4v2 M12 18v2',
   shield: 'M12 3l7 3v6c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V6z M9.5 12l1.8 1.8L15 10',
+  smile: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M8 9.5h.01 M16 9.5h.01 M8 14s1.5 3 4 3 4-3 4-3',
   star: 'm12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.23 6.44 20.12l1.06-6.2L3 9.53l6.22-.9z',
   tag: 'M3 5v6l10 10 8-8L11 3H5a2 2 0 0 0-2 2z M7 7h.01',
   user: 'M20 21a8 8 0 1 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',

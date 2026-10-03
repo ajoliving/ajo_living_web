@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Wave">
+  <circle cx="40" cy="40" r="40" fill="#2F6288"/>
+  <circle cx="40" cy="40" r="35.5" fill="none" stroke="#F3F8FC" stroke-width="1.25" opacity="0.2"/>
+  <path fill="#F3F8FC" d="M16 46c6-8 12-8 18 0s12 8 18 0 12-8 12 0v10H16V46z"/>
+  <path fill="none" stroke="#F3F8FC" stroke-width="3" stroke-linecap="round" d="M16 34c6-8 12-8 18 0s12 8 18 0 12-8 12 0"/>
+</svg>

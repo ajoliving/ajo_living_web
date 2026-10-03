@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Mountain">
+  <circle cx="40" cy="40" r="40" fill="#2F5B45"/>
+  <circle cx="40" cy="40" r="35.5" fill="none" stroke="#F3FAF5" stroke-width="1.25" opacity="0.2"/>
+  <path fill="#F3FAF5" d="M12 58 32 28l10 14 8-10 18 26H12z"/>
+  <path fill="#2F5B45" d="M32 28l5 8-3 4-6-6 4-6z"/>
+</svg>

@@ -74,7 +74,9 @@ export interface CurrentMemberProfile {
   roles: string[];
   permissions: string[];
   display_name: string;
+  username?: string;
   avatar_url: string;
+  avatar_key?: string;
   publisher_identity_type: string;
   district_code: string;
   primary_community?: CurrentMemberCommunity;
@@ -138,6 +140,7 @@ export interface SessionUserView {
   public_id: string;
   display_name: string;
   avatar_url: string;
+  avatar_key?: string;
   community_id: number;
   primary_community: {
     public_id: string;

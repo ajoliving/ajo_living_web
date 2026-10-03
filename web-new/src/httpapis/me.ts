@@ -41,6 +41,7 @@ export const updateMe = (payload: {
   bound_flat_unit_ids?: string[];
   district_code?: string;
   avatar_asset_id?: string;
+  avatar_key?: string;
   residence_floor?: string;
   residence_unit?: string;
 }) => httpClient.patch<ApiResponse<CurrentMemberProfile>>('/me/profile', payload);

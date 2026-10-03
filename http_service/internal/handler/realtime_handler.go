@@ -62,11 +62,12 @@ type realtimeClient struct {
 
 // 4. realtimeCommand defines the small JSON commands accepted by WebSocket.
 type realtimeCommand struct {
-	Type            string   `json:"type"`
-	ChatID          string   `json:"chat_id"`
-	Content         string   `json:"content"`
-	AttachmentIDs   []string `json:"attachment_ids,omitempty"`
-	ClientMessageID string   `json:"client_message_id,omitempty"`
+	Type             string   `json:"type"`
+	ChatID           string   `json:"chat_id"`
+	Content          string   `json:"content"`
+	AttachmentIDs    []string `json:"attachment_ids,omitempty"`
+	ClientMessageID  string   `json:"client_message_id,omitempty"`
+	ReplyToMessageID string   `json:"reply_to_message_id,omitempty"`
 }
 
 // 5. realtimeMessageEvent defines one broadcast message event.
@@ -185,7 +186,7 @@ func (h *RealtimeHandler) HandleWebSocket(c *gin.Context) {
 			h.sendError(client, errcode.New(errcode.CodeValidationError, "unsupported realtime command"))
 			continue
 		}
-		message, sendErr := h.chatService.SendRealtimeMessageWithAttachmentsAndClientID(c.Request.Context(), identity.UserID, chatID, command.Content, command.AttachmentIDs, command.ClientMessageID)
+		message, sendErr := h.chatService.SendRealtimeMessageWithAttachmentsAndClientID(c.Request.Context(), identity.UserID, chatID, command.Content, command.AttachmentIDs, command.ClientMessageID, command.ReplyToMessageID)
 		if sendErr != nil {
 			h.sendError(client, sendErr)
 			continue
@@ -205,6 +206,21 @@ func (h *RealtimeHub) PublishMessage(ctx context.Context, chatID string, message
 	if h.broker != nil {
 		if err := h.broker.Publish(ctx, payload); err == nil && h.chatService != nil {
 			h.chatService.MarkRealtimeEventPublished(ctx, message.MessageID)
+		}
+	}
+}
+
+// 10.1 PublishRecalledMessage broadcasts a redacted recall event to local and remote clients.
+func (h *RealtimeHub) PublishRecalledMessage(ctx context.Context, chatID string, message service.MessageResponse) {
+	event := realtimeMessageEvent{Type: "message_recalled", ChatID: strings.TrimSpace(chatID), Message: message, Origin: h.instance}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+	h.broadcast(ctx, event.ChatID, payload)
+	if h.broker != nil {
+		if err := h.broker.Publish(ctx, payload); err == nil && h.chatService != nil {
+			h.chatService.MarkRealtimeEventPublished(ctx, message.MessageID+":recalled")
 		}
 	}
 }

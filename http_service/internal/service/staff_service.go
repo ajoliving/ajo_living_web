@@ -109,7 +109,15 @@ func (s *StaffService) ListUsers(ctx context.Context, filters StaffUserListFilte
 	if keyword := strings.TrimSpace(filters.Keyword); keyword != "" {
 		pattern := "%" + keyword + "%"
 		query = query.Where(
-			"phone_country_code LIKE ? OR phone_number LIKE ? OR public_id LIKE ?",
+			`phone_country_code LIKE ? OR phone_number LIKE ? OR public_id LIKE ? OR EXISTS (
+				SELECT 1 FROM user_profiles
+				WHERE user_profiles.user_id = users.id AND LOWER(user_profiles.display_name) LIKE LOWER(?)
+			) OR EXISTS (
+				SELECT 1 FROM user_credentials
+				WHERE user_credentials.user_id = users.id AND LOWER(COALESCE(user_credentials.email, '')) LIKE LOWER(?)
+			)`,
+			pattern,
+			pattern,
 			pattern,
 			pattern,
 			pattern,

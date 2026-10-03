@@ -11,6 +11,7 @@ export interface ChatPeerSummaryResponse {
   user_id: string;
   public_id?: string;
   display_name?: string;
+  avatar_key?: string;
   role_in_chat?: string;
 }
 
@@ -53,7 +54,10 @@ export interface ChatSummaryResponse {
 export interface BuildingChatSummaryResponse {
   chat_id: string;
   building_id: string;
+  building_name?: string;
+  building_name_en?: string;
   chat_type: 'building_group';
+  avatar_key?: string;
   member_count: number;
   unread_count: number;
   last_message_preview: string;
@@ -64,6 +68,7 @@ export interface BuildingChatMemberResponse {
   user_id: string;
   public_id: string;
   display_name: string;
+  avatar_key?: string;
   role_in_chat: string;
   membership_status: string;
   muted_until?: string | null;
@@ -91,6 +96,8 @@ export interface ChatDetailResponse {
   chat_type: string;
   created_at: string;
   building_id?: string;
+  building_name?: string;
+  building_name_en?: string;
   unread_count?: number;
   can_manage?: boolean;
   participants: Array<{
@@ -157,10 +164,16 @@ export const fetchBuildingChatMessages = (chatId: string, params: FetchChatsPara
   );
 
 // 10. 發送大廈群聊訊息
-export const sendBuildingChatMessage = (chatId: string, payload: { content: string; attachment_ids?: string[]; client_message_id?: string }) =>
+export const sendBuildingChatMessage = (chatId: string, payload: { content: string; attachment_ids?: string[]; client_message_id?: string; reply_to_message_id?: string }) =>
   httpClient.post<ApiResponse<MessageResponse>>(
     `/building-chats/${chatId}/messages`,
     payload,
+  );
+
+// 10.1 撤回大廈群聊訊息
+export const recallBuildingChatMessage = (chatId: string, messageId: string) =>
+  httpClient.post<ApiResponse<MessageResponse>>(
+    `/building-chats/${chatId}/messages/${messageId}/recall`,
   );
 
 // 11. 標記大廈群聊已讀
@@ -204,3 +217,12 @@ export const leaveBuildingChat = (chatId: string) =>
 // 18. Staff 查看所有大廈群聊
 export const fetchStaffBuildingChats = () =>
   httpClient.get<ApiResponse<ApiListData<BuildingChatSummaryResponse>>>('/staff/building-chats');
+
+// 19. Staff 將系統會員加入大廈群聊
+export const addStaffBuildingChatMember = (
+  chatId: string,
+  payload: { public_id: string },
+) => httpClient.post<ApiResponse<BuildingChatMemberResponse>>(
+  `/staff/building-chats/${chatId}/members`,
+  payload,
+);

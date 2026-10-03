@@ -1395,7 +1395,7 @@ onBeforeUnmount(() => {
   min-height: calc(100svh - 48px);
   background: var(--sur);
   color: var(--ink);
-  padding: 20px 0 44px;
+  padding: 18px 0 44px;
 }
 
 /* 2. 詳情面板 */
@@ -1403,7 +1403,7 @@ onBeforeUnmount(() => {
   max-width: var(--layout-page-max-width);
   margin: 0 auto;
   border: 1px solid var(--bdr);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--sur-2);
   padding: 0;
 }
@@ -1450,23 +1450,23 @@ onBeforeUnmount(() => {
 /* 4. 商品頭 */
 .gp-product-head {
   display: grid;
-  grid-template-columns: 138px minmax(0, 1fr) auto;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
   margin: 0;
   border-bottom: 1px solid var(--bdr);
   background: var(--sur);
-  padding: 18px 20px;
+  padding: 22px 24px;
 }
 
 .gp-product-img {
   display: flex;
-  width: 138px;
-  height: 118px;
+  width: 176px;
+  height: 148px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--bdr);
-  border-radius: 8px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #fff 0%, var(--sur-2) 100%);
   overflow: hidden;
 }
@@ -1811,7 +1811,7 @@ onBeforeUnmount(() => {
 .gp-compare-card {
   position: relative;
   border: 1px solid var(--bdr);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--sur-2);
   padding: 12px;
 }

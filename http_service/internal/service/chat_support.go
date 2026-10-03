@@ -51,6 +51,7 @@ func (s *ChatService) loadChatPeerMap(ctx context.Context, userID int64, chatPub
 				UserID:      fmtInt64(item.UserID),
 				PublicID:    safeUserPublicID(profile),
 				DisplayName: model.SystemNotificationDisplayName,
+				AvatarKey:   peerAvatarKey(profile),
 				RoleInChat:  item.RoleInChat,
 			}
 			continue
@@ -60,6 +61,7 @@ func (s *ChatService) loadChatPeerMap(ctx context.Context, userID int64, chatPub
 			UserID:      fmtInt64(item.UserID),
 			PublicID:    safeUserPublicID(profile),
 			DisplayName: safeUserDisplayName(profile, fmtInt64(item.UserID)),
+			AvatarKey:   peerAvatarKey(profile),
 			RoleInChat:  item.RoleInChat,
 		}
 	}
@@ -230,4 +232,12 @@ func (s *ChatService) CleanupOrphanChatMedia(ctx context.Context, olderThan time
 		removed++
 	}
 	return removed, nil
+}
+
+// 8. peerAvatarKey returns a stored preset key from a user preview.
+func peerAvatarKey(profile *UserPreviewResponse) string {
+	if profile == nil {
+		return ""
+	}
+	return profile.AvatarKey
 }

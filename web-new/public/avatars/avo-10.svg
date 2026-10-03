@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Moon">
+  <circle cx="40" cy="40" r="40" fill="#3F4C63"/>
+  <circle cx="40" cy="40" r="35.5" fill="none" stroke="#F5F7FB" stroke-width="1.25" opacity="0.2"/>
+  <path fill="#F5F7FB" d="M46 18a22 22 0 1 0 10 38A18 18 0 0 1 46 18z"/>
+  <circle cx="52" cy="28" r="2" fill="#3F4C63" opacity=".35"/>
+  <circle cx="47" cy="36" r="1.4" fill="#3F4C63" opacity=".35"/>
+</svg>

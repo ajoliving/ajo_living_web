@@ -31,11 +31,17 @@ import {
 import { fetchMe } from '@/httpapis/me';
 import type { RegisterEmailAccountPayload, RequestOtpResult, VerifyOtpResult } from '@/model/auth';
 import type { CurrentMemberProfile, SessionUserView } from '@/model/user';
+import { resolveAvatarSrc } from '@/constants/presetAvatars';
 
 const buildSessionUser = (member: CurrentMemberProfile | null): SessionUserView => ({
   public_id: member?.public_id ?? '',
   display_name: member?.display_name?.trim() || 'Guest Member',
-  avatar_url: member?.avatar_url ?? '',
+  avatar_url: resolveAvatarSrc({
+    avatarKey: member?.avatar_key,
+    avatarUrl: member?.avatar_url,
+    seed: member?.public_id,
+  }),
+  avatar_key: member?.avatar_key ?? '',
   community_id: 0,
   primary_community: {
     public_id: member?.primary_community?.public_id ?? '',

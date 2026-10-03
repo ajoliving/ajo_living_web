@@ -71,4 +71,5 @@ func registerStaffRoutes(
 
 	// 1.8 Staff building chat management routes.
 	api.GET("/staff/building-chats", requireStaff, chatHandler.ListAllBuildingChatsForStaff)
+	api.POST("/staff/building-chats/:chatId/members", requireStaff, chatHandler.AddBuildingChatMember)
 }

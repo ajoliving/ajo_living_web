@@ -41,6 +41,7 @@ export default {
     heroEyebrow: '超市格價',
     heroTitle: 'AJO超市情報',
     heroSubtitle: '專人為你每日搜羅超市最新優惠',
+    heroNote: '按優惠後實付價排序，先找到真正值得買的商品。',
     searchPlaceholder: '搜尋商品、品牌或分類...',
     noSuggestions: '沒有相關建議。',
     showMoreSuggestions: '顯示更多建議',

@@ -3,18 +3,20 @@
  * 1. 串接真實會話列表、詳情、訊息與已讀流程，一對一與大廈群聊共用同一佈局。
  * 2. 中間會話列表與通信中心導航共用一致的選中與聚焦樣式，列表項之間以留白分隔線區分。
  * 3. 大廈群聊於標題欄提供「更多」選單，收納成員名單與離開群組操作。
+ * 4. 輸入框內提供表情、附件與發送操作。
+ * 5. 回覆時在輸入框上方顯示引用條。
 -->
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, onMounted, ref, watch } from 'vue';
 
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import BaseAvatar from '@/shared/components/base/BaseAvatar.vue';
-import BaseTextarea from '@/shared/components/base/BaseTextarea.vue';
 import BaseEmpty from '@/shared/components/feedback/BaseEmpty.vue';
 
 import { useMarketplaceChatPage } from './chat';
 import MessageBubble from './widgets/MessageBubble.vue';
+import EmojiPicker from './widgets/EmojiPicker.vue';
 import GroupMembersDialog from './widgets/GroupMembersDialog.vue';
 
 const emit = defineEmits<{
@@ -25,7 +27,9 @@ const {
   activeConversation,
   activeReferencePrice,
   activeMessages,
+  canRecallMessage,
   canSendMessage,
+  clearReplyTarget,
   conversations,
   draftMessage,
   formatPrice,
@@ -33,8 +37,12 @@ const {
   groupMembersOpen,
   handleBackToChats,
   handleCloseGroupMembers,
+  handleInsertEmoji,
   handleLeaveBuildingChat,
   handleOpenGroupMembers,
+  handleQuoteClick,
+  handleRecallMessage,
+  handleReplyMessage,
   handleSelectChat,
   handleSendByEnter,
   handleSendMessage,
@@ -48,6 +56,8 @@ const {
   preferenceStore,
   selectedChatId,
   setMessageContainerRef,
+  recallingMessageId,
+  replyTarget,
   sendingMessage,
   uploadingAttachment,
   sessionStore,
@@ -56,10 +66,68 @@ const {
 } = useMarketplaceChatPage();
 
 const moreMenuOpen = ref(false);
+const emojiPickerOpen = ref(false);
+const composerSurface = ref<HTMLElement | null>(null);
 
 // 1. 關閉群聊更多選單
 const closeMoreMenu = (): void => {
   moreMenuOpen.value = false;
+};
+
+// 1.1 關閉表情選擇器
+const closeEmojiPicker = (): void => {
+  emojiPickerOpen.value = false;
+};
+
+// 1.2 切換表情選擇器
+const toggleEmojiPicker = (): void => {
+  emojiPickerOpen.value = !emojiPickerOpen.value;
+};
+
+// 1.3 依內容高度調整輸入框
+const resizeComposerField = async (): Promise<void> => {
+  await nextTick();
+  const textarea = composerSurface.value?.querySelector('textarea');
+  if (!(textarea instanceof HTMLTextAreaElement)) {
+    return;
+  }
+  textarea.style.height = '0px';
+  textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 96), 180)}px`;
+};
+
+// 1.4 插入表情並保持輸入框可用
+const insertEmoji = (emoji: string): void => {
+  handleInsertEmoji(emoji);
+  void resizeComposerField();
+};
+
+// 1.5 從輸入框發送訊息
+const sendFromComposer = (): void => {
+  closeEmojiPicker();
+  void handleSendMessage();
+};
+
+// 1.5.1 從氣泡選單回覆並聚焦輸入框
+const replyFromBubble = (messageId: string): void => {
+  const target = activeMessages.value.find((item) => item.id === messageId);
+  if (!target) {
+    return;
+  }
+  handleReplyMessage(target);
+  void nextTick(() => {
+    const textarea = composerSurface.value?.querySelector('textarea');
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.focus();
+    }
+  });
+};
+
+// 1.6 Enter 發送時一併收起表情選擇器
+const onComposerEnter = (event: KeyboardEvent): void => {
+  if (!event.shiftKey && !event.isComposing) {
+    closeEmojiPicker();
+  }
+  handleSendByEnter(event);
 };
 
 // 2. 從更多選單開啟成員名單
@@ -74,7 +142,18 @@ const openLeaveConfirm = (): void => {
   leaveConfirmOpen.value = true;
 };
 
-// 4. 上報會話未讀總數給通信中心導航
+// 4. 切換會話時關閉表情並重設輸入高度
+watch(selectedChatId, () => {
+  closeEmojiPicker();
+  void resizeComposerField();
+});
+
+// 5. 草稿變更時調整輸入高度
+watch(draftMessage, () => {
+  void resizeComposerField();
+});
+
+// 6. 上報會話未讀總數給通信中心導航
 watch(
   totalUnreadCount,
   (count) => {
@@ -82,6 +161,10 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(() => {
+  void resizeComposerField();
+});
 </script>
 
 <template>
@@ -122,20 +205,12 @@ watch(
             >
               <div class="chat-nav-item__avatar">
                 <BaseAvatar
-                  v-if="conversation.type === 'direct_listing_chat'"
                   :src="conversation.peer.avatar_url"
+                  :avatar-key="conversation.peer.avatar_key"
+                  :seed="conversation.type === 'building_group' ? `building:${conversation.building_id || ''}` : conversation.peer.public_id"
                   :name="conversation.peer.display_name"
                   :size="40"
                 />
-                <div
-                  v-else
-                  class="chat-nav-item__building-icon"
-                >
-                  <AppIcon
-                    name="building"
-                    :size="20"
-                  />
-                </div>
               </div>
               <div class="chat-nav-item__content">
                 <div class="chat-nav-item__header">
@@ -201,6 +276,14 @@ watch(
                   :size="18"
                 />
               </button>
+              <BaseAvatar
+                class="chat-thread-avatar"
+                :src="activeConversation.peer.avatar_url"
+                :avatar-key="activeConversation.peer.avatar_key"
+                :seed="activeConversation.type === 'building_group' ? `building:${activeConversation.building_id || ''}` : activeConversation.peer.public_id"
+                :name="activeConversation.title"
+                :size="36"
+              />
               <div class="chat-thread-info">
                 <h3 class="chat-thread-title">{{ activeConversation.title }}</h3>
                 <p
@@ -302,27 +385,64 @@ watch(
               :key="messageItem.id"
               :message="messageItem"
               :show-sender-name="activeConversation.type === 'building_group'"
+              :can-recall="canRecallMessage(messageItem)"
+              :recalling="recallingMessageId === messageItem.id"
+              @reply="replyFromBubble(messageItem.id)"
+              @recall="handleRecallMessage(messageItem.id)"
+              @quote-click="handleQuoteClick"
             />
           </div>
 
           <div class="chat-composer">
-            <div class="chat-composer__surface">
-              <BaseTextarea
-                :model-value="draftMessage"
-                :rows="3"
+            <div
+              v-if="emojiPickerOpen"
+              class="chat-emoji-picker__backdrop"
+              @click="closeEmojiPicker"
+            />
+            <EmojiPicker
+              v-if="emojiPickerOpen"
+              class="chat-emoji-picker"
+              @select="insertEmoji"
+            />
+            <div
+              v-if="replyTarget"
+              class="chat-composer__quote"
+            >
+              <div class="chat-composer__quote-body">
+                <strong>{{ t('chat.replyingTo', { name: replyTarget.sender_name || t('chat.memberFallback') }) }}</strong>
+                <span>{{ replyTarget.body.trim() || t('chat.attachmentMessagePreview') }}</span>
+              </div>
+              <button
+                type="button"
+                class="chat-composer__quote-clear"
+                @click="clearReplyTarget"
+              >
+                {{ t('chat.cancelReply') }}
+              </button>
+            </div>
+            <div
+              ref="composerSurface"
+              class="chat-composer__field"
+              :class="uploadingAttachment ? 'is-busy' : ''"
+            >
+              <textarea
+                v-model="draftMessage"
+                class="chat-composer__input"
+                rows="1"
                 :maxlength="messageMaxLength"
-                class="chat-composer__textarea"
                 :placeholder="t('chat.composePlaceholder')"
-                @update:model-value="draftMessage = $event"
-                @keydown.enter="handleSendByEnter"
+                @keydown.enter="onComposerEnter"
               />
-              <div class="chat-composer__toolbar">
+              <div class="chat-composer__tools">
                 <label
-                  class="chat-attachment-button"
-                  :class="uploadingAttachment ? 'chat-attachment-button--disabled' : ''"
+                  class="chat-composer__tool"
+                  :class="uploadingAttachment ? 'is-disabled' : ''"
                   :title="t('chat.attachments')"
                 >
-                  <AppIcon name="plus" :size="22" />
+                  <AppIcon
+                    name="plus"
+                    :size="18"
+                  />
                   <input
                     type="file"
                     accept="image/*,video/*,application/pdf,text/plain"
@@ -333,15 +453,32 @@ watch(
                 </label>
                 <button
                   type="button"
-                  class="chat-send-button"
-                  :disabled="!canSendMessage || uploadingAttachment"
-                  :aria-label="sendingMessage ? t('chat.sending') : t('common.action.send')"
-                  :title="sendingMessage ? t('chat.sending') : t('common.action.send')"
-                  @click="handleSendMessage"
+                  class="chat-composer__tool"
+                  :class="emojiPickerOpen ? 'is-active' : ''"
+                  :title="t('chat.emoji')"
+                  :aria-label="t('chat.emoji')"
+                  :aria-expanded="emojiPickerOpen"
+                  @click="toggleEmojiPicker"
                 >
-                  <AppIcon name="send" :size="18" />
+                  <AppIcon
+                    name="smile"
+                    :size="18"
+                  />
                 </button>
               </div>
+              <button
+                type="button"
+                class="chat-send-button"
+                :disabled="!canSendMessage || uploadingAttachment"
+                :aria-label="sendingMessage || uploadingAttachment ? t('chat.sending') : t('common.action.send')"
+                :title="sendingMessage || uploadingAttachment ? t('chat.sending') : t('common.action.send')"
+                @click="sendFromComposer"
+              >
+                <AppIcon
+                  name="send"
+                  :size="16"
+                />
+              </button>
             </div>
           </div>
         </div>
@@ -536,18 +673,6 @@ watch(
   flex-shrink: 0;
 }
 
-.chat-nav-item__building-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: rgb(var(--color-primary) / 0.1);
-  color: rgb(var(--color-primary));
-}
-
 .chat-nav-item__header {
   display: flex;
   align-items: center;
@@ -703,6 +828,10 @@ watch(
 .chat-back-button:hover {
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary) / 0.05);
+}
+
+.chat-thread-avatar {
+  flex-shrink: 0;
 }
 
 .chat-thread-info {
@@ -867,81 +996,165 @@ watch(
 }
 
 .chat-composer {
+  position: relative;
   border-top: 1px solid rgb(var(--color-border));
   background: rgb(var(--color-surface));
-  padding: 12px 16px;
+  padding: 10px 16px 12px;
 }
 
-.chat-composer__surface {
-  display: grid;
-  grid-template-rows: minmax(84px, 1fr) 44px;
-  min-height: 132px;
+.chat-composer__quote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  border: 1px solid rgb(var(--color-border));
+  border-left: 3px solid rgb(var(--color-primary));
+  border-radius: 8px;
+  background: rgb(var(--color-surface-raised));
+  padding: 8px 10px;
+}
+
+.chat-composer__quote-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-composer__quote-body strong {
+  display: block;
+  color: rgb(var(--color-text));
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.chat-composer__quote-body span {
+  display: block;
+  overflow: hidden;
+  color: rgb(var(--color-text-muted));
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-composer__quote-clear {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 32px;
+  height: 32px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--color-text-muted));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0 4px;
+}
+
+.chat-composer__field {
+  position: relative;
+}
+
+.chat-composer__field.is-busy {
+  opacity: 0.78;
+}
+
+.chat-composer__input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  max-height: 180px;
+  margin: 0;
+  appearance: none;
   border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
   background: rgb(var(--color-surface-raised));
-  overflow: hidden;
-}
-
-.chat-composer__textarea {
-  min-width: 0;
-}
-
-.chat-composer__textarea :deep(.app-textarea) {
-  width: 100%;
-  min-height: 84px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  box-shadow: none;
+  color: rgb(var(--color-text));
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  overflow-y: auto;
+  padding: 12px 14px 44px;
   resize: none;
-  padding: 14px 14px 6px;
-  box-shadow: none;
 }
 
-.chat-composer__textarea :deep(.app-textarea:focus) {
-  box-shadow: none;
+.chat-composer__input::placeholder {
+  color: rgb(var(--color-text-muted) / 0.8);
 }
 
-.chat-composer__toolbar {
+.chat-composer__input:focus {
+  border-color: rgb(var(--color-primary));
+}
+
+.chat-composer__tools {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 44px;
-  padding: 4px 8px 8px;
+  gap: 2px;
 }
 
-.chat-attachment-button,
+.chat-composer__tool,
 .chat-send-button {
   display: inline-flex;
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: rgb(var(--color-text-muted));
   cursor: pointer;
 }
 
-.chat-attachment-button:hover,
-.chat-attachment-button:focus-within {
+.chat-composer__tool:hover,
+.chat-composer__tool:focus-visible,
+.chat-composer__tool:focus-within,
+.chat-composer__tool.is-active {
   background: rgb(var(--color-primary) / 0.08);
   color: rgb(var(--color-primary));
+  outline: none;
 }
 
-.chat-attachment-button input {
+.chat-composer__tool input {
   display: none;
 }
 
-.chat-attachment-button--disabled,
+.chat-composer__tool.is-disabled,
 .chat-send-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
 .chat-send-button {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
   background: rgb(var(--color-primary));
   color: rgb(var(--color-primary-contrast));
+}
+
+.chat-emoji-picker__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+}
+
+.chat-emoji-picker {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% - 4px);
+  z-index: 5;
+  width: min(100% - 32px, 20rem);
 }
 
 .chat-send-button:not(:disabled):hover,
@@ -1005,8 +1218,13 @@ watch(
     padding: 14px;
   }
 
-  .chat-composer__textarea :deep(.app-textarea) {
-    min-height: 84px;
+  .chat-composer {
+    padding: 8px 12px 10px;
+  }
+
+  .chat-emoji-picker {
+    left: 12px;
+    right: auto;
   }
 }
 

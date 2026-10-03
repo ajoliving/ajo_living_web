@@ -17,6 +17,10 @@ import Page from './Page.vue';
 vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: vi.fn(),
+    replace: vi.fn(),
+  }),
+  useRoute: () => ({
+    query: {},
   }),
 }));
 

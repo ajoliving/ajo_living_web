@@ -41,4 +41,12 @@ export default {
   loadChatsError: 'Failed to load conversations.',
   loadThreadError: 'Failed to load messages.',
   sendError: 'Failed to send message.',
+  emoji: 'Emoji',
+  reply: 'Reply',
+  copy: 'Copy',
+  cancelReply: 'Cancel reply',
+  replyingTo: 'Reply to {name}',
+  recall: 'Recall',
+  recalledMessage: 'Recalled',
+  recallError: 'Unable to recall this message.',
 };

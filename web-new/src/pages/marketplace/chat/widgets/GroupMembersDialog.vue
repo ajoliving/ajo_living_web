@@ -94,7 +94,8 @@ const mutedMembers = computed(() =>
               class="group-members-dialog__item"
             >
               <BaseAvatar
-                src=""
+                :avatar-key="member.avatar_key"
+                :seed="member.user_id"
                 :name="member.display_name"
                 :size="36"
               />

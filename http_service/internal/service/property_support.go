@@ -1721,7 +1721,7 @@ func (s *PropertyService) loadUserPreviewMap(ctx context.Context, userIDs []int6
 
 	var rows []secondhandUserPreviewRow
 	if err := s.runtime.DB.WithContext(ctx).Table("users").
-		Select("users.id, users.public_id, user_profiles.display_name, user_profiles.publisher_identity_type, media_assets.object_key AS avatar_object_key").
+		Select("users.id, users.public_id, user_profiles.display_name, user_profiles.publisher_identity_type, user_profiles.avatar_key, media_assets.object_key AS avatar_object_key").
 		Joins("LEFT JOIN user_profiles ON user_profiles.user_id = users.id").
 		Joins("LEFT JOIN media_assets ON media_assets.id = user_profiles.avatar_asset_id").
 		Where("users.id IN ?", userIDs).
@@ -1739,6 +1739,7 @@ func (s *PropertyService) loadUserPreviewMap(ctx context.Context, userIDs []int6
 			PublicID:              item.PublicID,
 			DisplayName:           displayName,
 			AvatarURL:             buildMediaURL(s.runtime.Config.MediaBaseURL, item.AvatarObjectKey),
+			AvatarKey:             utils.NormalizeAvatarKey(item.AvatarKey),
 			PublisherIdentityType: item.PublisherIdentityType,
 		}
 	}

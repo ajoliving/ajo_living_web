@@ -36,7 +36,9 @@ type MeResponse struct {
 	Roles                   []string                      `json:"roles"`
 	Permissions             []string                      `json:"permissions"`
 	DisplayName             string                        `json:"display_name"`
+	Username                string                        `json:"username"`
 	AvatarURL               string                        `json:"avatar_url"`
+	AvatarKey               string                        `json:"avatar_key"`
 	PublisherIdentity       string                        `json:"publisher_identity_type"`
 	AccountType             string                        `json:"account_type"`
 	DistrictCode            string                        `json:"district_code"`
@@ -115,6 +117,7 @@ type UpdateProfileParams struct {
 	ResidenceUnit         string
 	DistrictCode          string
 	AvatarAssetID         string
+	AvatarKey             string
 }
 
 const profileAvatarUpdateCost = int64(50)
@@ -183,7 +186,9 @@ func (s *UserService) GetMe(ctx context.Context, userID int64) (*MeResponse, err
 		Roles:                   access.RoleCodes,
 		Permissions:             permissions,
 		DisplayName:             profile.DisplayName,
+		Username:                s.userUsername(ctx, user.ID),
 		AvatarURL:               s.avatarURL(ctx, profile.AvatarAssetID),
+		AvatarKey:               utils.NormalizeAvatarKey(profile.AvatarKey),
 		PublisherIdentity:       publisherIdentity,
 		AccountType:             accountType,
 		DistrictCode:            profile.DistrictCode,
@@ -228,11 +233,16 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 		return nil, errcode.New(errcode.CodeValidationError, "publisher identity is derived from account type")
 	}
 
-	updates := map[string]any{
-		"display_name":    params.DisplayName,
-		"residence_floor": params.ResidenceFloor,
-		"residence_unit":  params.ResidenceUnit,
-		"district_code":   params.DistrictCode,
+	updates := map[string]any{}
+	if strings.TrimSpace(params.DisplayName) != "" {
+		updates["display_name"] = params.DisplayName
+	}
+	if strings.TrimSpace(params.ResidenceFloor) != "" || strings.TrimSpace(params.ResidenceUnit) != "" {
+		updates["residence_floor"] = params.ResidenceFloor
+		updates["residence_unit"] = params.ResidenceUnit
+	}
+	if strings.TrimSpace(params.DistrictCode) != "" {
+		updates["district_code"] = params.DistrictCode
 	}
 	userUpdates := map[string]any{}
 	credentialUpdates := map[string]any{}
@@ -278,6 +288,13 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 		}
 	}
 
+	if params.AvatarKey != "" {
+		avatarKey := utils.NormalizeAvatarKey(params.AvatarKey)
+		if avatarKey == "" {
+			return nil, errcode.New(errcode.CodeValidationError, "invalid avatar key")
+		}
+		updates["avatar_key"] = avatarKey
+	}
 	if params.AvatarAssetID != "" {
 		asset, err := s.loadOwnedAvatarAsset(ctx, userID, params.AvatarAssetID)
 		if err != nil {
@@ -348,8 +365,10 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, params Up
 			}
 		}
 
-		if err := tx.Where("user_id = ?", userID).Assign(updates).FirstOrCreate(&model.UserProfile{UserID: userID}).Error; err != nil {
-			return errcode.New(errcode.CodeInternalError, "failed to update profile")
+		if len(updates) > 0 {
+			if err := tx.Where("user_id = ?", userID).Assign(updates).FirstOrCreate(&model.UserProfile{UserID: userID}).Error; err != nil {
+				return errcode.New(errcode.CodeInternalError, "failed to update profile")
+			}
 		}
 
 		return nil
@@ -532,6 +551,19 @@ func (s *UserService) userEmail(ctx context.Context, userID int64) string {
 	}
 
 	return *credential.Email
+}
+
+// 16.1 userUsername returns the local login username for the current member.
+func (s *UserService) userUsername(ctx context.Context, userID int64) string {
+	var credential model.UserCredential
+	if err := s.runtime.DB.WithContext(ctx).Where("user_id = ?", userID).First(&credential).Error; err != nil {
+		return ""
+	}
+	if credential.Username == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(*credential.Username)
 }
 
 // 17. profileEmailUpdate validates email OTP when the email is changed.

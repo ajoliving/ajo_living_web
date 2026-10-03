@@ -25,6 +25,7 @@ import { useFeedbackStore } from '@/stores/feedback';
 import { useSessionStore } from '@/stores/session';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatDate, formatPrice } from '@/utils/format';
+import { resolveAvatarSrc } from '@/constants/presetAvatars';
 import {
   getDeliveryTagTranslationKey,
   resolveListingImages,
@@ -69,7 +70,11 @@ export const useMarketplaceListingPage = () => {
     listing.value ? getMarketplaceDistrictLabel(listing.value.district_code, preferenceStore.locale) : '',
   );
   const ownerName = computed(() => listing.value ? resolveListingOwnerName(listing.value) : '');
-  const ownerAvatarUrl = computed(() => listing.value?.owner?.avatar_url ?? '');
+  const ownerAvatarUrl = computed(() => resolveAvatarSrc({
+    avatarKey: listing.value?.owner?.avatar_key,
+    avatarUrl: listing.value?.owner?.avatar_url,
+    seed: listing.value?.owner?.public_id || listing.value?.owner?.user_id,
+  }));
   const publishedAt = computed(() =>
     listing.value ? formatDate(listing.value.published_at || listing.value.updated_at, preferenceStore.locale) : '',
   );

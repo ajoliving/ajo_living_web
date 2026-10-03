@@ -12,6 +12,7 @@ import { useMarketplaceChatPage } from './chat';
 const mocks = vi.hoisted(() => ({
   completeUpload: vi.fn(),
   createUploadPresign: vi.fn(),
+  fetchBuildingChats: vi.fn(),
   fetchRealtimeTicket: vi.fn(),
   fetchChatDetail: vi.fn(),
   fetchChats: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   markChatRead: vi.fn(),
   pushToast: vi.fn(),
   replace: vi.fn(),
+  recallMessage: vi.fn(),
   sendMessage: vi.fn(),
   route: {
     params: {} as Record<string, string>,
@@ -32,10 +34,11 @@ vi.mock('vue-router', () => ({
 }));
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-HK' } }),
 }));
 
 vi.mock('@/httpapis/chats', () => ({
+  fetchBuildingChats: mocks.fetchBuildingChats,
   fetchChatDetail: mocks.fetchChatDetail,
   fetchChats: mocks.fetchChats,
   markChatRead: mocks.markChatRead,
@@ -43,6 +46,7 @@ vi.mock('@/httpapis/chats', () => ({
 
 vi.mock('@/httpapis/messages', () => ({
   fetchMessages: mocks.fetchMessages,
+  recallMessage: mocks.recallMessage,
   sendMessage: mocks.sendMessage,
 }));
 
@@ -104,6 +108,18 @@ const secondConversation = {
   },
 };
 
+const buildingGroupConversation = {
+  chat_id: 'chat-group-1',
+  chat_type: 'building_group',
+  building_id: '0999900',
+  building_name: '測試1大廈',
+  building_name_en: 'DEMO1 BUILDING',
+  member_count: 3,
+  unread_count: 0,
+  last_message_preview: '群組訊息',
+  last_message_at: '2026-09-14T12:00:00Z',
+};
+
 // 1. 建立可操作聊天狀態的測試元件
 const TestHost = defineComponent({
   setup() {
@@ -114,8 +130,10 @@ const TestHost = defineComponent({
       <span class="selected-chat">{{ selectedChatId }}</span>
       <span class="attachment-status">{{ activeMessages[0]?.attachments[0]?.scan_status || '' }}</span>
       <span class="message-body">{{ activeMessages[0]?.body || '' }}</span>
+      <span class="message-status">{{ activeMessages[0]?.status || '' }}</span>
       <span class="message-count">{{ activeMessages.length }}</span>
       <span class="last-message">{{ conversations[0]?.last_message || '' }}</span>
+      <span class="building-title">{{ (conversations.find((item) => item.type === 'building_group') || {}).title || '' }}</span>
       <button class="select-chat" type="button" @click="handleSelectChat('chat-1')">select</button>
       <button class="select-chat-2" type="button" @click="handleSelectChat('chat-2')">select second</button>
       <button class="back-to-chats" type="button" @click="handleBackToChats">back</button>
@@ -130,14 +148,17 @@ describe('useMarketplaceChatPage', () => {
     mocks.replace.mockReset();
     mocks.pushToast.mockReset();
     mocks.fetchChats.mockReset();
+    mocks.fetchBuildingChats.mockReset();
     mocks.fetchRealtimeTicket.mockReset();
     mocks.fetchChatDetail.mockReset();
     mocks.fetchMessages.mockReset();
     mocks.markChatRead.mockReset();
     mocks.sendMessage.mockReset();
+    mocks.recallMessage.mockReset();
     mocks.createUploadPresign.mockReset();
     mocks.completeUpload.mockReset();
     mocks.fetchChats.mockResolvedValue({ data: { data: { items: [conversation] } } });
+    mocks.fetchBuildingChats.mockResolvedValue({ data: { data: { items: [] } } });
     mocks.fetchChatDetail.mockResolvedValue({
       data: {
         data: {
@@ -302,6 +323,7 @@ describe('useMarketplaceChatPage', () => {
     }));
     mocks.fetchMessages
       .mockResolvedValueOnce({ data: { data: { items: [baseMessage] } } })
+      .mockResolvedValueOnce({ data: { data: { items: [baseMessage] } } })
       .mockResolvedValueOnce({ data: { data: { items: firstRecoveredPage } } })
       .mockResolvedValueOnce({
         data: {
@@ -334,10 +356,14 @@ describe('useMarketplaceChatPage', () => {
     await flushPromises();
 
     expect(mocks.fetchMessages).toHaveBeenNthCalledWith(2, 'chat-1', {
-      after_message_id: 'message-base',
+      latest: true,
       page_size: 100,
     });
     expect(mocks.fetchMessages).toHaveBeenNthCalledWith(3, 'chat-1', {
+      after_message_id: 'message-base',
+      page_size: 100,
+    });
+    expect(mocks.fetchMessages).toHaveBeenNthCalledWith(4, 'chat-1', {
       after_message_id: 'message-100',
       page_size: 100,
     });
@@ -470,4 +496,214 @@ describe('useMarketplaceChatPage', () => {
     expect(mocks.pushToast).toHaveBeenNthCalledWith(1, 'chat.attachmentTypeError', 'error');
     expect(mocks.pushToast).toHaveBeenNthCalledWith(2, 'chat.attachmentSizeError', 'error');
   });
+
+  it('redacts a recalled message and updates the conversation preview', async () => {
+    const ownMessage = {
+      message_id: 'message-own',
+      sender_user_id: 'member-self',
+      content: '可撤回內容',
+      message_type: 'text',
+      status: 'sent',
+      created_at: new Date().toISOString(),
+    };
+    mocks.fetchMessages.mockResolvedValue({ data: { data: { items: [ownMessage] } } });
+    mocks.recallMessage.mockResolvedValue({
+      data: {
+        data: {
+          ...ownMessage,
+          content: '',
+          status: 'recalled',
+          attachments: [],
+        },
+      },
+    });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+    await wrapper.find('.select-chat').trigger('click');
+    await flushPromises();
+
+    const page = wrapper.vm as unknown as {
+      handleRecallMessage: (messageId: string) => Promise<void>;
+    };
+    await page.handleRecallMessage('message-own');
+    await flushPromises();
+
+    expect(mocks.recallMessage).toHaveBeenCalledWith('chat-1', 'message-own');
+    expect(wrapper.find('.message-body').text()).toBe('chat.recalledMessage');
+    expect(wrapper.find('.message-status').text()).toBe('recalled');
+    expect(wrapper.find('.last-message').text()).toBe('chat.recalledMessage');
+  });
+
+  it('keeps recall available for numeric sender ids when the backend marks the message as self', async () => {
+    mocks.fetchChatDetail.mockResolvedValue({
+      data: {
+        data: {
+          chat_type: 'direct_listing_chat',
+          participants: [
+            { user_id: '12', public_id: 'member-self' },
+            { user_id: '34', public_id: 'member-peer' },
+          ],
+        },
+      },
+    });
+    const ownMessage = {
+      message_id: 'message-numeric-self',
+      sender_user_id: '12',
+      sender_role: 'self',
+      content: '兩分鐘內可撤回',
+      message_type: 'text',
+      status: 'sent',
+      created_at: new Date().toISOString(),
+    };
+    mocks.fetchMessages.mockResolvedValue({ data: { data: { items: [ownMessage] } } });
+    mocks.recallMessage.mockResolvedValue({
+      data: {
+        data: {
+          ...ownMessage,
+          content: '',
+          status: 'recalled',
+          attachments: [],
+        },
+      },
+    });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+    await wrapper.find('.select-chat').trigger('click');
+    await flushPromises();
+
+    const page = wrapper.vm as unknown as {
+      canRecallMessage: (message: { id: string }) => boolean;
+      handleRecallMessage: (messageId: string) => Promise<void>;
+      activeMessages: Array<{ id: string }>;
+    };
+    expect(page.canRecallMessage(page.activeMessages[0])).toBe(true);
+    await page.handleRecallMessage('message-numeric-self');
+    await flushPromises();
+
+    expect(mocks.recallMessage).toHaveBeenCalledWith('chat-1', 'message-numeric-self');
+    expect(wrapper.find('.message-status').text()).toBe('recalled');
+  });
+
+  it('maps own messages by participant public_id when sender_user_id is numeric', async () => {
+    mocks.fetchChatDetail.mockResolvedValue({
+      data: {
+        data: {
+          chat_type: 'direct_listing_chat',
+          participants: [
+            { user_id: '12', public_id: 'member-self' },
+            { user_id: '34', public_id: 'member-peer' },
+          ],
+        },
+      },
+    });
+    mocks.fetchMessages.mockResolvedValue({
+      data: {
+        data: {
+          items: [{
+            message_id: 'message-mapped-self',
+            sender_user_id: '12',
+            content: '自己剛發送的訊息',
+            message_type: 'text',
+            status: 'sent',
+            created_at: new Date().toISOString(),
+          }],
+        },
+      },
+    });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+    await wrapper.find('.select-chat').trigger('click');
+    await flushPromises();
+
+    const page = wrapper.vm as unknown as {
+      canRecallMessage: (message: { id: string }) => boolean;
+      activeMessages: Array<{ id: string; sender_role: string }>;
+    };
+    expect(page.activeMessages[0].sender_role).toBe('self');
+    expect(page.canRecallMessage(page.activeMessages[0])).toBe(true);
+  });
+
+  it('shows the resolved building name instead of the building id for a group chat', async () => {
+    mocks.fetchBuildingChats.mockResolvedValue({ data: { data: { items: [buildingGroupConversation] } } });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+
+    expect(wrapper.find('.building-title').text()).toBe('chat.buildingGroup 測試1大廈');
+  });
+
+  it('falls back to the building id when the group chat has no resolved building name', async () => {
+    mocks.fetchBuildingChats.mockResolvedValue({
+      data: {
+        data: {
+          items: [{
+            ...buildingGroupConversation,
+            building_name: '',
+            building_name_en: '',
+          }],
+        },
+      },
+    });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+
+    expect(wrapper.find('.building-title').text()).toBe('chat.buildingGroup 0999900');
+  });
+
+  it('sends reply_to_message_id when a reply target is set', async () => {
+    const peerMessage = {
+      message_id: 'message-peer',
+      sender_user_id: 'member-peer',
+      content: '原訊息內容',
+      message_type: 'text',
+      status: 'sent',
+      created_at: '2026-09-12T12:00:00Z',
+    };
+    mocks.fetchMessages.mockResolvedValue({ data: { data: { items: [peerMessage] } } });
+    mocks.sendMessage.mockResolvedValue({
+      data: {
+        data: {
+          message_id: 'message-reply',
+          sender_user_id: 'member-self',
+          content: '回覆內容',
+          message_type: 'text',
+          status: 'sent',
+          created_at: '2026-09-12T12:01:00Z',
+          reply_to: {
+            message_id: 'message-peer',
+            sender_user_id: 'member-peer',
+            sender_name: '測試會員',
+            content: '原訊息內容',
+            recalled: false,
+          },
+        },
+      },
+    });
+
+    const wrapper = mount(TestHost);
+    await flushPromises();
+    await wrapper.find('.select-chat').trigger('click');
+    await flushPromises();
+
+    const page = wrapper.vm as unknown as {
+      activeMessages: Array<{ id: string; status: string; body: string; sender_name: string }>;
+      draftMessage: string;
+      handleReplyMessage: (message: { id: string; status: string; body: string; sender_name: string }) => void;
+      handleSendMessage: () => Promise<void>;
+    };
+    page.handleReplyMessage(page.activeMessages[0]);
+    page.draftMessage = '回覆內容';
+    await page.handleSendMessage();
+    await flushPromises();
+
+    expect(mocks.sendMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      content: '回覆內容',
+      reply_to_message_id: 'message-peer',
+    }));
+  });
+
 });

@@ -41,6 +41,7 @@ export default {
     heroEyebrow: 'SUPERMARKET PRICE COMPARISON',
     heroTitle: 'AJO Supermarket Intelligence',
     heroSubtitle: 'Our team finds the latest supermarket offers for you every day.',
+    heroNote: 'Sorted by effective paid price so the best value is easy to compare.',
     searchPlaceholder: 'Search products, brands, or categories...',
     noSuggestions: 'No matching suggestions.',
     showMoreSuggestions: 'Show more suggestions',

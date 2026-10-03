@@ -41,4 +41,12 @@ export default {
   loadChatsError: '無法載入訊息會話。',
   loadThreadError: '無法載入訊息內容。',
   sendError: '無法發送訊息。',
+  emoji: '表情',
+  reply: '回覆',
+  copy: '複製',
+  cancelReply: '取消回覆',
+  replyingTo: '回覆 {name}',
+  recall: '撤回',
+  recalledMessage: '已撤回',
+  recallError: '無法撤回此訊息。',
 };

@@ -24,7 +24,9 @@ APP_PUBLIC_BASE_URL="${APP_PUBLIC_BASE_URL:-https://$WEB_DOMAIN}"
 APP_API_PUBLIC_BASE_URL="${APP_API_PUBLIC_BASE_URL:-https://$APP_DOMAIN}"
 OSS_CALLBACK_ENABLED="${OSS_CALLBACK_ENABLED:-1}"
 OSS_CALLBACK_URL="${OSS_CALLBACK_URL:-$APP_API_PUBLIC_BASE_URL/api/v1/oss/callback}"
-OSS_ALLOWED_ORIGINS="${OSS_ALLOWED_ORIGINS:-$APP_PUBLIC_BASE_URL}"
+# The OSS bucket is shared by the production and testing frontends, so the
+# bucket CORS origin list must cover every deployed web origin.
+OSS_ALLOWED_ORIGINS="${OSS_ALLOWED_ORIGINS:-$APP_PUBLIC_BASE_URL,https://test.ajoliving.skylinedances.com}"
 
 BACKUP_DB="${BACKUP_DB:-1}"
 DB_BACKUP_KEEP="${DB_BACKUP_KEEP:-10}"
@@ -63,10 +65,10 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ajoliving_server ./cmd/server
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o oss-cors ./cmd/oss-cors
 popd >/dev/null
 
-# 3. Build frontend assets.
+# 3. Build frontend assets. Production keeps the fixed brand theme, so the theme picker stays off.
 pushd "$FRONTEND_DIR" >/dev/null
 npm ci
-VITE_API_BASE_URL="$APP_API_PUBLIC_BASE_URL/api/v1" npm run build
+VITE_API_BASE_URL="$APP_API_PUBLIC_BASE_URL/api/v1" VITE_ENABLE_THEME_PICKER=0 npm run build
 popd >/dev/null
 
 # 4. Create a local database dump only when an explicit restore is confirmed.

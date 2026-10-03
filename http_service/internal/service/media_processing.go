@@ -307,6 +307,9 @@ func (w *MediaProcessingWorker) enqueueAttachmentUpdates(ctx context.Context, tx
 		if err := tx.WithContext(ctx).First(&message, row.MessageID).Error; err != nil {
 			return err
 		}
+		if message.MessageStatus == messageStatusRecalled {
+			continue
+		}
 		items, err := chatService.buildMessageResponses(ctx, []model.Message{message})
 		if err != nil {
 			return err

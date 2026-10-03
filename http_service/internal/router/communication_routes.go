@@ -37,6 +37,13 @@ func registerChatRoutes(
 		}),
 		chatHandler.SendMessage,
 	)
+	api.POST("/chats/:chatId/messages/:messageId/recall",
+		requireAuth,
+		limiter.Limit(30, time.Minute, func(c *gin.Context) string {
+			return "recall_message:" + c.ClientIP()
+		}),
+		chatHandler.RecallMessage,
+	)
 	api.POST("/chats/:chatId/read", requireAuth, chatHandler.MarkRead)
 	api.GET("/building-chats", requireAuth, chatHandler.ListBuildingChats)
 	api.POST("/buildings/:buildingId/chat", requireAuth, chatHandler.EnsureBuildingChat)
@@ -50,6 +57,13 @@ func registerChatRoutes(
 			return "send_building_message:" + c.ClientIP()
 		}),
 		chatHandler.SendBuildingChatMessage,
+	)
+	api.POST("/building-chats/:chatId/messages/:messageId/recall",
+		requireAuth,
+		limiter.Limit(30, time.Minute, func(c *gin.Context) string {
+			return "recall_building_message:" + c.ClientIP()
+		}),
+		chatHandler.RecallMessage,
 	)
 	api.POST("/building-chats/:chatId/read", requireAuth, chatHandler.MarkBuildingChatRead)
 	api.POST("/building-chats/:chatId/leave", requireAuth, chatHandler.LeaveBuildingChat)

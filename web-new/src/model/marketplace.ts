@@ -34,6 +34,7 @@ export interface MarketplaceOwnerResponse {
   public_id?: string;
   display_name?: string;
   avatar_url?: string;
+  avatar_key?: string;
   publisher_identity_type?: string;
 }
 

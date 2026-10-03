@@ -35,17 +35,21 @@ const (
 	chatModerationKick         = "kick"
 	chatModerationBan          = "ban"
 	chatModerationUnban        = "unban"
+	chatModerationAdd          = "add"
 )
 
 // 1. BuildingChatSummary defines the building group list payload.
 type BuildingChatSummary struct {
-	ChatID        string  `json:"chat_id"`
-	BuildingID    string  `json:"building_id"`
-	ChatType      string  `json:"chat_type"`
-	MemberCount   int64   `json:"member_count"`
-	UnreadCount   int     `json:"unread_count"`
-	LastPreview   string  `json:"last_message_preview"`
-	LastMessageAt *string `json:"last_message_at,omitempty"`
+	ChatID         string  `json:"chat_id"`
+	BuildingID     string  `json:"building_id"`
+	BuildingName   string  `json:"building_name,omitempty"`
+	BuildingNameEN string  `json:"building_name_en,omitempty"`
+	ChatType       string  `json:"chat_type"`
+	AvatarKey      string  `json:"avatar_key"`
+	MemberCount    int64   `json:"member_count"`
+	UnreadCount    int     `json:"unread_count"`
+	LastPreview    string  `json:"last_message_preview"`
+	LastMessageAt  *string `json:"last_message_at,omitempty"`
 }
 
 // 2. BuildingChatMember defines a member management payload.
@@ -53,6 +57,7 @@ type BuildingChatMember struct {
 	UserID           string  `json:"user_id"`
 	PublicID         string  `json:"public_id"`
 	DisplayName      string  `json:"display_name"`
+	AvatarKey        string  `json:"avatar_key,omitempty"`
 	RoleInChat       string  `json:"role_in_chat"`
 	MembershipStatus string  `json:"membership_status"`
 	MutedUntil       *string `json:"muted_until,omitempty"`
@@ -80,12 +85,13 @@ func (s *ChatService) ListBuildingChats(ctx context.Context, userID int64) ([]Bu
 		return nil, err
 	}
 	items := make([]BuildingChatSummary, 0, len(buildingIDs))
+	names := s.buildingNameIndex(ctx)
 	for _, buildingID := range buildingIDs {
 		chat, participant, err := s.ensureBuildingChat(ctx, userID, buildingID)
 		if err != nil {
 			continue
 		}
-		items = append(items, s.buildBuildingChatSummary(ctx, chat, participant))
+		items = append(items, s.buildBuildingChatSummary(ctx, chat, participant, names))
 	}
 	return items, nil
 }
@@ -96,7 +102,7 @@ func (s *ChatService) EnsureBuildingChat(ctx context.Context, userID int64, buil
 	if err != nil {
 		return nil, err
 	}
-	result := s.buildBuildingChatSummary(ctx, chat, participant)
+	result := s.buildBuildingChatSummary(ctx, chat, participant, s.buildingNameIndex(ctx))
 	return &result, nil
 }
 
@@ -111,9 +117,12 @@ func (s *ChatService) GetBuildingChat(ctx context.Context, userID int64, chatPub
 		return nil, errcode.New(errcode.CodeInternalError, "failed to load building chat members")
 	}
 	result := &ChatDetail{ChatID: chat.PublicID, BuildingID: chat.BuildingID, BizModule: chat.BizModule, ChatType: chat.ChatType, CreatedAt: chat.CreatedAt.UTC().Format(time.RFC3339), CanManage: s.canManageBuilding(ctx, userID, chat), Participants: make([]ChatMember, 0, len(members))}
+	name := s.buildingNameFor(ctx, s.buildingNameIndex(ctx), chat.BuildingID)
+	result.BuildingName = name.ZH
+	result.BuildingNameEN = name.EN
 	for _, member := range members {
 		preview := s.loadUserPreview(ctx, member.UserID)
-		result.Participants = append(result.Participants, ChatMember{UserID: fmtInt64(member.UserID), PublicID: preview.PublicID, DisplayName: preview.DisplayName, RoleInChat: member.RoleInChat, MembershipStatus: member.MembershipStatus})
+		result.Participants = append(result.Participants, ChatMember{UserID: fmtInt64(member.UserID), PublicID: preview.PublicID, DisplayName: preview.DisplayName, AvatarKey: preview.AvatarKey, RoleInChat: member.RoleInChat, MembershipStatus: member.MembershipStatus})
 	}
 	if participant != nil {
 		result.UnreadCount = participant.UnreadCount
@@ -195,16 +204,16 @@ func (s *ChatService) ListBuildingChatMessagesAfter(ctx context.Context, userID 
 
 // 8. SendBuildingChatMessage persists a text message after group moderation checks.
 func (s *ChatService) SendBuildingChatMessage(ctx context.Context, userID int64, chatPublicID string, content string) (*MessageResponse, error) {
-	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, nil, "")
+	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, nil, "", "")
 }
 
 // 8.1 SendBuildingChatMessageWithAttachments sends a group message with optional uploads.
 func (s *ChatService) SendBuildingChatMessageWithAttachments(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string) (*MessageResponse, error) {
-	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, attachmentIDs, "")
+	return s.SendBuildingChatMessageWithAttachmentsAndClientID(ctx, userID, chatPublicID, content, attachmentIDs, "", "")
 }
 
 // 8.2 SendBuildingChatMessageWithAttachmentsAndClientID adds retry idempotency.
-func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string, clientMessageID string) (*MessageResponse, error) {
+func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx context.Context, userID int64, chatPublicID string, content string, attachmentIDs []string, clientMessageID string, replyToMessageID string) (*MessageResponse, error) {
 	content = strings.TrimSpace(content)
 	var attachmentErr error
 	attachmentIDs, attachmentErr = normalizeAttachmentIDs(attachmentIDs)
@@ -245,6 +254,10 @@ func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx cont
 	if err != nil {
 		return nil, err
 	}
+	replyToID, replyPreview, replyErr := s.resolveReplyTarget(ctx, chat.ID, replyToMessageID)
+	if replyErr != nil {
+		return nil, replyErr
+	}
 	messageType := messageTypeText
 	if len(assets) > 0 && content == "" {
 		messageType = messageTypeAttachment
@@ -255,8 +268,8 @@ func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx cont
 	if preview == "" {
 		preview = "[Attachment]"
 	}
-	message := model.Message{PublicID: utils.NewPublicID(), ChatID: chat.ID, SenderUserID: userID, ClientMessageID: optionalString(clientMessageID), MessageType: messageType, ContentText: content, MessageStatus: "sent", CreatedAt: now}
-	eventPayload, payloadErr := buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+	message := model.Message{PublicID: utils.NewPublicID(), ChatID: chat.ID, SenderUserID: userID, ClientMessageID: optionalString(clientMessageID), ReplyToMessageID: replyToID, MessageType: messageType, ContentText: content, MessageStatus: "sent", CreatedAt: now}
+	eventPayload, payloadErr := realtimeMessagePayload(chat.PublicID, message, assets, s.runtime.Config.MediaBaseURL, replyPreview, clientMessageID)
 	if payloadErr != nil {
 		return nil, errcode.New(errcode.CodeInternalError, "failed to prepare realtime event")
 	}
@@ -266,7 +279,7 @@ func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx cont
 		if err != nil {
 			return err
 		}
-		eventPayload, payloadErr = buildRealtimeMessagePayload(chat.PublicID, messageResponseFromAssets(message, assets, s.runtime.Config.MediaBaseURL), clientMessageID)
+		eventPayload, payloadErr = realtimeMessagePayload(chat.PublicID, message, assets, s.runtime.Config.MediaBaseURL, replyPreview, clientMessageID)
 		if payloadErr != nil {
 			return payloadErr
 		}
@@ -289,15 +302,7 @@ func (s *ChatService) SendBuildingChatMessageWithAttachmentsAndClientID(ctx cont
 		if err := tx.Model(&model.ChatParticipant{}).Where("chat_id = ? AND user_id <> ? AND membership_status = ?", chat.ID, userID, chatMemberActive).Update("unread_count", gorm.Expr("unread_count + ?", 1)).Error; err != nil {
 			return err
 		}
-		var recipients []model.ChatParticipant
-		if err := tx.Where("chat_id = ? AND user_id <> ? AND membership_status = ?", chat.ID, userID, chatMemberActive).Find(&recipients).Error; err != nil {
-			return err
-		}
-		for _, recipient := range recipients {
-			if err := NewNotificationService(s.runtime).CreateNotification(ctx, tx, CreateNotificationParams{UserID: recipient.UserID, Category: "chat_message", Title: "大廈群組新訊息", Body: preview, RelatedType: "chat", RelatedPublicID: chat.PublicID}); err != nil {
-				return err
-			}
-		}
+		// 8.5.1 大廈群組訊息只更新會話未讀數與 realtime 事件，不寫入通知中心。
 		if participant == nil {
 			return nil
 		}
@@ -406,7 +411,7 @@ func (s *ChatService) ListBuildingChatMembers(ctx context.Context, userID int64,
 	result := make([]BuildingChatMember, 0, len(rows))
 	for _, row := range rows {
 		preview := s.loadUserPreview(ctx, row.UserID)
-		result = append(result, BuildingChatMember{UserID: fmtInt64(row.UserID), PublicID: preview.PublicID, DisplayName: preview.DisplayName, RoleInChat: row.RoleInChat, MembershipStatus: row.MembershipStatus, MutedUntil: buildingChatFormatOptionalTime(row.MutedUntil), BannedUntil: buildingChatFormatOptionalTime(row.BannedUntil), JoinedAt: row.JoinedAt.UTC().Format(time.RFC3339)})
+		result = append(result, BuildingChatMember{UserID: fmtInt64(row.UserID), PublicID: preview.PublicID, DisplayName: preview.DisplayName, AvatarKey: preview.AvatarKey, RoleInChat: row.RoleInChat, MembershipStatus: row.MembershipStatus, MutedUntil: buildingChatFormatOptionalTime(row.MutedUntil), BannedUntil: buildingChatFormatOptionalTime(row.BannedUntil), JoinedAt: row.JoinedAt.UTC().Format(time.RFC3339)})
 	}
 	return result, nil
 }
@@ -478,7 +483,75 @@ func (s *ChatService) ModerateBuildingChatMember(ctx context.Context, operatorID
 	return nil
 }
 
-// 14. MarkBuildingChatRead clears unread state for one group member.
+// 14. AddBuildingChatMember lets an administrator add any recorded user to the group.
+func (s *ChatService) AddBuildingChatMember(ctx context.Context, operatorID int64, chatPublicID string, targetUserID int64, targetPublicID string) (*BuildingChatMember, error) {
+	chat, _, err := s.loadBuildingChat(ctx, chatPublicID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.canManageBuilding(ctx, operatorID, chat) {
+		return nil, errcode.New(errcode.CodeAuthForbidden, "building administrator access required")
+	}
+
+	var user model.User
+	switch {
+	case targetUserID > 0:
+		if err := s.runtime.DB.WithContext(ctx).First(&user, targetUserID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errcode.New(errcode.CodeNotFound, "user not found")
+			}
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load user")
+		}
+	case strings.TrimSpace(targetPublicID) != "":
+		if err := s.runtime.DB.WithContext(ctx).Where("public_id = ?", strings.TrimSpace(targetPublicID)).First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errcode.New(errcode.CodeNotFound, "user not found")
+			}
+			return nil, errcode.New(errcode.CodeInternalError, "failed to load user")
+		}
+	default:
+		return nil, errcode.New(errcode.CodeValidationError, "user_id or public_id is required")
+	}
+
+	now := s.runtime.Now()
+	var participant model.ChatParticipant
+	findErr := s.runtime.DB.WithContext(ctx).Where("chat_id = ? AND user_id = ?", chat.ID, user.ID).First(&participant).Error
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return nil, errcode.New(errcode.CodeInternalError, "failed to load chat member")
+	}
+
+	if err := s.runtime.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if errors.Is(findErr, gorm.ErrRecordNotFound) {
+			participant = model.ChatParticipant{ChatID: chat.ID, UserID: user.ID, RoleInChat: "member", MembershipStatus: chatMemberActive, JoinedAt: now}
+			if err := tx.Create(&participant).Error; err != nil {
+				return err
+			}
+		} else if participant.MembershipStatus == chatMemberActive {
+			return errcode.New(errcode.CodeValidationError, "member is already in the group")
+		} else if participant.MembershipStatus == chatMemberBanned && (participant.BannedUntil == nil || now.Before(*participant.BannedUntil)) {
+			return errcode.New(errcode.CodeAuthForbidden, "member is banned from this group")
+		} else if err := tx.Model(&participant).Updates(map[string]any{"membership_status": chatMemberActive, "banned_until": nil, "muted_until": nil, "joined_at": now}).Error; err != nil {
+			return err
+		} else {
+			participant.MembershipStatus = chatMemberActive
+			participant.BannedUntil = nil
+			participant.MutedUntil = nil
+			participant.JoinedAt = now
+		}
+		return tx.Create(&model.ModerationAction{TargetType: chatModerationTargetMember, TargetID: participant.ID, ActionType: chatModerationAdd, OperatorUserID: operatorID, CreatedAt: now}).Error
+	}); err != nil {
+		var appErr *errcode.AppError
+		if errors.As(err, &appErr) {
+			return nil, appErr
+		}
+		return nil, errcode.New(errcode.CodeInternalError, "failed to add chat member")
+	}
+
+	preview := s.loadUserPreview(ctx, user.ID)
+	return &BuildingChatMember{UserID: fmtInt64(user.ID), PublicID: preview.PublicID, DisplayName: preview.DisplayName, AvatarKey: preview.AvatarKey, RoleInChat: participant.RoleInChat, MembershipStatus: chatMemberActive, JoinedAt: participant.JoinedAt.UTC().Format(time.RFC3339)}, nil
+}
+
+// 15. MarkBuildingChatRead clears unread state for one group member.
 func (s *ChatService) MarkBuildingChatRead(ctx context.Context, userID int64, chatPublicID string) error {
 	chat, participant, err := s.loadAuthorizedBuildingChat(ctx, userID, chatPublicID, true)
 	if err != nil {
@@ -499,7 +572,7 @@ func (s *ChatService) MarkBuildingChatRead(ctx context.Context, userID int64, ch
 	return s.runtime.DB.WithContext(ctx).Model(&model.ChatParticipant{}).Where("id = ?", participant.ID).Updates(updates).Error
 }
 
-// 15. ensureBuildingChat ensures one group and one active membership.
+// 16. ensureBuildingChat ensures one group and one active membership.
 func (s *ChatService) ensureBuildingChat(ctx context.Context, userID int64, buildingID string) (*model.Chat, *model.ChatParticipant, error) {
 	buildingID = strings.TrimSpace(buildingID)
 	if buildingID == "" {
@@ -556,7 +629,7 @@ func (s *ChatService) ensureBuildingChat(ctx context.Context, userID int64, buil
 	return &chat, &participant, nil
 }
 
-// 16. loadAuthorizedBuildingChat loads a group and checks active membership or staff access.
+// 17. loadAuthorizedBuildingChat loads a group and checks active membership or staff access.
 func (s *ChatService) loadAuthorizedBuildingChat(ctx context.Context, userID int64, chatPublicID string, requireMembership bool) (*model.Chat, *model.ChatParticipant, error) {
 	chat, _, err := s.loadBuildingChat(ctx, chatPublicID)
 	if err != nil {
@@ -598,7 +671,7 @@ func (s *ChatService) loadAuthorizedBuildingChat(ctx context.Context, userID int
 	return chat, &participant, nil
 }
 
-// 17. loadBuildingChat loads only building group records.
+// 18. loadBuildingChat loads only building group records.
 func (s *ChatService) loadBuildingChat(ctx context.Context, chatPublicID string) (*model.Chat, *model.ChatParticipant, error) {
 	var chat model.Chat
 	if err := s.runtime.DB.WithContext(ctx).Where("public_id = ? AND chat_type = ?", strings.TrimSpace(chatPublicID), chatTypeBuildingGroup).First(&chat).Error; err != nil {
@@ -610,7 +683,7 @@ func (s *ChatService) loadBuildingChat(ctx context.Context, chatPublicID string)
 	return &chat, nil, nil
 }
 
-// 18. loadBuildingChatByID loads a group by database ID for internal review flows.
+// 19. loadBuildingChatByID loads a group by database ID for internal review flows.
 func (s *ChatService) loadBuildingChatByID(ctx context.Context, chatID int64) (*model.Chat, *model.ChatParticipant, error) {
 	var chat model.Chat
 	if err := s.runtime.DB.WithContext(ctx).Where("id = ? AND chat_type = ?", chatID, chatTypeBuildingGroup).First(&chat).Error; err != nil {
@@ -619,7 +692,7 @@ func (s *ChatService) loadBuildingChatByID(ctx context.Context, chatID int64) (*
 	return &chat, nil, nil
 }
 
-// 19. requireBuildingAccess checks bound profile, active authorization, or staff access.
+// 20. requireBuildingAccess checks bound profile, active authorization, or staff access.
 func (s *ChatService) requireBuildingAccess(ctx context.Context, userID int64, buildingID string) error {
 	if s.isStaff(ctx, userID) {
 		return nil
@@ -636,7 +709,7 @@ func (s *ChatService) requireBuildingAccess(ctx context.Context, userID int64, b
 	return errcode.New(errcode.CodeAuthForbidden, "building is not accessible")
 }
 
-// 20. requireBuildingAdmin limits moderation to AJO staff or building owners.
+// 21. requireBuildingAdmin limits moderation to AJO staff or building owners.
 func (s *ChatService) requireBuildingAdmin(ctx context.Context, userID int64, buildingID string) error {
 	if s.isStaff(ctx, userID) {
 		return nil
@@ -665,7 +738,7 @@ func (s *ChatService) canManageBuilding(ctx context.Context, userID int64, chat 
 	return count > 0
 }
 
-// 21. visibleBuildingIDs combines current profile bindings and active local grants.
+// 22. visibleBuildingIDs combines current profile bindings and active local grants.
 func (s *ChatService) visibleBuildingIDs(ctx context.Context, userID int64) ([]string, error) {
 	result := make([]string, 0)
 	var profile model.UserProfile
@@ -695,17 +768,18 @@ func (s *ChatService) visibleBuildingIDs(ctx context.Context, userID int64) ([]s
 	return result, nil
 }
 
-// 22. isStaff returns the authoritative AJO staff flag.
+// 23. isStaff returns the authoritative AJO staff flag.
 func (s *ChatService) isStaff(ctx context.Context, userID int64) bool {
 	var user model.User
 	return s.runtime.DB.WithContext(ctx).Select("is_staff").First(&user, userID).Error == nil && user.IsStaff
 }
 
-// 23. buildBuildingChatSummary maps group metadata for list responses.
-func (s *ChatService) buildBuildingChatSummary(ctx context.Context, chat *model.Chat, participant *model.ChatParticipant) BuildingChatSummary {
+// 24. buildBuildingChatSummary maps group metadata for list responses.
+func (s *ChatService) buildBuildingChatSummary(ctx context.Context, chat *model.Chat, participant *model.ChatParticipant, names map[string]buildingDisplayName) BuildingChatSummary {
 	var count int64
 	_ = s.runtime.DB.WithContext(ctx).Model(&model.ChatParticipant{}).Where("chat_id = ? AND membership_status = ?", chat.ID, chatMemberActive).Count(&count).Error
-	result := BuildingChatSummary{ChatID: chat.PublicID, BuildingID: chat.BuildingID, ChatType: chat.ChatType, MemberCount: count, LastPreview: chat.LastMessagePreview, UnreadCount: participant.UnreadCount}
+	name := s.buildingNameFor(ctx, names, chat.BuildingID)
+	result := BuildingChatSummary{ChatID: chat.PublicID, BuildingID: chat.BuildingID, BuildingName: name.ZH, BuildingNameEN: name.EN, ChatType: chat.ChatType, AvatarKey: utils.BuildingAvatarKey(chat.BuildingID), MemberCount: count, LastPreview: chat.LastMessagePreview, UnreadCount: participant.UnreadCount}
 	if chat.LastMessageAt != nil {
 		value := chat.LastMessageAt.UTC().Format(time.RFC3339)
 		result.LastMessageAt = &value
@@ -713,7 +787,7 @@ func (s *ChatService) buildBuildingChatSummary(ctx context.Context, chat *model.
 	return result
 }
 
-// 24. loadUserPreview loads a minimal display payload without exposing credentials.
+// 25. loadUserPreview loads a minimal display payload without exposing credentials.
 func (s *ChatService) loadUserPreview(ctx context.Context, userID int64) ChatPeerSummary {
 	var user model.User
 	_ = s.runtime.DB.WithContext(ctx).First(&user, userID).Error
@@ -723,10 +797,10 @@ func (s *ChatService) loadUserPreview(ctx context.Context, userID int64) ChatPee
 	if name == "" {
 		name = fmtInt64(userID)
 	}
-	return ChatPeerSummary{UserID: fmtInt64(userID), PublicID: user.PublicID, DisplayName: name}
+	return ChatPeerSummary{UserID: fmtInt64(userID), PublicID: user.PublicID, DisplayName: name, AvatarKey: utils.NormalizeAvatarKey(profile.AvatarKey)}
 }
 
-// 25. mapJoinRequest maps a persisted request to a stable management response.
+// 26. mapJoinRequest maps a persisted request to a stable management response.
 func (s *ChatService) mapJoinRequest(ctx context.Context, value *model.ChatJoinRequest) *BuildingChatJoinRequest {
 	preview := s.loadUserPreview(ctx, value.UserID)
 	result := &BuildingChatJoinRequest{RequestID: value.PublicID, ChatID: fmtInt64(value.ChatID), UserID: fmtInt64(value.UserID), UserPublicID: preview.PublicID, DisplayName: preview.DisplayName, Status: value.Status, Reason: value.Reason, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339)}
@@ -737,7 +811,7 @@ func (s *ChatService) mapJoinRequest(ctx context.Context, value *model.ChatJoinR
 	return result
 }
 
-// 26. buildingChatFormatOptionalTime maps an optional timestamp to RFC3339.
+// 27. buildingChatFormatOptionalTime maps an optional timestamp to RFC3339.
 func buildingChatFormatOptionalTime(value *time.Time) *string {
 	if value == nil {
 		return nil
@@ -746,7 +820,7 @@ func buildingChatFormatOptionalTime(value *time.Time) *string {
 	return &formatted
 }
 
-// 27. appendUniqueBuilding adds a non-empty building identifier once.
+// 28. appendUniqueBuilding adds a non-empty building identifier once.
 func appendUniqueBuilding(values []string, value string) []string {
 	value = strings.TrimSpace(value)
 	for _, existing := range values {
@@ -760,7 +834,7 @@ func appendUniqueBuilding(values []string, value string) []string {
 	return values
 }
 
-// 28. ListAllBuildingChatsForStaff returns all building chats for staff management.
+// 29. ListAllBuildingChatsForStaff returns all building chats for staff management.
 func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]BuildingChatSummary, error) {
 	var chats []model.Chat
 	if err := s.runtime.DB.WithContext(ctx).
@@ -771,6 +845,7 @@ func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]Build
 	}
 
 	items := make([]BuildingChatSummary, 0, len(chats))
+	names := s.buildingNameIndex(ctx)
 	for _, chat := range chats {
 		var count int64
 		s.runtime.DB.WithContext(ctx).
@@ -778,13 +853,16 @@ func (s *ChatService) ListAllBuildingChatsForStaff(ctx context.Context) ([]Build
 			Where("chat_id = ? AND membership_status = ?", chat.ID, chatMemberActive).
 			Count(&count)
 
+		name := s.buildingNameFor(ctx, names, chat.BuildingID)
 		summary := BuildingChatSummary{
-			ChatID:      chat.PublicID,
-			BuildingID:  chat.BuildingID,
-			ChatType:    chat.ChatType,
-			MemberCount: count,
-			LastPreview: chat.LastMessagePreview,
-			UnreadCount: 0,
+			ChatID:         chat.PublicID,
+			BuildingID:     chat.BuildingID,
+			BuildingName:   name.ZH,
+			BuildingNameEN: name.EN,
+			ChatType:       chat.ChatType,
+			MemberCount:    count,
+			LastPreview:    chat.LastMessagePreview,
+			UnreadCount:    0,
 		}
 		if chat.LastMessageAt != nil {
 			value := chat.LastMessageAt.UTC().Format(time.RFC3339)

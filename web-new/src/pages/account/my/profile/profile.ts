@@ -1,8 +1,7 @@
 /*
  * 會員中心個人資料 - 狀態與資料流程。
  * 1. 讀取並同步會員資料表單。
- * 2. 上傳 OSS 頭像並同步會員狀態。
- * 3. 儲存會員資料並同步全域會員狀態。
+ * 2. 儲存會員資料並同步全域會員狀態。
  */
 import axios from 'axios';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -11,7 +10,6 @@ import { useRouter } from 'vue-router';
 
 import { fetchMemberPosBuildings, fetchMemberPosBuildingUnits } from '@/httpapis/building';
 import { bindCurrentUserIsmart, updateMe } from '@/httpapis/me';
-import { completeUpload, createUploadPresign } from '@/httpapis/uploads';
 import type { PosBuilding, PosBuildingUnit } from '@/model/community';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -28,9 +26,6 @@ interface ProfileUnitOption {
   value: string;
 }
 
-const avatarObjectPrefix = 'ajo_living/account/';
-const maxAvatarFileSize = 5 * 1024 * 1024;
-const blockedUploadHeaders = new Set(['host', 'content-length']);
 const unassignedFloorValue = '__unassigned__';
 
 // 1.0 讀取 POS 大廈 ID
@@ -261,23 +256,6 @@ const compareDisplayCodes = (left: string, right: string): number => {
   });
 };
 
-// 1. 建立 OSS 直傳 headers
-const buildUploadHeaders = (headers: Record<string, string>, mimeType: string): Headers => {
-  const result = new Headers();
-
-  Object.entries(headers).forEach(([key, value]) => {
-    if (!blockedUploadHeaders.has(key.toLowerCase())) {
-      result.set(key, value);
-    }
-  });
-
-  if (!result.has('Content-Type')) {
-    result.set('Content-Type', mimeType);
-  }
-
-  return result;
-};
-
 // 2. 管理個人資料頁資料與動作
 export const useAccountProfilePage = () => {
   const { t } = useI18n();
@@ -290,7 +268,6 @@ export const useAccountProfilePage = () => {
   const isEditModalOpen = ref(false);
   const isIsmartModalOpen = ref(false);
   const isUnitModalOpen = ref(false);
-  const isUploadingAvatar = ref(false);
   const isSigningOut = ref(false);
   const isBindingIsmart = ref(false);
   const isBuildingsLoading = ref(false);
@@ -652,7 +629,7 @@ export const useAccountProfilePage = () => {
 
   // 2.12 關閉編輯彈窗
   const closeEditModal = (): void => {
-    if (!isSaving.value && !isUploadingAvatar.value) {
+    if (!isSaving.value) {
       isEditModalOpen.value = false;
     }
   };
@@ -683,69 +660,7 @@ export const useAccountProfilePage = () => {
     }
   };
 
-  // 2.13 上傳頭像並更新會員資料
-  const handleAvatarFileChange = async (event: Event): Promise<void> => {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-
-    if (!file) {
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      feedbackStore.pushToast(t('account.profile.avatarFileInvalid'), 'error');
-      return;
-    }
-    if (file.size > maxAvatarFileSize) {
-      feedbackStore.pushToast(t('account.profile.avatarFileTooLarge'), 'error');
-      return;
-    }
-
-    isUploadingAvatar.value = true;
-
-    try {
-      const presignResponse = await createUploadPresign({
-        file_name: file.name,
-        mime_type: file.type,
-        file_size: file.size,
-        object_prefix: avatarObjectPrefix,
-      });
-      const presign = presignResponse.data.data;
-
-      const uploadResponse = await fetch(presign.upload_url, {
-        method: 'PUT',
-        headers: buildUploadHeaders(presign.headers, file.type),
-        body: file,
-      });
-      if (!uploadResponse.ok) {
-        throw new Error(`avatar upload failed with status ${uploadResponse.status}`);
-      }
-
-      const completeResponse = await completeUpload({
-        object_key: presign.object_key,
-        upload_token: presign.upload_token,
-        mime_type: file.type,
-        file_size: file.size,
-      });
-      const profileResponse = await updateMe({
-        display_name: formState.display_name.trim(),
-        ...buildPhonePayload(),
-        district_code: formState.district_code.trim(),
-        avatar_asset_id: completeResponse.data.data.media_asset_id,
-      });
-
-      sessionStore.me = profileResponse.data.data;
-      syncFormState();
-      feedbackStore.pushToast(t('account.profile.avatarUploadSuccess', { points: 50 }), 'success');
-    } catch (error) {
-      console.error(error);
-      feedbackStore.pushToast(readErrorMessage(error, t('account.profile.avatarUploadError')), 'error');
-    } finally {
-      isUploadingAvatar.value = false;
-    }
-  };
-
-  // 2.14 儲存會員資料
+  // 2.13 儲存會員資料
   const handleSaveProfile = async (): Promise<void> => {
     isSaving.value = true;
 
@@ -1013,7 +928,6 @@ export const useAccountProfilePage = () => {
     closeUnitModal,
     floorOptions,
     formState,
-    handleAvatarFileChange,
     handleBindIsmart,
     handleSaveUnit,
     handleSaveProfile,
@@ -1030,7 +944,6 @@ export const useAccountProfilePage = () => {
     isSigningOut,
     isUnitModalOpen,
     isUnitsLoading,
-    isUploadingAvatar,
     ismartFormState,
     openEditModal,
     openIsmartModal,

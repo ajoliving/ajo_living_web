@@ -88,3 +88,4 @@ Go Gin API + WebSocket handler
 - 已撤銷大廈綁定的舊群成員不能透過 WebSocket 或 REST 繼續讀取、已讀、離開或發送。
 - 上傳中的大文件不阻塞文字消息，未授權會員不能取得附件下載地址。
 - 同一 `client_message_id` 重試只產生一條消息；outbox worker 重啟後可繼續處理未完成事件。
+- 發送者可在兩分鐘內撤回訊息；撤回與發送共用同一交易與 realtime outbox，事件類型為 `message_recalled`，回應與廣播均不得再帶原文或附件 URL。

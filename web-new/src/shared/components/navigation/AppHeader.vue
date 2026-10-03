@@ -2,7 +2,7 @@
  * 全域頂部導航。
  * 1. 嚴格對齊 HTML 設計稿 chrome.html 的 .nav 結構與樣式。
  * 2. 按登入態輸出公開入口、會員入口與通知中心鈴鐺。
- * 3. 整合主題、語系切換按鈕與登入入口。
+ * 3. 整合主題、語系切換按鈕與登入入口；主題選擇器只在開放的主題環境顯示。
  * 4. 保留 mobile 側邊抽屜與底部主入口。
 -->
 <script setup lang="ts">
@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
+import { isThemePickerEnabled } from '@/utils/feature-flags';
 import { THEME_OPTIONS, type AppThemeName } from '@/utils/theme';
 
 interface NavigationItem {
@@ -31,6 +32,7 @@ const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 const themeMenuOpen = ref(false);
+const themePickerEnabled = computed(() => isThemePickerEnabled());
 const orangeThemeGroups = [
   { key: 'flame', labelKey: 'common.theme.orangeGroupFlame' },
   { key: 'classic', labelKey: 'common.theme.orangeGroupClassic' },
@@ -224,7 +226,10 @@ watch(
 
     <!-- 右側區域 -->
     <div class="nav-r">
-      <div class="theme-picker">
+      <div
+        v-if="themePickerEnabled"
+        class="theme-picker"
+      >
         <button
           type="button"
           class="theme-toggle"

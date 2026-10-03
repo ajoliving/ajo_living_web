@@ -52,17 +52,18 @@ type ChatJoinRequest struct {
 
 // 4. Message stores chat messages.
 type Message struct {
-	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	PublicID        string    `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
-	ChatID          int64     `gorm:"not null;index:idx_messages_chat_time,priority:1;uniqueIndex:uk_messages_client_id,priority:1" json:"chat_id"`
-	SenderUserID    int64     `gorm:"not null;index;uniqueIndex:uk_messages_client_id,priority:2" json:"sender_user_id"`
-	ClientMessageID *string   `gorm:"type:varchar(80);uniqueIndex:uk_messages_client_id,priority:3" json:"client_message_id,omitempty"`
-	MessageType     string    `gorm:"type:varchar(32);not null" json:"message_type"`
-	ContentText     string    `gorm:"type:text;not null" json:"content_text"`
-	ActionLabel     string    `gorm:"type:varchar(80)" json:"action_label"`
-	ActionURL       string    `gorm:"type:varchar(500)" json:"action_url"`
-	MessageStatus   string    `gorm:"type:varchar(32);not null" json:"message_status"`
-	CreatedAt       time.Time `gorm:"index:idx_messages_chat_time,priority:2" json:"created_at"`
+	ID               int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	PublicID         string    `gorm:"type:varchar(26);not null;uniqueIndex" json:"public_id"`
+	ChatID           int64     `gorm:"not null;index:idx_messages_chat_time,priority:1;uniqueIndex:uk_messages_client_id,priority:1" json:"chat_id"`
+	SenderUserID     int64     `gorm:"not null;index;uniqueIndex:uk_messages_client_id,priority:2" json:"sender_user_id"`
+	ClientMessageID  *string   `gorm:"type:varchar(80);uniqueIndex:uk_messages_client_id,priority:3" json:"client_message_id,omitempty"`
+	ReplyToMessageID *int64    `gorm:"index" json:"reply_to_message_id,omitempty"`
+	MessageType      string    `gorm:"type:varchar(32);not null" json:"message_type"`
+	ContentText      string    `gorm:"type:text;not null" json:"content_text"`
+	ActionLabel      string    `gorm:"type:varchar(80)" json:"action_label"`
+	ActionURL        string    `gorm:"type:varchar(500)" json:"action_url"`
+	MessageStatus    string    `gorm:"type:varchar(32);not null" json:"message_status"`
+	CreatedAt        time.Time `gorm:"index:idx_messages_chat_time,priority:2" json:"created_at"`
 }
 
 // 5. RealtimeOutbox stores committed realtime events until publication succeeds.

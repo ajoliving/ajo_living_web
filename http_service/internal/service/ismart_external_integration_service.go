@@ -52,6 +52,18 @@ type IsmartSubaccountMutationParams struct {
 	Remark       string
 }
 
+// 3.1 IsmartFlatBindingQuery defines the current member's flat-binding list filters.
+type IsmartFlatBindingQuery struct {
+	BuildingID string
+	Role       string
+}
+
+// 3.2 IsmartOwnerBindingRequestQuery defines the current member's OwnerReg application filters.
+type IsmartOwnerBindingRequestQuery struct {
+	BuildingID string
+	Status     string
+}
+
 // 4.1 IsmartServiceCaseListParams defines the current member's service-case filters.
 type IsmartServiceCaseListParams struct {
 	BuildingID  string
@@ -345,7 +357,53 @@ func (s *IsmartExternalService) ownerBindingPayload(ctx context.Context, userID 
 	return account, buildingID, payload, nil
 }
 
-// 18. ListSubaccounts lists current authorized sub users for owner-controlled units.
+// 18.1 ListFlatBindings lists the linked member's approved flat role bindings from iSmart.
+func (s *IsmartExternalService) ListFlatBindings(ctx context.Context, userID int64, queryParams IsmartFlatBindingQuery) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := url.Values{}
+	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
+	if buildingID := strings.TrimSpace(queryParams.BuildingID); buildingID != "" {
+		query.Set("building_id", buildingID)
+	}
+	if role := strings.TrimSpace(queryParams.Role); role != "" {
+		query.Set("cli_role", role)
+	}
+
+	result, err := s.getIntegration(ctx, "/buildings/flat-bindings/", query)
+	if err != nil {
+		return nil, err
+	}
+	return decorateIsmartPayload(result.Payload, "", []string{}, result.Message, account.IsStaff), nil
+}
+
+// 18.2 ListOwnerBindingRequests lists the linked member's OwnerReg applications and approval status.
+func (s *IsmartExternalService) ListOwnerBindingRequests(ctx context.Context, userID int64, queryParams IsmartOwnerBindingRequestQuery) (map[string]any, error) {
+	account, err := s.loadIsmartAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := url.Values{}
+	query.Set("user_id", strconv.FormatInt(account.IsmartUserID, 10))
+	if buildingID := strings.TrimSpace(queryParams.BuildingID); buildingID != "" {
+		query.Set("building_id", buildingID)
+	}
+	if status := strings.TrimSpace(queryParams.Status); status != "" {
+		query.Set("status", status)
+	}
+
+	result, err := s.getIntegration(ctx, "/buildings/building-flat-owner-binding-requests/", query)
+	if err != nil {
+		return nil, err
+	}
+	return decorateIsmartPayload(result.Payload, "", []string{}, result.Message, account.IsStaff), nil
+}
+
+// 18.3 ListSubaccounts lists current authorized sub users for owner-controlled units.
 func (s *IsmartExternalService) ListSubaccounts(ctx context.Context, userID int64, queryParams IsmartSubaccountQuery) (map[string]any, error) {
 	account, err := s.loadIsmartAccount(ctx, userID)
 	if err != nil {

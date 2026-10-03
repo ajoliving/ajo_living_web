@@ -51,5 +51,6 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 2026-08-12: 將 `ajoliving.oss.skylinedances.com` 由已過期的 certbot manual DNS 憑證遷移至 `acme.sh + AliDNS + ali_cdn` 自動續期及 CDN 部署；新憑證有效至 2026-11-10，真實圖片及瀏覽器驗收正常。
 2026-08-17: 發布 Good Price 尾端規格自動拆分；每日 CSV 保留人工副標題並自動分離重量、容量、尺寸、數量及包裝規格，歷史回填限定最新兩個資料日。發布前 PostgreSQL 與舊二進制均已備份，Supervisor、公開 Good Price API 及 AJO 測試代理驗證正常。
 2026-08-18: 測試 release `20260818111641-test-79673` 發布住戶 iSmart 副戶授權更新；保留測試資料庫，測試前後端、同源 HTTPS、Supervisor、PostgreSQL、Redis、FRP 與 `noindex` 驗證正常，生產健康接口維持 `200`。
+2026-10-03: 測試 release `20261003162704-test-19964` 發布目前工作區的 iSmart 副戶註冊與授權、臨時密碼郵件、身份證顯示修正及 Good Price 超市情報 UI；保留測試資料庫，`https://test.ajoliving.skylinedances.com/`、`/api/v1/health`、Nginx、`ajoliving_test_server` 與 `frpc` 驗證正常。
 
 [PROTOCOL]: When changing deployment prompts or server-operation instructions, update this map, `../PROMPT_INDEX.md`, and verify whether root `../AGENTS.md` deployment references need updating.

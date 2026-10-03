@@ -520,43 +520,39 @@ const formatInteger = (value: number | undefined): string =>
 const formatStore = (value: string): string =>
   displaySupermarketStore(value, preferenceStore.locale);
 
-// 40. 格式化商品分類
-const formatCategory = (value: string): string =>
-  displaySupermarketCategory(value, preferenceStore.locale);
-
-// 41. 格式化商品價格
+// 40. 格式化商品價格
 const formatOfferPrice = (value: number | null | undefined): string =>
   formatSupermarketHKPrice(value, preferenceStore.locale);
 
-// 42. 取得商品商店價格
+// 41. 取得商品商店價格
 const productStorePrices = (product: SupermarketProduct) =>
   supermarketStorePrices(product, preferenceStore.locale);
 
-// 43. 取得商品主要價格
+// 42. 取得商品主要價格
 const productPrimaryPrice = (product: SupermarketProduct) =>
   supermarketPrimaryPrice(product, preferenceStore.locale);
 
-// 44. 取得商品優惠文字
+// 43. 取得商品優惠文字
 const productOfferTexts = (product: SupermarketProduct): string[] =>
   supermarketOfferTexts(product, preferenceStore.locale)
     .map((value) => supermarketOfferDisplayText(value))
     .filter(Boolean);
 
-// 45. 顯示商品主標題名稱
+// 44. 顯示商品主標題名稱
 const productDisplayName = (product: SupermarketProduct): string =>
   [resolveSupermarketProductName(product), resolveSupermarketProductUnit(product)]
     .filter(Boolean)
     .join(' ');
 
-// 46. 顯示不含單位的商品名稱
+// 45. 顯示不含單位的商品名稱
 const productTitleName = (product: SupermarketProduct): string =>
   resolveSupermarketProductName(product);
 
-// 47. 顯示商品單位
+// 46. 顯示商品單位
 const productDisplayUnit = (product: SupermarketProduct): string =>
   resolveSupermarketProductUnit(product);
 
-// 48. 顯示商品品牌
+// 47. 顯示商品品牌
 const productDisplayBrand = (product: SupermarketProduct): string =>
   resolveSupermarketProductBrand(product);
 
@@ -798,9 +794,11 @@ onBeforeUnmount(() => {
     <!-- 1. 超市情報標題 -->
     <section class="gp-hero">
       <div class="gp-hero-left">
+        <div class="gp-hero-label">{{ t('offers.list.heroEyebrow') }}</div>
         <div class="gp-hero-title">{{ t('offers.list.heroTitle') }}</div>
         <div class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</div>
       </div>
+      <div class="gp-hero-note">{{ t('offers.list.heroNote') }}</div>
     </section>
 
     <!-- 2. 控制欄 -->
@@ -1253,13 +1251,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 132px;
+  min-height: 150px;
   max-width: 1440px;
   margin: 0 auto;
   padding: 34px 38px;
-  border-bottom: 3px solid var(--accent);
-  background: #fff;
-  color: var(--brand);
+  border-bottom: 1px solid var(--bdr);
+  background: var(--brand);
+  color: #fff;
 }
 
 .gp-hero-left {
@@ -1267,7 +1265,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-hero-label {
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--brand-light);
   font-size: 12px;
 }
 
@@ -1277,15 +1275,23 @@ onBeforeUnmount(() => {
   font-size: 34px;
   font-weight: 400;
   line-height: 1.12;
-  color: var(--brand);
+  color: #fff;
 }
 
 .gp-hero-sub {
   margin-top: 8px;
   max-width: 480px;
-  color: var(--brand);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.gp-hero-note {
+  max-width: 260px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: right;
 }
 
 .gp-hero-right {
@@ -1640,7 +1646,7 @@ onBeforeUnmount(() => {
   margin: 0;
   isolation: isolate;
   border: 1px solid var(--bdr);
-  border-radius: var(--r-xl);
+  border-radius: 8px;
   overflow: hidden;
   background: rgb(var(--color-surface));
   cursor: pointer;
@@ -1805,7 +1811,7 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--brand-light);
   padding: 12px 14px;
 }
@@ -1848,7 +1854,7 @@ onBeforeUnmount(() => {
 
 .gp-card-best-amount {
   color: var(--ink);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -2042,13 +2048,22 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1023px) {
-  .gp-hero,
   .gp-filter-pills,
   .gp-store-pills,
   .gp-search-row .gp-fav-btn,
   .gp-brand-select,
   .gp-view-toggle,
   .gp-toolbar {
+    display: none;
+  }
+
+  .gp-hero {
+    display: block;
+    min-height: 0;
+    padding: 22px 14px 18px;
+  }
+
+  .gp-hero-note {
     display: none;
   }
 

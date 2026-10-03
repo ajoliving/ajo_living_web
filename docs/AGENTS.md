@@ -24,6 +24,9 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 - `docs/archive/`、`.claude/worktrees/`、`dist`、`node_modules`、資料庫備份與 HTML 備份不列入穩定 prompt surface，除非使用者明確要求追溯歷史。
 
 ## 變更日誌
+2026-09-14: `docs/integrations/external_app_building_api.zh-HK.md` 對譯底稿升級為 `external_app_building_api(2).md`，新增 `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`（業主綁定申請與審批狀態）與 `GET /api/v1/integration/buildings/flat-bindings/`（會員現行單位角色）兩節，第 3 節改為 3.1 提交與查詢、3.2 會員單位綁定清單、3.3 至 3.5 副戶；兩條路由已在 production 與 clouddev 回應，但本機檢出的 `ajo_ismart` 分支尚未包含，接入仍需以上游部署為準。
+2026-09-14: 新增 `docs/architecture/chat-system-architecture.md`，以現行程式碼為真值記錄聊天系統落地架構（分層、資料模型與枚舉、會話類型、大廈授權三來源、消息與撤回流程、票據式單會話連線、可靠性設計、媒體鏈路與展示門禁、通知邊界、介面索引），並在第 9 節列出與 `realtime-chat-guidance.md` 目標方案的落差，供產品決策使用；`PROMPT_INDEX.md` 已同步索引與變更日誌。
+2026-09-13: 會員中心已連結物業功能表按物業名分組，綁定與解除綁定負責切換目前使用單位；修改密碼改到已連結物業登記資料操作區。
 2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源。
 2026-09-10: 副戶接口暫時改走生產 `ISMART_SUBACCOUNT_API_BASE_URL`，服務個案維持 `clouddev`。
 2026-09-10: 記錄 iSmart 副戶授權走 `ISMART_SUBACCOUNT_API_BASE_URL` 的 `clouddev` 接口；授權前分別核對手機號與電郵 `user_id`，不得回退生產。

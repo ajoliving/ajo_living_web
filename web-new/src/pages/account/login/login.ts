@@ -879,6 +879,7 @@ export const useLoginPage = () => {
       formState.primaryCommunityID,
       formState.residenceFloor,
       formState.residenceUnit,
+      formState.idCard,
     );
     if (formState.publisherIdentityType === 'individual_agent' && !formState.email.trim()) {
       delete validationErrors.value.email;

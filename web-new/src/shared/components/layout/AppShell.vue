@@ -28,7 +28,7 @@ const route = useRoute();
 const { t } = useI18n();
 
 // 1. 判斷目前路由是否隱藏頁腳
-const isFooterHiddenRoute = computed(() => route.name === 'Login');
+const isFooterHiddenRoute = computed(() => route.name === 'Login' || route.name === 'Notifications');
 
 // 2. 組合頁腳欄目，沒有實際頁面的項目保持不可跳轉，避免死鏈
 const footerColumns = computed<FooterColumn[]>(() => [

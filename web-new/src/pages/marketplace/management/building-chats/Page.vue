@@ -3,12 +3,14 @@
  * 1. 查看所有大廈群聊列表。
  * 2. 審核待處理加入申請，並處置群聊成員。
  * 3. 以統一管理列表呈現群聊詳情、申請與成員資料。
+ * 4. 從系統會員篩選並加入群聊；加入成功後只更新該列與本地成員狀態。
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import {
+  addStaffBuildingChatMember,
   fetchStaffBuildingChats,
   fetchBuildingChatMembers,
   fetchBuildingChatJoinRequests,
@@ -18,9 +20,12 @@ import {
   type BuildingChatMemberResponse,
   type BuildingChatJoinRequestResponse,
 } from '@/httpapis/chats';
+import { fetchStaffUsers } from '@/httpapis/staff';
+import type { StaffUserSummary } from '@/model/user';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 
+import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
 
 const { t, locale } = useI18n();
@@ -34,12 +39,29 @@ const members = ref<BuildingChatMemberResponse[]>([]);
 const joinRequests = ref<BuildingChatJoinRequestResponse[]>([]);
 const processingMemberId = ref('');
 const reviewingRequestId = ref('');
+const isAddDialogOpen = ref(false);
+const loadingCandidates = ref(false);
+const addingUserId = ref('');
+const candidateKeyword = ref('');
+const candidatePage = ref(1);
+const candidatePageSize = 10;
+const candidateTotal = ref(0);
+const candidateItems = ref<StaffUserSummary[]>([]);
 
 type MemberAction = 'mute' | 'unmute' | 'kick' | 'ban' | 'unban';
 
 const pendingJoinRequests = computed(() =>
   joinRequests.value.filter((request) => request.status === 'pending'),
 );
+const memberByPublicId = computed(() => {
+  const result = new Map<string, BuildingChatMemberResponse>();
+  members.value.forEach((member) => {
+    result.set(member.public_id, member);
+  });
+  return result;
+});
+const hasPreviousCandidates = computed(() => candidatePage.value > 1);
+const hasNextCandidates = computed(() => candidatePage.value * candidatePageSize < candidateTotal.value);
 
 // 1. 讀取大廈群聊列表
 const loadChats = async (): Promise<void> => {
@@ -71,9 +93,12 @@ const refreshSelectedChatSummary = async (): Promise<void> => {
   }
 };
 
-// 3. 格式化大廈名稱
-const formatBuildingName = (buildingId: string): string => {
-  return buildingId || t('marketplace.management.buildingChats.unknownBuilding');
+// 3. 格式化大廈顯示名稱，缺少名稱時回退大廈 ID
+const formatBuildingName = (chat: BuildingChatSummaryResponse): string => {
+  const primary = locale.value === 'en' ? chat.building_name_en : chat.building_name;
+  const secondary = locale.value === 'en' ? chat.building_name : chat.building_name_en;
+  const resolved = String(primary || secondary || chat.building_id || '').trim();
+  return resolved || t('marketplace.management.buildingChats.unknownBuilding');
 };
 
 // 4. 格式化管理列表的完整日期時間
@@ -105,6 +130,7 @@ const formatLastMessageTime = (time: string | null | undefined): string => {
 // 6. 選擇群聊並載入管理資料
 const selectChat = async (chat: BuildingChatSummaryResponse): Promise<void> => {
   selectedChat.value = chat;
+  isAddDialogOpen.value = false;
   await Promise.all([loadMembers(chat.chat_id), loadJoinRequests(chat.chat_id)]);
 };
 
@@ -204,6 +230,114 @@ const formatMemberStatus = (status: string): string => {
     : status;
 };
 
+// 12. 格式化候選會員名稱
+const formatCandidateName = (member: StaffUserSummary): string =>
+  member.display_name?.trim() || member.email || member.phone_number || member.public_id;
+
+// 13. 格式化候選會員聯絡資料
+const formatCandidateContact = (member: StaffUserSummary): string => {
+  const phone = member.phone_number ? `${member.phone_country_code} ${member.phone_number}`.trim() : '';
+  return [member.email?.trim(), phone].filter(Boolean).join(' · ') || member.public_id;
+};
+
+// 14. 讀取候選會員目前群內狀態
+const resolveCandidateMembership = (member: StaffUserSummary): BuildingChatMemberResponse | undefined =>
+  memberByPublicId.value.get(member.public_id);
+
+// 15. 判斷候選會員是否已在群內
+const isCandidateAlreadyActive = (member: StaffUserSummary): boolean =>
+  resolveCandidateMembership(member)?.membership_status === 'active';
+
+// 16. 判斷候選會員是否已被封禁
+const isCandidateBanned = (member: StaffUserSummary): boolean =>
+  resolveCandidateMembership(member)?.membership_status === 'banned';
+
+// 17. 讀取可加入的系統會員
+const loadCandidates = async (targetPage = candidatePage.value): Promise<void> => {
+  loadingCandidates.value = true;
+  try {
+    const { data } = await fetchStaffUsers({
+      page: targetPage,
+      page_size: candidatePageSize,
+      keyword: candidateKeyword.value.trim() || undefined,
+    });
+    candidateItems.value = Array.isArray(data.data?.items) ? data.data.items : [];
+    candidatePage.value = data.data?.pagination?.page || targetPage;
+    candidateTotal.value = data.data?.pagination?.total || 0;
+  } catch {
+    feedbackStore.pushToast(t('marketplace.management.buildingChats.loadCandidatesError'), 'error');
+    candidateItems.value = [];
+    candidateTotal.value = 0;
+  } finally {
+    loadingCandidates.value = false;
+  }
+};
+
+// 18. 開啟加入成員彈窗
+const openAddDialog = async (): Promise<void> => {
+  if (!selectedChat.value) {
+    return;
+  }
+  candidateKeyword.value = '';
+  candidatePage.value = 1;
+  isAddDialogOpen.value = true;
+  await loadCandidates(1);
+};
+
+// 19. 關閉加入成員彈窗
+const closeAddDialog = (): void => {
+  if (!addingUserId.value) {
+    isAddDialogOpen.value = false;
+  }
+};
+
+// 20. 搜尋可加入會員
+const searchCandidates = async (): Promise<void> => {
+  await loadCandidates(1);
+};
+
+// 21. 以加入結果更新目前成員狀態
+const applyAddedMember = (member: BuildingChatMemberResponse): void => {
+  const previous = members.value.find((item) => item.public_id === member.public_id);
+  const wasActive = previous?.membership_status === 'active';
+
+  members.value = previous
+    ? members.value.map((item) => (item.public_id === member.public_id ? { ...item, ...member } : item))
+    : [...members.value, member];
+
+  if (!wasActive && selectedChat.value) {
+    selectedChat.value.member_count += 1;
+  }
+};
+
+// 22. 將系統會員加入目前群聊
+const handleAddMember = async (member: StaffUserSummary): Promise<void> => {
+  if (!selectedChat.value || addingUserId.value || isCandidateAlreadyActive(member) || isCandidateBanned(member)) {
+    return;
+  }
+
+  addingUserId.value = member.public_id;
+  try {
+    const { data } = await addStaffBuildingChatMember(selectedChat.value.chat_id, { public_id: member.public_id });
+    applyAddedMember({
+      user_id: data.data?.user_id || member.public_id,
+      public_id: data.data?.public_id || member.public_id,
+      display_name: data.data?.display_name || formatCandidateName(member),
+      avatar_key: data.data?.avatar_key,
+      role_in_chat: data.data?.role_in_chat || 'member',
+      membership_status: data.data?.membership_status || 'active',
+      muted_until: data.data?.muted_until,
+      banned_until: data.data?.banned_until,
+      joined_at: data.data?.joined_at || new Date().toISOString(),
+    });
+    feedbackStore.pushToast(t('marketplace.management.buildingChats.addSuccess'), 'success');
+  } catch {
+    feedbackStore.pushToast(t('marketplace.management.buildingChats.addError'), 'error');
+  } finally {
+    addingUserId.value = '';
+  }
+};
+
 onMounted(() => {
   void loadChats();
 });
@@ -265,7 +399,7 @@ onMounted(() => {
           <table class="management-table building-chat-table">
             <thead>
               <tr>
-                <th scope="col">{{ t('marketplace.management.buildingChats.buildingId') }}</th>
+                <th scope="col">{{ t('marketplace.management.buildingChats.building') }}</th>
                 <th scope="col">{{ t('marketplace.management.buildingChats.memberCount') }}</th>
                 <th scope="col">{{ t('marketplace.management.buildingChats.lastMessage') }}</th>
                 <th scope="col">{{ t('marketplace.management.buildingChats.lastMessageTime') }}</th>
@@ -279,7 +413,7 @@ onMounted(() => {
                 :class="selectedChat?.chat_id === chat.chat_id ? 'selected' : ''"
               >
                 <td>
-                  <strong>{{ formatBuildingName(chat.building_id) }}</strong>
+                  <strong :title="chat.building_id">{{ formatBuildingName(chat) }}</strong>
                 </td>
                 <td>{{ chat.member_count }}</td>
                 <td class="management-table-text">{{ chat.last_message_preview || '-' }}</td>
@@ -311,7 +445,7 @@ onMounted(() => {
               {{ t('marketplace.management.buildingChats.membersTitle') }}
             </h2>
             <p class="building-chat-detail-subtitle">
-              {{ formatBuildingName(selectedChat.building_id) }} · {{ members.length }} {{ t('marketplace.management.buildingChats.membersUnit') }}
+              {{ formatBuildingName(selectedChat) }} · {{ members.length }} {{ t('marketplace.management.buildingChats.membersUnit') }}
             </p>
           </div>
           <span
@@ -386,6 +520,13 @@ onMounted(() => {
         <section class="building-chat-detail-section">
           <header class="building-chat-detail-section__header">
             <h3>{{ t('marketplace.management.buildingChats.membersTitle') }}</h3>
+            <button
+              type="button"
+              class="management-list-button"
+              @click="openAddDialog"
+            >
+              {{ t('marketplace.management.buildingChats.addMember') }}
+            </button>
           </header>
 
           <div
@@ -499,6 +640,166 @@ onMounted(() => {
         </section>
       </article>
     </template>
+
+    <Teleport to="body">
+      <Transition name="management-dialog">
+        <div
+          v-if="isAddDialogOpen"
+          class="management-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('marketplace.management.buildingChats.addMemberTitle')"
+          @click.self="closeAddDialog"
+        >
+          <section class="management-dialog-panel building-chat-add-dialog">
+            <header class="management-dialog-header">
+              <div>
+                <p>{{ t('marketplace.management.buildingChats.addMemberKicker') }}</p>
+                <h2>{{ t('marketplace.management.buildingChats.addMemberTitle') }}</h2>
+              </div>
+              <button
+                type="button"
+                class="management-dialog-close"
+                :aria-label="t('marketplace.management.closeDialog')"
+                @click="closeAddDialog"
+              >
+                <AppIcon
+                  name="close"
+                  :size="18"
+                />
+              </button>
+            </header>
+
+            <div class="management-dialog-body">
+              <div class="management-list-toolbar building-chat-candidate-toolbar">
+                <label class="management-list-search">
+                  <AppIcon
+                    name="search"
+                    :size="16"
+                  />
+                  <input
+                    v-model="candidateKeyword"
+                    type="search"
+                    :placeholder="t('marketplace.management.buildingChats.addMemberSearchPlaceholder')"
+                    @keyup.enter="searchCandidates"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="management-list-button"
+                  :disabled="loadingCandidates"
+                  @click="searchCandidates"
+                >
+                  {{ t('marketplace.list.searchAction') }}
+                </button>
+              </div>
+
+              <div
+                v-if="loadingCandidates"
+                class="building-chat-inline-state"
+              >
+                {{ t('marketplace.management.buildingChats.loadingCandidates') }}
+              </div>
+
+              <div
+                v-else-if="candidateItems.length === 0"
+                class="building-chat-inline-state"
+              >
+                {{ t('marketplace.management.buildingChats.noCandidates') }}
+              </div>
+
+              <div
+                v-else
+                class="management-table-wrap"
+              >
+                <table class="management-table building-chat-candidate-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">{{ t('marketplace.management.buildingChats.memberName') }}</th>
+                      <th scope="col">{{ t('marketplace.management.buildingChats.candidateContact') }}</th>
+                      <th scope="col">{{ t('marketplace.management.buildingChats.memberStatus') }}</th>
+                      <th scope="col" class="management-table-actions">{{ t('marketplace.management.buildingChats.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="candidate in candidateItems"
+                      :key="candidate.public_id"
+                    >
+                      <td>
+                        <div class="management-user-cell">
+                          <strong>{{ formatCandidateName(candidate) }}</strong>
+                          <span>{{ candidate.public_id }}</span>
+                        </div>
+                      </td>
+                      <td class="management-table-text">{{ formatCandidateContact(candidate) }}</td>
+                      <td>
+                        <span
+                          v-if="resolveCandidateMembership(candidate)"
+                          class="management-status-pill building-chat-status-pill"
+                          :class="resolveCandidateMembership(candidate)?.membership_status"
+                        >
+                          {{ formatMemberStatus(resolveCandidateMembership(candidate)?.membership_status || '') }}
+                        </span>
+                        <span
+                          v-else
+                          class="management-status-pill building-chat-status-pill"
+                        >
+                          {{ t('marketplace.management.buildingChats.notInGroup') }}
+                        </span>
+                      </td>
+                      <td class="management-table-actions">
+                        <button
+                          v-if="isCandidateAlreadyActive(candidate)"
+                          type="button"
+                          class="management-list-action"
+                          disabled
+                        >
+                          {{ t('marketplace.management.buildingChats.alreadyInGroup') }}
+                        </button>
+                        <button
+                          v-else-if="isCandidateBanned(candidate)"
+                          type="button"
+                          class="management-list-action"
+                          disabled
+                        >
+                          {{ t('marketplace.management.buildingChats.bannedCannotAdd') }}
+                        </button>
+                        <button
+                          v-else
+                          type="button"
+                          class="management-list-action"
+                          :disabled="Boolean(addingUserId)"
+                          @click="handleAddMember(candidate)"
+                        >
+                          {{
+                            addingUserId === candidate.public_id
+                              ? t('marketplace.management.buildingChats.addingToGroup')
+                              : t('marketplace.management.buildingChats.addToGroup')
+                          }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <ManagementPagination
+                :has-next="hasNextCandidates"
+                :has-previous="hasPreviousCandidates"
+                :loading="loadingCandidates"
+                :page="candidatePage"
+                :page-size="candidatePageSize"
+                :t="t"
+                :total="candidateTotal"
+                @next="loadCandidates(candidatePage + 1)"
+                @previous="loadCandidates(candidatePage - 1)"
+              />
+            </div>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
 
@@ -678,8 +979,58 @@ onMounted(() => {
 .building-chat-detail-section__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   min-height: 3.1rem;
   padding: 0.72rem 0.9rem;
+}
+
+.building-chat-candidate-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.building-chat-add-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(100%, 72rem);
+  overflow: hidden;
+}
+
+.building-chat-add-dialog .management-dialog-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.building-chat-add-dialog .management-table-wrap {
+  overflow: visible;
+}
+
+.building-chat-candidate-table {
+  min-width: 0;
+}
+
+.building-chat-candidate-table th:nth-child(1),
+.building-chat-candidate-table td:nth-child(1) {
+  width: 22%;
+}
+
+.building-chat-candidate-table th:nth-child(3),
+.building-chat-candidate-table td:nth-child(3) {
+  width: 7.5rem;
+}
+
+.building-chat-candidate-table th:last-child,
+.building-chat-candidate-table td:last-child,
+.building-chat-add-dialog .management-table-actions {
+  position: sticky;
+  right: 0;
+  width: 8.5rem;
+  min-width: 8.5rem;
+  background: rgb(var(--color-surface-raised));
+}
+
+.building-chat-candidate-table thead th:last-child {
+  z-index: 2;
 }
 
 .building-chat-detail-section__header h3 {

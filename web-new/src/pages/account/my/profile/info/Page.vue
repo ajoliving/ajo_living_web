@@ -22,7 +22,6 @@ const {
   closeUnitModal,
   floorOptions,
   formState,
-  handleAvatarFileChange,
   handleBindIsmart,
   handleSaveUnit,
   handleSaveProfile,
@@ -39,7 +38,6 @@ const {
   isSigningOut,
   isUnitModalOpen,
   isUnitsLoading,
-  isUploadingAvatar,
   ismartFormState,
   openEditModal,
   openIsmartModal,
@@ -337,30 +335,6 @@ const {
           </button>
         </header>
 
-        <div class="account-avatar-editor">
-          <BaseAvatar
-            :src="sessionStore.currentUser.avatar_url"
-            :name="sessionStore.currentUser.display_name"
-            :size="56"
-          />
-          <div class="account-avatar-editor__copy">
-            <span>{{ t('account.profile.avatar') }}</span>
-            <p>{{ t('account.profile.avatarHint') }}</p>
-          </div>
-          <label class="account-avatar-upload-button">
-            <input
-              type="file"
-              accept="image/*"
-              class="sr-only"
-              :disabled="isUploadingAvatar || isLoading"
-              @change="handleAvatarFileChange"
-            />
-            <span>
-              {{ isUploadingAvatar ? t('common.status.loading') : t('account.profile.uploadAvatar') }}
-            </span>
-          </label>
-        </div>
-
         <div class="account-profile-dialog__fields">
           <label class="account-profile-field">
             <span>{{ t('account.profile.displayName') }}</span>
@@ -416,7 +390,7 @@ const {
             variant="secondary"
             size="md"
             type="button"
-            :disabled="isSaving || isUploadingAvatar"
+            :disabled="isSaving"
             @click="closeEditModal"
           >
             {{ t('marketplace.myProfile.cancelAction') }}
@@ -425,7 +399,7 @@ const {
             variant="primary"
             size="md"
             type="submit"
-            :disabled="isSaving || isUploadingAvatar"
+            :disabled="isSaving"
           >
             {{ isSaving ? t('common.status.loading') : t('account.actions.save') }}
           </BaseButton>
@@ -888,70 +862,6 @@ const {
   background: rgb(var(--color-surface-muted));
 }
 
-.account-avatar-editor {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  border-bottom: 1px solid rgb(var(--color-border));
-  padding: 20px 24px;
-}
-
-.account-avatar-editor__copy {
-  min-width: 0;
-}
-
-.account-avatar-editor__copy span {
-  color: rgb(var(--color-text-muted));
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.account-avatar-editor__copy p {
-  margin: 6px 0 0;
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.account-avatar-upload-button {
-  display: inline-flex;
-  min-height: 36px;
-  flex-shrink: 0;
-  cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgb(var(--color-primary));
-  border-radius: 2px;
-  background: rgb(var(--color-primary));
-  padding: 8px 16px;
-  color: rgb(var(--color-primary-contrast));
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  transition:
-    background-color 0.2s ease,
-    transform 0.1s ease;
-}
-
-.account-avatar-upload-button:hover {
-  background: rgb(var(--color-text));
-  transform: translateY(-1px);
-}
-
-.account-avatar-upload-button:focus-within {
-  outline: 2px solid rgb(var(--color-primary));
-  outline-offset: 3px;
-}
-
-.account-avatar-upload-button:has(input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 .account-profile-dialog__fields {
   display: grid;
   gap: 16px;
@@ -1064,16 +974,6 @@ const {
 
   .account-profile-phone-grid {
     grid-template-columns: 1fr;
-  }
-
-  .account-avatar-editor {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    text-align: center;
-  }
-
-  .account-avatar-upload-button {
-    width: 100%;
   }
 
   .account-profile-dialog__actions {

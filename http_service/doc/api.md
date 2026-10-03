@@ -64,11 +64,15 @@ go run ./http_service/cmd/server
 | 73.2 | /api/v1/me/ismart/notices | GET | 查詢目前會員可見大廈的有效通告 | 會員 |
 | 73.3 | /api/v1/me/ismart/owner-binding-requests | POST | 提交業主單位綁定申請 | 會員 |
 | 73.4 | /api/v1/me/ismart/subaccounts | GET | 查詢目前會員可管理單位的授權用戶 | 會員 |
+| 73.4.1 | /api/v1/me/ismart/subaccounts/check-contacts | POST | 檢查副戶電話及電郵是否指向同一個 iSmart 帳戶 | 會員 |
+| 73.4.2 | /api/v1/me/ismart/subaccounts/register-and-grant | POST | 必要時建立 iSmart 帳戶並完成單位副戶授權 | 會員 |
 | 73.5 | /api/v1/me/ismart/subaccounts/grant | POST | 授予單位授權用戶 | 會員 |
 | 73.6 | /api/v1/me/ismart/subaccounts/revoke | POST | 撤銷單位授權用戶 | 會員 |
 | 73.7 | /api/v1/me/ismart/building-comments | POST | 提交目前會員的維修或意見服務個案 | 會員 |
 | 73.8 | /api/v1/me/ismart/service-cases | GET | 查詢目前會員可見的服務個案 | 會員 |
 | 73.9 | /api/v1/me/ismart/service-cases/{caseId} | GET | 查詢服務個案詳情與訊息紀錄 | 會員 |
+| 73.10 | /api/v1/me/ismart/owner-binding-requests | GET | 查詢目前會員的業主綁定申請與審批狀態 | 會員 |
+| 73.11 | /api/v1/me/ismart/flat-bindings | GET | 查詢目前會員已審批有效的單位角色綁定 | 會員 |
 | 73.10 | /api/v1/me/building-authorizations/permissions | GET | 查詢可授權的大廈功能 | 會員 |
 | 73.11 | /api/v1/me/building-authorizations | GET / POST | 查詢或建立大廈副戶授權 | 會員 |
 | 73.12 | /api/v1/me/building-authorizations/{authorizationId} | DELETE | 撤銷大廈副戶授權 | 會員 |
@@ -163,24 +167,30 @@ go run ./http_service/cmd/server
 | 22 | /api/v1/chats | GET | 查詢聊天會話列表 | 會員 |
 | 23 | /api/v1/chats/{chatId} | GET | 查詢聊天會話詳情 | 會員 |
 | 24 | /api/v1/chats/{chatId}/messages | GET | 查詢聊天訊息列表；`latest=true` 返回最近一頁並維持時間正序 | 會員 |
-| 25 | /api/v1/chats/{chatId}/messages | POST | 傳送聊天訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "..." }` | 會員 |
+| 25 | /api/v1/chats/{chatId}/messages | POST | 傳送聊天訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "...", "reply_to_message_id": "..." }` | 會員 |
+| 25.1 | /api/v1/chats/{chatId}/messages/{messageId}/recall | POST | 發送者在兩分鐘內撤回訊息；回應不含原文與附件 URL | 會員 |
 | 26 | /api/v1/chats/{chatId}/read | POST | 標記聊天已讀 | 會員 |
-| 26.1 | /api/v1/building-chats | GET | 查詢目前會員可見大廈的群聊摘要及未讀數 | 會員 |
+| 26.1 | /api/v1/building-chats | GET | 查詢目前會員可見大廈的群聊摘要及未讀數；每筆含 `building_id` 與解析後的 `building_name`、`building_name_en` | 會員 |
 | 26.2 | /api/v1/buildings/{buildingId}/chat | POST | 建立或加入指定大廈群聊；首次進入會建立成員記錄 | 會員 |
-| 26.3 | /api/v1/building-chats/{chatId} | GET | 查詢大廈群聊詳情、成員摘要及管理權限 | 群聊成員 |
+| 26.3 | /api/v1/building-chats/{chatId} | GET | 查詢大廈群聊詳情、成員摘要及管理權限；含 `building_name`、`building_name_en` | 群聊成員 |
 | 26.4 | /api/v1/building-chats/{chatId}/members | GET | 查詢大廈群聊成員及禁言、封禁狀態 | 群聊成員 |
 | 26.5 | /api/v1/building-chats/{chatId}/messages | GET | 分頁查詢大廈群聊文字訊息；`latest=true` 返回最近一頁並維持時間正序 | 群聊成員 |
-| 26.6 | /api/v1/building-chats/{chatId}/messages | POST | 傳送大廈群聊訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "..." }` | 有效群聊成員 |
+| 26.6 | /api/v1/building-chats/{chatId}/messages | POST | 傳送大廈群聊訊息；請求體可帶 `{ "content": "...", "attachment_ids": ["..."], "client_message_id": "...", "reply_to_message_id": "..." }` | 有效群聊成員 |
+| 26.6.1 | /api/v1/building-chats/{chatId}/messages/{messageId}/recall | POST | 發送者在兩分鐘內撤回群聊訊息；回應不含原文與附件 URL | 有效群聊成員 |
 | 26.7 | /api/v1/building-chats/{chatId}/read | POST | 標記大廈群聊已讀 | 群聊成員 |
 | 26.8 | /api/v1/building-chats/{chatId}/leave | POST | 退出大廈群聊；之後可重新申請加入 | 群聊成員 |
 | 26.9 | /api/v1/building-chats/{chatId}/join-requests | POST | 提交加入申請，請求體可帶 `{ "reason": "..." }` | 有大廈訪問權限的會員 |
 | 26.10 | /api/v1/building-chat-join-requests/{requestId}/review | POST | 審核加入申請，請求體 `{ "status": "approved\|rejected" }` | 所屬大廈管理員 / Staff |
 | 26.11 | /api/v1/building-chats/{chatId}/join-requests | GET | 查詢待審核加入申請 | 所屬大廈管理員 / Staff |
 | 26.12 | /api/v1/building-chats/{chatId}/members/moderate | POST | 禁言、解除禁言、剔除、群內封禁或解除封禁；請求體含 `user_id`、`action`、可選 `duration_minutes`、`reason` | 所屬大廈管理員 / Staff |
+| 26.12.1 | /api/v1/staff/building-chats | GET | Staff 查看全部大廈群聊 | Staff |
+| 26.12.2 | /api/v1/staff/building-chats/{chatId}/members | POST | Staff 從系統會員中加入指定群聊；請求體 `{ "public_id": "..." }` 或 `{ "user_id": 1 }` | Staff |
 | 26.13 | /api/v1/realtime/ticket | GET | 取得短時 WebSocket 連線 ticket | 有效會員 |
 | 26.14 | /api/v1/realtime/ws | GET (WebSocket) | 建立指定聊天的即時消息連線 | 有效會員 ticket |
 
-大廈群聊管理動作 `action` 支援：`mute`、`unmute`、`kick`、`ban`、`unban`。大廈管理員只能操作其有效授權所屬的大廈，Staff 可作全局違規處理。群聊成員由有效大廈綁定或授權關係決定；退出後保留成員記錄，重新加入需再次通過大廈訪問權限與加入流程。
+大廈群聊管理動作 `action` 支援：`mute`、`unmute`、`kick`、`ban`、`unban`。大廈管理員只能操作其有效授權所屬的大廈，Staff 可作全局違規處理。Staff 可從系統已記錄會員中直接加入群聊，不要求該會員目前具備該大廈綁定；已被群內封禁的會員必須先解除封禁。普通加入申請仍須通過大廈訪問權限。
+
+大廈群聊名稱解析：群聊摘要與詳情以共享 POS 大廈目錄為主來源回填 `building_name`（中文）與 `building_name_en`（英文），目錄缺失時以本地 `communities` 資料補齊；兩者皆無法解析或名稱僅為大廈編號佔位值時，欄位留空，由前端回退顯示 `building_id`。
 
 ### Notification 模組
 
@@ -1045,6 +1055,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/logout" -Method POST -
     "roles": ["user"],
     "permissions": [],
     "display_name": "Neighbour User",
+    "username": "email-member",
+    "avatar_key": "avo-03",
     "publisher_identity_type": "owner",
     "district_code": "hk_east",
     "residence_floor": "12",
@@ -1122,9 +1134,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me" -Method GET -Headers $h
   "bound_flat_unit_ids": ["09999000012", "09999000111"], // 可選，多個綁定單位
   "residence_floor": "12", // 可選
   "residence_unit": "08", // 可選
-  "district_code": "hk_east" // 可選
+  "district_code": "hk_east", // 可選
+  "avatar_key": "avo-03" // 可選，靜態預設頭像 avo-01 至 avo-16，不經 OSS
 }
 ```
+- **頭像規則**: `avatar_key` 只接受前端靜態圖庫編號 `avo-01` 至 `avo-16`；更換預設頭像不扣積分、不上傳檔案。未選擇時前端按會員 `public_id` 穩定映射一張預設頭像。大廈群聊頭像按 `building_id` 穩定映射，不另存檔。
 - **身份規則**: `publisher_identity_type` 為樓盤發布身份，只接受 `owner` 或 `agent`；新帳戶及舊空值預設為 `owner`，會員可在帳號管理透過 `PATCH /me/profile` 修改。
 - **回應參數**
 ```json
@@ -1238,8 +1252,25 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 - **上游主路徑**: AJO 後端分別代理 `GET /api/v1/integration/buildings/notices/`、`POST /api/v1/integration/buildings/building-flat-owner-binding-requests/`、`GET /api/v1/integration/buildings/subaccounts/`、`POST /api/v1/integration/buildings/subaccounts/grant/` 與 `POST /api/v1/integration/buildings/subaccounts/revoke/`。大廈資料使用 `GET /api/v1/integration/buildings/info/`；只有上游讀取路徑不可用時才兼容既有舊路徑。
 - **通告**: `GET /api/v1/me/ismart/notices?building_id=<building_id>`。`building_id` 可省略，由後端選取目前會員可見大廈；回應含 `selected_building_id`、`building_options` 與有效通告 `result`。
 - **業主綁定**: `POST /api/v1/me/ismart/owner-binding-requests`。請求使用 `building_id`、`ownedflat` 陣列，並可選 `cli_role`、`ownernote`、`is_receive_email`、`reg_tel`、`reg_email`、`cli_name`、`cli_id_card`、`cli_tel`。成功只代表 iSmart 已建立 `OwnerReg` 待審申請，不會建立有效 AJO 物業綁定。
+- **業主綁定狀態查詢**: `GET /api/v1/me/ismart/owner-binding-requests?building_id=&status=` 代理 iSmart `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`，查詢目前會員本人的 `OwnerReg` 申請與審批狀態。`status` 可為 `pending_approval`、`approved` 或 `rejected`；回應 `items` 依 `id` 倒序，最新在前。只回 `OwnerReg.user` 等於目前 iSmart `user_id` 的列，以外電話或姓名提交、未帶 `user` 的申請不會返回。
+- **有效單位綁定查詢**: `GET /api/v1/me/ismart/flat-bindings?building_id=&cli_role=` 代理 iSmart `GET /api/v1/integration/buildings/flat-bindings/`，查詢目前會員已審批生效的單位角色綁定（`i_flatcli_rel_tbl`，只含 `is_active`），回應 `items` 為平坦清單，含 `building_id`、`building_name`、`unit_id`、`unit_display`、`floor`、`unit`、`cli_role`。系統產生的 `單位戶口` 角色已由上游排除；同一單位持有多個角色時會出現多筆，使用單位清單時需自行去重。此接口不包含未審批申請，判斷「審批中」必須與上一條接口合併使用。
 - **本地大廈副戶授權接口（歷史兼容）**: `GET /api/v1/me/building-authorizations/permissions`、`GET|POST /api/v1/me/building-authorizations` 及 `DELETE /api/v1/me/building-authorizations/{authorizationId}` 保留兼容既有資料，不再由「我的大廈」住戶授權頁使用；目前頁面改用 iSmart 單位級授權接口。
 - **單位授權接口**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`、`POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke` 直接代理 iSmart 單位授權。授予請求使用 `unit_id`、`target_phone`、`target_email`。AJO 先分別以手機號與電郵呼叫 iSmart `/auth/check-contact/`；電話會兼容提交值、本地號碼及常見區號舊格式，兩邊對上同一個 `user_id` 才作為 `target_user_id`，再提交原始 `subaccounts/grant/`。上游使用 `ISMART_SUBACCOUNT_API_BASE_URL`，本機目前指向生產 iSmart。現行生產 iSmart 在寫入授權歷史時讀取 `IFlatTbl.building`，該模型實際只有 `building_id`，因此 list/grant/revoke 可能回傳 `'IFlatTbl' object has no attribute 'building'`；AJO 只轉發上游錯誤，不修改 `ajo_ismart` 倉庫。iSmart 副戶為單位級完整授權，包含遙距開門及查看通告，不提供獨立功能勾選；撤銷使用 `unit_id` 與 `target_user_id`。
+- **副戶聯絡檢查**: `POST /api/v1/me/ismart/subaccounts/check-contacts` 可只提交電話或電郵作資訊檢查；真正授權仍要求兩項聯絡資料均存在，且解析到同一個 iSmart `user_id`。
+- **註冊並授權**: `POST /api/v1/me/ismart/subaccounts/register-and-grant` 使用 `unit_id`、`phone`、`email`、未註冊時必填的 `eng_name`、可選 `remark` 及 `send_email`。若兩項聯絡資料均不存在，AJO 後端以 `crypto/rand` 產生臨時密碼，將同一密碼明確傳入 iSmart `/auth/register/`，註冊成功後再呼叫副戶 grant。新帳戶必須發送通知電郵，電郵包含登入 `username`、臨時密碼、大廈名稱、單位名稱及修改密碼提示；密碼不寫入 AJO 資料庫、不返回瀏覽器。大廈與單位名稱優先由 Redis-backed POS 目錄解析，快取只作展示，不能取代即時權限校驗。郵件發送失敗不回滾已完成的 iSmart 註冊及授權，回應以 `email_sent=false` 表示。
+
+```json
+{
+  "unit_id": "0348200001",
+  "phone": "+85291234567",
+  "email": "resident@example.com",
+  "eng_name": "CHAN TAI MAN",
+  "send_email": true,
+  "remark": "family member"
+}
+```
+
+成功回應的 `data` 只返回 `account_created`、`target_user_id`、`target_username`、`building_name`、`unit_display`、`email_sent` 及 `temporary_password_sent`；臨時密碼只出現在寄出的電郵，不會返回前端。
 - **安全邊界**: 瀏覽器不得提交 iSmart `user_id`。AJO 後端從目前 JWT 與 `UserIsmartAccount` 注入上游身份，並維持 AJO 穩定回應結構。
 - **服務個案提交**: `POST /api/v1/me/ismart/building-comments` 支援 `comment_type`、`comment` 與 `content` 的已註冊兼容分類，也保留 `request_type`、`category`、`subcategory` 的新 taxonomy 欄位。AJO 會員頁目前只提交 `門卡報失`、`冷氣滴水`、`嘈音滋擾`、`樓梯雜物`、`水質問題`、`渠務問題`、`保安事宜`、`清潔衛生`、`增加服務`、`電力問題` 或 `其他事宜` 作為 `comment_type`，並可選 `subject`、`location_text`、`unit_id`、`contact_name`、`contact_phone`。`building_id` 必須等於會員 `BoundBuildingIDs` 的目前正式綁定大廈；沒有綁定時不得提交。`unit_id` 非空時必須同時屬於 `BoundFlatUnitIDs`、目前會員 iSmart 可見單位及同一 `building_id`。上游固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `POST /buildings/comments/`，目前指向 `clouddev` 測試環境，失敗時不得回退生產接口。
 - **服務個案查詢**: `GET /api/v1/me/ismart/service-cases?building_id=&status=&request_type=` 固定查詢目前會員本人個案；`GET /api/v1/me/ismart/service-cases/{caseId}?building_id=` 返回個案內容、非內部訊息與附件。兩者固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `/buildings/service-cases/...`，目前指向 `clouddev` 測試環境，不設生產接口回退，也不快取動態處理狀態或訊息紀錄。
@@ -2466,7 +2497,14 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001" -Method G
         "message_type": "text",
         "status": "sent",
         "created_at": "2026-04-17T05:32:00Z",
-        "attachments": []
+        "attachments": [],
+        "reply_to": {
+          "message_id": "01KMESSAGE000",
+          "sender_user_id": "3",
+          "sender_name": "業主",
+          "content": "這件家具仍在",
+          "recalled": false
+        }
       }
     ],
     "pagination": {
@@ -2500,7 +2538,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages?p
   "chatId": "01KCHAT001", // 路徑參數
   "content": "你好，請問仍可交易嗎？", // 可選；最多 1000 字，與附件至少一項
   "attachment_ids": ["01KMEDIA001"], // 可選；最多 5 個已完成聊天上傳
-  "client_message_id": "web-uuid-001" // 必填建議；同一會話/發送者重試保持幂等
+  "client_message_id": "web-uuid-001", // 必填建議；同一會話/發送者重試保持幂等
+  "reply_to_message_id": "01KMESSAGE000" // 可選；同一會話內要回覆的訊息 public_id
 }
 ```
 - **回應參數**
@@ -2541,6 +2580,45 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages" 
 
 ---
 
+### 25.1. /api/v1/chats/{chatId}/messages/{messageId}/recall [POST]
+- **簡介**: 發送者撤回一則兩分鐘內的聊天訊息；訊息列保留，原文與附件 URL 不再返回。
+- **請求參數**
+```json
+{
+  "chatId": "01KCHAT001", // 路徑參數
+  "messageId": "01KMESSAGE001" // 路徑參數
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "message_id": "01KMESSAGE001",
+    "sender_user_id": "2",
+    "content": "",
+    "message_type": "text",
+    "status": "recalled",
+    "created_at": "2026-04-17T05:33:00Z"
+  },
+  "request_id": "01KPCXEXAMPLE",
+  "timestamp": "2026-04-17T05:35:00Z"
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages/01KMESSAGE001/recall" \
+  -H "Authorization: Bearer $token"
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $token"}
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/messages/01KMESSAGE001/recall" -Method POST -Headers $headers
+```
+
+---
+
 ### 26. /api/v1/chats/{chatId}/read [POST]
 - **簡介**: 標記聊天已讀
 - **請求參數**
@@ -2571,6 +2649,45 @@ curl -X POST "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" \
 ```powershell
 $headers=@{"Authorization"="Bearer $token"}
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/chats/01KCHAT001/read" -Method POST -Headers $headers
+```
+
+---
+
+### 26.12.2. /api/v1/staff/building-chats/{chatId}/members [POST]
+- **簡介**: Staff 將系統已記錄會員加入指定大廈群聊。
+- **請求參數**
+```json
+{
+  "public_id": "01KUSERPRO001" // 與 user_id 擇一
+}
+```
+- **回應參數**
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "user_id": "101",
+    "public_id": "01KUSERPRO001",
+    "display_name": "住戶甲",
+    "role_in_chat": "member",
+    "membership_status": "active",
+    "joined_at": "2026-09-13T08:00:00Z"
+  }
+}
+```
+- **Curl測試**
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/staff/building-chats/01KCHAT001/members" \
+  -H "Authorization: Bearer $staff_token" \
+  -H "Content-Type: application/json" \
+  -d '{"public_id":"01KUSERPRO001"}'
+```
+- **Powershell測試**
+```powershell
+$headers=@{"Authorization"="Bearer $staff_token"}
+$body='{"public_id":"01KUSERPRO001"}'
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/building-chats/01KCHAT001/members" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 ---
@@ -3606,11 +3723,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/staff/users?page=1&page_siz
       },
       {
         "notification_id": "01KNOTIFY002",
-        "category": "chat_message",
-        "title": "新訊息",
-        "body": "See you tonight at the lobby.",
-        "related_type": "chat",
-        "related_public_id": "01KCHAT001",
+        "category": "agency_profile_review",
+        "title": "代理資料審核結果",
+        "body": "代理資料已獲批准，現可使用代理身份發布樓盤。",
+        "related_type": "agency_profile",
+        "related_public_id": "01KAGENCY001",
         "is_read": true,
         "read_at": "2026-04-17T05:52:00Z",
         "created_at": "2026-04-17T05:50:00Z"

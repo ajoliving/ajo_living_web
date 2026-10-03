@@ -3,6 +3,7 @@
  * 1. 讀取會話列表、會話詳情與訊息，統一管理一對一與大廈群聊。
  * 2. 管理會話列表與聊天內容的單頁切換、訊息送出與已讀同步。
  * 3. 提供大廈群聊的只讀成員名單與離開群組流程。
+ * 4. 回覆帶入同一會話的引用預覽，並在切換會話或送出後清除。
  */
 import axios from 'axios';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -21,10 +22,11 @@ import {
   leaveBuildingChat,
   markBuildingChatRead,
   markChatRead,
+  recallBuildingChatMessage,
   sendBuildingChatMessage,
 } from '@/httpapis/chats';
 import type { MessageResponse } from '@/httpapis/messages';
-import { fetchMessages, sendMessage } from '@/httpapis/messages';
+import { fetchMessages, recallMessage, sendMessage } from '@/httpapis/messages';
 import { fetchRealtimeTicket } from '@/httpapis/realtime';
 import {
   abortMultipartUpload,
@@ -37,6 +39,7 @@ import {
 } from '@/httpapis/uploads';
 import { buildUploadHeaders } from '@/utils/upload';
 import type { BuildingChatMemberView, ChatConversationView, ChatMessageView } from '@/model/chat';
+import { buildingAvatarKey, resolveAvatarSrc } from '@/constants/presetAvatars';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -49,6 +52,32 @@ const hiddenMessageTypes = new Set(['notice_card']);
 const multipartThreshold = 10 * 1024 * 1024;
 const chatAttachmentMaxCount = 5;
 const chatAttachmentMaxFileSize = 50 * 1024 * 1024;
+const messageRecallWindowMs = 2 * 60 * 1000;
+const recalledMessagePreview = '已撤回';
+
+// 0.2 判斷訊息是否由目前登入會員發送。
+const isOwnChatMessage = (
+  item: MessageResponse,
+  currentPublicId: string,
+  participantPublicIdByUserId: Record<string, string>,
+): boolean => {
+  if (item.sender_role === 'self') {
+    return true;
+  }
+  if (item.sender_role === 'peer') {
+    return false;
+  }
+  const senderUserId = String(item.sender_user_id || '').trim();
+  const currentId = String(currentPublicId || '').trim();
+  if (!senderUserId) {
+    return false;
+  }
+  if (currentId && senderUserId === currentId) {
+    return true;
+  }
+  const senderPublicId = String(participantPublicIdByUserId[senderUserId] || '').trim();
+  return Boolean(currentId && senderPublicId && senderPublicId === currentId);
+};
 
 // 0. 建立一次發送的客戶端幂等鍵，網絡重試不會重複落庫。
 const newClientMessageID = (): string => {
@@ -83,7 +112,7 @@ const isDisplayableMessage = (item: MessageResponse): boolean =>
 export const useMarketplaceChatPage = () => {
   const route = useRoute();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const preferenceStore = usePreferenceStore();
   const sessionStore = useSessionStore();
   const feedbackStore = useFeedbackStore();
@@ -91,6 +120,8 @@ export const useMarketplaceChatPage = () => {
   const loadingMessages = ref(false);
   const sendingMessage = ref(false);
   const uploadingAttachment = ref(false);
+  const recallingMessageId = ref('');
+  const replyTarget = ref<ChatMessageView | null>(null);
   const conversations = ref<ChatConversationView[]>([]);
   const selectedChatId = ref('');
   const activeMessages = ref<ChatMessageView[]>([]);
@@ -142,68 +173,133 @@ export const useMarketplaceChatPage = () => {
       user_id: item.peer?.user_id || '',
       public_id: item.peer?.public_id || '',
       display_name: item.peer?.display_name || t('chat.memberFallback'),
-      avatar_url: '',
+      avatar_url: resolveAvatarSrc({
+        avatarKey: item.peer?.avatar_key,
+        seed: item.peer?.public_id || item.peer?.user_id,
+      }),
+      avatar_key: item.peer?.avatar_key,
       role_in_chat: item.peer?.role_in_chat || '',
     },
     unread_count: item.unread_count,
-    last_message: item.last_message_preview,
+    last_message: item.last_message_preview === recalledMessagePreview
+      ? t('chat.recalledMessage')
+      : item.last_message_preview,
     last_message_at: item.last_message_at || '',
   });
 
-  // 4.2 映射大廈群聊資料
-  const mapBuildingConversation = (item: BuildingChatSummaryResponse): ChatConversationView => ({
-    id: item.chat_id,
-    type: buildingGroupChatType,
-    title: `${t('chat.buildingGroup')} ${item.building_id}`,
-    subtitle: `${item.member_count} ${t('chat.members')}`,
-    building_id: item.building_id,
-    member_count: item.member_count,
-    listing: {
-      id: item.building_id,
-      title: `${t('chat.buildingGroup')} ${item.building_id}`,
-      summary: '',
-      price_hkd: 0,
-      status: 'active',
-    },
-    peer: {
-      user_id: '',
-      public_id: '',
-      display_name: `${t('chat.buildingGroup')} ${item.building_id}`,
-      avatar_url: '',
-      role_in_chat: 'group',
-    },
-    unread_count: item.unread_count,
-    last_message: item.last_message_preview,
-    last_message_at: item.last_message_at || '',
-  });
+  // 4.2 讀取大廈群聊對應的大廈名稱，缺少名稱時回退大廈 ID
+  const buildingConversationLabel = (item: BuildingChatSummaryResponse): string => {
+    const primary = locale.value === 'en' ? item.building_name_en : item.building_name;
+    const secondary = locale.value === 'en' ? item.building_name : item.building_name_en;
+    return String(primary || secondary || item.building_id || '').trim();
+  };
+
+  // 4.2.1 映射大廈群聊資料
+  const mapBuildingConversation = (item: BuildingChatSummaryResponse): ChatConversationView => {
+    const title = `${t('chat.buildingGroup')} ${buildingConversationLabel(item)}`;
+    return {
+      id: item.chat_id,
+      type: buildingGroupChatType,
+      title,
+      subtitle: `${item.member_count} ${t('chat.members')}`,
+      building_id: item.building_id,
+      building_name: item.building_name,
+      building_name_en: item.building_name_en,
+      member_count: item.member_count,
+      listing: {
+        id: item.building_id,
+        title,
+        summary: '',
+        price_hkd: 0,
+        status: 'active',
+      },
+      peer: {
+        user_id: '',
+        public_id: '',
+        display_name: title,
+        avatar_url: resolveAvatarSrc({
+          avatarKey: item.avatar_key || buildingAvatarKey(item.building_id),
+          seed: `building:${item.building_id}`,
+        }),
+        avatar_key: item.avatar_key || buildingAvatarKey(item.building_id),
+        role_in_chat: 'group',
+      },
+      unread_count: item.unread_count,
+      last_message: item.last_message_preview === recalledMessagePreview
+        ? t('chat.recalledMessage')
+        : item.last_message_preview,
+      last_message_at: item.last_message_at || '',
+    };
+  };
 
   // 4.3 根據參與者資料映射訊息
-  const mapMessage = (item: MessageResponse): ChatMessageView => ({
-    id: item.message_id,
-    chat_id: selectedChatId.value,
-    sender_role:
-      participantPublicIdByUserId.value[item.sender_user_id] === sessionStore.currentUser.public_id
-        ? 'self'
-        : 'peer',
-    sender_name: participantNameByUserId.value[item.sender_user_id] || '',
-    body: item.content,
-    message_type: item.message_type,
-    action_label: item.action_label,
-    action_url: item.action_url,
-    sent_at: item.created_at,
-    attachments: item.attachments || [],
-  });
+  const mapReplyPreview = (item: MessageResponse['reply_to']): ChatMessageView['reply'] => {
+    if (!item) {
+      return undefined;
+    }
+    const recalled = Boolean(item.recalled) || item.content === recalledMessagePreview;
+    const content = item.content.trim();
+    return {
+      message_id: item.message_id,
+      sender_name: item.sender_name || t('chat.memberFallback'),
+      content: recalled
+        ? t('chat.recalledMessage')
+        : (!content || content === '[Attachment]' ? t('chat.attachmentMessagePreview') : content),
+      recalled,
+    };
+  };
+
+  const mapMessage = (item: MessageResponse): ChatMessageView => {
+    const recalled = item.status === 'recalled';
+    return {
+      id: item.message_id,
+      chat_id: selectedChatId.value,
+      sender_role: isOwnChatMessage(
+        item,
+        sessionStore.currentUser.public_id,
+        participantPublicIdByUserId.value,
+      ) ? 'self' : 'peer',
+      sender_name: participantNameByUserId.value[item.sender_user_id] || '',
+      body: recalled ? t('chat.recalledMessage') : item.content,
+      message_type: item.message_type,
+      status: item.status || 'sent',
+      action_label: item.action_label,
+      action_url: item.action_url,
+      sent_at: item.created_at,
+      attachments: recalled ? [] : (item.attachments || []),
+      reply: mapReplyPreview(item.reply_to),
+    };
+  };
 
   // 4.4 以訊息 ID 寫入或更新目前會話，避免 REST 與 WebSocket 重複顯示同一條消息。
+  const redactQuotedReply = (item: ChatMessageView, recalledId: string): ChatMessageView => {
+    if (item.reply?.message_id !== recalledId || item.reply.recalled) {
+      return item;
+    }
+    return {
+      ...item,
+      reply: {
+        ...item.reply,
+        content: t('chat.recalledMessage'),
+        recalled: true,
+      },
+    };
+  };
+
   const upsertActiveMessage = (message: ChatMessageView): void => {
     const existingMessageIndex = activeMessages.value.findIndex((item) => item.id === message.id);
     if (existingMessageIndex >= 0) {
-      activeMessages.value = activeMessages.value.map((item, index) =>
-        index === existingMessageIndex ? message : item,
-      );
-      return;
+      const existingMessage = activeMessages.value[existingMessageIndex];
+      if (existingMessage.status === 'recalled' && message.status !== 'recalled') {
+        return;
+      }
     }
-    activeMessages.value = [...activeMessages.value, message];
+    const nextMessages = existingMessageIndex >= 0
+      ? activeMessages.value.map((item, index) => (index === existingMessageIndex ? message : item))
+      : [...activeMessages.value, message];
+    activeMessages.value = message.status === 'recalled'
+      ? nextMessages.map((item) => redactQuotedReply(item, message.id))
+      : nextMessages;
   };
 
   // 4.4.1 直接或透過可續傳分片上傳一個聊天附件。
@@ -254,6 +350,15 @@ export const useMarketplaceChatPage = () => {
     }
   };
 
+  // 4.4.1.1 送出時附帶目前引用的原訊息。
+  const withReplyPayload = <T extends { content: string; client_message_id: string }>(payload: T): T & { reply_to_message_id?: string } => {
+    const replyToID = replyTarget.value?.id || '';
+    if (!replyToID) {
+      return payload;
+    }
+    return { ...payload, reply_to_message_id: replyToID };
+  };
+
   // 4.4.2 上傳並發送已選附件。
   const handleSelectAttachment = async (event: Event): Promise<void> => {
     const input = event.target as HTMLInputElement;
@@ -280,13 +385,14 @@ export const useMarketplaceChatPage = () => {
     try {
       const attachmentIDs = await Promise.all(files.map(uploadChatAttachment));
       const { data } = isBuildingGroup
-        ? await sendBuildingChatMessage(chatId, { content, attachment_ids: attachmentIDs, client_message_id: newClientMessageID() })
-        : await sendMessage(chatId, { content, attachment_ids: attachmentIDs, client_message_id: newClientMessageID() });
+        ? await sendBuildingChatMessage(chatId, withReplyPayload({ content, attachment_ids: attachmentIDs, client_message_id: newClientMessageID() }))
+        : await sendMessage(chatId, withReplyPayload({ content, attachment_ids: attachmentIDs, client_message_id: newClientMessageID() }));
       if (selectedChatId.value === chatId) {
         upsertActiveMessage(mapMessage(data.data));
         if (draftMessage.value.trim() === content) {
           draftMessage.value = '';
         }
+        replyTarget.value = null;
       }
       conversations.value = conversations.value.map((conversation) =>
         conversation.id === chatId
@@ -458,10 +564,11 @@ export const useMarketplaceChatPage = () => {
 
     try {
       const { data } = isBuildingGroup
-        ? await sendBuildingChatMessage(chatId, { content, client_message_id: newClientMessageID() })
-        : await sendMessage(chatId, { content, client_message_id: newClientMessageID() });
+        ? await sendBuildingChatMessage(chatId, withReplyPayload({ content, client_message_id: newClientMessageID() }))
+        : await sendMessage(chatId, withReplyPayload({ content, client_message_id: newClientMessageID() }));
       if (selectedChatId.value === chatId) {
         upsertActiveMessage(mapMessage(data.data));
+        replyTarget.value = null;
       }
       conversations.value = conversations.value.map((conversation) =>
         conversation.id === chatId
@@ -485,6 +592,85 @@ export const useMarketplaceChatPage = () => {
       );
     } finally {
       sendingMessage.value = false;
+    }
+  };
+
+  // 4.8.1 將指定訊息設為回覆引用
+  const handleReplyMessage = (message: ChatMessageView): void => {
+    if (message.status === 'recalled') {
+      return;
+    }
+    replyTarget.value = message;
+  };
+
+  // 4.8.1.1 取消目前回覆引用
+  const clearReplyTarget = (): void => {
+    replyTarget.value = null;
+  };
+
+  // 4.8.1.2 點擊引用時捲動到原訊息
+  const handleQuoteClick = (messageId: string): void => {
+    const container = messageContainerRef.value;
+    if (!container || !messageId) {
+      return;
+    }
+    const target = container.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // 4.8.1.3 將表情插入目前草稿
+  const handleInsertEmoji = (emoji: string): void => {
+    const next = `${draftMessage.value}${emoji}`;
+    if ([...next].length > messageMaxLength) {
+      return;
+    }
+    draftMessage.value = next;
+  };
+
+  // 4.8.2 判斷自己的訊息是否仍可撤回
+  const canRecallMessage = (message: ChatMessageView): boolean => {
+    if (message.sender_role !== 'self' || message.status === 'recalled' || !message.sent_at) {
+      return false;
+    }
+    const sentAt = new Date(message.sent_at).getTime();
+    if (Number.isNaN(sentAt)) {
+      return false;
+    }
+    return Date.now() - sentAt <= messageRecallWindowMs;
+  };
+
+  // 4.8.3 撤回自己兩分鐘內的訊息
+  const handleRecallMessage = async (messageId: string): Promise<void> => {
+    const chatId = selectedChatId.value;
+    const target = activeMessages.value.find((item) => item.id === messageId);
+    if (!chatId || !target || recallingMessageId.value || !canRecallMessage(target)) {
+      return;
+    }
+    recallingMessageId.value = messageId;
+    const isBuildingGroup = activeConversation.value?.type === buildingGroupChatType;
+    try {
+      const { data } = isBuildingGroup
+        ? await recallBuildingChatMessage(chatId, messageId)
+        : await recallMessage(chatId, messageId);
+      if (selectedChatId.value !== chatId) {
+        return;
+      }
+      const mapped = mapMessage(data.data);
+      upsertActiveMessage(mapped);
+      applyConversationPreview(chatId, mapped);
+    } catch (error) {
+      feedbackStore.pushToast(
+        axios.isAxiosError<{ message?: string }>(error)
+          ? error.response?.data?.message ?? t('chat.recallError')
+          : t('chat.recallError'),
+        'error',
+      );
+    } finally {
+      if (recallingMessageId.value === messageId) {
+        recallingMessageId.value = '';
+      }
     }
   };
 
@@ -517,6 +703,30 @@ export const useMarketplaceChatPage = () => {
   };
 
   // 4.12 處理即時消息事件，並以消息 ID 去重
+  const conversationPreviewFromMessage = (message: ChatMessageView, fallback: string): string => {
+    if (message.status === 'recalled') {
+      return t('chat.recalledMessage');
+    }
+    return message.body || (message.attachments.length ? t('chat.attachmentMessagePreview') : fallback);
+  };
+
+  const applyConversationPreview = (chatId: string, message: ChatMessageView): void => {
+    const lastMessage = activeMessages.value[activeMessages.value.length - 1];
+    if (lastMessage && lastMessage.id !== message.id) {
+      return;
+    }
+    conversations.value = conversations.value.map((conversation) =>
+      conversation.id === chatId
+        ? {
+            ...conversation,
+            last_message: conversationPreviewFromMessage(message, conversation.last_message),
+            last_message_at: message.sent_at || conversation.last_message_at,
+            unread_count: 0,
+          }
+        : conversation,
+    );
+  };
+
   const handleRealtimeMessage = (event: MessageEvent<string>): void => {
     let payload: {
       type?: string;
@@ -528,23 +738,18 @@ export const useMarketplaceChatPage = () => {
     } catch {
       return;
     }
-    if (payload.type !== 'message' || payload.chat_id !== selectedChatId.value || !payload.message) {
+    if (
+      (payload.type !== 'message' && payload.type !== 'message_recalled') ||
+      payload.chat_id !== selectedChatId.value ||
+      !payload.message
+    ) {
       return;
     }
-    const message = payload.message;
-    upsertActiveMessage(mapMessage(message));
-    conversations.value = conversations.value.map((conversation) =>
-      conversation.id === selectedChatId.value
-        ? {
-            ...conversation,
-            last_message:
-              message.content ||
-              (message.attachments?.length ? t('chat.attachmentMessagePreview') : conversation.last_message),
-            last_message_at: message.created_at || conversation.last_message_at,
-            unread_count: 0,
-          }
-        : conversation,
+    const mapped = mapMessage(
+      payload.type === 'message_recalled' ? { ...payload.message, status: 'recalled' } : payload.message,
     );
+    upsertActiveMessage(mapped);
+    applyConversationPreview(selectedChatId.value, mapped);
   };
 
   // 4.13 連線恢復後按最後消息游標補回離線消息；空歷史會讀取目前最新一頁。
@@ -554,35 +759,33 @@ export const useMarketplaceChatPage = () => {
       return;
     }
     const isBuildingGroup = activeConversation.value?.type === buildingGroupChatType;
-    let afterMessageID = lastMessage?.id;
+    const previousLastId = lastMessage?.id;
+    const loadPage = async (params: { after_message_id?: string; latest?: boolean; page_size: number }) => {
+      const { data } = isBuildingGroup
+        ? await fetchBuildingChatMessages(chatId, params)
+        : await fetchMessages(chatId, params);
+      if (selectedChatId.value !== chatId) {
+        return [] as MessageResponse[];
+      }
+      const items = data.data.items.filter(isDisplayableMessage);
+      items.forEach((item) => {
+        upsertActiveMessage(mapMessage(item));
+      });
+      const newestMessage = activeMessages.value[activeMessages.value.length - 1];
+      if (newestMessage) {
+        applyConversationPreview(chatId, newestMessage);
+      }
+      return items;
+    };
     try {
+      await loadPage({ latest: true, page_size: 100 });
+      if (!previousLastId || selectedChatId.value !== chatId) {
+        return;
+      }
+      let afterMessageID = previousLastId;
       while (selectedChatId.value === chatId) {
-        const { data } = isBuildingGroup
-          ? await fetchBuildingChatMessages(chatId, afterMessageID ? { after_message_id: afterMessageID, page_size: 100 } : { latest: true, page_size: 100 })
-          : await fetchMessages(chatId, afterMessageID ? { after_message_id: afterMessageID, page_size: 100 } : { latest: true, page_size: 100 });
-        if (selectedChatId.value !== chatId) {
-          return;
-        }
-        const items = data.data.items;
-        const knownIds = new Set(activeMessages.value.map((item) => item.id));
-        const missing = items
-          .filter((item) => !knownIds.has(item.message_id))
-          .map(mapMessage);
-        if (missing.length > 0) {
-          activeMessages.value = [...activeMessages.value, ...missing];
-          const newestMessage = missing[missing.length - 1];
-          conversations.value = conversations.value.map((conversation) =>
-            conversation.id === chatId
-              ? {
-                  ...conversation,
-                  last_message: newestMessage.body || t('chat.attachmentMessagePreview'),
-                  last_message_at: newestMessage.sent_at,
-                  unread_count: 0,
-                }
-              : conversation,
-          );
-        }
-        if (!afterMessageID || items.length < 100) {
+        const items = await loadPage({ after_message_id: afterMessageID, page_size: 100 });
+        if (selectedChatId.value !== chatId || items.length < 100) {
           return;
         }
         afterMessageID = items[items.length - 1]?.message_id;
@@ -658,6 +861,7 @@ export const useMarketplaceChatPage = () => {
       groupMembers.value = data.data.items.map((member) => ({
         user_id: member.user_id,
         display_name: member.display_name,
+        avatar_key: member.avatar_key,
         role_in_chat: member.role_in_chat,
         membership_status: member.membership_status,
         muted_until: member.muted_until,
@@ -717,6 +921,7 @@ export const useMarketplaceChatPage = () => {
       const chatId = selectedChatId.value;
       closeRealtime();
       draftMessage.value = '';
+      replyTarget.value = null;
       groupMembersOpen.value = false;
       leaveConfirmOpen.value = false;
       void (async () => {
@@ -772,7 +977,9 @@ export const useMarketplaceChatPage = () => {
     activeConversation,
     activeReferencePrice,
     activeMessages,
+    canRecallMessage,
     canSendMessage,
+    clearReplyTarget,
     conversations,
     draftMessage,
     formatPrice,
@@ -780,8 +987,12 @@ export const useMarketplaceChatPage = () => {
     groupMembersOpen,
     handleBackToChats,
     handleCloseGroupMembers,
+    handleInsertEmoji,
     handleLeaveBuildingChat,
     handleOpenGroupMembers,
+    handleQuoteClick,
+    handleRecallMessage,
+    handleReplyMessage,
     handleSelectChat,
     handleSendByEnter,
     handleSendMessage,
@@ -794,6 +1005,8 @@ export const useMarketplaceChatPage = () => {
     preferenceStore,
     selectedChatId,
     setMessageContainerRef,
+    recallingMessageId,
+    replyTarget,
     sendingMessage,
     uploadingAttachment,
     handleSelectAttachment,

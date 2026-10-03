@@ -51,7 +51,7 @@ if [ "$SKIP_BUILD" != "1" ]; then
 
   pushd "$FRONTEND_DIR" >/dev/null
   npm ci
-  VITE_API_BASE_URL="/api/v1" npm run build
+  VITE_API_BASE_URL="/api/v1" VITE_ENABLE_THEME_PICKER=1 npm run build
   popd >/dev/null
 fi
 
@@ -262,7 +262,7 @@ set_env "REDIS_ENABLED" "true"
 set_env "REDIS_ADDR" "127.0.0.1:$REDIS_PORT"
 set_env "REDIS_PASSWORD" ""
 set_env "REDIS_DB" "0"
-set_env "OSS_ALLOWED_ORIGINS" "$APP_PUBLIC_BASE_URL"
+set_env "OSS_ALLOWED_ORIGINS" "https://ajoliving.skylinedances.com,$APP_PUBLIC_BASE_URL"
 set_env "OSS_CALLBACK_URL" "$APP_API_PUBLIC_BASE_URL/api/v1/oss/callback"
 set_env "WALLET_RECHARGE_RETURN_BASE_URL" "$APP_PUBLIC_BASE_URL"
 set_env "WALLET_RECHARGE_NOTIFY_URL" "$APP_API_PUBLIC_BASE_URL/api/v1/payments/easylink/notify"

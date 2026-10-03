@@ -6,6 +6,14 @@
 import httpClient from '@/httpapis';
 import type { ApiResponse, PaginatedResult } from '@/model/api';
 
+export interface MessageReplyPreview {
+  message_id: string;
+  sender_user_id: string;
+  sender_name: string;
+  content: string;
+  recalled: boolean;
+}
+
 export interface MessageResponse {
   message_id: string;
   sender_user_id: string;
@@ -18,6 +26,7 @@ export interface MessageResponse {
   status: string;
   created_at: string;
   attachments?: MessageAttachmentResponse[];
+  reply_to?: MessageReplyPreview;
 }
 
 export interface MessageAttachmentResponse {
@@ -46,5 +55,9 @@ export const fetchMessages = (chatId: string, params: FetchMessagesParams = {}) 
   });
 
 // 2. 發送聊天訊息
-export const sendMessage = (chatId: string, payload: { content: string; attachment_ids?: string[]; client_message_id?: string }) =>
+export const sendMessage = (chatId: string, payload: { content: string; attachment_ids?: string[]; client_message_id?: string; reply_to_message_id?: string }) =>
   httpClient.post<ApiResponse<MessageResponse>>(`/chats/${chatId}/messages`, payload);
+
+// 3. 撤回聊天訊息
+export const recallMessage = (chatId: string, messageId: string) =>
+  httpClient.post<ApiResponse<MessageResponse>>(`/chats/${chatId}/messages/${messageId}/recall`);

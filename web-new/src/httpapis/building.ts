@@ -218,6 +218,18 @@ export interface IsmartSubaccountsResponse extends IsmartBuildingOptionResponse 
   upstream_message?: string;
 }
 
+export interface IsmartSubaccountContactCheckResponse {
+  email?: string;
+  phone?: string;
+  email_exists?: boolean;
+  phone_exists?: boolean;
+  email_user_id?: number;
+  phone_user_id?: number;
+  same_user?: boolean;
+  can_authorize?: boolean;
+  conflict_reason?: string;
+}
+
 export interface IsmartSubaccountMutationPayload {
   unit_id: string;
   target_user_id?: number;
@@ -235,6 +247,64 @@ export interface IsmartSubaccountMutationResponse extends IsmartBuildingOptionRe
   target_username?: string;
   role?: string;
   active_subaccount_count?: number;
+  upstream_message?: string;
+}
+
+export interface IsmartSubaccountRegisterAndGrantPayload {
+  unit_id: string;
+  phone: string;
+  email: string;
+  eng_name?: string;
+  send_email: boolean;
+  remark?: string;
+}
+
+export interface IsmartSubaccountRegisterAndGrantResponse extends IsmartSubaccountMutationResponse {
+  account_created?: boolean;
+  email_sent?: boolean;
+  temporary_password_sent?: boolean;
+  building_name?: string;
+  unit_display?: string;
+}
+
+export interface IsmartFlatBindingRow {
+  relation_info_id?: number | string;
+  building_id?: string;
+  building_name?: string;
+  unit_id?: string;
+  unit_display?: string;
+  floor?: string;
+  unit?: string;
+  cli_role?: string;
+  client_id?: string;
+  remark?: string | null;
+}
+
+export interface IsmartFlatBindingsResponse extends IsmartBuildingOptionResponse {
+  items?: IsmartFlatBindingRow[];
+  count?: number;
+  upstream_message?: string;
+}
+
+export type IsmartOwnerBindingRequestStatus = 'pending_approval' | 'approved' | 'rejected';
+
+export interface IsmartOwnerBindingRequestRow {
+  owner_reg_id?: number | string;
+  building_id?: string;
+  building_name?: string;
+  ownedflat?: string[];
+  user?: number | string;
+  cli_role?: string;
+  ownernote?: string;
+  status?: IsmartOwnerBindingRequestStatus | string;
+  remark?: string | null;
+  created_date?: string;
+  approval_date?: string | null;
+}
+
+export interface IsmartOwnerBindingRequestsResponse extends IsmartBuildingOptionResponse {
+  items?: IsmartOwnerBindingRequestRow[];
+  count?: number;
   upstream_message?: string;
 }
 
@@ -442,11 +512,61 @@ export const fetchMemberIsmartSubaccounts = async (unitID?: string): Promise<Ism
   return data.data;
 };
 
+// 7.1 檢查授權副戶聯絡資料
+export const checkMemberIsmartSubaccountContacts = async (payload: {
+  phone?: string;
+  email?: string;
+}): Promise<IsmartSubaccountContactCheckResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountContactCheckResponse>>('/me/ismart/subaccounts/check-contacts', payload);
+  return data.data;
+};
+
+// 7.2 取得目前會員 iSmart 已審批的單位角色綁定
+export const fetchMemberIsmartFlatBindings = async (params?: {
+  buildingID?: string;
+  role?: string;
+}): Promise<IsmartFlatBindingsResponse> => {
+  const query = {
+    ...(params?.buildingID ? { building_id: params.buildingID } : {}),
+    ...(params?.role ? { cli_role: params.role } : {}),
+  };
+  const { data } = await httpClient.get<ApiResponse<IsmartFlatBindingsResponse>>('/me/ismart/flat-bindings', {
+    params: Object.keys(query).length > 0 ? query : undefined,
+  });
+  return data.data;
+};
+
+// 7.2 取得目前會員 iSmart 業主綁定申請與審批狀態
+export const fetchMemberIsmartOwnerBindingRequests = async (params?: {
+  buildingID?: string;
+  status?: IsmartOwnerBindingRequestStatus;
+}): Promise<IsmartOwnerBindingRequestsResponse> => {
+  const query = {
+    ...(params?.buildingID ? { building_id: params.buildingID } : {}),
+    ...(params?.status ? { status: params.status } : {}),
+  };
+  const { data } = await httpClient.get<ApiResponse<IsmartOwnerBindingRequestsResponse>>('/me/ismart/owner-binding-requests', {
+    params: Object.keys(query).length > 0 ? query : undefined,
+  });
+  return data.data;
+};
+
 // 8. 新增目前會員 iSmart 授權副戶
 export const grantMemberIsmartSubaccount = async (
   payload: IsmartSubaccountMutationPayload,
 ): Promise<IsmartSubaccountMutationResponse> => {
   const { data } = await httpClient.post<ApiResponse<IsmartSubaccountMutationResponse>>('/me/ismart/subaccounts/grant', payload);
+  return data.data;
+};
+
+// 8.1 註冊（如需要）並授予目前會員 iSmart 副戶
+export const registerAndGrantMemberIsmartSubaccount = async (
+  payload: IsmartSubaccountRegisterAndGrantPayload,
+): Promise<IsmartSubaccountRegisterAndGrantResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountRegisterAndGrantResponse>>(
+    '/me/ismart/subaccounts/register-and-grant',
+    payload,
+  );
   return data.data;
 };
 

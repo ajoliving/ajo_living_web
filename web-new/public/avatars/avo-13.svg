@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Flower">
+  <circle cx="40" cy="40" r="40" fill="#B4494A"/>
+  <circle cx="40" cy="40" r="35.5" fill="none" stroke="#FFF4F4" stroke-width="1.25" opacity="0.2"/>
+  <circle cx="40" cy="28" r="8" fill="#FFF4F4"/>
+  <circle cx="28" cy="40" r="8" fill="#FFF4F4"/>
+  <circle cx="52" cy="40" r="8" fill="#FFF4F4"/>
+  <circle cx="40" cy="52" r="8" fill="#FFF4F4"/>
+  <circle cx="40" cy="40" r="6" fill="#B4494A"/>
+  <circle cx="40" cy="40" r="3" fill="#FFF4F4"/>
+</svg>

@@ -1,6 +1,23 @@
 # iSmart 整合 API 參考
 
-本文是 `external_app_building_api(1).md` 的繁體中文對譯，體例對齊 `ismart_integration_api_reference.zh-HK.md`。路徑、欄位名、JSON 鍵與錯誤字串維持原文。
+本文是 `external_app_building_api(2).md` 的繁體中文對譯，體例對齊 `ismart_integration_api_reference.zh-HK.md`。路徑、欄位名、JSON 鍵與錯誤字串維持原文。
+
+相對 `(1)` 版，本版新增兩個綁定查詢接口：
+
+- `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`：查詢一個會員已提交的 `OwnerReg` 綁定申請與其審批狀態。
+- `GET /api/v1/integration/buildings/flat-bindings/`：查詢一個會員目前有效的單位角色關係（已審批綁定，非申請）。
+
+驗證狀態（2026-09-14 實測，production 與 clouddev 結果一致）：
+
+- 兩條路由均已上線並可正常回應，成功與失敗路徑都驗過。
+- 成功路徑：`flat-bindings/?user_id=123` 回 HTTP `200`，`{"status":"success","data":{"items":[{"relation_info_id":266,"building_id":"0314100","building_name":"Yen Ying Building","unit_id":"03141002212","unit_display":"Yen Ying Building 22 B","floor":"22","unit":"B","cli_role":"登記業主","client_id":"03141050","remark":null}],"count":1}}`。
+- 成功路徑：`building-flat-owner-binding-requests/?user_id=123` 回 HTTP `200`，`{"status":"success","data":{"items":[],"count":0}}`。申請項目的欄位形狀其後已由 AJO 測試站以真實帳號代理實測補齊，見 3.1。
+- 失敗路徑：未帶 `user_id` 回 HTTP `400` `user_id is required`；`user_id` 不存在回 HTTP `400` `user_id 999999999 not found`（注意不是 `404`）。
+- 對照組：不存在的同層路徑回 HTTP `404`，可排除 400 由 catch-all 或閘道產生。
+
+關於上游版本：本機檢出的 `ajo_ismart` 是**已知落後的舊檢出版**，不代表上游現況。因此「本機沒有這兩條路由」不構成任何反證，接入判斷一律以已部署環境的實測結果為準。
+
+佐證：本機 HEAD 為 `d4dc931`（2026-08-18），遠端 `feature/django_v1_sawyer` 已推進至 `7f3573b2`；本機該 view 只實作 `post()` 且無 `flat-bindings/`，而部署環境對同路徑的 `GET` 回 `400` 而非 `405`，兩者一致地指向「部署版本新於本機檢出」。要對照最新上游程式碼時，先同步該倉庫再查，不要以本機現有檔案作結。
 
 AJO 實際接入仍以 `ajo_ismart` 已暴露路由為真值。現行上游密碼與通告電郵寫入端是 `/api/v1/integration/auth/password/` 與 `/api/v1/integration/auth/notification-settings/`，付款類型是 `/api/v1/integration/payments/fees/`。本文底稿中的 `/auth/change-password/`、`/auth/settings/`、`/payments/types/` 只反映該英文稿，接入前必須再核對上游。
 
@@ -61,6 +78,8 @@ AJO 實際接入仍以 `ajo_ismart` 已暴露路由為真值。現行上游密�
 - `/api/v1/integration/auth/client/`
 - `/api/v1/integration/auth/change-password/`
 - `/api/v1/integration/auth/settings/`
+- `/api/v1/integration/buildings/building-flat-owner-binding-requests/`
+- `/api/v1/integration/buildings/flat-bindings/`
 - `/api/v1/building-mf-table/`
 - `/api/v1/building-of-list/`
 - `/api/v1/building-notices/`
@@ -120,7 +139,8 @@ AJO 實際接入仍以 `ajo_ismart` 已暴露路由為真值。現行上游密�
 | 大廈資料 | `GET` | `/api/v1/integration/buildings/receivables/other-fees/` | `/api/v1/building-of-list/` | 其他費用應收列表 |
 | 大廈資料 | `GET` | `/api/v1/integration/buildings/notices/` | `/api/v1/building-notices/` | 有效大廈通告 |
 | 外部大廈 | `GET` | `/api/v1/integration/buildings/info/` | `/api/v1/external/building-info/` | 大廈資料與文件中繼 |
-| 綁定 | `POST` | `/api/v1/integration/buildings/building-flat-owner-binding-requests/` | — | 提交 `OwnerReg` 業主綁定申請，需職員審批 |
+| 綁定 | `GET` / `POST` | `/api/v1/integration/buildings/building-flat-owner-binding-requests/` | — | 查詢業主綁定申請，或提交 `OwnerReg` 業主綁定申請（需職員審批） |
+| 綁定 | `GET` | `/api/v1/integration/buildings/flat-bindings/` | — | 列出一個會員目前有效的單位角色（不含 `單位戶口`） |
 | 副戶 | `GET` | `/api/v1/integration/buildings/subaccounts/` | — | 列出業主控制單位目前有效授權副戶 |
 | 副戶 | `POST` | `/api/v1/integration/buildings/subaccounts/grant/` | — | 為一個業主控制單位授予 `授權用戶` |
 | 副戶 | `POST` | `/api/v1/integration/buildings/subaccounts/revoke/` | — | 從一個業主控制單位撤銷 `授權用戶` |
@@ -446,12 +466,18 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 
 業主角色（`登記業主`）經 `OwnerReg` 提交，仍需大廈管理審批。已核准業主授予 `授權用戶` 時不走審批。實際有效角色關係仍寫在 `i_flatcli_rel_tbl`。
 
+- 申請狀態（`OwnerReg`）讀 `3.1` 的 `GET`；已核准的實際綁定關係讀 `3.2` 的 `flat-bindings`。
+- 兩者不可互相取代：前者包含未審批與被拒絕的申請，後者只包含已生效角色。
+
 ### 3.1 業主綁定申請
 
 - 主要路徑：`POST /api/v1/integration/buildings/building-flat-owner-binding-requests/`
+- 查詢方法：`GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`
 - 舊路徑：無
-- 用途：提交 `OwnerReg`，把使用者綁到一個或多個單位，供業主角色審批
+- 用途：提交 `OwnerReg`，把使用者綁到一個或多個單位，供業主角色審批；`GET` 用於查詢該會員已提交的申請與審批狀態
 - 授權：目前無 IP whitelist，亦無登入要求
+
+#### 1. 提交申請（`POST`）
 
 關鍵欄位：
 
@@ -463,6 +489,23 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 | `cli_role` | 預設業主角色 |
 | `reg_tel` / `reg_email` | 沒有 `user` 時需要的申請人聯絡資料 |
 | `cli_name` / `cli_id_card` / `cli_tel` | 申請人資料 |
+| `ownernote` | 申請備註 |
+| `is_receive_email` | 審批後是否開啟通告電郵，預設 `false` |
+
+成功回應：
+
+```json
+{
+  "status": "success",
+  "data": {
+    "owner_reg_id": 45,
+    "building_id": "0348200",
+    "ownedflat": ["0348200001"],
+    "user": 123,
+    "status": "pending_approval"
+  }
+}
+```
 
 注意：
 
@@ -470,7 +513,128 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 - 職員其後經既有 `confirm_memreg` 流程審批
 - 若 `OwnerReg.user` 已有值，審批會重用既有帳號，不另開新帳
 
-### 3.2 副戶清單
+#### 2. 查詢申請（`GET`）
+
+查詢參數：
+
+```text
+?user_id=123&building_id=0348200&status=pending_approval
+```
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `user_id` | 是 | 申請人 `CustomUser.id` |
+| `building_id` | 否 | 只回該大廈的申請 |
+| `status` | 否 | `pending_approval` / `approved` / `rejected` |
+
+成功回應：
+
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "owner_reg_id": 45,
+        "building_id": "0348200",
+        "building_name": "Example Building",
+        "ownedflat": ["0348200001"],
+        "user": 123,
+        "cli_role": "業主",
+        "ownernote": "request from external app",
+        "status": "pending_approval",
+        "remark": null,
+        "created_date": "2026-09-14",
+        "approval_date": null
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+上述為形狀示意。實測已補齊（經 AJO 測試站代理同一上游取得，`user_id=10` 的會員）：
+
+```json
+{"owner_reg_id":304,"building_id":"0999900","building_name":"DEMO1 BUILDING","ownedflat":["09999000112"],"user":10,"cli_role":"業主","ownernote":null,"status":"pending_approval","remark":null,"created_date":"2026-07-15","approval_date":null}
+```
+
+欄位與上表一致。另實測：`status` 帶無效值回 HTTP `400` `status must be pending_approval, approved, or rejected`；無有效業主綁定的會員回 HTTP `200` 與 `items: []`，不是錯誤。
+
+注意：
+
+- 只回 `OwnerReg.user` 等於 `user_id` 的列；只用電話／姓名提交、沒有帶 `user` 的申請不會回傳
+- `status` 由 `OwnerReg.status` 與 `OwnerReg.is_success` 推導：未處理為 `pending_approval`，已處理且成功為 `approved`，已處理但不成功為 `rejected`
+- `ownedflat` 是 `OwnerReg.get_ownedflat_ids()` 正規化後的單位 ID 清單
+- 結果按 `id` 倒序，最新在前
+- 缺 `user_id`、`user_id` 不存在或 `status` 值無效回 HTTP `400`
+- `building_id` 不存在回 HTTP `404`
+- 會員存在但沒有符合條件的申請時回 HTTP `200` 與 `items: []`
+
+### 3.2 會員單位綁定清單
+
+- 主要路徑：`GET /api/v1/integration/buildings/flat-bindings/`
+- 舊路徑：無
+- 用途：列出一個會員目前有效的單位角色關係，資料來自 `i_flatcli_rel_tbl`
+- 授權：目前無 IP whitelist，亦無登入要求
+
+查詢參數：
+
+```text
+?user_id=123&building_id=0348200&cli_role=登記業主
+```
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `user_id` | 是 | `CustomUser.id` |
+| `building_id` | 否 | 只回該大廈；不傳時回全部大廈 |
+| `cli_role` | 否 | 在系統角色排除清單之後的精確角色篩選 |
+
+成功回應：
+
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "relation_info_id": 1001,
+        "building_id": "0348200",
+        "building_name": "Example Building",
+        "unit_id": "0348200001",
+        "unit_display": "Example Building 12 A",
+        "floor": "12",
+        "unit": "A",
+        "cli_role": "登記業主",
+        "client_id": "200123",
+        "remark": null
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+上述為形狀示意。實測樣本（production 與 clouddev 一致，`?user_id=123`）：
+
+```json
+{"status":"success","data":{"items":[{"relation_info_id":266,"building_id":"0314100","building_name":"Yen Ying Building","unit_id":"03141002212","unit_display":"Yen Ying Building 22 B","floor":"22","unit":"B","cli_role":"登記業主","client_id":"03141050","remark":null}],"count":1}}
+```
+
+注意：
+
+- 一個會員可以跨多棟大廈持有多個單位；回應是一層平坦的 `items` 清單，不按大廈分組
+- `unit_display` 由 `{building_name} {floor} {unit}` 組成，`building_name` 優先取 `buildname`，否則取 `buildname_chi`
+- 每筆 `i_flatcli_rel_tbl` 關係各佔一項；同一單位有兩個角色時會出現兩項
+- 只回 `is_active=True` 的列
+- `單位戶口` 一律排除（系統產生的單位帳戶）；其他角色，包括日後新增的，都會回傳
+- 傳 `?cli_role=單位戶口` 仍回空清單
+- 未知 `cli_role` 不算錯誤，回 `items: []`
+- 缺 `user_id` 或 `user_id` 不存在回 HTTP `400`
+- `building_id` 不存在回 HTTP `404`
+- 會員存在但沒有符合條件的關係時回 HTTP `200` 與 `items: []`
+
+### 3.3 副戶清單
 
 - 主要路徑：`GET /api/v1/integration/buildings/subaccounts/`
 - 舊路徑：無
@@ -490,7 +654,7 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 - `history_count` 是該關係的授權副戶歷史筆數
 - 指定 `unit_id` 但呼叫端不是該單位業主時回 HTTP `403`
 
-### 3.3 副戶授權
+### 3.4 副戶授權
 
 - 主要路徑：`POST /api/v1/integration/buildings/subaccounts/grant/`
 - 舊路徑：無
@@ -515,7 +679,25 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 
 注意：若同一目標先前有已停用的 `授權用戶` 列，現有程式會重新啟用該列，而不是再插一筆。成功授權會寫入 `AuthorizedSubUserRequestHistory`。
 
-### 3.4 副戶撤銷
+### 3.4.1 AJO 授權前聯絡資料檢查
+
+- AJO 路徑：`POST /api/v1/me/ismart/subaccounts/check-contacts`
+- AJO 會按前端實際提交的 `phone` 或 `email` 呼叫 iSmart 副戶專用 `/auth/check-contact/`
+- 只填一項時可先獨立確認該聯絡資料是否對應現有 iSmart 帳戶
+- 只有電話及電郵都存在，且兩次回應的 `user_id` 相同，才可進入副戶授權
+- 此檢查不會建立帳戶，也不會改變授權關係；最終寫入仍由 `POST /api/v1/integration/buildings/subaccounts/grant/` 完成
+- 若找不到帳戶，前端應要求補充另一項聯絡資料或進入受控註冊流程；不得由瀏覽器直接呼叫 iSmart `register`
+
+### 3.4.2 AJO 註冊並授權副戶
+
+- AJO 路徑：`POST /api/v1/me/ismart/subaccounts/register-and-grant`
+- 請求使用 `unit_id`、`phone`、`email`、未註冊時必填的 `eng_name`、可選 `remark` 及 `send_email`。
+- 若電話及電郵均不存在，AJO 後端以 `crypto/rand` 產生臨時密碼，將同一密碼明確傳入 iSmart `/auth/register/`，註冊成功後再呼叫副戶 grant。
+- 新帳戶必須發送通知電郵；郵件包含登入 `username`、臨時密碼、大廈名稱、單位名稱及修改密碼提示。臨時密碼不寫入 AJO 資料庫，也不返回瀏覽器。
+- 大廈及單位名稱優先由 Redis-backed POS 目錄解析，快取只作展示，不能取代即時單位權限校驗。
+- 郵件發送失敗不回滾已完成的 iSmart 註冊及授權，成功回應會以 `email_sent=false` 表示。
+
+### 3.5 副戶撤銷
 
 - 主要路徑：`POST /api/v1/integration/buildings/subaccounts/revoke/`
 - 舊路徑：無
@@ -850,6 +1032,9 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 - `PosPaymentToIsmart` 目前沒有有效 IP whitelist
 - `qfpayapi` 不驗證回調簽名
 - `ExternalBuildingInfoApi` 目前用 `btype='audition'` 查審計報告
+- `building-flat-owner-binding-requests/` 的 `GET` 只認 `OwnerReg.user`；以電話／姓名提交而未帶 `user` 的申請，外部端無法查回
+- `flat-bindings/` 只反映已生效的 `i_flatcli_rel_tbl`，不反映尚在審批中的申請；兩者需分別查詢
+- 這兩條綁定查詢接口未帶 `user_id`、`user_id` 不存在或篩選值無效時回 HTTP `400`，不是 `404`
 - 門禁列表權限與遙距開門權限並不完全相同
 - `clouddev` 與 production 的硬件能力可能不同
 
@@ -859,7 +1044,7 @@ JSON boolean 與整數 `1` / `0` 也可。`null` 或其他值回 HTTP `400`。
 - 舊非整合別名仍以 `POST` 提供
 - 寫入、webhook 與帶敏感 body 的門禁流程維持 `POST`
 
-適合 `GET` 的例子：管理費、其他費用、通告、大廈資料、未繳發票、cashier 交易、單位／日期交易歷史、bank-in 列表與明細。
+適合 `GET` 的例子：管理費、其他費用、通告、大廈資料、未繳發票、cashier 交易、單位／日期交易歷史、bank-in 列表與明細、業主綁定申請查詢、會員單位綁定清單。
 
 應維持 `POST` 的例子：登入、提交服務個案、遙距開門、產生 QR、POS 付款、bank-in、webhook。
 

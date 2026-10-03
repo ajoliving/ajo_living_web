@@ -57,6 +57,7 @@ type UserProfile struct {
 	ResidenceBindingStatus string         `gorm:"type:varchar(32);index" json:"residence_binding_status"`
 	DistrictCode           string         `gorm:"type:varchar(64)" json:"district_code"`
 	AvatarAssetID          *int64         `json:"avatar_asset_id"`
+	AvatarKey              string         `gorm:"type:varchar(16)" json:"avatar_key"`
 	CreatedAt              time.Time      `json:"created_at"`
 	UpdatedAt              time.Time      `json:"updated_at"`
 	PrimaryCommunity       *Community     `gorm:"foreignKey:PrimaryCommunityID" json:"primary_community,omitempty"`

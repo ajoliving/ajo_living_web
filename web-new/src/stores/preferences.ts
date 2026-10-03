@@ -2,9 +2,11 @@
  * 偏好設定狀態。
  * 1. 管理可持久化的全站主題色與語系。
  * 2. 管理 mobile 導航偏好。
+ * 3. 主題選擇器未開放時，全站固定使用預設品牌色。
  */
 import { defineStore } from 'pinia';
 
+import { isThemePickerEnabled } from '@/utils/feature-flags';
 import { DEFAULT_THEME_NAME, applyTheme, getThemeOption, type AppThemeName } from '@/utils/theme';
 
 // 1. 定義語系型別
@@ -30,7 +32,11 @@ const getStoredTheme = (): AppThemeName => {
   return getThemeOption(storedTheme).value;
 };
 
-// 4. 建立偏好設定 Store
+// 4. 選擇本次執行採用的主題；未開放主題選擇器時固定使用預設品牌色
+const resolveActiveTheme = (): AppThemeName =>
+  isThemePickerEnabled() ? getStoredTheme() : DEFAULT_THEME_NAME;
+
+// 5. 建立偏好設定 Store
 export const usePreferenceStore = defineStore('preferences', {
   state: () => ({
     locale: 'zh-HK' as AppLocale,
@@ -38,16 +44,19 @@ export const usePreferenceStore = defineStore('preferences', {
     mobile_menu_open: false,
   }),
   actions: {
-    // 4. 還原已保存的語系與主題
+    // 5.1 還原已保存的語系與主題
     hydratePreferences() {
       if (typeof window === 'undefined') {
         return;
       }
 
       const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-      this.theme = getStoredTheme();
-      window.localStorage.setItem(THEME_STORAGE_KEY, this.theme);
-      window.localStorage.setItem(THEME_STORAGE_VERSION_KEY, CURRENT_THEME_STORAGE_VERSION);
+      this.theme = resolveActiveTheme();
+
+      if (isThemePickerEnabled()) {
+        window.localStorage.setItem(THEME_STORAGE_KEY, this.theme);
+        window.localStorage.setItem(THEME_STORAGE_VERSION_KEY, CURRENT_THEME_STORAGE_VERSION);
+      }
 
       if (isValidLocale(storedLocale)) {
         this.locale = storedLocale;
@@ -56,13 +65,13 @@ export const usePreferenceStore = defineStore('preferences', {
       applyTheme(this.theme);
     },
 
-    // 5. 更新語系並寫入本地儲存
+    // 5.2 更新語系並寫入本地儲存
     setLocale(locale: AppLocale) {
       this.locale = locale;
       window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     },
 
-    // 6. 更新主題並即時同步全站 token
+    // 5.3 更新主題並即時同步全站 token
     setTheme(theme: AppThemeName) {
       this.theme = getThemeOption(theme).value;
       window.localStorage.setItem(THEME_STORAGE_KEY, this.theme);
@@ -70,7 +79,7 @@ export const usePreferenceStore = defineStore('preferences', {
       applyTheme(this.theme);
     },
 
-    // 7. 更新 mobile 導航開關狀態
+    // 5.4 更新 mobile 導航開關狀態
     setMobileMenuOpen(open: boolean) {
       this.mobile_menu_open = open;
     },

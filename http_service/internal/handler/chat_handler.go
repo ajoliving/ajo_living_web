@@ -23,9 +23,10 @@ type ChatHandler struct {
 
 // 2. messageRequest defines the send message payload.
 type messageRequest struct {
-	Content         string   `json:"content"`
-	AttachmentIDs   []string `json:"attachment_ids"`
-	ClientMessageID string   `json:"client_message_id"`
+	Content          string   `json:"content"`
+	AttachmentIDs    []string `json:"attachment_ids"`
+	ClientMessageID  string   `json:"client_message_id"`
+	ReplyToMessageID string   `json:"reply_to_message_id"`
 }
 
 // 2. buildingChatJoinRequestPayload defines a join request payload.
@@ -44,6 +45,12 @@ type buildingChatModerationPayload struct {
 	Action          string `json:"action" binding:"required"`
 	DurationMinutes int    `json:"duration_minutes"`
 	Reason          string `json:"reason"`
+}
+
+// 5. buildingChatAddMemberPayload defines an administrator add-member payload.
+type buildingChatAddMemberPayload struct {
+	UserID   int64  `json:"user_id"`
+	PublicID string `json:"public_id"`
 }
 
 // 3. NewChatHandler creates a chat handler instance.
@@ -184,7 +191,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	result, err := h.chatService.SendMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID))
+	result, err := h.chatService.SendMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID), strings.TrimSpace(request.ReplyToMessageID))
 	if err != nil {
 		errcode.WriteError(c, err)
 		return
@@ -193,6 +200,25 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		h.realtimeHub.PublishMessage(c.Request.Context(), strings.TrimSpace(c.Param("chatId")), *result, strings.TrimSpace(request.ClientMessageID))
 	}
 
+	errcode.Success(c, result)
+}
+
+// 11.1 RecallMessage retracts a sent message in a direct or building chat.
+func (h *ChatHandler) RecallMessage(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	chatID := strings.TrimSpace(c.Param("chatId"))
+	result, err := h.chatService.RecallMessage(c.Request.Context(), user.UserID, chatID, strings.TrimSpace(c.Param("messageId")))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	if h.realtimeHub != nil {
+		h.realtimeHub.PublishRecalledMessage(c.Request.Context(), chatID, *result)
+	}
 	errcode.Success(c, result)
 }
 
@@ -333,7 +359,7 @@ func (h *ChatHandler) SendBuildingChatMessage(c *gin.Context) {
 		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
 		return
 	}
-	result, err := h.chatService.SendBuildingChatMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID))
+	result, err := h.chatService.SendBuildingChatMessageWithAttachmentsAndClientID(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), strings.TrimSpace(request.Content), request.AttachmentIDs, strings.TrimSpace(request.ClientMessageID), strings.TrimSpace(request.ReplyToMessageID))
 	if err != nil {
 		errcode.WriteError(c, err)
 		return
@@ -435,7 +461,27 @@ func (h *ChatHandler) ModerateBuildingChatMember(c *gin.Context) {
 	errcode.Success(c, gin.H{"chat_id": strings.TrimSpace(c.Param("chatId")), "user_id": strconv.FormatInt(request.UserID, 10), "action": request.Action})
 }
 
-// 25. ListAllBuildingChatsForStaff returns all building chats for staff management.
+// 25. AddBuildingChatMember adds a recorded user to a building group.
+func (h *ChatHandler) AddBuildingChatMember(c *gin.Context) {
+	user := currentUser(c)
+	if user == nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeAuthRequired, "login required"))
+		return
+	}
+	var request buildingChatAddMemberPayload
+	if err := c.ShouldBindJSON(&request); err != nil {
+		errcode.WriteError(c, errcode.New(errcode.CodeValidationError, "invalid request payload"))
+		return
+	}
+	result, err := h.chatService.AddBuildingChatMember(c.Request.Context(), user.UserID, strings.TrimSpace(c.Param("chatId")), request.UserID, strings.TrimSpace(request.PublicID))
+	if err != nil {
+		errcode.WriteError(c, err)
+		return
+	}
+	errcode.Success(c, result)
+}
+
+// 26. ListAllBuildingChatsForStaff returns all building chats for staff management.
 func (h *ChatHandler) ListAllBuildingChatsForStaff(c *gin.Context) {
 	items, err := h.chatService.ListAllBuildingChatsForStaff(c.Request.Context())
 	if err != nil {

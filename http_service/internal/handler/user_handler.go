@@ -36,6 +36,7 @@ type updateProfileRequest struct {
 	ResidenceUnit         string   `json:"residence_unit"`
 	DistrictCode          string   `json:"district_code"`
 	AvatarAssetID         string   `json:"avatar_asset_id"`
+	AvatarKey             string   `json:"avatar_key"`
 }
 
 // 3. bindIsmartRequest defines current user ismart binding payload.
@@ -98,6 +99,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		ResidenceUnit:         strings.TrimSpace(request.ResidenceUnit),
 		DistrictCode:          strings.TrimSpace(request.DistrictCode),
 		AvatarAssetID:         strings.TrimSpace(request.AvatarAssetID),
+		AvatarKey:             strings.TrimSpace(request.AvatarKey),
 	})
 	if err != nil {
 		errcode.WriteError(c, err)
