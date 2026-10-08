@@ -239,6 +239,13 @@ describe('AccountMyPage lazy data loading', () => {
     expect(wrapper.text()).not.toContain(i18n.global.t('account.center.nav.subaccounts'));
   });
 
+  it('shows the registered username beside the account avatar', async () => {
+    const wrapper = await mountAccountPage();
+
+    expect(wrapper.find('.work-account-name').text()).toBe('patrick');
+    expect(wrapper.find('.work-account-name').text()).not.toBe('Guest Member');
+  });
+
   it('loads owner-binding directories only after the property-binding panel is opened', async () => {
     const wrapper = await mountAccountPage();
 

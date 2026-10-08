@@ -70,6 +70,10 @@ No direct prompt regression test currently guards prompt wording or localization
 
 ## Change Log
 
+2026-10-09: Header theme trigger and dropdown share local sun, orbit, and moon SVGs for orange, cyan, and night; existing preference persistence and production feature gating stay unchanged.
+
+2026-10-09: Price intelligence category shortcuts use six local Lucide SVG symbols with retained ISC licensing; the page memory map records their ownership, and page tests cover icon mapping plus category select/toggle-off behavior.
+
 2026-09-14: Split the iSmart owner-binding surface into two documented reads in `docs/integrations/external_app_building_api.zh-HK.md` — `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/` for `OwnerReg` application status and `GET /api/v1/integration/buildings/flat-bindings/` for live `i_flatcli_rel_tbl` unit roles — and archived the newer English draft as `docs/integrations/external_app_building_api(2).md`; both routes answered on production and clouddev, while the local `ajo_ismart` checkout still lacks them, so wiring stays gated on the upstream deployment.
 
 

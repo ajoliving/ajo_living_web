@@ -4,7 +4,7 @@
  * 2. 驗證登入後底部導覽切換至會員中心。
  * 3. 驗證手機抽屜按登入狀態顯示登入或通知入口。
  * 4. 驗證抽屜遮罩點擊可關閉。
- * 5. 驗證主題選單提供六十組主題色並可套用選定色彩。
+ * 5. 驗證三項主題使用太陽、水星軌道及月亮，並可套用選定色彩。
  * 6. 驗證共用導航文案全部經由 i18n 資源輸出。
  * 7. 驗證主題入口關閉時不渲染主題選擇器。
  */
@@ -17,6 +17,7 @@ import { useSessionStore } from '@/stores/session';
 import type { CurrentMemberProfile } from '@/model/user';
 
 import AppHeader from './AppHeader.vue';
+import themeIconsSvg from './theme-icons.svg?raw';
 
 const routeState = vi.hoisted(() => ({
   path: '/',
@@ -195,18 +196,63 @@ describe('AppHeader mobile navigation', () => {
     expect(localeToggle.text()).toBe('繁中');
   });
 
-  it('opens sixty theme choices and applies the selected theme', async () => {
+  it('opens the three theme choices and applies cyan', async () => {
     const preferenceStore = usePreferenceStore();
     const wrapper = mountHeader();
 
     await wrapper.find('.theme-toggle').trigger('click');
 
-    expect(wrapper.findAll('.theme-swatch')).toHaveLength(60);
-    await wrapper.findAll('.theme-swatch')[50]?.trigger('click');
+    expect(wrapper.findAll('.theme-choice')).toHaveLength(3);
+    await wrapper.findAll('.theme-choice')[1]?.trigger('click');
 
-    expect(preferenceStore.theme).toBe('jade');
-    expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('13 139 100');
+    expect(preferenceStore.theme).toBe('cyan');
+    expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('8 127 140');
     expect(wrapper.find('.theme-menu').exists()).toBe(false);
+  });
+
+  it('shows a white moon instead of the dark swatch for the night theme', () => {
+    const preferenceStore = usePreferenceStore();
+    preferenceStore.setTheme('night');
+    const wrapper = mountHeader();
+
+    expect(wrapper.find('.theme-toggle-moon').exists()).toBe(true);
+    expect(wrapper.find('.theme-toggle-dot').exists()).toBe(false);
+    expect(wrapper.find('.theme-toggle-icon use').attributes('href')).toMatch(/#moon$/);
+  });
+
+  // 3. 三項主題的選單與入口使用相同圖示，選擇後保留偏好及選取狀態。
+  it('uses matching sun, orbit, and moon SVGs in the menu and active theme button', async () => {
+    const preferenceStore = usePreferenceStore();
+    const wrapper = mountHeader();
+    const icons = ['sun', 'orbit', 'moon'];
+    const themes = ['orange-05', 'cyan', 'night'];
+    const sprite = new DOMParser().parseFromString(themeIconsSvg, 'image/svg+xml');
+
+    expect(sprite.querySelector('parsererror')).toBeNull();
+    expect(sprite.querySelectorAll('symbol')).toHaveLength(3);
+    expect(wrapper.find('.theme-toggle-icon use').attributes('href')).toMatch(/#sun$/);
+
+    for (const [index, icon] of icons.entries()) {
+      expect(sprite.getElementById(icon)?.querySelector('path, circle')).not.toBeNull();
+      await wrapper.find('.theme-toggle').trigger('click');
+
+      const choices = wrapper.findAll('.theme-choice');
+      expect(choices.map((choice) =>
+        new URL(choice.find('use').attributes('href')!, 'http://localhost').hash,
+      )).toEqual(['#sun', '#orbit', '#moon']);
+      expect(choices[index]!.find('svg').attributes('aria-hidden')).toBe('true');
+
+      await choices[index]!.trigger('click');
+
+      expect(preferenceStore.theme).toBe(themes[index]);
+      expect(window.localStorage.getItem('ajoliving.theme')).toBe(themes[index]);
+      expect(wrapper.find('.theme-menu').exists()).toBe(false);
+      expect(wrapper.find('.theme-toggle-icon use').attributes('href')).toMatch(new RegExp(`#${icon}$`));
+
+      await wrapper.find('.theme-toggle').trigger('click');
+      expect(wrapper.findAll('.theme-choice')[index]!.attributes('aria-checked')).toBe('true');
+      await wrapper.find('.theme-toggle').trigger('click');
+    }
   });
 
   it('hides the theme picker when the theme entry is disabled', () => {

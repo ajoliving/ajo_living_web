@@ -181,7 +181,13 @@ describe('mobile baseline styles', () => {
   it('keeps supermarket search controls compact when stacked on mobile', () => {
     expect(offersPage).toMatch(/@media \(max-width: (?:900|1023)px\)[\s\S]*?\.gp-search-box \{[\s\S]*?flex: 1 1 auto;/);
     expect(offersPage).toContain('class="gp-mobile-filter-select gp-mobile-sort-select"');
-    expect(offersPage.indexOf('gp-mobile-sort-select')).toBeLessThan(offersPage.indexOf(":aria-label=\"t('offers.list.category')\""));
+    const categoryPosition = offersPage.indexOf(":aria-label=\"t('offers.list.category')\"");
+    const storePosition = offersPage.indexOf(":aria-label=\"t('offers.list.store')\"");
+    const sortPosition = offersPage.indexOf('gp-mobile-sort-select');
+    expect(categoryPosition).toBeGreaterThan(-1);
+    expect(storePosition).toBeGreaterThan(-1);
+    expect(categoryPosition).toBeLessThan(storePosition);
+    expect(storePosition).toBeLessThan(sortPosition);
     expect(offersPage.indexOf('gp-mobile-sort-select')).toBeLessThan(offersPage.indexOf('class="gp-mobile-filter-button mobile-filter-button"'));
     expect(offersPage).toMatch(/@media \(max-width: 1023px\)[\s\S]*?\.gp-toolbar \{[\s\S]*?display: none;/);
   });

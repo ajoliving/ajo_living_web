@@ -57,6 +57,7 @@ export default {
   },
   theme: {
     selector: '選擇主題色',
+    selectorShort: '主題',
     orangeGroup: '亮橙色',
     orangeGroupFlame: '熾焰亮橙',
     orangeGroupClassic: '經典亮橙',
@@ -68,6 +69,7 @@ export default {
     orange03: '火光橙',
     orange04: '熔岩橙',
     orange05: 'AJO 橙',
+    defaultTheme: '橙色',
     orange06: '鮮亮橙',
     orange07: '活力橙',
     orange08: '清亮橙',
@@ -123,6 +125,7 @@ export default {
     terracotta: '陶土紅',
     slate: '岩灰藍',
     graphite: '石墨灰',
+    night: '黑夜',
   },
   empty: {
     listingsTitle: '暫時未有符合條件的帖子',

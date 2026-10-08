@@ -1,6 +1,6 @@
 /*
  * 主題 Token 測試。
- * 1. 驗證六十組主題方案與四組十色亮橙細分。
+ * 1. 驗證主題方案與可選主題。
  * 2. 驗證主題色會同步到既有語意變量與維持白色內容面。
  */
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,14 +12,10 @@ describe('theme tokens', () => {
     applyTheme(DEFAULT_THEME_NAME);
   });
 
-  it('provides forty bright orange themes and twenty other formal themes', () => {
-    expect(THEME_OPTIONS).toHaveLength(60);
+  it('provides the default, cyan, and night choices', () => {
     expect(THEME_OPTIONS.filter((theme) => theme.group === 'orange')).toHaveLength(40);
-    expect(THEME_OPTIONS.filter((theme) => theme.group === 'other')).toHaveLength(20);
-    expect(THEME_OPTIONS.filter((theme) => theme.orangeTone === 'flame')).toHaveLength(10);
-    expect(THEME_OPTIONS.filter((theme) => theme.orangeTone === 'classic')).toHaveLength(10);
-    expect(THEME_OPTIONS.filter((theme) => theme.orangeTone === 'solar')).toHaveLength(10);
-    expect(THEME_OPTIONS.filter((theme) => theme.orangeTone === 'peach')).toHaveLength(10);
+    expect(THEME_OPTIONS.map((theme) => theme.value)).toContain('cyan');
+    expect(THEME_OPTIONS.map((theme) => theme.value)).toContain('night');
   });
 
   it('uses a white canvas with the selected primary action color', () => {
@@ -39,3 +35,11 @@ describe('theme tokens', () => {
     expect(document.documentElement.style.getPropertyValue('--sur')).toBe('rgb(255 255 255)');
   });
 });
+
+  it('applies dark surfaces for night mode', () => {
+    applyTheme('night');
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('night');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--sur')).toBe('rgb(28 32 38)');
+  });

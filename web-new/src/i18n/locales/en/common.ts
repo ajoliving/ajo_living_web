@@ -57,6 +57,7 @@ export default {
   },
   theme: {
     selector: 'Choose theme color',
+    selectorShort: 'Theme',
     orangeGroup: 'Bright oranges',
     orangeGroupFlame: 'Flame bright orange',
     orangeGroupClassic: 'Classic bright orange',
@@ -68,6 +69,7 @@ export default {
     orange03: 'Firelight Orange',
     orange04: 'Lava Orange',
     orange05: 'AJO Orange',
+    defaultTheme: 'Orange',
     orange06: 'Fresh Orange',
     orange07: 'Vivid Orange',
     orange08: 'Clear Orange',
@@ -123,6 +125,7 @@ export default {
     terracotta: 'Terracotta',
     slate: 'Slate',
     graphite: 'Graphite',
+    night: 'Dark',
   },
   empty: {
     listingsTitle: 'No listings match the current filters.',

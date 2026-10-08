@@ -2,6 +2,7 @@
  * 綜合優惠頁搜尋測試。
  * 1. 確認一般搜尋不會排除無優惠商品。
  * 2. 確認輸入文字會顯示品牌及包含規格的商品名稱。
+ * 3. 確認六個分類入口使用本地 SVG，並保留分類切換。
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -11,6 +12,7 @@ import { fetchSupermarketSummary, searchSupermarketProducts } from '@/httpapis/s
 import i18n from '@/i18n';
 
 import Page from './Page.vue';
+import categoryIconsSvg from './category-icons.svg?raw';
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -19,6 +21,10 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/httpapis/auth-session', () => ({
   readStoredAccessToken: () => '',
+}));
+
+vi.mock('@/httpapis/wallet', () => ({
+  fetchPublicDisplayAds: vi.fn().mockResolvedValue({ data: { data: { items: [] } } }),
 }));
 
 vi.mock('@/httpapis/supermarket-offers', () => ({
@@ -110,7 +116,8 @@ describe('SupermarketOffersPage search', () => {
       data: {
         data: {
           stats: { records: 0, products: 0, stores: 0, offers: 0, parsedOffers: 0, unsupportedOffers: 0, ambiguousOffers: 0, uncalculatedOffers: 0 },
-          categories: [],
+          categories: ['個人護理', '保健食品', '家居用品', '米油雜貨', '奶類乳品', '零食飲品']
+            .map((value) => ({ value, count: 1 })),
           stores: [],
           cheapest: [],
           bestDiscounts: [],
@@ -132,6 +139,70 @@ describe('SupermarketOffersPage search', () => {
     await flushPromises();
 
     expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ offerOnly: false }));
+  });
+
+  it('shows category, store, and discount sorting in the mobile filter rail', async () => {
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+
+    const mobileSelects = wrapper.findAll('.gp-mobile-filter-rail select');
+    expect(mobileSelects).toHaveLength(3);
+    expect(mobileSelects.map((select) => select.attributes('aria-label'))).toEqual([
+      '商品分類',
+      '商店',
+      '排序方式',
+    ]);
+  });
+
+  // 2.1 每個快捷分類均有可渲染、同色描邊的 Lucide 圖示。
+  it('renders six local category SVG icons matching the category labels', async () => {
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+
+    const tiles = wrapper.findAll('.gp-cat-tile');
+    const expectedIcons = ['soap-dispenser-droplet', 'pill', 'spray-can', 'wheat', 'milk', 'cookie'];
+    const sprite = new DOMParser().parseFromString(categoryIconsSvg, 'image/svg+xml');
+
+    expect(sprite.querySelector('parsererror')).toBeNull();
+    expect(sprite.querySelectorAll('symbol')).toHaveLength(6);
+    expect(tiles.map((tile) => tile.text())).toEqual([
+      '個人護理', '保健食品', '家居用品', '米油雜貨', '奶類乳品', '零食飲品',
+    ]);
+    for (const [index, icon] of expectedIcons.entries()) {
+      const svg = tiles[index]!.find('svg');
+      expect(svg.attributes()).toMatchObject({
+        width: '22',
+        height: '22',
+        stroke: 'currentColor',
+        'aria-hidden': 'true',
+      });
+      const iconUrl = new URL(svg.find('use').attributes('href')!, 'http://localhost');
+      expect(iconUrl.pathname).toContain('category-icons.svg');
+      expect(iconUrl.hash).toBe(`#${icon}`);
+      expect(sprite.getElementById(icon)?.querySelector('path')?.getAttribute('d')).toBeTruthy();
+    }
+  });
+
+  // 2.2 替換圖示不得改變分類選取與再次點擊取消的行為。
+  it('keeps category filtering and toggle-off behavior for all six shortcuts', async () => {
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+
+    for (const tile of wrapper.findAll('.gp-cat-tile')) {
+      await tile.trigger('click');
+      await flushPromises();
+
+      expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({ category: tile.text() }));
+      expect(tile.classes()).toContain('on');
+      expect(tile.attributes('aria-pressed')).toBe('true');
+
+      await tile.trigger('click');
+      await flushPromises();
+
+      expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({ category: '' }));
+      expect(tile.classes()).not.toContain('on');
+      expect(tile.attributes('aria-pressed')).toBe('false');
+    }
   });
 
   // 3. 輸入文字後應顯示可直接選取的搜尋建議。

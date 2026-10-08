@@ -201,7 +201,17 @@ export function normalizeSupermarketStoreCode(storeCode: string): string {
   return storeCode.trim().toUpperCase();
 }
 
-// 4. 建立 Google Maps 步行路線 URL
+// 4. 建立門店地圖嵌入地址
+export function supermarketMapEmbedUrl(store: Pick<SupermarketStoreLocation, 'latitude' | 'longitude'>): string {
+  const params = new URLSearchParams({
+    q: `${store.latitude},${store.longitude}`,
+    z: '16',
+    output: 'embed',
+  });
+  return `https://maps.google.com/maps?${params.toString()}`;
+}
+
+// 5. 建立 Google Maps 步行路線 URL
 export function supermarketDirectionsUrl(store: SupermarketNearbyStoreLocation): string {
   const params = new URLSearchParams({
     api: '1',
@@ -212,7 +222,7 @@ export function supermarketDirectionsUrl(store: SupermarketNearbyStoreLocation):
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-// 5. 格式化門店距離
+// 6. 格式化門店距離
 export function formatSupermarketDistanceKm(distanceKm: number): string {
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)} m`;
@@ -220,7 +230,7 @@ export function formatSupermarketDistanceKm(distanceKm: number): string {
   return `${distanceKm.toFixed(1)} km`;
 }
 
-// 6. 計算兩個座標之間的距離
+// 7. 計算兩個座標之間的距離
 function haversineDistanceKm(
   fromLatitude: number,
   fromLongitude: number,
@@ -237,7 +247,7 @@ function haversineDistanceKm(
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-// 7. 角度轉弧度
+// 8. 角度轉弧度
 function degreesToRadians(value: number): number {
   return (value * Math.PI) / 180;
 }

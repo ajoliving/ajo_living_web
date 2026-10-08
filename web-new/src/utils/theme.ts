@@ -65,15 +65,17 @@ export type AppThemeName =
   | 'coral'
   | 'terracotta'
   | 'slate'
-  | 'graphite';
+  | 'graphite'
+  | 'night';
 
 export interface ThemeOption {
   value: AppThemeName;
   labelKey: string;
   primary: string;
   primaryContrast: 'light' | 'dark';
-  group: 'orange' | 'other';
+  group: 'orange' | 'other' | 'mode';
   orangeTone?: 'flame' | 'classic' | 'solar' | 'peach';
+  appearance?: 'day' | 'night';
 }
 
 // 1. 建立可供甲方直接選擇的正式主題色清單
@@ -138,9 +140,66 @@ export const THEME_OPTIONS: ThemeOption[] = [
   { value: 'terracotta', labelKey: 'common.theme.terracotta', primary: '#A94B32', primaryContrast: 'light', group: 'other' },
   { value: 'slate', labelKey: 'common.theme.slate', primary: '#466071', primaryContrast: 'light', group: 'other' },
   { value: 'graphite', labelKey: 'common.theme.graphite', primary: '#3E4651', primaryContrast: 'light', group: 'other' },
+  { value: 'night', labelKey: 'common.theme.night', primary: '#FF7A2F', primaryContrast: 'light', group: 'mode', appearance: 'night' },
 ];
 
 export const DEFAULT_THEME_NAME: AppThemeName = 'orange-05';
+
+// 1.1 右上角只保留預設、青藍與夜間
+export const SELECTABLE_THEME_NAMES: AppThemeName[] = [DEFAULT_THEME_NAME, 'cyan', 'night'];
+
+// 1.2 右上角主題顯示名稱；預設色不沿用色階名稱
+export const selectableThemeLabel = (themeName: AppThemeName): string =>
+  themeName === DEFAULT_THEME_NAME ? 'common.theme.defaultTheme' : getThemeOption(themeName).labelKey;
+
+const NIGHT_THEME_VARIABLES: Record<string, string> = {
+  '--color-canvas': '18 20 24',
+  '--color-page-tint': '12 14 18',
+  '--color-surface': '28 32 38',
+  '--color-surface-muted': '22 25 31',
+  '--color-surface-raised': '36 41 48',
+  '--color-topbar-surface': '18 20 24',
+  '--color-toolbar-surface': '22 25 31',
+  '--color-field-surface': '18 20 24',
+  '--color-dropdown-surface': '28 32 38',
+  '--color-text': '243 244 246',
+  '--color-text-muted': '168 176 186',
+  '--color-border': '62 70 80',
+  '--color-success': '92 196 138',
+  '--color-warning': '242 176 78',
+  '--color-danger': '240 112 104',
+  '--color-ink-2': '220 224 230',
+  '--color-ink-3': '168 176 186',
+  '--color-ink-4': '122 130 140',
+  '--color-surface-2': '22 25 31',
+  '--color-surface-3': '42 48 56',
+  '--color-border-2': '82 90 100',
+  '--color-success-bg': '24 52 38',
+  '--color-warning-bg': '58 42 18',
+  '--color-danger-bg': '62 28 26',
+  '--ink': 'rgb(243 244 246)',
+  '--ink-2': 'rgb(220 224 230)',
+  '--ink-3': 'rgb(168 176 186)',
+  '--ink-4': 'rgb(122 130 140)',
+  '--sur': 'rgb(28 32 38)',
+  '--sur-2': 'rgb(22 25 31)',
+  '--sur-3': 'rgb(42 48 56)',
+  '--bdr': 'rgb(62 70 80)',
+  '--bdr-2': 'rgb(82 90 100)',
+  '--success': 'rgb(92 196 138)',
+  '--success-bg': 'rgb(24 52 38)',
+  '--error': 'rgb(240 112 104)',
+  '--error-bg': 'rgb(62 28 26)',
+  '--warning': 'rgb(242 176 78)',
+  '--warning-bg': 'rgb(58 42 18)',
+  '--black': 'rgb(243 244 246)',
+  '--white': 'rgb(255 255 255)',
+  '--g1': 'rgb(22 25 31)',
+  '--g2': 'rgb(62 70 80)',
+  '--g3': 'rgb(122 130 140)',
+  '--g4': 'rgb(168 176 186)',
+  '--g5': 'rgb(220 224 230)',
+};
 
 const BASE_THEME_VARIABLES: Record<string, string> = {
   '--color-canvas': '255 255 255',
@@ -215,15 +274,21 @@ export const applyTheme = (themeName: AppThemeName = DEFAULT_THEME_NAME): void =
 
   const theme = getThemeOption(themeName);
   const primaryRgb = hexToRgb(theme.primary);
-  const softRgb = mixWithWhite(primaryRgb, 0.88);
-  const midRgb = mixWithWhite(primaryRgb, 0.44);
+  const isNight = theme.appearance === 'night';
+  const softRgb = isNight
+    ? primaryRgb.map((value) => Math.round(18 + value * 0.22)).join(' ')
+    : mixWithWhite(primaryRgb, 0.88);
+  const midRgb = isNight
+    ? primaryRgb.map((value) => Math.round(40 + value * 0.45)).join(' ')
+    : mixWithWhite(primaryRgb, 0.44);
   const darkRgb = primaryRgb.map((value) => Math.round(value * 0.78)).join(' ');
   const primary = primaryRgb.join(' ');
   const contrast = theme.primaryContrast === 'light' ? '255 255 255' : '26 26 26';
   const root = document.documentElement;
 
   root.setAttribute('data-theme', theme.value);
-  Object.entries(BASE_THEME_VARIABLES).forEach(([key, value]) => root.style.setProperty(key, value));
+  root.style.colorScheme = isNight ? 'dark' : 'light';
+  Object.entries(isNight ? NIGHT_THEME_VARIABLES : BASE_THEME_VARIABLES).forEach(([key, value]) => root.style.setProperty(key, value));
   root.style.setProperty('--color-primary', primary);
   root.style.setProperty('--color-primary-contrast', contrast);
   root.style.setProperty('--color-primary-soft', softRgb);

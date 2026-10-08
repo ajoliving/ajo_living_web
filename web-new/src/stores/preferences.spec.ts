@@ -52,13 +52,23 @@ describe('preference locale persistence', () => {
     expect(document.documentElement.style.getPropertyValue('--color-primary')).toBe('255 90 0');
   });
 
-  it('restores the stored theme when the theme picker is available', () => {
+  it('restores only the default, cyan, or night theme', () => {
+    vi.stubEnv('VITE_ENABLE_THEME_PICKER', '1');
+    window.localStorage.setItem('ajoliving.theme', 'cyan');
+
+    const preferenceStore = usePreferenceStore();
+    preferenceStore.hydratePreferences();
+
+    expect(preferenceStore.theme).toBe('cyan');
+  });
+
+  it('falls back to the default theme when a retired palette choice is stored', () => {
     vi.stubEnv('VITE_ENABLE_THEME_PICKER', '1');
     window.localStorage.setItem('ajoliving.theme', 'graphite');
 
     const preferenceStore = usePreferenceStore();
     preferenceStore.hydratePreferences();
 
-    expect(preferenceStore.theme).toBe('graphite');
+    expect(preferenceStore.theme).toBe('orange-05');
   });
 });

@@ -7,7 +7,7 @@
 import { defineStore } from 'pinia';
 
 import { isThemePickerEnabled } from '@/utils/feature-flags';
-import { DEFAULT_THEME_NAME, applyTheme, getThemeOption, type AppThemeName } from '@/utils/theme';
+import { DEFAULT_THEME_NAME, SELECTABLE_THEME_NAMES, applyTheme, type AppThemeName } from '@/utils/theme';
 
 // 1. 定義語系型別
 export type AppLocale = 'zh-HK' | 'en';
@@ -20,7 +20,7 @@ export const LOCALE_OPTIONS: Array<{ labelKey: string; value: AppLocale }> = [
 
 const THEME_STORAGE_KEY = 'ajoliving.theme';
 const THEME_STORAGE_VERSION_KEY = 'ajoliving.theme.version';
-const CURRENT_THEME_STORAGE_VERSION = '8';
+const CURRENT_THEME_STORAGE_VERSION = '9';
 const LOCALE_STORAGE_KEY = 'ajoliving.locale';
 
 const isValidLocale = (value: string | null): value is AppLocale =>
@@ -29,7 +29,9 @@ const isValidLocale = (value: string | null): value is AppLocale =>
 // 3. 讀取有效主題，舊版名稱與未知值安全回落至預設方案
 const getStoredTheme = (): AppThemeName => {
   const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return getThemeOption(storedTheme).value;
+  return SELECTABLE_THEME_NAMES.includes(storedTheme as AppThemeName)
+    ? storedTheme as AppThemeName
+    : DEFAULT_THEME_NAME;
 };
 
 // 4. 選擇本次執行採用的主題；未開放主題選擇器時固定使用預設品牌色
@@ -73,7 +75,7 @@ export const usePreferenceStore = defineStore('preferences', {
 
     // 5.3 更新主題並即時同步全站 token
     setTheme(theme: AppThemeName) {
-      this.theme = getThemeOption(theme).value;
+      this.theme = SELECTABLE_THEME_NAMES.includes(theme) ? theme : DEFAULT_THEME_NAME;
       window.localStorage.setItem(THEME_STORAGE_KEY, this.theme);
       window.localStorage.setItem(THEME_STORAGE_VERSION_KEY, CURRENT_THEME_STORAGE_VERSION);
       applyTheme(this.theme);

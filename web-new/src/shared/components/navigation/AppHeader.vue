@@ -14,7 +14,8 @@ import AppIcon from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { isThemePickerEnabled } from '@/utils/feature-flags';
-import { THEME_OPTIONS, type AppThemeName } from '@/utils/theme';
+import { SELECTABLE_THEME_NAMES, getThemeOption, selectableThemeLabel, type AppThemeName } from '@/utils/theme';
+import themeIconsUrl from './theme-icons.svg?no-inline';
 
 interface NavigationItem {
   key: string;
@@ -33,16 +34,12 @@ const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 const themeMenuOpen = ref(false);
 const themePickerEnabled = computed(() => isThemePickerEnabled());
-const orangeThemeGroups = [
-  { key: 'flame', labelKey: 'common.theme.orangeGroupFlame' },
-  { key: 'classic', labelKey: 'common.theme.orangeGroupClassic' },
-  { key: 'solar', labelKey: 'common.theme.orangeGroupSolar' },
-  { key: 'peach', labelKey: 'common.theme.orangeGroupPeach' },
-].map((group) => ({
-  ...group,
-  options: THEME_OPTIONS.filter((option) => option.group === 'orange' && option.orangeTone === group.key),
-}));
-const otherThemeOptions = THEME_OPTIONS.filter((option) => option.group === 'other');
+const selectableThemes = SELECTABLE_THEME_NAMES.map((name) => getThemeOption(name));
+const activeTheme = computed(() => getThemeOption(preferenceStore.theme));
+
+// 1. 主題入口與選單共用太陽、水星軌道及月亮圖示。
+const themeIconId = (theme: AppThemeName): 'sun' | 'orbit' | 'moon' =>
+  theme === 'night' ? 'moon' : theme === 'cyan' ? 'orbit' : 'sun';
 
 const mobileDrawerOpen = computed({
   get: () => preferenceStore.mobile_menu_open,
@@ -238,11 +235,21 @@ watch(
           :aria-expanded="themeMenuOpen"
           @click="themeMenuOpen = !themeMenuOpen"
         >
-          <AppIcon
-            name="palette"
-            :size="18"
-            :stroke-width="1.9"
-          />
+          <svg
+            class="theme-toggle-icon"
+            :class="{ 'theme-toggle-moon': preferenceStore.theme === 'night' }"
+            :style="activeTheme.appearance === 'night' ? undefined : { color: activeTheme.primary }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <use :href="`${themeIconsUrl}#${themeIconId(preferenceStore.theme)}`" />
+          </svg>
         </button>
         <div
           v-if="themeMenuOpen"
@@ -250,49 +257,32 @@ watch(
           role="menu"
           :aria-label="t('common.theme.selector')"
         >
-          <p class="theme-menu-title">{{ t('common.theme.orangeGroup') }}</p>
-          <div
-            v-for="group in orangeThemeGroups"
-            :key="group.key"
-            class="theme-group"
+          <button
+            v-for="theme in selectableThemes"
+            :key="theme.value"
+            type="button"
+            class="theme-choice"
+            :class="{ 'theme-choice--active': preferenceStore.theme === theme.value }"
+            role="menuitemradio"
+            :aria-checked="preferenceStore.theme === theme.value"
+            @click="handleThemeChange(theme.value)"
           >
-            <p class="theme-group-title">{{ t(group.labelKey) }}</p>
-            <div class="theme-grid">
-              <button
-                v-for="theme in group.options"
-                :key="theme.value"
-                type="button"
-                class="theme-swatch"
-                :class="{ 'theme-swatch--active': preferenceStore.theme === theme.value }"
-                :style="{ '--theme-swatch': theme.primary }"
-                :aria-label="t(theme.labelKey)"
-                :title="t(theme.labelKey)"
-                :aria-pressed="preferenceStore.theme === theme.value"
-                role="menuitemradio"
-                @click="handleThemeChange(theme.value)"
-              >
-                <span></span>
-              </button>
-            </div>
-          </div>
-          <p class="theme-menu-title">{{ t('common.theme.otherGroup') }}</p>
-          <div class="theme-grid">
-            <button
-              v-for="theme in otherThemeOptions"
-              :key="theme.value"
-              type="button"
-              class="theme-swatch"
-              :class="{ 'theme-swatch--active': preferenceStore.theme === theme.value }"
-              :style="{ '--theme-swatch': theme.primary }"
-              :aria-label="t(theme.labelKey)"
-              :title="t(theme.labelKey)"
-              :aria-pressed="preferenceStore.theme === theme.value"
-              role="menuitemradio"
-              @click="handleThemeChange(theme.value)"
+            <svg
+              class="theme-choice-mark"
+              :style="theme.appearance === 'night' ? undefined : { color: theme.primary }"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
             >
-              <span></span>
-            </button>
-          </div>
+              <use :href="`${themeIconsUrl}#${themeIconId(theme.value)}`" />
+            </svg>
+            {{ t(selectableThemeLabel(theme.value)) }}
+          </button>
         </div>
       </div>
       <button
@@ -546,10 +536,11 @@ watch(
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--r-md);
+  border-radius: 50%;
   background: transparent;
   color: var(--ink);
   cursor: pointer;
+  padding: 0;
 }
 
 .theme-toggle:hover {
@@ -561,12 +552,53 @@ watch(
   z-index: 40;
   top: calc(100% + 10px);
   right: 0;
-  width: 248px;
+  display: grid;
+  width: 168px;
+  gap: 4px;
   border: 1px solid var(--bdr);
-  border-radius: var(--r-md);
+  border-radius: 8px;
   background: var(--sur);
   box-shadow: var(--shadow-md);
-  padding: 14px;
+  padding: 8px;
+}
+
+.theme-choice {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.theme-choice:hover,
+.theme-choice--active {
+  background: var(--sur-2);
+}
+
+.theme-choice-mark {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.theme-toggle-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.theme-toggle-moon {
+  color: #fff;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.45));
 }
 
 .theme-menu-title {

@@ -54,6 +54,7 @@ import {
   SUPERMARKET_GEOLOCATION_CACHE_MAX_AGE_MS,
   SUPERMARKET_NEARBY_STORE_LIMIT,
   supermarketDirectionsUrl,
+  supermarketMapEmbedUrl,
 } from '../constants/store-locations';
 import type { SupermarketNearbyStoreLocation } from '../constants/store-locations';
 
@@ -95,6 +96,7 @@ const alertFormOpen = ref(false);
 const chartMode = ref<PriceChartMode>('effective');
 const trendHoverDate = ref('');
 const nearbyStores = ref<SupermarketNearbyStoreLocation[]>([]);
+const selectedNearbyStoreId = ref('');
 const nearbyStatus = ref<NearbyStoreStatus>('idle');
 const nearbyMessage = ref('');
 const failedImageCodes = ref(new Set<string>());
@@ -235,13 +237,9 @@ const bestDealBadgeText = computed(() => {
 // 9.4 取得最近的一間最優惠門市。
 const nearestStore = computed(() => nearbyStores.value[0] ?? null);
 
-// 7. 建立最優惠門店摘要文字
-const bestDealSummaryText = computed(() =>
-  bestDealPrices.value.length > 0
-    ? bestDealPrices.value
-        .map((item) => `${formatStore(item.store)} ${formatOfferPrice(item.effectiveUnitPrice)}`)
-        .join(' / ')
-    : t('offers.detail.noDeal'),
+// 9.5 取得目前選擇的門市。
+const selectedNearbyStore = computed(() =>
+  nearbyStores.value.find((store) => store.id === selectedNearbyStoreId.value) ?? nearestStore.value,
 );
 
 // 8. 取得最新快照日期
@@ -451,6 +449,7 @@ const loadDetail = async (code: string): Promise<void> => {
     chartMode.value = 'effective';
     trendHoverDate.value = '';
     fillAlertForm(data.data.alertRule ?? null);
+    requestBestDealLocation();
   } catch {
     detailError.value = t('offers.detail.loadError');
   } finally {
@@ -607,6 +606,7 @@ const openLogin = async (): Promise<void> => {
 // 28. 重設附近門店狀態
 const resetNearbyStores = (): void => {
   nearbyStores.value = [];
+  selectedNearbyStoreId.value = '';
   nearbyStatus.value = 'idle';
   nearbyMessage.value = '';
 };
@@ -656,7 +656,21 @@ const requestBestDealLocation = (): void => {
   );
 };
 
-// 29.1 定位並帶到最近門市區。
+// 29.1 選擇其他分店並開啟該店路線。
+const selectNearbyStore = (event: Event): void => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  selectedNearbyStoreId.value = target.value;
+  const store = selectedNearbyStore.value;
+  if (store) {
+    window.open(supermarketDirectionsUrl(store), '_blank', 'noopener,noreferrer');
+  }
+};
+
+// 29.2 定位並帶到最近門市區。
 const focusNearestStores = (): void => {
   requestBestDealLocation();
   document.getElementById('offers-nearest-stores')?.scrollIntoView({ block: 'nearest' });
@@ -997,17 +1011,17 @@ onBeforeUnmount(() => {
               >
                 {{ t('offers.detail.favoriteWithAlert') }}
               </button>
+              <button
+                type="button"
+                class="gp-detail-action"
+                :disabled="reportingImageIssue"
+                @click="reportImageIssue"
+              >
+                {{ reportingImageIssue
+                  ? t('offers.detail.imageIssueSubmitting')
+                  : t('offers.detail.reportImageIssue') }}
+              </button>
             </div>
-            <button
-              type="button"
-              class="gp-detail-action"
-              :disabled="reportingImageIssue"
-              @click="reportImageIssue"
-            >
-              {{ reportingImageIssue
-                ? t('offers.detail.imageIssueSubmitting')
-                : t('offers.detail.reportImageIssue') }}
-            </button>
           </div>
         </div>
 
@@ -1081,10 +1095,11 @@ onBeforeUnmount(() => {
           </form>
         </section>
 
-        <!-- 4. 超市優惠與門店地址 -->
-        <div class="gp-detail-card gp-section-block">
-          <h3>{{ t('offers.detail.offersAndStores') }}</h3>
-          <div class="gp-detail-split">
+        <!-- 4. 實付價與最低價門市 -->
+        <div class="gp-detail-split">
+          <section class="gp-detail-card">
+            <h3>{{ t('offers.detail.offersAndStores') }}</h3>
+            <p class="gp-detail-subtitle">{{ t('offers.detail.latestSnapshot', { date: latestSnapshotText }) }}</p>
           <div class="gp-price-table-wrap">
             <table class="gp-price-table">
               <thead>
@@ -1117,96 +1132,87 @@ onBeforeUnmount(() => {
               </tbody>
             </table>
           </div>
-          <div>
-          <div class="gp-best-shop">
-            <div>
-              <strong>{{ t('offers.detail.bestStoreAddress') }}</strong>
-              <span>{{ bestDealSummaryText }}</span>
-            </div>
-            <button
-              type="button"
-              class="gp-map-btn"
-              :disabled="nearbyStatus === 'requesting'"
-              @click="requestBestDealLocation"
-            >
-              {{ nearbyStatus === 'requesting'
-                ? t('offers.detail.locating')
-                : t('offers.detail.findBestStore') }}
-            </button>
-          </div>
-          <h3
+          </section>
+          <section
             id="offers-nearest-stores"
-            class="gp-shop-block-title"
-          >{{ t('offers.detail.nearestBestStoreAddress') }}</h3>
-          <div class="gp-detail-subtitle">{{ nearbyMessage || t('offers.detail.latestSnapshot', {
-            date: latestSnapshotText,
-          }) }}</div>
-          <article
-            v-if="nearestStore"
-            class="gp-nearest-card"
+            class="gp-detail-card"
           >
-            <div>
-              <strong>{{ nearestStore.name }}</strong>
-              <p>{{ nearestStore.address }}</p>
-              <p>{{ formatSupermarketDistanceKm(nearestStore.distanceKm) }} · {{ nearestStore.hours || '-' }}</p>
-            </div>
+          <h3>{{ t('offers.detail.nearestBestStoreAddress') }}</h3>
+          <a
+            v-if="selectedNearbyStore"
+            class="gp-store-map"
+            :href="supermarketDirectionsUrl(selectedNearbyStore)"
+            target="_blank"
+            rel="noreferrer"
+            :aria-label="t('offers.detail.openRoute')"
+          >
+            <iframe
+              class="gp-store-map-frame"
+              :src="supermarketMapEmbedUrl(selectedNearbyStore)"
+              :title="selectedNearbyStore.name"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            />
+          </a>
+          <button
+            v-else
+            type="button"
+            class="gp-store-map gp-store-map-empty"
+            :disabled="nearbyStatus === 'requesting'"
+            @click="requestBestDealLocation"
+          >
+            {{ nearbyStatus === 'requesting'
+              ? t('offers.detail.locating')
+              : t('offers.detail.findBestStore') }}
+          </button>
+          <div
+            v-if="selectedNearbyStore"
+            class="gp-store-map-meta"
+          >
+            <strong>{{ selectedNearbyStore.name }}</strong>
+            <span>{{ selectedNearbyStore.address }}</span>
+            <span>{{ formatSupermarketDistanceKm(selectedNearbyStore.distanceKm) }} · {{ selectedNearbyStore.hours || '-' }}</span>
+          </div>
+          <div
+            v-if="selectedNearbyStore"
+            class="gp-store-map-actions"
+          >
             <a
-              :href="supermarketDirectionsUrl(nearestStore)"
+              class="gp-store-route-button"
+              :href="supermarketDirectionsUrl(selectedNearbyStore)"
               target="_blank"
               rel="noreferrer"
-            >{{ t('offers.detail.openRoute') }}</a>
-          </article>
-          <div
-            v-if="nearbyStores.length > 0"
-            class="gp-shop-table-wrap"
-          >
-            <table class="gp-shop-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>{{ t('offers.detail.supermarket') }}</th>
-                  <th>{{ t('offers.detail.shop') }}</th>
-                  <th>{{ t('offers.detail.address') }}</th>
-                  <th>{{ t('offers.detail.distance') }}</th>
-                  <th>{{ t('offers.detail.openingHours') }}</th>
-                  <th>{{ t('offers.detail.route') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(store, index) in nearbyStores"
-                  :key="store.id || `${store.name}-${store.address}`"
-                >
-                  <td>
-                    <a
-                      :href="supermarketDirectionsUrl(store)"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {{ index + 1 }}
-                    </a>
-                  </td>
-                  <td>{{ formatStore(store.storeCode) }}</td>
-                  <td>{{ store.name }}</td>
-                  <td>{{ store.address }}</td>
-                  <td><span class="gp-shop-dist">{{ formatSupermarketDistanceKm(store.distanceKm) }}</span></td>
-                  <td>{{ store.hours || '-' }}</td>
-                  <td>
-                    <a
-                      :href="supermarketDirectionsUrl(store)"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {{ t('offers.detail.openRoute') }}
-                    </a>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            >
+              {{ t('offers.detail.openRoute') }}
+            </a>
+            <select
+              class="gp-store-branch-select"
+              :value="selectedNearbyStoreId"
+              :aria-label="t('offers.detail.otherBranches')"
+              :disabled="nearbyStores.length < 2"
+              @change="selectNearbyStore"
+            >
+              <option
+                value=""
+                disabled
+              >
+                {{ t('offers.detail.otherBranches') }}
+              </option>
+              <option
+                v-for="store in nearbyStores"
+                :key="store.id"
+                :value="store.id"
+              >
+                {{ store.name }} · {{ formatSupermarketDistanceKm(store.distanceKm) }}
+              </option>
+            </select>
           </div>
+          <p
+            v-else-if="nearbyMessage"
+            class="gp-detail-subtitle"
+          >{{ nearbyMessage }}</p>
+          </section>
         </div>
-          </div>
-          </div>
 
         <!-- 5. 價格摘要 + 走勢 -->
         <div class="gp-price-layout">
@@ -1489,18 +1495,23 @@ onBeforeUnmount(() => {
 .offers-detail-page {
   width: 100%;
   min-height: calc(100svh - 48px);
-  background: var(--sur);
+  background: var(--sur-2);
   color: var(--ink);
-  padding: 18px 0 44px;
+  padding: 18px 16px 44px;
 }
 
 /* 2. 詳情面板 */
 .gp-detail-panel {
-  max-width: var(--layout-page-max-width);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  max-width: 1120px;
   margin: 0 auto;
-  border: 1px solid var(--bdr);
+  gap: 12px;
+  border: 0;
   border-radius: 0;
-  background: var(--sur-2);
+  background: transparent;
   padding: 0;
 }
 
@@ -1510,10 +1521,10 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 0 2px;
   margin: 0;
-  background: var(--sur);
-  border-bottom: 1px solid var(--bdr);
+  background: transparent;
+  border: 0;
   color: var(--ink-3);
   font-size: 12px;
   line-height: 1.5;
@@ -1546,24 +1557,26 @@ onBeforeUnmount(() => {
 /* 4. 商品頭 */
 .gp-product-head {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: 18px;
-  align-items: center;
+  align-items: start;
   margin: 0;
-  border-bottom: 1px solid var(--bdr);
+  border: 1px solid var(--bdr);
+  border-radius: 16px;
   background: var(--sur);
-  padding: 22px 24px;
+  padding: 18px;
 }
 
 .gp-product-img {
   display: flex;
-  width: 176px;
-  height: 148px;
+  grid-row: 1 / span 2;
+  width: 100%;
+  height: 200px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: linear-gradient(135deg, #fff 0%, var(--sur-2) 100%);
+  background: var(--sur-2);
   overflow: hidden;
 }
 
@@ -1659,9 +1672,9 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-brand-chip {
-  border: 1px solid var(--bdr);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--sur-2);
+  background: var(--brand-light);
   color: var(--brand);
   cursor: pointer;
   font: inherit;
@@ -1783,21 +1796,29 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: flex-end;
+  display: block;
+  grid-column: 2;
+  min-width: 0;
+  margin-top: 12px;
 }
 
 .gp-detail-primary-actions {
   display: flex;
-  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gp-detail-primary-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .gp-detail-action {
+  flex: 0 0 auto;
   border: 1px solid var(--brand);
   border-radius: 6px;
   background: var(--brand-light);
@@ -1807,6 +1828,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 700;
   padding: 9px 12px;
+  white-space: nowrap;
 }
 
 .gp-detail-action.on {
@@ -1826,7 +1848,7 @@ onBeforeUnmount(() => {
 
 /* 5. 操作訊息 */
 .gp-action-message {
-  margin: 12px 20px 0;
+  margin: 0;
   border: 1px solid var(--bdr);
   border-radius: 6px;
   background: var(--sur);
@@ -1838,7 +1860,7 @@ onBeforeUnmount(() => {
 /* 6. 通用卡片 */
 .gp-detail-card {
   border: 1px solid var(--bdr);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--sur);
   padding: 16px;
 }
@@ -1858,12 +1880,12 @@ onBeforeUnmount(() => {
 }
 
 .gp-section-block {
-  margin: 16px 20px;
+  margin: 0;
 }
 
 /* 7. 到價提醒表單 */
 .gp-alert-card {
-  margin: 16px 20px;
+  margin: 0;
 }
 
 .gp-alert-head {
@@ -1940,20 +1962,20 @@ onBeforeUnmount(() => {
 /* 8. 對比卡 */
 .gp-price-table-wrap {
   overflow: auto;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
 }
 
 .gp-detail-split {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .gp-price-table {
   width: 100%;
-  min-width: 520px;
+  min-width: 0;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -2004,6 +2026,105 @@ onBeforeUnmount(() => {
   color: var(--brand);
 }
 
+.gp-store-map {
+  position: relative;
+  display: block;
+  height: 180px;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  background: var(--sur-2);
+}
+
+.gp-store-map-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
+}
+
+.gp-store-map-empty {
+  width: 100%;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gp-store-map-empty:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gp-store-map-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.gp-store-map-meta strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.gp-store-map-meta span {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gp-store-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gp-store-route-button,
+.gp-store-branch-select {
+  min-height: 40px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gp-store-route-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: #fff;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.gp-store-branch-select {
+  min-width: 150px;
+  max-width: 100%;
+  background: var(--sur);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 34px 0 12px;
+}
+
+.gp-store-branch-select:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.gp-store-route-button:focus-visible,
+.gp-store-branch-select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 .gp-nearest-card {
   display: flex;
   align-items: center;
@@ -2044,9 +2165,9 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 12px;
-  border: 1px solid #b7c9dc;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #e8f4ff;
+  background: var(--sur-2);
 }
 
 .gp-compare-card {
@@ -2075,8 +2196,8 @@ onBeforeUnmount(() => {
 .gp-compare-offer {
   display: inline-block;
   margin-top: 8px;
-  background: #ffd8c8;
-  color: #9a3b12;
+  background: var(--brand-light);
+  color: var(--brand);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
@@ -2189,8 +2310,8 @@ onBeforeUnmount(() => {
 .gp-shop-dist {
   display: inline-flex;
   border-radius: 2px;
-  background: #ffd8c8;
-  color: #9a3b12;
+  background: var(--brand-light);
+  color: var(--brand);
   font-weight: 800;
   padding: 4px 7px;
 }
@@ -2198,9 +2319,9 @@ onBeforeUnmount(() => {
 /* 11. 價格摘要 + 走勢佈局 */
 .gp-price-layout {
   display: grid;
-  grid-template-columns: 330px minmax(0, 1fr);
-  gap: 16px;
-  margin: 0 20px 16px;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
 }
 
 .gp-summary-grid {
@@ -2259,7 +2380,7 @@ onBeforeUnmount(() => {
   height: 280px;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: linear-gradient(180deg, #fff, #fafafa);
+  background: var(--sur-2);
   padding: 12px;
 }
 
@@ -2343,20 +2464,31 @@ onBeforeUnmount(() => {
 
 /* 13. 同品牌 / 同分類 */
 .gp-related-block {
-  margin: 0 20px 16px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
 }
 
 .gp-related-scroll {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
+  scroll-snap-type: x proximity;
   scrollbar-width: thin;
 }
 
 .gp-related-card {
   flex: 0 0 220px;
-  display: block;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   border: 1px solid var(--bdr);
   border-radius: 8px;
   background: var(--sur);
@@ -2364,18 +2496,21 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font: inherit;
   padding: 0;
+  scroll-snap-align: start;
   text-align: left;
   color: var(--ink);
 }
 
 .gp-related-img {
   display: flex;
-  height: 96px;
-  align-items: center;
+  flex: 0 0 120px;
+  height: 120px;
+  align-items: flex-start;
   justify-content: center;
   border-bottom: 1px solid var(--bdr);
-  background: linear-gradient(135deg, #fff 0%, var(--sur-2) 100%);
+  background: var(--sur-2);
   overflow: hidden;
+  padding: 8px 8px 0;
 }
 
 .gp-related-img img {
@@ -2395,6 +2530,10 @@ onBeforeUnmount(() => {
 }
 
 .gp-related-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
   padding: 11px;
 }
 
@@ -2415,10 +2554,10 @@ onBeforeUnmount(() => {
 .gp-related-brand-chip {
   display: inline-flex;
   flex: 0 0 auto;
-  border: 1px solid var(--bdr);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--sur-2);
-  color: var(--ink-2);
+  background: var(--brand-light);
+  color: var(--brand);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
@@ -2472,16 +2611,18 @@ onBeforeUnmount(() => {
 
   .gp-product-head {
     grid-template-columns: 1fr;
+    padding: 12px;
   }
 
   .gp-product-img {
+    grid-row: auto;
     width: 100%;
-    height: 180px;
+    height: 160px;
   }
 
   .gp-detail-actions {
-    align-items: flex-start;
-    justify-content: flex-start;
+    grid-column: auto;
+    width: 100%;
   }
 
   .gp-detail-primary-actions {
@@ -2513,17 +2654,6 @@ onBeforeUnmount(() => {
 
   .gp-price-layout {
     grid-template-columns: 1fr;
-    margin-left: 14px;
-    margin-right: 14px;
-  }
-
-  .gp-section-block,
-  .gp-detail-panel > .gp-detail-card,
-  .gp-alert-card,
-  .gp-action-message,
-  .gp-related-block {
-    margin-left: 14px;
-    margin-right: 14px;
   }
 
   .gp-alert-form {
@@ -2535,5 +2665,23 @@ onBeforeUnmount(() => {
   .gp-detail-title {
     font-size: 20px;
   }
+}
+
+/* 16. 夜間護眼色 */
+:global(html[data-theme="night"]) .gp-product-img,
+:global(html[data-theme="night"]) .gp-related-img,
+:global(html[data-theme="night"]) .gp-chart,
+:global(html[data-theme="night"]) .gp-chart rect {
+  background: rgb(42 48 56);
+}
+
+:global(html[data-theme="night"]) .gp-product-img img,
+:global(html[data-theme="night"]) .gp-related-img img,
+:global(html[data-theme="night"]) .gp-image-preview-dialog img {
+  filter: brightness(0.88);
+}
+
+:global(html[data-theme="night"]) .gp-chart line {
+  stroke: rgb(62 70 80);
 }
 </style>

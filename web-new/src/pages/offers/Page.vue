@@ -19,6 +19,7 @@ import {
 import { fetchPublicDisplayAds } from '@/httpapis/wallet';
 import { readStoredAccessToken } from '@/httpapis/auth-session';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import categoryIconsUrl from './category-icons.svg?no-inline';
 import { usePreferenceStore } from '@/stores/preferences';
 import type { PublicDisplayAdResponse } from '@/model/wallet';
 import type {
@@ -62,7 +63,7 @@ interface SortOption {
 interface CategoryTile {
   id: string;
   labelKey: string;
-  icon: 'shield' | 'plus' | 'home' | 'tag' | 'star' | 'smile';
+  icon: 'soap-dispenser-droplet' | 'pill' | 'spray-can' | 'wheat' | 'milk' | 'cookie';
   keywords: string[];
 }
 
@@ -132,13 +133,14 @@ const categoryPills = computed<FilterPill[]>(() => [
   ),
 ]);
 
+// 2.0 六個分類入口使用同一套本地 Lucide SVG。
 const categoryTiles: CategoryTile[] = [
-  { id: 'care', labelKey: 'offers.list.tileCare', icon: 'shield', keywords: ['個人護理', '護理', 'personal care'] },
-  { id: 'health', labelKey: 'offers.list.tileHealth', icon: 'plus', keywords: ['保健', '健康', 'health'] },
-  { id: 'home', labelKey: 'offers.list.tileHome', icon: 'home', keywords: ['家居', 'household'] },
-  { id: 'grocery', labelKey: 'offers.list.tileGrocery', icon: 'tag', keywords: ['米', '雜貨', '粉麵', 'grocery', 'rice', 'noodle'] },
-  { id: 'dairy', labelKey: 'offers.list.tileDairy', icon: 'star', keywords: ['奶類', '乳品', '乳', 'dairy', 'milk'] },
-  { id: 'snack', labelKey: 'offers.list.tileSnack', icon: 'smile', keywords: ['零食', '飲品', '糖果', 'snack', 'drink'] },
+  { id: 'care', labelKey: 'offers.list.tileCare', icon: 'soap-dispenser-droplet', keywords: ['個人護理', '護理', 'personal care'] },
+  { id: 'health', labelKey: 'offers.list.tileHealth', icon: 'pill', keywords: ['保健', '健康', 'health'] },
+  { id: 'home', labelKey: 'offers.list.tileHome', icon: 'spray-can', keywords: ['家居', 'household'] },
+  { id: 'grocery', labelKey: 'offers.list.tileGrocery', icon: 'wheat', keywords: ['米', '雜貨', '粉麵', 'grocery', 'rice', 'noodle'] },
+  { id: 'dairy', labelKey: 'offers.list.tileDairy', icon: 'milk', keywords: ['奶類', '乳品', '乳', 'dairy', 'milk'] },
+  { id: 'snack', labelKey: 'offers.list.tileSnack', icon: 'cookie', keywords: ['零食', '飲品', '糖果', 'snack', 'drink'] },
 ];
 
 // 2.1 取得電腦端與手機端已投放廣告。
@@ -518,6 +520,11 @@ const setView = (mode: ViewMode): void => {
   viewMode.value = mode;
 };
 
+// 32.1 在網格與表格之間切換
+const toggleView = (): void => {
+  setView(viewMode.value === 'grid' ? 'table' : 'grid');
+};
+
 // 33. 切換分頁
 const selectPage = (page: PageButton): void => {
   if (page.disabled || currentPage.value === page.page) {
@@ -827,18 +834,14 @@ onBeforeUnmount(() => {
 
         <section class="gp-filter-section gp-view-filter-section">
           <h3>{{ t('offers.list.viewMode') }}</h3>
-          <div class="gp-view-filter-actions">
-            <button
-              type="button"
-              :class="viewMode === 'grid' ? 'on' : ''"
-              @click="setView('grid')"
-            >{{ t('offers.list.grid') }}</button>
-            <button
-              type="button"
-              :class="viewMode === 'table' ? 'on' : ''"
-              @click="setView('table')"
-            >{{ t('offers.list.table') }}</button>
-          </div>
+          <button
+            type="button"
+            class="gp-view-switch"
+            :aria-pressed="viewMode === 'table'"
+            @click="toggleView"
+          >
+            {{ viewMode === 'grid' ? t('offers.list.table') : t('offers.list.grid') }}
+          </button>
         </section>
       </div>
 
@@ -856,13 +859,7 @@ onBeforeUnmount(() => {
       </footer>
     </aside>
 
-    <!-- 1. 超市情報標題 -->
-    <section class="gp-hero">
-      <h1 class="gp-hero-title">{{ t('offers.list.heroTitle') }}</h1>
-      <p class="gp-hero-sub">{{ t('offers.list.heroSubtitle') }}</p>
-    </section>
-
-    <!-- 2. 控制欄 -->
+    <!-- 1. 控制欄 -->
     <section class="gp-controls">
       <div
         class="gp-ad-banner"
@@ -987,6 +984,32 @@ onBeforeUnmount(() => {
         :aria-label="t('offers.list.offerFilters')"
       >
         <select
+          v-model="activeCategory"
+          class="gp-mobile-filter-select"
+          :aria-label="t('offers.list.category')"
+          @change="selectCategory(activeCategory)"
+        >
+          <option value="">{{ t('offers.list.category') }}</option>
+          <option
+            v-for="category in categoryOptions"
+            :key="`mobile-category-${category.value}`"
+            :value="category.value"
+          >{{ category.label }}</option>
+        </select>
+        <select
+          v-model="activeStore"
+          class="gp-mobile-filter-select"
+          :aria-label="t('offers.list.store')"
+          @change="selectStore(activeStore)"
+        >
+          <option value="">{{ t('offers.list.store') }}</option>
+          <option
+            v-for="store in storeOptions"
+            :key="`mobile-store-${store.value}`"
+            :value="store.value"
+          >{{ store.label }}</option>
+        </select>
+        <select
           v-model="activeSort"
           class="gp-mobile-filter-select gp-mobile-sort-select"
           :aria-label="t('offers.list.sortMethod')"
@@ -1043,12 +1066,24 @@ onBeforeUnmount(() => {
           type="button"
           class="gp-cat-tile"
           :class="activeCategoryTileId === tile.id ? 'on' : ''"
+          :aria-pressed="activeCategoryTileId === tile.id"
           @click="selectCategoryTile(tile.id)"
         >
-          <AppIcon
-            :name="tile.icon"
-            :size="22"
-          />
+          <svg
+            class="gp-cat-icon"
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <use :href="`${categoryIconsUrl}#${tile.icon}`" />
+          </svg>
           <span>{{ t(tile.labelKey) }}</span>
         </button>
       </div>
@@ -1103,24 +1138,15 @@ onBeforeUnmount(() => {
               {{ brand }}
             </option>
           </select>
-          <div class="gp-view-toggle">
-            <button
-              type="button"
-              class="gp-view-btn"
-              :class="viewMode === 'grid' ? 'on' : ''"
-              @click="setView('grid')"
-            >
-              {{ t('offers.list.grid') }}
-            </button>
-            <button
-              type="button"
-              class="gp-view-btn"
-              :class="viewMode === 'table' ? 'on' : ''"
-              @click="setView('table')"
-            >
-              {{ t('offers.list.table') }}
-            </button>
-          </div>
+          <button
+            type="button"
+            class="gp-view-switch"
+            :aria-pressed="viewMode === 'table'"
+            :aria-label="t('offers.list.viewMode')"
+            @click="toggleView"
+          >
+            {{ viewMode === 'grid' ? t('offers.list.table') : t('offers.list.grid') }}
+          </button>
           <select
             v-model="activeSort"
             class="gp-sort gp-order-select"
@@ -1746,24 +1772,21 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.gp-view-toggle {
-  display: flex;
-  overflow: hidden;
-  border: 0;
-  gap: 6px;
-}
-
-.gp-view-toggle .gp-view-btn {
+.gp-view-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
   border: 1px solid var(--bdr);
-  border-radius: 2px;
-  padding: 7px 13px;
-  background: rgb(var(--color-surface));
-}
-
-.gp-view-toggle .gp-view-btn.on {
+  border-radius: 8px;
   background: rgb(var(--color-surface));
   color: var(--ink);
-  border-color: var(--bdr);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 13px;
+  white-space: nowrap;
 }
 
 .gp-sort {
@@ -1833,7 +1856,7 @@ onBeforeUnmount(() => {
   width: var(--gp-media-width);
   height: 100%;
   overflow: visible;
-  background: #fff;
+  background: var(--sur-2);
 }
 
 .gp-card-img {
@@ -1848,7 +1871,7 @@ onBeforeUnmount(() => {
   padding: 28px 12px 16px;
   box-sizing: border-box;
   overflow: hidden;
-  background: #fff;
+  background: var(--sur-2);
   transition: width 0.22s ease;
 }
 
@@ -1962,7 +1985,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 6px;
   background: var(--ink);
-  color: #fff;
+  color: var(--sur);
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
@@ -2048,8 +2071,13 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.gp-card-other-row span:first-child {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .gp-card-other-row span:nth-child(2) {
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 .gp-card-other-row strong {
@@ -2127,7 +2155,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-table tr:hover td {
-  background: #fffaf7;
+  background: var(--sur-2);
 }
 
 .gp-table strong {
@@ -2218,7 +2246,7 @@ onBeforeUnmount(() => {
   .gp-store-pills,
   .gp-search-row .gp-fav-btn,
   .gp-brand-select,
-  .gp-view-toggle {
+  .gp-toolbar .gp-view-switch {
     display: none;
   }
 
@@ -2343,13 +2371,13 @@ onBeforeUnmount(() => {
 
   .gp-mobile-filter-select {
     width: auto;
-    min-width: 104px;
+    min-width: 98px;
     flex: 0 0 auto;
     padding: 0 30px 0 13px;
   }
 
   .gp-mobile-sort-select {
-    min-width: 120px;
+    min-width: 108px;
   }
 
   .gp-mobile-filter-button,
@@ -2658,5 +2686,15 @@ onBeforeUnmount(() => {
     gap: 6px;
     font-size: 12px;
   }
+}
+
+/* 10. 夜間護眼色 */
+:global(html[data-theme="night"]) .gp-card-img img,
+:global(html[data-theme="night"]) .gp-card-media {
+  background: rgb(42 48 56);
+}
+
+:global(html[data-theme="night"]) .gp-card-img img {
+  filter: brightness(0.88);
 }
 </style>

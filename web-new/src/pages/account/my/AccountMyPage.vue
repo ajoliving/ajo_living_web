@@ -372,8 +372,6 @@ const readAccountApiErrorMessage = (error: unknown, fallback: string): string =>
     ? error.response?.data?.message ?? fallback
     : fallback;
 
-const accountDisplayName = computed(() => displayText(sessionStore.me?.display_name, sessionStore.currentUser.display_name));
-
 // 8. 目前頭像來源
 const accountAvatarSrc = computed(() => resolveAvatarSrc({
   avatarKey: sessionStore.me?.avatar_key,
@@ -459,6 +457,17 @@ const registeredUsernameText = computed(() =>
     || sessionStore.me?.ismart_username
     || sessionStore.me?.ismart_msg?.username
     || ismartProfile.value?.account_code,
+  ),
+);
+
+const accountDisplayName = computed(() =>
+  displayText(
+    sessionStore.me?.username
+    || sessionStore.me?.ismart_username
+    || sessionStore.me?.ismart_msg?.username
+    || ismartProfile.value?.account_code
+    || sessionStore.me?.display_name,
+    sessionStore.currentUser.display_name,
   ),
 );
 
