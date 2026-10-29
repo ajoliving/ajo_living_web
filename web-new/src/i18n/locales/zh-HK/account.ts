@@ -129,6 +129,8 @@ export default {
       propertyFunctionEnabled: '已啟用',
       propertyFunctionDisabled: '未啟用',
       bindProperty: '綁定',
+      switchProperty: '切換物業',
+      currentProperty: '目前綁定',
       unbindProperty: '解除綁定',
       linkedPropertyName: '已連結物業名',
       functionName: '功能名',

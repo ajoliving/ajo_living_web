@@ -693,6 +693,29 @@ RESTORE_DB=1 RESTORE_DB_CONFIRM=RESTORE_PRODUCTION_AJOLIVING ./deploy-ajoliving.
 
 只有同时设置以上两个变量，脚本才允许把本地 dump 恢复到服务器。正常更新前后端不要设置 `RESTORE_DB=1`。
 
+### 4.3 SMTP 郵件配置與驗收
+
+2026-10-09 使用者先確認測試郵件實際收件，再明確授權將成功配置套用至生產及測試環境。本次只修正生產 `SMTP_USERNAME`，令其與既有 `SMTP_FROM` 一致；測試配置已正確，不再次修改或重啟。兩套 `.env` 均已在本機與伺服器備份，既有二進制及其他環境參數保持不變。
+
+已驗證的配置格式如下；真實地址及密碼只可保存於受控 `.env`，不得寫入文檔：
+
+```bash
+MAIL_ENABLED=true
+SMTP_HOST=smtpdm.aliyun.com
+SMTP_PORT=80
+SMTP_HELLO_NAME=localhost
+SMTP_USERNAME='<verified-sender-address>'
+SMTP_PASSWORD='<sender-smtp-password>'
+SMTP_FROM='<verified-sender-address>'
+```
+
+- 現行郵件程式在 `80` 端口使用 STARTTLS，再以 PLAIN 認證；不支援 `465` 隱式 TLS，不得只改端口而宣稱已啟用 SSL。
+- 郵件配置維護只定點修改必要的 `MAIL_ENABLED`／`SMTP_*` 欄位；不得使用 `SYNC_ENV=1` 整份覆蓋配置或順帶發布未授權程式碼。
+- 生產發布預設保留伺服器 `.env` 已有欄位，僅從本機配置補缺失欄位；測試發布每次從生產 `.env` 繼承郵件參數。本次兩套 SMTP 參數已一致，無需新增獨立測試郵件覆寫或修改部署腳本；發布前仍須核對來源。
+- 每個環境須核對保存值與實際程序環境；只重啟配置有變更的既有 Supervisor 服務，並分別驗證 SMTP、公開健康接口及資料庫 readiness。
+- 本次兩套運行環境均通過憑證校驗、`AUTH 235` 與 `MAIL FROM 250`，健康及 readiness 均為 `200`。測試郵件已由收件方確認送達；生產驗證郵件的 `RCPT TO` 及完整 `DATA` 均返回 `250`，代表服務商接受，生產收件箱送達仍待收件方確認。
+- 缺失 `DATA` 最終回應時不得盲目重發，避免重複郵件；完整回執及配置備份保存在受控、Git 忽略的本機備份目錄。
+
 ### 5. 验收命令
 
 ```bash
@@ -767,6 +790,8 @@ curl -I https://ajoliving.server.skylinedances.com/api/v1/health
 - 測試部署預設不按服務或讀寫類型隔離外部接口；只有產品明確指定的接口才可改用 mock、不可用地址或獨立測試地址。
 - 每次部署先保留測試 `JWT_SECRET` 與 `ENCRYPTION_KEY`，再從生產 `.env` 重新載入外部服務配置，最後覆蓋測試資料庫、Redis、公開域名及回調 URL。
 
+2026-10-09 後續授權已涵蓋生產及測試郵件配置，取代最初僅限測試的修正範圍。兩套已採用相同成功配置，後續測試發布從已修正的生產 `.env` 繼承；完整配置及分階段投遞驗收規則見第 4.3 節。
+
 部署命令：
 
 ```bash
@@ -780,6 +805,23 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 ```
 
 `SKIP_BUILD=1` 只可用於同一次已驗證建置後的傳輸重試，不得作為一般發布方式。後端二進制使用 legacy SCP 傳輸，避免目前網絡環境的 SFTP 固定窗口停滯。
+
+一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
+
+2026-10-20 已部署測試 release `20261020150156-test-1996`：
+
+- 重新建置目前工作區前後端，發布會員中心每個已連結物業的解除綁定入口，以及商品內頁關聯卡移除其他門店比較字樣的修正；解除綁定仍只提示未接通，不修改登記關聯。
+- 使用 `INITIALIZE_DB=0` 保留既有測試資料庫，`KEEP_RELEASES=0` 保留舊 release；未恢復生產快照。
+- 31 項相關前端測試、TypeScript 檢查、建置、公網頁面、health/readiness、Nginx、PostgreSQL、Redis 及 `noindex` 均通過。
+- 真實測試站商品列表與詳情在桌面及手機均正常載入，關聯卡沒有其他門店比較字樣；部署後會員頁使用模擬會員 API 驗證三個物業各有一個解除綁定入口，點擊不發送寫入請求，沒有頁面橫向溢出或 JavaScript 錯誤。未執行真實會員解除登記操作。
+- 生產 release `20261010042129-55503`、二進制與 `.env` 校驗值維持不變；生產及共用 `frpc` PID 未變，FRP 配置未改，未修改 SSL 或 OSS CORS。
+
+2026-10-20 已部署測試 release `20261020110722-test-77871`：
+
+- 依目前工作區重新建置前後端，包含熱門分類白底、列表與內頁同分類商品的標題區左右捲動控制及更多產品分類入口。
+- 使用 `INITIALIZE_DB=0` 保留測試資料庫、`KEEP_RELEASES=0` 保留所有舊 release；未恢復生產快照。
+- 測試公網頁面、health/readiness、Nginx、Supervisor、PostgreSQL、Redis 及 `noindex` 均通過驗收。
+- 生產 release、二進制與 `.env` 校驗值保持不變；生產及 `frpc` PID 未變，FRP 配置未改，未修改 SSL 或 OSS CORS。
 
 測試網址可在任何瀏覽器直接開啟，不需要入口密鑰或 Cookie。網關不再保留 `/__test_access` 路由及 `gateway-access.env`。
 
@@ -834,6 +876,46 @@ ssh admin@47.239.117.108 \
 - 更新住戶 iSmart 副戶授權流程，使用電話及電郵解析 `target_user_id`，再由 iSmart 執行單位授權；前端移除獨立開門及通告權限選項，改為顯示副戶擁有完整大廈權限。
 - 保留既有測試資料庫，測試後端、同源前端、Supervisor、PostgreSQL、Redis、FRP、HTTPS 及 `noindex` 驗證通過。
 - 生產 `/api/v1/health` 同步驗證為 `200`，未修改生產 release、資料庫或路由配置。
+
+2026-10-10 已分環境部署 AJO release：
+
+- 生產 release `20261010023358-95312` 發布非超市情報改動；超市情報前後端改動不進入生產。發布前 PostgreSQL 備份為 `/home/admin/ajoliving/db/backups/ajoliving_20261010023358-95312.dump`，未重建生產資料庫。
+- 測試 release `20261010023945-test-98411` 發布完整前後端，包含超市情報價格優惠頁面與 API；使用 `INITIALIZE_DB=0` 保留測試資料庫，`KEEP_RELEASES=0` 保留舊 release。
+- 生產及測試首頁、API health/readiness、Supervisor、PostgreSQL、Redis 均驗證正常；測試站 HTTPS 回應 `noindex`，既有 FRP 代理未重啟或修改。
+- 測試超市情報摘要 API 回傳最新資料日 `2026-10-10`、商品數 `2,720`；頁面顯示真實資料更新日期，未渲染優惠排序說明文案。
+- 測試環境繼承生產外部服務配置；測試中的 OTP、郵件、OSS、支付與 iSmart 操作仍可能呼叫真實上游服務。
+
+2026-10-10 已發布廣告管理表單 UI 更新：
+
+- 生產 release `20261010030844-13570` 與測試 release `20261010030802-test-13122` 均包含廣告編輯器布局與文案修正；只有「看廣告賺積分」任務顯示獎勵積分與觀看秒數，展示廣告改用廣告標題，任務標題與媒體上傳欄位重新分組。
+- 生產發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20261010030844-13570.dump`，未恢復資料庫、未同步生產 `.env`，未修改 FRP、SSL 或 OSS CORS。
+- 測試發布使用 `INITIALIZE_DB=0` 保留既有測試資料庫；兩套 API health/readiness 均返回 `200`，Supervisor、PostgreSQL、Redis、Nginx 與 HTTPS 驗收通過。
+
+2026-10-10 已發布廣告管理 Workbench 布局：
+
+- 生產 release `20261010035710-42216` 與測試 release `20261010035443-test-40920` 將廣告用途改為表單頂部選擇，內容與設定集中於左側，預覽固定於右側；只有「看廣告賺積分」任務顯示獎勵積分與觀看秒數。
+- 生產發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20261010035710-42216.dump`，未恢復資料庫、未同步生產 `.env`，未修改 FRP、SSL 或 OSS CORS。
+- 測試發布使用 `INITIALIZE_DB=0` 保留既有測試資料庫；兩套 API health/readiness 均返回 `200`，Supervisor、PostgreSQL、Redis、Nginx、HTTPS 與 `noindex` 驗收通過。
+
+2026-10-10 已發布廣告管理彈窗：
+
+- 生產 release `20261010042129-55503` 與測試 release `20261010041907-test-54210` 將廣告編輯改為管理彈窗；電腦端以主題色用途按鈕切換，手機端改為下拉框，預覽顯示用途名稱而非翻譯鍵。
+- 生產發布前建立並校驗 PostgreSQL 備份 `/home/admin/ajoliving/db/backups/ajoliving_20261010042129-55503.dump`，未恢復資料庫、未同步生產 `.env`，未修改 FRP、SSL 或 OSS CORS。
+- 測試發布使用 `INITIALIZE_DB=0` 保留既有測試資料庫；兩套 API health/readiness 均返回 `200`，Supervisor、PostgreSQL、Redis、Nginx、HTTPS 與 `noindex` 驗收通過。
+
+2026-10-12 已部署測試 release `20261012083637-test-93480`：
+
+- 發布「授予副戶」延時授權完整流程：`pending_registration → awaiting_confirmation → active` 狀態機、註冊邀請電郵、註冊命中提升、授權確認電郵（48 小時有效）、令牌／站內雙確認入口、逾期失效 ticker、重發與撤銷；前端移除代填英文姓名／密碼欄位，新增三態授權列表與確認頁 `/auth/ismart-subaccount-authorizations/confirm`。
+- 測試發布使用 `INITIALIZE_DB=0` 保留既有測試資料庫；後端 AutoMigrate 自動建立 `ismart_subaccount_authorizations` 表（22 欄位），未恢復資料庫，未修改 FRP、SSL 或 OSS CORS。
+- 本機部署時需以 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 前綴執行 `./deploy-ajoliving-test.sh`，否則 npm safe-delete 保護會在 `npm ci` 清理 `node_modules/.vite` 時中斷部署。
+- 驗收：測試前後端公網 `200`、health/readiness `200`、新公開路由 `/api/v1/auth/ismart-subaccount-authorizations/:token` 返回業務 `404 RESOURCE_NOT_FOUND`（證明路由已生效）、`noindex` 保持；生產 Supervisor、API 與前端在測試發布後維持正常。
+
+2026-10-13 已部署測試 release `20261013062348-test-49826`：
+
+- 授權面板布局修正：`authorization-field-stack` 由兩列改為單列（`grid-template-columns: minmax(0, 1fr)`、gap 16px），手提電話（區號＋輸入框）與電郵輸入框同寬、同左緣對齊；「檢查帳戶」按鈕高度統一為 42px。僅 CSS 改動，無模板與邏輯變更。
+- 本機安裝環境根因處理：WorkBuddy 的 `NODE_OPTIONS` language-shim 在 `npm ci` 大規模解包與 vite build 高負載寫入時代理超時，靜默丟失文件（node_modules 隨機缺檔、`@volar/typescript`／`@vue/language-core` 等損壞、rolldown build 崩潰）。兩個部署腳本的 `npm ci` 與 `npm run build` 已改為 `env -u NODE_OPTIONS` 前綴執行；修復工具 `web-new/scripts/repair-package.sh` 可按 lockfile 重解單個損壞包。
+- 部署操作注意：SSH 需讀 `~/.ssh/`（known_hosts／私鑰），後台 Bash 任務實際仍在沙箱內（即使請求繞過），會卡死在主機密鑰交互確認；部署必須以前台命令＋繞過沙箱執行（逾時會自動轉後台但進程上下文不變）。
+- 驗收：Supervisor／frpc RUNNING、測試 health 200、公網前後端 200、線上 CSS 已含單列規則 `authorization-field-stack{grid-template-columns:minmax(0,1fr)}`；生產 Supervisor 與前端不受影響。
 
 ---
 

@@ -113,6 +113,7 @@ func main() {
 	posBuildingService := service.NewPOSBuildingService(runtime)
 	posPaymentService := service.NewPOSPaymentService(runtime, posBuildingService)
 	ismartExternalService := service.NewIsmartExternalService(runtime)
+	ismartSubaccountAuthService := service.NewIsmartSubaccountAuthorizationService(runtime)
 	buildingAuthorizationService := service.NewBuildingAuthorizationService(runtime)
 	securityICCTVService := service.NewSecurityICCTVService(runtime)
 	secondhandService := service.NewSecondhandService(runtime)
@@ -138,6 +139,7 @@ func main() {
 	if cfg.EnableExpireTicker {
 		go startExpireTicker(lifecycleService, cfg.ExpireTickerInterval)
 	}
+	go startSubaccountAuthorizationExpireTicker(ismartSubaccountAuthService, time.Hour)
 	if cfg.GoodPriceAlertEnabled {
 		go startSupermarketAlertTicker(supermarketOfferService, cfg.GoodPriceAlertInterval)
 	}
@@ -154,6 +156,7 @@ func main() {
 		POSBuildingService:           posBuildingService,
 		POSPaymentService:            posPaymentService,
 		IsmartExternalService:        ismartExternalService,
+		IsmartSubaccountAuthService:  ismartSubaccountAuthService,
 		BuildingAuthorizationService: buildingAuthorizationService,
 		SecurityICCTVService:         securityICCTVService,
 		WalletService:                walletService,
@@ -206,7 +209,20 @@ func startExpireTicker(lifecycleService *service.LifecycleService, interval time
 	}
 }
 
-// 3. startSupermarketAlertTicker periodically evaluates supermarket price alerts.
+// 3. startSubaccountAuthorizationExpireTicker periodically expires overdue subaccount authorizations.
+func startSubaccountAuthorizationExpireTicker(authorizationService *service.IsmartSubaccountAuthorizationService, interval time.Duration) {
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		_, _ = authorizationService.ExpireOverdueAuthorizations(context.Background())
+	}
+}
+
+// 4. startSupermarketAlertTicker periodically evaluates supermarket price alerts.
 func startSupermarketAlertTicker(supermarketOfferService *service.SupermarketOfferService, interval time.Duration) {
 	if interval <= 0 {
 		interval = time.Hour
@@ -219,7 +235,7 @@ func startSupermarketAlertTicker(supermarketOfferService *service.SupermarketOff
 	}
 }
 
-// 4. waitForShutdown gracefully stops the HTTP server after context cancellation.
+// 5. waitForShutdown gracefully stops the HTTP server after context cancellation.
 func waitForShutdown(ctx context.Context, server *http.Server) {
 	<-ctx.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

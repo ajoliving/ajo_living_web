@@ -196,6 +196,20 @@ func (s *IsmartExternalService) UpdateIsmartNotificationSettings(ctx context.Con
 
 // 9. RegisterDirectAccount creates one iSmart account during AJO registration.
 func (s *IsmartExternalService) RegisterDirectAccount(ctx context.Context, params IsmartDirectRegistrationParams) (*IsmartMessage, error) {
+	return s.registerDirectAccountWithPoster(ctx, params, s.postIntegration)
+}
+
+// 9.1 RegisterDirectAccountOnSubaccountAPI creates an account in the same iSmart environment as subaccount grants.
+func (s *IsmartExternalService) RegisterDirectAccountOnSubaccountAPI(ctx context.Context, params IsmartDirectRegistrationParams) (*IsmartMessage, error) {
+	return s.registerDirectAccountWithPoster(ctx, params, s.postSubaccountIntegration)
+}
+
+// 9.2 registerDirectAccountWithPoster shares registration payload parsing across iSmart environments.
+func (s *IsmartExternalService) registerDirectAccountWithPoster(
+	ctx context.Context,
+	params IsmartDirectRegistrationParams,
+	post func(context.Context, string, map[string]any) (*ismartProxyResult, error),
+) (*IsmartMessage, error) {
 	payload := map[string]any{
 		"phone":            strings.TrimSpace(params.Phone),
 		"email":            normalizeEmail(params.Email),
@@ -208,7 +222,7 @@ func (s *IsmartExternalService) RegisterDirectAccount(ctx context.Context, param
 		"is_receive_email": params.IsReceiveEmail,
 		"password":         params.Password,
 	}
-	result, err := s.postIntegration(ctx, "/auth/register/", payload)
+	result, err := post(ctx, "/auth/register/", payload)
 	if err != nil {
 		return nil, err
 	}

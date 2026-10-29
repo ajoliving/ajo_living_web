@@ -135,6 +135,9 @@ func (s *IsmartExternalService) requestJSON(ctx context.Context, method string, 
 
 	response, err := s.httpClient().Do(request)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") {
+			return nil, errcode.New(errcode.CodeInternalError, "ismart service request timed out")
+		}
 		return nil, errcode.New(errcode.CodeInternalError, "failed to call ismart service")
 	}
 	defer response.Body.Close()

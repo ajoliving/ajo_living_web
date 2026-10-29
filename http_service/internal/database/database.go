@@ -55,6 +55,7 @@ func Migrate(db *gorm.DB) error {
 		&model.UserProfile{},
 		&model.UserIsmartAccount{},
 		&model.BuildingAuthorization{},
+		&model.IsmartSubaccountAuthorization{},
 		&model.Community{},
 		&model.Listing{},
 		&model.ListingContact{},

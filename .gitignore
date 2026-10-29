@@ -39,3 +39,9 @@ asserts/
 pns_images/
 .claude/
 /outputs
+
+# AI assistant working files
+.trae/
+.workbuddy/
+.openclaw/
+.restore/

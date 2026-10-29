@@ -1796,8 +1796,8 @@
 
 .authorization-field-stack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
 .authorization-field {
@@ -1806,6 +1806,13 @@
   color: var(--ink-2);
   font-size: 12px;
   font-weight: 600;
+}
+
+.authorization-field-hint {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .authorization-permission-grid {
@@ -1901,16 +1908,16 @@
 .authorization-check-button {
   grid-column: 1 / -1;
   justify-self: start;
-  min-height: 34px;
+  min-height: 42px;
   border: 1px solid var(--bdr);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--sur);
   color: var(--ink-2);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  padding: 0 12px;
+  padding: 0 16px;
 }
 
 .authorization-check-button:hover:not(:disabled) {
@@ -1924,8 +1931,7 @@
 }
 
 .authorization-contact-result,
-.authorization-email-optin,
-.authorization-name-field {
+.authorization-email-optin {
   grid-column: 1 / -1;
 }
 
@@ -2062,12 +2068,35 @@
 
 .authorization-record {
   display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) minmax(200px, 1fr) auto;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
   align-items: center;
   gap: 18px;
   min-width: 0;
   border-top: 1px solid var(--sur-3);
   padding: 14px 18px;
+}
+
+.authorization-record-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
+.authorization-list-message {
+  margin: 0;
+  border-top: 1px solid var(--sur-3);
+  padding: 12px 18px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.authorization-list-message.success {
+  color: var(--success);
+}
+
+.authorization-list-message.error {
+  color: var(--danger);
 }
 
 .authorization-record:first-child {
@@ -2161,6 +2190,30 @@
 }
 
 .authorization-revoke-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.authorization-resend-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 5px;
+  padding: 7px 8px;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.authorization-resend-button:hover:not(:disabled) {
+  background: var(--sur-2);
+}
+
+.authorization-resend-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -2271,13 +2324,13 @@
   }
 
   .authorization-record-contact,
-  .authorization-record-permissions {
+  .authorization-record-actions {
     grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
-  .authorization-revoke-button {
-    grid-column: 2;
-    grid-row: 1;
+  .authorization-record-actions {
+    justify-content: flex-end;
   }
 
   .authorization-form-actions {

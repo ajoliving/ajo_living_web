@@ -176,6 +176,9 @@ const resolveTargetPath = (item: NotificationItem, panelKey: PanelKey): string =
   if (item.related_type === 'chat' && item.related_public_id) {
     return `/notifications?tab=conversations&conversationId=${encodeURIComponent(item.related_public_id)}`;
   }
+  if (item.related_type === 'ismart_subaccount_authorization' && item.related_public_id) {
+    return `/auth/ismart-subaccount-authorizations/confirm?authorization_id=${encodeURIComponent(item.related_public_id)}`;
+  }
 
   const routeMap: Partial<Record<PanelKey, string>> = {
     'notif-offers': '/supermarket-offers',

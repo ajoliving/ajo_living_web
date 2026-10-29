@@ -209,8 +209,24 @@ export const useRewardAdEditorPage = () => {
   const savingAd = ref(false);
   const uploadingMedia = ref(false);
   const adForm = reactive<RewardAdForm>(emptyRewardAdForm());
-  const taskId = computed(() => String(route.params.taskId ?? '').trim());
+  const taskId = computed(() => adForm.taskId.trim() || String(route.params.taskId ?? '').trim());
   const isEditingAd = computed(() => taskId.value.length > 0 || adForm.taskId.trim().length > 0);
+
+  const openRewardAd = async (targetTaskId = ''): Promise<void> => {
+    resetRewardAdForm();
+    if (!targetTaskId) {
+      return;
+    }
+    loadingAd.value = true;
+    try {
+      const { data } = await fetchStaffRewardAd(targetTaskId);
+      applyRewardAdToForm(data.data, adForm);
+    } catch (error) {
+      feedbackStore.pushToast(readErrorMessage(error, t('marketplace.management.walletLoadAdsError')), 'error');
+    } finally {
+      loadingAd.value = false;
+    }
+  };
 
   const loadRewardAd = async (): Promise<void> => {
     if (!taskId.value) {
@@ -254,7 +270,10 @@ export const useRewardAdEditorPage = () => {
 
   const saveRewardAd = async (): Promise<void> => {
     if (!isRewardAdFormValid(adForm, isEditingAd.value)) {
-      feedbackStore.pushToast(t('marketplace.management.walletAdRequired'), 'error');
+      const requiredMessage = isImageOnlyAdType(adForm.adType)
+        ? 'marketplace.management.walletAdDisplayRequired'
+        : 'marketplace.management.walletAdRequired';
+      feedbackStore.pushToast(t(requiredMessage), 'error');
       return;
     }
 
@@ -282,10 +301,6 @@ export const useRewardAdEditorPage = () => {
       savingAd.value = false;
     }
   };
-
-  watch(taskId, () => {
-    void loadRewardAd();
-  });
 
   watch(
     () => adForm.mediaType,
@@ -337,6 +352,7 @@ export const useRewardAdEditorPage = () => {
     formatAjoPoints,
     isEditingAd,
     loadingAd,
+    openRewardAd,
     resetRewardAdForm,
     saveRewardAd,
     savingAd,

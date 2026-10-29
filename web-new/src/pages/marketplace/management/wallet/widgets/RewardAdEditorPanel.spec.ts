@@ -20,6 +20,8 @@ const t = (key: string): string => {
     'marketplace.management.walletAdTypeDisplayShort': '右側短廣告',
     'marketplace.management.walletAdTypeDisplayLong': '右側長廣告',
     'marketplace.management.walletAdTitleField': '任務標題',
+    'marketplace.management.walletAdDisplayTitleField': '廣告標題',
+    'marketplace.management.walletAdRewardField': '獎勵積分',
     'marketplace.management.walletAdSummaryField': '任務摘要',
     'marketplace.management.walletAdTitlePlaceholder': '請輸入標題',
     'marketplace.management.walletAdSummaryPlaceholder': '請輸入摘要',
@@ -34,6 +36,7 @@ const t = (key: string): string => {
     'marketplace.management.walletAdDisplayShortSize': '16:9',
     'marketplace.management.walletAdDisplayLongSize': '9:16',
     'marketplace.management.walletAdSortOrderField': '排序',
+    'marketplace.management.walletAdWatchSecondsField': '觀看秒數',
     'marketplace.management.walletAdRetentionDaysField': '保留天數',
     'marketplace.management.walletAdActiveField': '啟用任務',
     'marketplace.management.walletAdTargetField': '跳轉 URL',
@@ -43,13 +46,22 @@ const t = (key: string): string => {
     'marketplace.settings.displayAdChannelPropertySale': '樓盤放售',
     'marketplace.settings.displayAdChannelFurniture': '二手家私',
     'marketplace.settings.displayAdChannelServicedApartment': '服務式住宅',
+    'marketplace.management.walletAdPreviewField': '預覽',
+    'marketplace.management.walletAdChooseFile': '選擇檔案',
+    'marketplace.management.walletAdNoFile': '未選擇檔案',
+    'marketplace.management.cancelAction': '取消',
+    'marketplace.management.closeDialog': '關閉視窗',
+    'marketplace.management.walletAdListSection': '廣告列表',
+    'marketplace.management.walletAdPublishSection': '發布廣告',
+    'marketplace.management.walletAdTypePriceDesktop': '價格情報網電腦端廣告',
+    'marketplace.management.walletAdTypePriceMobile': '價格情報網手機端廣告',
   };
 
   return messages[key] ?? key;
 };
 
 describe('RewardAdEditorPanel', () => {
-  it('shows display ad controls and disables video selection in display mode', () => {
+  it('shows display ad controls without reward fields and disables video selection', () => {
     const adForm = reactive(emptyRewardAdForm());
     adForm.adType = 'display_long';
     adForm.displayChannel = 'property_sale';
@@ -68,6 +80,30 @@ describe('RewardAdEditorPanel', () => {
     expect(wrapper.text()).toContain('展示頻道');
     expect(wrapper.text()).toContain('展示樣式');
     expect(wrapper.text()).toContain('樓盤放售');
-    expect(wrapper.find('select:disabled').exists()).toBe(true);
+    expect(wrapper.text()).toContain('廣告標題');
+    expect(wrapper.text()).not.toContain('獎勵積分');
+    expect(wrapper.text()).not.toContain('觀看秒數');
+    expect(wrapper.find('.wallet-ad-media-toggle button:disabled').exists()).toBe(true);
+    expect(wrapper.get('.wallet-ad-purpose-bar').findAll('.wallet-ad-purpose')).toHaveLength(5);
+    expect(wrapper.find('.wallet-ad-preview-pane').exists()).toBe(true);
+    expect(wrapper.find('.wallet-ad-preview-pane strong').text()).toBe('右側長廣告');
+    expect(wrapper.text()).not.toContain('marketplace.management.walletAdType');
+  });
+
+  it('shows reward and watch settings only for watch-ad tasks', () => {
+    const wrapper = mount(RewardAdEditorPanel, {
+      props: {
+        adForm: reactive(emptyRewardAdForm()),
+        isEditingAd: false,
+        savingAd: false,
+        t,
+      },
+    });
+
+    expect(wrapper.text()).toContain('任務標題');
+    expect(wrapper.text()).toContain('獎勵積分');
+    expect(wrapper.text()).toContain('觀看秒數');
+    expect(wrapper.find('.wallet-ad-editor-reward-grid').exists()).toBe(true);
+    expect(wrapper.find('.wallet-ad-editor-display-grid').exists()).toBe(false);
   });
 });

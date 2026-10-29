@@ -13,14 +13,26 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - AJO Redis 與 PostgreSQL 由同一份伺服器 Docker Compose 管理，只綁定應用伺服器 `127.0.0.1`；Redis 只保存可重建快取，不配置持久化 volume。
 - POS 大廈與單位共用目錄使用 Redis 快取 5 分鐘；部署環境以 `POS_DIRECTORY_CACHE_TTL` 控制，會員權限、綁定、目前物業及 relay token 不得進入共用快取。
 - iSmart 意見提供及維修個案的提交、列表與詳情使用獨立 `ISMART_SERVICE_CASE_API_BASE_URL`，目前指向 `clouddev`。iSmart 副戶列表、授權與撤銷使用獨立 `ISMART_SUBACCOUNT_API_BASE_URL`，目前暫時指向生產 iSmart。
+- iSmart 副戶檢查、註冊、授權與撤銷必須全部使用生產 `https://ismart.ajoliving.com/api/v1/integration`，不得讓註冊與 grant 分別落到 production 和 clouddev。
 - AJO 測試環境使用 `test.ajoliving.skylinedances.com` 單一同源入口、獨立目錄、Supervisor、Docker Compose project、PostgreSQL volume、Redis 與密鑰；測試庫只可透過顯式確認由生產邏輯快照重建。
 - 測試環境目前公開直接訪問並保持 `noindex`；`noindex` 不等同存取控制。外部服務預設沿用生產配置，只有產品明確指定的接口才隔離；測試資料庫、Redis、JWT 與加密密鑰維持獨立。
 - 生產快照恢復至測試庫後，保留的應用密文必須使用測試獨立 `ENCRYPTION_KEY` 重加密；工具不得輸出明文或密鑰，且不得修改生產資料庫。
 - 測試部署每次從生產 `.env` 重新繼承外部服務配置，並只覆蓋測試站本地運行配置及回調域名，避免殘留歷史 mock 或不可用地址。
+- 測試發布只有在新增 `ajoliving-test-web` FRP 路由時才重啟共用 `frpc`；既有路由不變時不得因一般發布重啟其他站點共用的穿透程序。
+- 生產 `.env` 是測試部署的郵件配置繼承來源；生產發布預設保留已有 SMTP 欄位，只補缺失欄位。郵件維護只定點修改已授權的必要欄位，不整份覆蓋配置、不順帶發布程式碼；分別核對兩套實際程序環境與 SMTP，只重啟有變更的服務。2026-10-09 後續授權已涵蓋生產及測試，兩套 `SMTP_USERNAME` 與 `SMTP_FROM` 已一致。
+- 郵件驗證中 `AUTH 235`、`MAIL FROM 250` 不等同真實投遞；完整 `SMTP DATA` 結束後的 `250` 只代表服務商接受，收件箱送達須由收件方確認。缺失最終回應時不得盲目重發，文檔不得保存真實郵箱或憑據。
 - OSS CDN 媒體域名使用網關 `acme.sh` 的 `dns_ali` 自動簽發及 `ali_cdn` 自動部署；域名續期不得退回無法自動執行的 certbot manual DNS 流程。
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
 
 ## 變更日誌
+2026-10-20: 測試 release `20261020150156-test-1996` 發布每個物業的解除綁定入口及商品內頁比較字樣清理；保留資料庫和舊 release。31 項相關測試、建置、健康、readiness、資料服務及桌面／手機瀏覽器驗證通過；會員頁以模擬 API 確認不發送解除寫入。生產 release、環境、二進制及 PID、FRP 配置及 PID 未變。
+2026-10-20: 測試 release `20261020110722-test-77871` 發布目前工作區與價格情報頁調整，保留測試資料庫及全部舊 release；健康、readiness、Nginx、PostgreSQL 與 Redis 通過。生產 release、二進制、環境檔及程序未改，FRP 配置與 PID 未改；測試部署腳本改為僅新增路由時重啟 `frpc`。
+2026-10-10: 明確 iSmart 副戶檢查、註冊、授權與撤銷統一走生產接口；服務個案仍維持獨立 `clouddev`。
+2026-10-10: 發布廣告管理彈窗至生產 release `20261010042129-55503` 與測試 release `20261010041907-test-54210`；電腦端保留用途按鈕，手機端改為下拉框，預覽顯示廣告用途名稱。生產建立並校驗 PostgreSQL 備份，未恢復資料庫或修改網絡配置；測試保留既有資料庫，兩套健康、readiness、Supervisor、資料服務與 HTTPS 驗證通過。
+2026-10-10: 發布廣告管理 Workbench 布局至生產 release `20261010035710-42216` 與測試 release `20261010035443-test-40920`；廣告用途置於表單頂部，預覽固定於右側，獎勵積分與觀看秒數僅保留於看廣告賺積分任務。生產建立並校驗 PostgreSQL 備份，未恢復資料庫、未修改環境或網絡配置；測試保留既有資料庫，兩套健康、readiness、Supervisor、資料服務、HTTPS 及 Nginx 驗證通過。
+2026-10-10: 發布廣告管理表單 UI 更新至生產 release `20261010030844-13570` 與測試 release `20261010030802-test-13122`；看廣告賺積分才顯示獎勵積分與觀看秒數，展示廣告改用廣告標題及整理後的媒體上傳布局。生產建立 PostgreSQL 備份並保留資料庫、環境與網絡配置，測試保留既有資料庫，兩套健康、readiness、Supervisor、PostgreSQL、Redis、HTTPS 及 Nginx 驗證通過。
+2026-10-10: 記錄 AJO 生產 release `20261010023358-95312` 與測試 release `20261010023945-test-98411` 分環境部署；測試保留既有資料庫並通過服務、資料庫及 HTTPS 驗證。
+2026-10-09: 按後續明確授權同步生產及測試的成功 SMTP 配置；只修正生產登入帳號並重啟既有生產後端，兩套運行配置、SMTP、健康及 readiness 驗證通過。測試收件已確認，生產驗證郵件已獲服務商接受；固定生產保留、測試繼承及禁止盲目重發規則。
 2026-09-12: 暫時停用 iSmart 個人檔案、大廈資料與通告 Redis 快取，改每次回源；POS 目錄快取維持不變。
 2026-09-10: 副戶列表、授權與撤銷改為暫時走生產 `ISMART_SUBACCOUNT_API_BASE_URL`，方便本機驗證住戶授權。
 2026-09-10: 記錄 iSmart 副戶列表、授權與撤銷使用獨立 `ISMART_SUBACCOUNT_API_BASE_URL` 指向 `clouddev`，授權前分別核對手機號與電郵的 `user_id`，且不得回退生產接口。

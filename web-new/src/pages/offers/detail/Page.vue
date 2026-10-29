@@ -30,22 +30,15 @@ import { usePreferenceStore } from '@/stores/preferences';
 import {
   displaySupermarketCategory,
   displaySupermarketStore,
-  formatSupermarketDate,
   formatSupermarketHKPrice,
+  formatSupermarketDate,
   resolveSupermarketProductBrand,
   resolveSupermarketProductFullTitle,
   resolveSupermarketProductName,
   resolveSupermarketProductUnit,
-  supermarketBestDealStorePrices,
   supermarketCurrentStorePrices,
-  supermarketOfferTexts,
-  supermarketIsSimpleOffer,
   supermarketOfferDisplayText,
-  supermarketPriceDiscountRate,
   normalizeSupermarketStoreCode,
-  supermarketSecondPriceAdvantageRate,
-  supermarketSecondPriceAdvantageStores,
-  supermarketPrimaryPrice,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
 import {
@@ -102,6 +95,7 @@ const nearbyMessage = ref('');
 const failedImageCodes = ref(new Set<string>());
 const isImagePreviewOpen = ref(false);
 const reportingImageIssue = ref(false);
+const relatedProductsTrack = ref<HTMLDivElement | null>(null);
 const alertForm = reactive({
   targetPrice: '',
   priceMode: 'effective' as PriceChartMode,
@@ -143,6 +137,16 @@ const latestStorePrices = computed<SupermarketStorePrice[]>(() => {
   return supermarketCurrentStorePrices([...pricesByStore.values()], preferenceStore.locale);
 });
 
+// 4.1 顯示目前門店價格資料中的最近快照日期。
+const latestSnapshotText = computed(() => {
+  const latestSnapshotDate = latestStorePrices.value
+    .map((price) => price.snapshotDate?.trim())
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => b.localeCompare(a))[0];
+  return formatSupermarketDate(latestSnapshotDate, preferenceStore.locale)
+    || t('offers.detail.latestData');
+});
+
 // 5. 取得返回列表所需的原搜尋參數。
 const returnListQuery = computed(() => {
   const { return: _return, ...query } = route.query;
@@ -152,58 +156,18 @@ const returnListQuery = computed(() => {
 // 6. 取得所有最新商店對比卡，避免只顯示單一商店。
 const latestStoreCards = computed<SupermarketStorePrice[]>(() => latestStorePrices.value);
 
-// 6.1 取得可顯示第二低價優勢的最低價門店代碼。
-const secondPriceAdvantageStoreCodes = computed(() => new Set(
-  supermarketSecondPriceAdvantageStores(latestStoreCards.value, preferenceStore.locale)
-    .map((item) => normalizeSupermarketStoreCode(item.store)),
-));
-
-// 6.2 取得最低價相對下一個不同價格的優勢百分比。
-const secondPriceAdvantageRate = computed<number>(() =>
-  supermarketSecondPriceAdvantageRate(latestStoreCards.value),
-);
-
-// 7. 取得純減價或原價貨品的 90 日價格標籤。
-const simpleOfferTrendLabel = (price: SupermarketStorePrice): string => {
-  if (!supermarketIsSimpleOffer(price.offer)) {
-    return '';
-  }
-
-  const history = detail.value?.history ?? [];
-  const historyDates = [...new Set(history.map((item) => item.date))].sort();
-  const today = price.snapshotDate || historyDates[historyDates.length - 1] || '';
-  const previousDates = [...new Set(
-    history
-      .filter((item) => item.store.trim().toUpperCase() === price.store.trim().toUpperCase() && item.date < today)
-      .map((item) => item.date),
-  )].sort().slice(-89);
-  const previousPrices = history
-    .filter((item) => item.store.trim().toUpperCase() === price.store.trim().toUpperCase())
-    .filter((item) => previousDates.includes(item.date))
-    .map((item) => item.effectiveUnitPrice)
-    .filter((value) => Number.isFinite(value) && value >= 0);
-  if (previousPrices.length === 0) {
-    return '';
-  }
-
-  const lowestPreviousPrice = Math.min(...previousPrices);
-  if (price.effectiveUnitPrice > lowestPreviousPrice * 1.05) {
-    return t('offers.detail.nearThreeMonthLow');
-  }
-  if (price.effectiveUnitPrice < lowestPreviousPrice) {
-    return t('offers.detail.nearThreeMonthLowest');
-  }
-  return '';
-};
-
-// 8. 顯示非純減價及非原價貨品的有效優惠文字。
+// 7. 顯示商店提供的優惠備註。
 const priceOfferDisplayText = (price: SupermarketStorePrice): string =>
   supermarketOfferDisplayText(price.offer);
 
-// 9. 取得最優惠商店
-const bestDealPrices = computed<SupermarketStorePrice[]>(() =>
-  supermarketBestDealStorePrices(latestStorePrices.value, preferenceStore.locale),
-);
+// 8. 勝出商店按優惠後每件實付價決定，並保留並列門店。
+const bestDealPrices = computed<SupermarketStorePrice[]>(() => {
+  const lowestPrice = latestStorePrices.value[0]?.effectiveUnitPrice;
+  if (lowestPrice === undefined) {
+    return [];
+  }
+  return latestStorePrices.value.filter((item) => item.effectiveUnitPrice === lowestPrice);
+});
 
 // 9.1 判斷門店是否屬於目前最低實付價。
 const isBestDealStore = (price: SupermarketStorePrice): boolean =>
@@ -211,28 +175,29 @@ const isBestDealStore = (price: SupermarketStorePrice): boolean =>
     normalizeSupermarketStoreCode(item.store) === normalizeSupermarketStoreCode(price.store),
   );
 
-// 9.2 取得首屏最低價的優惠說明。
+// 9.2 取得首屏最低價的每件節省金額。
 const bestDealOfferText = computed(() => {
   const price = bestDealPrices.value[0];
   if (!price) {
     return '';
   }
-  return simpleOfferTrendLabel(price) || priceOfferDisplayText(price) || t('offers.list.currentPrice');
+  const explicitSaving = priceOfferDisplayText(price).match(/(?:每件慳|save(?:d)?\s*(?:per item)?)[^\d$HK]*[$HK]*\s*([\d,.]+)/i);
+  const nextPrice = latestStorePrices.value
+    .filter((item) => item.effectiveUnitPrice > price.effectiveUnitPrice)
+    .map((item) => item.effectiveUnitPrice)
+    .sort((a, b) => a - b)[0];
+  const saving = explicitSaving
+    ? Number(explicitSaving[1]?.replace(/,/g, ''))
+    : price.listPrice > price.effectiveUnitPrice
+      ? price.listPrice - price.effectiveUnitPrice
+      : Math.max(0, (nextPrice ?? price.effectiveUnitPrice) - price.effectiveUnitPrice);
+  return t('offers.list.savedPerItem', { amount: formatCompactDollar(saving) });
 });
 
-// 9.3 取得首屏最低價標籤。
-const bestDealBadgeText = computed(() => {
-  const price = bestDealPrices.value[0];
-  if (!price) {
-    return '';
-  }
-  const label = bestDealPrices.value.length > 1
-    ? t('offers.detail.tiedLowest')
-    : t('offers.list.lowestAcrossStores');
-  return priceOfferDisplayText(price)
-    ? `${label} · ${t('offers.list.offerApplied')}`
-    : label;
-});
+// 9.3 取得並列最低價店名。
+const bestDealStoreLabel = computed(() =>
+  bestDealPrices.value.map((price) => formatStore(price.store)).join(' / '),
+);
 
 // 9.4 取得最近的一間最優惠門市。
 const nearestStore = computed(() => nearbyStores.value[0] ?? null);
@@ -242,35 +207,21 @@ const selectedNearbyStore = computed(() =>
   nearbyStores.value.find((store) => store.id === selectedNearbyStoreId.value) ?? nearestStore.value,
 );
 
-// 8. 取得最新快照日期
-const latestSnapshotText = computed(() =>
-  formatSupermarketDate(latestStoreCards.value[0]?.snapshotDate, preferenceStore.locale)
-  || t('offers.detail.latestData'),
-);
-
-// 9. 取得同品牌商品
-const sameBrandProducts = computed<SupermarketProduct[]>(() => {
-  const direct = detail.value?.sameBrand ?? [];
-  if (direct.length > 0) {
-    return direct.slice(0, 8);
-  }
-
-  const brand = product.value?.brand?.trim() ?? '';
-  if (!brand) {
-    return [];
-  }
-
-  return (detail.value?.sameCategory ?? [])
-    .filter((item) => item.brand?.trim() === brand && item.code !== product.value?.code)
-    .slice(0, 8);
-});
-
 // 10. 取得同分類商品
 const sameCategoryProducts = computed<SupermarketProduct[]>(() =>
   (detail.value?.sameCategory ?? [])
     .filter((item) => item.code !== product.value?.code)
-    .slice(0, 8),
+    .slice(0, 6),
 );
+
+// 10.1 左右移動同分類商品。
+const scrollRelatedProducts = (direction: -1 | 1) => {
+  const track = relatedProductsTrack.value;
+  if (!track) {
+    return;
+  }
+  track.scrollBy({ left: direction * track.clientWidth * 0.8, behavior: 'smooth' });
+};
 
 // 11. 取得目前商品可切換的同系列資料。
 const seriesProducts = computed<SupermarketProduct[]>(() => {
@@ -362,36 +313,52 @@ const trendHover = computed(() => {
   };
 });
 
-// 20. 取得關聯商品價格
-const relatedProductPriceText = (item: SupermarketProduct): string =>
-  formatOfferPrice(supermarketPrimaryPrice(item, preferenceStore.locale).effectiveUnitPrice);
-
-// 20.1 顯示關聯商品節省百分比
-const relatedProductSavingText = (item: SupermarketProduct): string => {
-  const rate = supermarketPriceDiscountRate(supermarketPrimaryPrice(item, preferenceStore.locale));
-  return rate >= 1
-    ? t('offers.detail.savedPercentage', { rate: rate.toFixed(0) })
-    : '';
+// 20. 取得關聯商品的最低實付價門店。
+const relatedProductBestPrices = (item: SupermarketProduct): SupermarketStorePrice[] => {
+  const prices = supermarketStorePrices(item, preferenceStore.locale);
+  const lowest = prices[0]?.effectiveUnitPrice;
+  return prices.filter((price) => price.effectiveUnitPrice === lowest);
 };
 
-// 21. 取得關聯商品門店
+// 21. 取得關聯商品勝出店名。
 const relatedProductStoreText = (item: SupermarketProduct): string =>
-  formatStore(supermarketPrimaryPrice(item, preferenceStore.locale).store);
+  relatedProductBestPrices(item).map((price) => formatStore(price.store)).join(' / ');
 
-// 22. 取得關聯商品優惠文字
-const relatedProductOfferText = (item: SupermarketProduct): string => {
-  const [firstOffer] = supermarketOfferTexts(item, preferenceStore.locale);
-  return firstOffer
-    || supermarketPrimaryPrice(item, preferenceStore.locale).offer
-    || t('offers.detail.regularPrice');
+// 22. 顯示關聯商品最低實付價。
+const relatedProductPriceText = (item: SupermarketProduct): string =>
+  formatOfferPrice(relatedProductBestPrices(item)[0]?.effectiveUnitPrice);
+
+// 23. 關聯商品只顯示實際原價，不以其他門店價格補位。
+const relatedProductCompareText = (item: SupermarketProduct): string => {
+  const bestPrice = relatedProductBestPrices(item)[0];
+  if (!bestPrice || bestPrice.listPrice <= bestPrice.effectiveUnitPrice) {
+    return '';
+  }
+  return t('offers.list.originalPrice', { price: formatPlainDollar(bestPrice.listPrice) });
 };
 
-// 23. 取得關聯商品品牌首字
+// 24. 顯示關聯商品每件節省金額。
+const relatedProductSavingText = (item: SupermarketProduct): string => {
+  const bestPrice = relatedProductBestPrices(item)[0];
+  if (!bestPrice) {
+    return '';
+  }
+  const explicitSaving = priceOfferDisplayText(bestPrice).match(/(?:每件慳|save(?:d)?\s*(?:per item)?)[^\d$HK]*[$HK]*\s*([\d,.]+)/i);
+  const nextPrice = supermarketStorePrices(item, preferenceStore.locale)
+    .find((price) => price.effectiveUnitPrice > bestPrice.effectiveUnitPrice)
+    ?.effectiveUnitPrice;
+  const saving = explicitSaving
+    ? Number(explicitSaving[1]?.replace(/,/g, ''))
+    : bestPrice.listPrice > bestPrice.effectiveUnitPrice
+      ? bestPrice.listPrice - bestPrice.effectiveUnitPrice
+      : Math.max(0, (nextPrice ?? bestPrice.effectiveUnitPrice) - bestPrice.effectiveUnitPrice);
+  return t('offers.list.savedPerItem', { amount: formatCompactDollar(saving) });
+};
+
+// 25. 取得關聯商品品牌首字。
 const relatedProductInitial = (item: SupermarketProduct): string => {
-  const source = item.brand?.trim()
-    || item.name?.trim()
-    || t('offers.detail.productFallbackInitial');
-  return source.slice(0, 1);
+  const source = formatProductBrand(item) || formatProductName(item);
+  return source.slice(0, 1) || t('offers.detail.productFallbackInitial');
 };
 
 // 24. 記錄無法載入的商品圖片，改用既有後備顯示。
@@ -805,6 +772,20 @@ const formatStore = (value: string): string =>
 const formatOfferPrice = (value: number | null | undefined): string =>
   formatSupermarketHKPrice(value, preferenceStore.locale);
 
+// 39.1 格式化節省金額，整數不保留小數。
+const formatCompactDollar = (value: number): string =>
+  `$${value.toLocaleString(preferenceStore.locale, {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+// 39.2 顯示對照價格。
+const formatPlainDollar = (value: number): string =>
+  `$${value.toLocaleString(preferenceStore.locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 // 39. 格式化商品名稱
 const formatProductName = (item: SupermarketProduct): string =>
   [resolveSupermarketProductName(item), resolveSupermarketProductUnit(item)]
@@ -908,6 +889,10 @@ onBeforeUnmount(() => {
               </button>
               <div class="gp-detail-title">{{ formatProductName(product) }}</div>
             </div>
+            <div
+              v-if="resolveSupermarketProductUnit(product)"
+              class="gp-detail-unit"
+            >{{ resolveSupermarketProductUnit(product) }}</div>
             <div class="gp-product-cat">
               <button
                 v-for="category in productCategories"
@@ -971,16 +956,13 @@ onBeforeUnmount(() => {
               class="gp-best-hero"
             >
               <div>
-                <div class="gp-best-hero-stores">
-                  <strong
-                    v-for="price in bestDealPrices"
-                    :key="`best-${price.store}`"
-                  >{{ formatStore(price.store) }}</strong>
-                </div>
+                <strong class="gp-best-hero-stores">{{ bestDealStoreLabel }}</strong>
                 <p>{{ bestDealOfferText }}</p>
-                <span>{{ bestDealBadgeText }}</span>
               </div>
-              <div class="gp-best-hero-price">{{ formatOfferPrice(bestDealPrices[0]?.effectiveUnitPrice) }}</div>
+              <div class="gp-best-hero-price">
+                <span>{{ formatOfferPrice(bestDealPrices[0]?.effectiveUnitPrice) }}</span>
+                <small>{{ t('offers.list.perItem') }}</small>
+              </div>
             </div>
           </div>
           <div class="gp-detail-actions">
@@ -1099,12 +1081,14 @@ onBeforeUnmount(() => {
         <div class="gp-detail-split">
           <section class="gp-detail-card">
             <h3>{{ t('offers.detail.offersAndStores') }}</h3>
-            <p class="gp-detail-subtitle">{{ t('offers.detail.latestSnapshot', { date: latestSnapshotText }) }}</p>
+            <p class="gp-detail-subtitle">
+              {{ t('offers.detail.latestSnapshot', { date: latestSnapshotText }) }}
+            </p>
           <div class="gp-price-table-wrap">
             <table class="gp-price-table">
               <thead>
                 <tr>
-                  <th>{{ t('offers.detail.supermarket') }}</th>
+                  <th>{{ t('offers.detail.store') }}</th>
                   <th>{{ t('offers.detail.priceNote') }}</th>
                   <th>{{ t('offers.detail.paidUnitPrice') }}</th>
                 </tr>
@@ -1118,15 +1102,11 @@ onBeforeUnmount(() => {
                   <td>
                     {{ formatStore(price.store) }}
                     <span
-                      v-if="isBestDealStore(price)"
+                      v-if="isBestDealStore(price) && bestDealPrices.length === 1"
                       class="gp-best-pill"
                     >{{ t('offers.detail.bestDealPill') }}</span>
-                    <span
-                      v-if="secondPriceAdvantageStoreCodes.has(normalizeSupermarketStoreCode(price.store))"
-                      class="gp-saving-pill"
-                    >{{ t('offers.detail.secondPriceAdvantage', { rate: secondPriceAdvantageRate.toFixed(0) }) }}</span>
                   </td>
-                  <td>{{ simpleOfferTrendLabel(price) || priceOfferDisplayText(price) || t('offers.list.currentPrice') }}</td>
+                  <td>{{ priceOfferDisplayText(price) || '—' }}</td>
                   <td class="gp-price-unit">{{ formatOfferPrice(price.effectiveUnitPrice) }}</td>
                 </tr>
               </tbody>
@@ -1360,60 +1340,45 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 6. 同品牌產品 -->
-        <div
-          v-if="sameBrandProducts.length > 0"
-          class="gp-detail-card gp-related-block"
-        >
-          <h3>{{ t('offers.detail.sameBrand') }}</h3>
-          <div class="gp-related-scroll">
-            <button
-              v-for="item in sameBrandProducts"
-              :key="item.code"
-              type="button"
-              class="gp-related-card"
-              @click="openRelatedProduct(item)"
-            >
-              <div class="gp-related-img">
-                <img
-                  v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
-                  :src="item.image_url || item.imageUrl"
-                  :alt="formatProductTitle(item)"
-                  @error="handleProductImageError(item.code)"
-                >
-                <span
-                  v-else
-                  class="gp-related-img-text"
-                >
-                  {{ relatedProductInitial(item) }}
-                </span>
-              </div>
-              <div class="gp-related-body">
-                <div class="gp-related-title-row">
-                  <span
-                    v-if="formatProductBrand(item)"
-                    class="gp-related-brand-chip"
-                  >{{ formatProductBrand(item) }}</span>
-                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
-                </div>
-                <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }}{{ t('offers.detail.perItem') }}</div>
-                <div
-                  v-if="relatedProductSavingText(item)"
-                  class="gp-related-saving"
-                >{{ relatedProductSavingText(item) }}</div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- 7. 同分類產品 -->
+        <!-- 6. 同類產品 -->
         <div
           v-if="sameCategoryProducts.length > 0"
           class="gp-detail-card gp-related-block"
         >
-          <h3>{{ t('offers.detail.sameCategory') }}</h3>
-          <div class="gp-related-scroll">
+          <header class="gp-related-header">
+            <h3>{{ t('offers.detail.sameCategory') }}</h3>
+            <div class="gp-related-controls">
+              <button
+                type="button"
+                class="gp-related-arrow"
+                :aria-label="t('offers.list.scrollLeft')"
+                :title="t('offers.list.scrollLeft')"
+                @click="scrollRelatedProducts(-1)"
+              >
+                <AppIcon name="arrow-left" :size="17" />
+              </button>
+              <button
+                type="button"
+                class="gp-related-arrow"
+                :aria-label="t('offers.list.scrollRight')"
+                :title="t('offers.list.scrollRight')"
+                @click="scrollRelatedProducts(1)"
+              >
+                <AppIcon name="arrow-right" :size="17" />
+              </button>
+              <button
+                v-if="productCategories[0]"
+                type="button"
+                class="gp-related-more"
+                @click="openListFilter('category', productCategories[0].value)"
+              >{{ t('offers.list.moreProducts') }}</button>
+            </div>
+          </header>
+          <p class="gp-detail-subtitle">{{ productCategories[0]?.label }}</p>
+          <div
+            ref="relatedProductsTrack"
+            class="gp-related-scroll"
+          >
             <button
               v-for="item in sameCategoryProducts"
               :key="item.code"
@@ -1422,6 +1387,10 @@ onBeforeUnmount(() => {
               @click="openRelatedProduct(item)"
             >
               <div class="gp-related-img">
+                <span
+                  v-if="formatProductBrand(item)"
+                  class="gp-related-brand-chip"
+                >{{ formatProductBrand(item) }}</span>
                 <img
                   v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
                   :src="item.image_url || item.imageUrl"
@@ -1436,19 +1405,14 @@ onBeforeUnmount(() => {
                 </span>
               </div>
               <div class="gp-related-body">
-                <div class="gp-related-title-row">
-                  <span
-                    v-if="formatProductBrand(item)"
-                    class="gp-related-brand-chip"
-                  >{{ formatProductBrand(item) }}</span>
-                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
-                </div>
-                <div class="gp-related-offer">{{ relatedProductStoreText(item) }} {{ relatedProductOfferText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }}{{ t('offers.detail.perItem') }}</div>
+                <div class="gp-related-name">{{ formatProductName(item) }}</div>
+                <div class="gp-related-store">{{ relatedProductStoreText(item) }}</div>
+                <div class="gp-related-price">{{ relatedProductPriceText(item) }}<small>{{ t('offers.detail.perItem') }}</small></div>
                 <div
-                  v-if="relatedProductSavingText(item)"
-                  class="gp-related-saving"
-                >{{ relatedProductSavingText(item) }}</div>
+                  v-if="relatedProductCompareText(item)"
+                  class="gp-related-compare"
+                >{{ relatedProductCompareText(item) }}</div>
+                <div class="gp-related-saving">{{ relatedProductSavingText(item) }}</div>
               </div>
             </button>
           </div>
@@ -1493,10 +1457,23 @@ onBeforeUnmount(() => {
 <style scoped>
 /* 1. 頁面容器 */
 .offers-detail-page {
+  --ink: #2c2824;
+  --ink-2: #2c2824;
+  --ink-3: #6b7280;
+  --ink-4: #9ca3af;
+  --sur: #ffffff;
+  --sur-2: #ffffff;
+  --sur-3: #e6e1d8;
+  --bdr: #e6e1d8;
+  --brand: #ff6a00;
+  --brand-light: #fff0e8;
+  --detail-teal: #2a7a6e;
   width: 100%;
   min-height: calc(100svh - 48px);
-  background: var(--sur-2);
+  overflow-x: hidden;
+  background: #ffffff;
   color: var(--ink);
+  font-family: "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", sans-serif;
   padding: 18px 16px 44px;
 }
 
@@ -1511,7 +1488,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: #ffffff;
   padding: 0;
 }
 
@@ -1525,7 +1502,7 @@ onBeforeUnmount(() => {
   margin: 0;
   background: transparent;
   border: 0;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1533,7 +1510,7 @@ onBeforeUnmount(() => {
 .gp-breadcrumb .bc-link {
   border: 0;
   background: transparent;
-  color: var(--ink-3);
+  color: #6b7280;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1541,16 +1518,16 @@ onBeforeUnmount(() => {
 }
 
 .gp-breadcrumb .bc-link:hover {
-  color: var(--brand);
+  color: #ff6a00;
 }
 
 .gp-breadcrumb .bc-sep {
-  color: var(--ink-4);
+  color: #9ca3af;
   font-size: 12px;
 }
 
 .gp-breadcrumb .bc-current {
-  color: var(--ink);
+  color: #2c2824;
   font-weight: 600;
 }
 
@@ -1558,13 +1535,13 @@ onBeforeUnmount(() => {
 .gp-product-head {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
-  gap: 18px;
+  gap: 22px;
   align-items: start;
   margin: 0;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 16px;
-  background: var(--sur);
-  padding: 18px;
+  background: #ffffff;
+  padding: 20px;
 }
 
 .gp-product-img {
@@ -1574,9 +1551,9 @@ onBeforeUnmount(() => {
   height: 200px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--bdr);
-  border-radius: 6px;
-  background: var(--sur-2);
+  border: 1px solid #e6e1d8;
+  border-radius: 12px;
+  background: #ffe8d6;
   overflow: hidden;
 }
 
@@ -1651,17 +1628,25 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: var(--brand);
+  color: #ff6a00;
   font-family: var(--font-serif);
   font-size: 36px;
   font-weight: 700;
 }
 
 .gp-detail-title {
-  color: var(--ink);
-  font-size: 24px;
-  font-weight: 700;
+  color: #2c2824;
+  font-size: 22px;
+  font-weight: 800;
   line-height: 1.25;
+}
+
+.gp-detail-unit {
+  margin-top: 4px;
+  color: #2c2824;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .gp-detail-title-row {
@@ -1672,21 +1657,21 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-brand-chip {
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 999px;
-  background: var(--brand-light);
-  color: var(--brand);
+  background: #2a7a6e;
+  color: #ffffff;
   cursor: pointer;
   font: inherit;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.25;
-  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 4px 9px;
 }
 
 .gp-product-cat {
   margin-top: 8px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 13px;
 }
 
@@ -1696,43 +1681,57 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
-  border-radius: 8px;
-  background: var(--brand-light);
-  padding: 12px;
+  border-radius: 12px;
+  background: #ff6a00;
+  color: #ffffff;
+  padding: 16px;
 }
 
 .gp-best-hero-stores {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .gp-best-hero p {
   margin: 4px 0 0;
-  color: var(--ink-3);
-  font-size: 12px;
-}
-
-.gp-best-hero span {
-  display: inline-block;
-  margin-top: 6px;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 700;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .gp-best-hero-price {
-  color: var(--ink);
-  font-size: 28px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: #ffffff;
+  font-size: 26px;
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
 }
 
+.gp-best-hero-price > span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.gp-best-hero-price small {
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .gp-filter-link {
   border: 0;
   background: transparent;
-  color: var(--brand);
+  color: #ff6a00;
   cursor: pointer;
   font: inherit;
   padding: 0;
@@ -1759,7 +1758,7 @@ onBeforeUnmount(() => {
 
 .gp-series-label {
   flex: 0 0 70px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
   line-height: 32px;
 }
@@ -1772,10 +1771,10 @@ onBeforeUnmount(() => {
 
 .gp-series-option {
   min-height: 32px;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 6px;
-  background: var(--sur-2);
-  color: var(--ink);
+  background: #ffffff;
+  color: #2c2824;
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -1784,14 +1783,14 @@ onBeforeUnmount(() => {
 }
 
 .gp-series-option:hover {
-  border-color: var(--brand);
-  color: var(--brand);
+  border-color: #ff6a00;
+  color: #ff6a00;
 }
 
 .gp-series-option.on {
-  border-color: var(--brand);
-  background: var(--brand-light);
-  color: var(--brand);
+  border-color: #ff6a00;
+  background: #fff0e8;
+  color: #ff6a00;
   font-weight: 700;
 }
 
@@ -1819,10 +1818,10 @@ onBeforeUnmount(() => {
 
 .gp-detail-action {
   flex: 0 0 auto;
-  border: 1px solid var(--brand);
+  border: 1px solid #ff6a00;
   border-radius: 6px;
-  background: var(--brand-light);
-  color: var(--brand);
+  background: #ffffff;
+  color: #ff6a00;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1832,12 +1831,13 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-action.on {
-  background: var(--brand);
+  background: #ff6a00;
   color: #fff;
 }
 
 .gp-detail-action-primary {
-  background: var(--brand);
+  background: #4a433c;
+  border-color: #4a433c;
   color: #fff;
 }
 
@@ -1849,32 +1849,32 @@ onBeforeUnmount(() => {
 /* 5. 操作訊息 */
 .gp-action-message {
   margin: 0;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 6px;
-  background: var(--sur);
-  color: var(--ink-3);
+  background: #ffffff;
+  color: #6b7280;
   font-size: 12px;
   padding: 10px 12px;
 }
 
 /* 6. 通用卡片 */
 .gp-detail-card {
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 16px;
-  background: var(--sur);
-  padding: 16px;
+  background: #ffffff;
+  padding: 18px;
 }
 
 .gp-detail-card h3 {
   margin: 0 0 10px;
-  color: var(--ink);
-  font-size: 14px;
+  color: #4a433c;
+  font-size: 18px;
   font-weight: 700;
 }
 
 .gp-detail-subtitle {
   margin: 6px 0 14px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1906,10 +1906,10 @@ onBeforeUnmount(() => {
 }
 
 .gp-link-btn {
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 6px;
-  background: var(--sur);
-  color: var(--brand);
+  background: #ffffff;
+  color: #ff6a00;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1926,9 +1926,9 @@ onBeforeUnmount(() => {
 
 .gp-alert-form input[type='number'],
 .gp-alert-form select {
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 6px;
-  color: var(--ink);
+  color: #2c2824;
   font: inherit;
   font-size: 12px;
   padding: 9px 10px;
@@ -1938,14 +1938,14 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
 }
 
 .gp-alert-form button {
-  border: 1px solid var(--brand);
+  border: 1px solid #4a433c;
   border-radius: 6px;
-  background: var(--brand);
+  background: #4a433c;
   color: #fff;
   cursor: pointer;
   font-family: inherit;
@@ -1969,7 +1969,7 @@ onBeforeUnmount(() => {
 .gp-detail-split {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
-  gap: 12px;
+  gap: 18px;
   align-items: stretch;
 }
 
@@ -1981,21 +1981,25 @@ onBeforeUnmount(() => {
 }
 
 .gp-price-table th {
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
   font-weight: 700;
   padding: 10px 8px;
   text-align: left;
 }
 
+.gp-price-table th:last-child {
+  text-align: right;
+}
+
 .gp-price-table td {
-  border-top: 1px solid var(--bdr);
+  border-top: 1px solid #e6e1d8;
   padding: 10px 8px;
   vertical-align: middle;
 }
 
 .gp-price-table tr.is-best td {
-  background: var(--brand-light);
+  background: #fff0e8;
 }
 
 .gp-price-unit {
@@ -2016,14 +2020,14 @@ onBeforeUnmount(() => {
 }
 
 .gp-best-pill {
-  background: var(--brand);
-  color: #fff;
+  background: #ff6a00;
+  color: #ffffff;
 }
 
 .gp-saving-pill {
-  border: 1px solid var(--bdr);
-  background: var(--sur);
-  color: var(--brand);
+  border: 1px solid #e6e1d8;
+  background: #ffffff;
+  color: #ff6a00;
 }
 
 .gp-store-map {
@@ -2032,9 +2036,9 @@ onBeforeUnmount(() => {
   height: 180px;
   margin-top: 12px;
   overflow: hidden;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 12px;
-  background: var(--sur-2);
+  background: #ffffff;
 }
 
 .gp-store-map-frame {
@@ -2047,7 +2051,7 @@ onBeforeUnmount(() => {
 
 .gp-store-map-empty {
   width: 100%;
-  color: var(--brand);
+  color: #ff6a00;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -2066,12 +2070,12 @@ onBeforeUnmount(() => {
 }
 
 .gp-store-map-meta strong {
-  color: var(--ink);
+  color: #2c2824;
   font-size: 14px;
 }
 
 .gp-store-map-meta span {
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -2087,7 +2091,7 @@ onBeforeUnmount(() => {
 .gp-store-route-button,
 .gp-store-branch-select {
   min-height: 40px;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 8px;
   font: inherit;
   font-size: 13px;
@@ -2098,17 +2102,23 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--brand);
-  color: #fff;
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-primary));
+  color: rgb(var(--color-primary-contrast));
   padding: 0 14px;
   text-decoration: none;
+}
+
+.gp-store-route-button:hover {
+  border-color: rgb(var(--color-brand-dark));
+  background: rgb(var(--color-brand-dark));
 }
 
 .gp-store-branch-select {
   min-width: 150px;
   max-width: 100%;
-  background: var(--sur);
-  color: var(--ink);
+  background: #ffffff;
+  color: #2c2824;
   cursor: pointer;
   padding: 0 34px 0 12px;
 }
@@ -2121,7 +2131,7 @@ onBeforeUnmount(() => {
 
 .gp-store-route-button:focus-visible,
 .gp-store-branch-select:focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid rgb(var(--color-primary));
   outline-offset: 2px;
 }
 
@@ -2131,27 +2141,27 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 8px;
-  background: var(--sur);
+  background: #ffffff;
   padding: 12px;
 }
 
 .gp-nearest-card strong {
   display: block;
-  color: var(--ink);
+  color: #2c2824;
   font-size: 15px;
 }
 
 .gp-nearest-card p {
   margin: 4px 0 0;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 12px;
 }
 
 .gp-nearest-card a {
   border-radius: 8px;
-  background: var(--brand);
+  background: #4a433c;
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -2331,21 +2341,21 @@ onBeforeUnmount(() => {
 }
 
 .gp-summary-item {
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 8px;
-  background: var(--sur-2);
+  background: #ffffff;
   padding: 12px;
 }
 
 .gp-summary-label {
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 11px;
   font-weight: 700;
 }
 
 .gp-summary-value {
   margin-top: 6px;
-  color: var(--ink);
+  color: #2c2824;
   font-size: 18px;
   font-weight: 800;
 }
@@ -2358,10 +2368,10 @@ onBeforeUnmount(() => {
 }
 
 .gp-mode-pill {
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 999px;
-  background: var(--sur);
-  color: var(--ink-3);
+  background: #ffffff;
+  color: #6b7280;
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
@@ -2370,17 +2380,17 @@ onBeforeUnmount(() => {
 }
 
 .gp-mode-pill.on {
-  border-color: var(--brand);
-  background: var(--brand-light);
-  color: var(--brand);
+  border-color: #ff6a00;
+  background: #fff0e8;
+  color: #ff6a00;
 }
 
 .gp-chart {
   position: relative;
   height: 280px;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 8px;
-  background: var(--sur-2);
+  background: #ffffff;
   padding: 12px;
 }
 
@@ -2395,12 +2405,12 @@ onBeforeUnmount(() => {
 }
 
 .gp-chart line {
-  stroke: var(--sur-3);
+  stroke: #e6e1d8;
   stroke-width: 1;
 }
 
 .gp-chart text {
-  fill: var(--ink-3);
+  fill: #6b7280;
   font-size: 11px;
 }
 
@@ -2410,7 +2420,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-hover-line {
-  stroke: var(--brand);
+  stroke: #ff6a00;
   stroke-width: 1.4;
 }
 
@@ -2420,9 +2430,9 @@ onBeforeUnmount(() => {
   z-index: 2;
   min-width: 180px;
   transform: translateX(-50%);
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 6px;
-  background: var(--sur);
+  background: #ffffff;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
   padding: 10px;
 }
@@ -2430,13 +2440,13 @@ onBeforeUnmount(() => {
 .gp-tooltip strong,
 .gp-tooltip span {
   display: block;
-  color: var(--ink);
+  color: #2c2824;
   font-size: 12px;
 }
 
 .gp-tooltip span {
   margin-top: 5px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 11px;
 }
 
@@ -2445,7 +2455,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 10px;
-  color: var(--ink-3);
+  color: #6b7280;
   font-size: 11px;
 }
 
@@ -2482,33 +2492,91 @@ onBeforeUnmount(() => {
   scrollbar-width: thin;
 }
 
+.gp-related-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.gp-related-header h3 {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.gp-related-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.gp-related-arrow {
+  display: grid;
+  width: 50px;
+  height: 28px;
+  flex: 0 0 50px;
+  place-items: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 6px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-primary));
+  cursor: pointer;
+  padding: 0;
+}
+
+.gp-related-arrow:hover {
+  background: rgb(var(--color-primary-soft));
+}
+
+.gp-related-more {
+  border: 0;
+  background: transparent;
+  color: #4a433c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.gp-related-controls button:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
 .gp-related-card {
-  flex: 0 0 220px;
+  flex: 0 0 240px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur);
+  border: 1px solid #e6e1d8;
+  border-radius: 16px;
+  background: #ffffff;
   overflow: hidden;
   cursor: pointer;
   font: inherit;
   padding: 0;
   scroll-snap-align: start;
-  text-align: left;
+  text-align: center;
   color: var(--ink);
 }
 
 .gp-related-img {
+  position: relative;
   display: flex;
   flex: 0 0 120px;
   height: 120px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  border-bottom: 1px solid var(--bdr);
-  background: var(--sur-2);
+  border-bottom: 1px solid #e6e1d8;
+  background: #ffffff;
   overflow: hidden;
   padding: 8px 8px 0;
 }
@@ -2523,7 +2591,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-related-img-text {
-  color: var(--brand);
+  color: #ff6a00;
   font-family: var(--font-serif);
   font-size: 28px;
   font-weight: 700;
@@ -2538,8 +2606,13 @@ onBeforeUnmount(() => {
 }
 
 .gp-related-name {
-  color: var(--ink);
-  font-size: 13px;
+  display: -webkit-box;
+  min-height: 41px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #2c2824;
+  font-size: 15px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -2552,37 +2625,67 @@ onBeforeUnmount(() => {
 }
 
 .gp-related-brand-chip {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
   display: inline-flex;
   flex: 0 0 auto;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 999px;
-  background: var(--brand-light);
-  color: var(--brand);
-  font-size: 13px;
-  font-weight: 700;
+  background: #2a7a6e;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.35;
   padding: 0 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.gp-related-offer {
+.gp-related-store {
   margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 11px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #ff6a00;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
   line-height: 1.4;
+  padding: 6px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gp-related-price {
   margin-top: 6px;
-  color: var(--brand);
-  font-size: 13px;
+  color: #2c2824;
+  font-size: 20px;
   font-weight: 800;
 }
 
-.gp-related-saving {
-  margin-top: 3px;
-  color: var(--brand);
-  font-size: 11px;
+.gp-related-price small {
+  margin-left: 3px;
+  color: #2c2824;
+  font-size: 12px;
   font-weight: 700;
+}
+
+.gp-related-compare {
+  min-height: 16px;
+  margin-top: 5px;
+  color: #6b7280;
+  font-size: 11px;
+  text-decoration: line-through;
+}
+
+.gp-related-saving {
+  margin-top: 5px;
+  color: #ff6a00;
+  font-size: 18px;
+  font-weight: 800;
   line-height: 1.2;
 }
 
@@ -2590,10 +2693,10 @@ onBeforeUnmount(() => {
 .gp-state {
   max-width: var(--layout-page-max-width);
   margin: 20px auto 0;
-  border: 1px solid var(--bdr);
+  border: 1px solid #e6e1d8;
   border-radius: 8px;
-  background: var(--sur);
-  color: var(--ink-3);
+  background: #ffffff;
+  color: #6b7280;
   font-size: 13px;
   padding: 12px 14px;
 }
@@ -2606,7 +2709,7 @@ onBeforeUnmount(() => {
 /* 15. 響應式 */
 @media (max-width: 1023px) {
   .offers-detail-page {
-    padding: 14px 14px 48px;
+    padding: 14px 14px calc(72px + env(safe-area-inset-bottom));
   }
 
   .gp-product-head {
@@ -2667,12 +2770,118 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 800px) {
+  .offers-detail-page {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .gp-detail-panel {
+    gap: 10px;
+  }
+
+  .gp-product-head {
+    gap: 14px;
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .gp-product-img {
+    height: 180px;
+    border-radius: 10px;
+  }
+
+  .gp-detail-title {
+    font-size: 18px;
+  }
+
+  .gp-detail-brand-chip {
+    font-size: 13px;
+  }
+
+  .gp-best-hero {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+  }
+
+  .gp-best-hero-price {
+    align-self: flex-end;
+    font-size: 22px;
+  }
+
+  .gp-detail-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .gp-detail-card h3 {
+    font-size: 17px;
+  }
+
+  .gp-price-table {
+    font-size: 12px;
+  }
+
+  .gp-price-table th,
+  .gp-price-table td {
+    padding: 9px 6px;
+  }
+
+  .gp-price-table th:last-child,
+  .gp-price-table td:last-child {
+    text-align: right;
+  }
+
+  .gp-related-arrow {
+    width: 75px;
+    flex-basis: 75px;
+  }
+
+  .gp-related-scroll {
+    gap: 10px;
+    margin-right: -2px;
+    padding-right: 2px;
+    scrollbar-width: none;
+  }
+
+  .gp-related-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gp-related-card {
+    flex-basis: 68%;
+    border-radius: 14px;
+  }
+
+  .gp-related-img {
+    flex-basis: 120px;
+    height: 120px;
+  }
+
+  .gp-related-body {
+    padding: 12px;
+  }
+
+  .gp-related-name {
+    font-size: 14px;
+  }
+
+  .gp-related-price,
+  .gp-related-saving {
+    font-size: 18px;
+  }
+}
+
 /* 16. 夜間護眼色 */
-:global(html[data-theme="night"]) .gp-product-img,
-:global(html[data-theme="night"]) .gp-related-img,
+:global(html[data-theme="night"]) .gp-product-img {
+  background: #ffe8d6;
+}
+
 :global(html[data-theme="night"]) .gp-chart,
 :global(html[data-theme="night"]) .gp-chart rect {
-  background: rgb(42 48 56);
+  background: #ffffff;
 }
 
 :global(html[data-theme="night"]) .gp-product-img img,
@@ -2682,6 +2891,6 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-theme="night"]) .gp-chart line {
-  stroke: rgb(62 70 80);
+  stroke: #e6e1d8;
 }
 </style>

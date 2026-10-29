@@ -2,19 +2,37 @@
  * 超市優惠顯示工具測試。
  * 1. 確認已記錄門店不會因部分價格資料缺失而消失。
  * 2. 確認第二低價優勢只標記唯一最低價門店。
+ * 3. 確認日期於所有語系固定顯示為年月日。
  */
 import { describe, expect, it } from 'vitest';
 
 import type { SupermarketProduct, SupermarketStorePrice } from '@/model/supermarket-offers';
 
 import {
+  formatSupermarketDate,
   supermarketSecondPriceAdvantageRate,
   supermarketSecondPriceAdvantageStore,
   supermarketSecondPriceAdvantageStores,
   supermarketStorePrices,
 } from './supermarket-offers';
 
-// 1. 補齊已有門店的後備價格列。
+// 1. 驗證價格情報日期固定使用年月日順序。
+describe('formatSupermarketDate', () => {
+  it('formats snapshot dates as YYYY/MM/DD', () => {
+    expect(formatSupermarketDate('2026-10-09')).toBe('2026/10/09');
+    expect(formatSupermarketDate('2026-10-09', 'en')).toBe('2026/10/09');
+    expect(formatSupermarketDate('2024-02-29')).toBe('2024/02/29');
+  });
+
+  it('keeps invalid values unchanged', () => {
+    expect(formatSupermarketDate('invalid-date')).toBe('invalid-date');
+    expect(formatSupermarketDate('2026-02-29')).toBe('2026-02-29');
+    expect(formatSupermarketDate('2026-13-09')).toBe('2026-13-09');
+    expect(formatSupermarketDate(undefined)).toBe('');
+  });
+});
+
+// 2. 補齊已有門店的後備價格列。
 describe('supermarketStorePrices', () => {
   it('keeps every recorded store when explicit prices cover only one store', () => {
     const product: SupermarketProduct = {
@@ -54,7 +72,7 @@ describe('supermarketStorePrices', () => {
   });
 });
 
-// 2. 驗證第二低價優勢標籤對應最低價門店。
+// 3. 驗證第二低價優勢標籤對應最低價門店。
 describe('supermarketSecondPriceAdvantageStore', () => {
   const prices: SupermarketStorePrice[] = [
     {

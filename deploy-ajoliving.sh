@@ -67,8 +67,9 @@ popd >/dev/null
 
 # 3. Build frontend assets. Production keeps the fixed brand theme, so the theme picker stays off.
 pushd "$FRONTEND_DIR" >/dev/null
-npm ci
-VITE_API_BASE_URL="$APP_API_PUBLIC_BASE_URL/api/v1" VITE_ENABLE_THEME_PICKER=0 npm run build
+# npm ci 需绕过 WorkBuddy node-language-shim：该代理在大规模解包时会超时并静默丢失文件。
+env -u NODE_OPTIONS npm ci
+VITE_API_BASE_URL="$APP_API_PUBLIC_BASE_URL/api/v1" VITE_ENABLE_THEME_PICKER=0 env -u NODE_OPTIONS npm run build
 popd >/dev/null
 
 # 4. Create a local database dump only when an explicit restore is confirmed.

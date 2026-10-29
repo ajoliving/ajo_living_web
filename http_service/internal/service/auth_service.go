@@ -94,7 +94,7 @@ type RegistrationAvailabilityParams struct {
 	PhoneNumber      string
 }
 
-// 6.2 RegistrationAvailabilityResult reports whether each submitted registration identity is free in AJO and iSmart.
+// 6.2 RegistrationAvailabilityResult reports whether each submitted registration identity is free in iSmart.
 type RegistrationAvailabilityResult struct {
 	EmailAvailable bool `json:"email_available"`
 	PhoneAvailable bool `json:"phone_available"`
@@ -504,10 +504,28 @@ func (s *AuthService) RegisterWithEmail(ctx context.Context, params EmailPasswor
 		}
 	}
 
+	// 註冊成功後，將以電話或電郵命中的待授權記錄轉為等待確認；此步驟失敗不影響註冊結果。
+	s.processPendingSubaccountAuthorizations(ctx, user.ID)
+
 	return s.issueAuthResult(ctx, &user, &profile)
 }
 
-// 21.1 CheckRegistrationAvailability checks AJO and iSmart email and phone availability before registration.
+// 21.0 processPendingSubaccountAuthorizations promotes matched subaccount invitations after registration.
+func (s *AuthService) processPendingSubaccountAuthorizations(ctx context.Context, userID int64) {
+	defer func() {
+		if recovered := recover(); recovered != nil && s.runtime.Logger != nil {
+			s.runtime.Logger.Error("panic while processing subaccount authorizations", "user_id", userID, "panic", recovered)
+		}
+	}()
+	authorizationService := NewIsmartSubaccountAuthorizationService(s.runtime)
+	if err := authorizationService.ProcessRegistrationForPendingAuthorizations(ctx, userID); err != nil {
+		if s.runtime.Logger != nil {
+			s.runtime.Logger.Warn("failed to process pending subaccount authorizations", "user_id", userID, "error", err)
+		}
+	}
+}
+
+// 21.1 CheckRegistrationAvailability checks iSmart email and phone availability before registration.
 func (s *AuthService) CheckRegistrationAvailability(ctx context.Context, params RegistrationAvailabilityParams) (*RegistrationAvailabilityResult, error) {
 	email := normalizeEmail(params.Email)
 	phoneCountryCode := normalizePhoneCountryCode(params.PhoneCountryCode)
@@ -519,31 +537,18 @@ func (s *AuthService) CheckRegistrationAvailability(ctx context.Context, params 
 		return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 	}
 
-	result := &RegistrationAvailabilityResult{EmailAvailable: true, PhoneAvailable: true}
-	var count int64
-	if email != "" {
-		if err := s.runtime.DB.WithContext(ctx).Model(&model.UserCredential{}).Where("email = ?", email).Count(&count).Error; err != nil {
-			return nil, errcode.New(errcode.CodeInternalError, "failed to validate registration email")
-		}
-		result.EmailAvailable = count == 0
-	}
-	if err := s.runtime.DB.WithContext(ctx).Model(&model.User{}).Where("phone_country_code = ? AND phone_number = ?", phoneCountryCode, phoneNumber).Count(&count).Error; err != nil {
-		return nil, errcode.New(errcode.CodeInternalError, "failed to validate registration phone")
-	}
-	result.PhoneAvailable = count == 0
-	if s.runtime.Config != nil && strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL) != "" {
-		ismartAvailability, err := NewIsmartExternalService(s.runtime).CheckRegistrationContact(ctx, IsmartRegistrationContactParams{
-			Email: email,
-			Phone: phoneCountryCode + phoneNumber,
-		})
-		if err != nil {
-			return nil, err
-		}
-		result.EmailAvailable = result.EmailAvailable && ismartAvailability.EmailAvailable
-		result.PhoneAvailable = result.PhoneAvailable && ismartAvailability.PhoneAvailable
+	ismartAvailability, err := NewIsmartExternalService(s.runtime).CheckRegistrationContact(ctx, IsmartRegistrationContactParams{
+		Email: email,
+		Phone: phoneCountryCode + phoneNumber,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	return &RegistrationAvailabilityResult{
+		EmailAvailable: ismartAvailability.EmailAvailable,
+		PhoneAvailable: ismartAvailability.PhoneAvailable,
+	}, nil
 }
 
 // 21.2 ensureEmailRegistrationAvailable checks local identities before creating an iSmart account.
@@ -1221,6 +1226,11 @@ func (s *AuthService) upsertUserByIsmart(ctx context.Context, ismartMsg *IsmartM
 		}
 
 		if user.ID == 0 {
+			if phoneCountryCode != "" && phoneNumber != "" {
+				if err := s.ensurePhoneAvailableForIsmart(ctx, tx, 0, phoneCountryCode, phoneNumber); err != nil {
+					return err
+				}
+			}
 			ajoIsStaff := s.isBootstrapStaffPhone(phoneCountryCode, phoneNumber)
 			user = model.User{
 				PublicID:         utils.NewPublicID(),
@@ -1414,15 +1424,18 @@ func isIsmartCredentialError(err error) bool {
 		appErr.Message == "ismart account or password is incorrect"
 }
 
-// 38. callPOSLogin sends the credential check to the configured POS Web endpoint.
+// 38. callPOSLogin sends the credential check to the iSmart integration login endpoint.
 func (s *AuthService) callPOSLogin(ctx context.Context, account string, password string) (*IsmartMessage, error) {
 	loginURL := strings.TrimSpace(s.runtime.Config.POSLoginURL)
 	if loginURL == "" {
-		baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.POSAPIBaseURL), "/")
+		baseURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.IsmartIntegrationAPIBaseURL), "/")
 		if baseURL == "" {
-			baseURL = "https://pos.ismart.skylinedances.com/api"
+			baseURL = strings.TrimRight(strings.TrimSpace(s.runtime.Config.POSAPIBaseURL), "/")
 		}
-		loginURL = baseURL + "/poslogin"
+		if baseURL == "" {
+			baseURL = "https://ismart.ajoliving.com/api/v1/integration"
+		}
+		loginURL = baseURL + "/auth/login/"
 	}
 
 	usernameField := strings.TrimSpace(s.runtime.Config.POSLoginUsernameField)
@@ -1435,8 +1448,10 @@ func (s *AuthService) callPOSLogin(ctx context.Context, account string, password
 	}
 
 	loginType := "username"
-	if looksLikePhoneAccount(account) {
+	if _, _, isPhone := parseLoginPhoneIdentifier(account); isPhone {
 		loginType = "phone"
+	} else if isValidEmail(strings.ToLower(strings.TrimSpace(account))) {
+		loginType = "email"
 	}
 	payload := map[string]string{
 		usernameField: account,
@@ -1837,16 +1852,26 @@ func isPlaceholderPhone(countryCode string) bool {
 	return value == "" || value == "email" || value == "ismart"
 }
 
-// 49. ensurePhoneAvailableForIsmart keeps ismart identity authoritative when rebinding a phone.
+// 49. ensurePhoneAvailableForIsmart reclaims the phone from stale local-only users so
+// the ismart identity stays authoritative. Local accounts are no longer validated for
+// login, so a phone held by an old local record is reset to a placeholder instead of
+// blocking the ismart binding.
 func (s *AuthService) ensurePhoneAvailableForIsmart(ctx context.Context, tx *gorm.DB, userID int64, countryCode string, phoneNumber string) error {
-	var count int64
-	if err := tx.WithContext(ctx).Model(&model.User{}).
+	var conflicting []model.User
+	if err := tx.WithContext(ctx).
 		Where("id <> ? AND phone_country_code = ? AND phone_number = ?", userID, countryCode, phoneNumber).
-		Count(&count).Error; err != nil {
+		Find(&conflicting).Error; err != nil {
 		return err
 	}
-	if count > 0 {
-		return errcode.New(errcode.CodeValidationError, "phone number is already registered")
+	for _, stale := range conflicting {
+		updates := map[string]any{
+			"phone_country_code": "ismart",
+			"phone_number":       fmt.Sprintf("%d", stale.ID),
+			"is_verified_phone":  false,
+		}
+		if err := tx.Model(&model.User{}).Where("id = ?", stale.ID).Updates(updates).Error; err != nil {
+			return err
+		}
 	}
 
 	return nil

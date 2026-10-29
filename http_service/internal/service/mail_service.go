@@ -2,7 +2,7 @@
  * Email delivery provider.
  * 1. Define mail sender boundary for auth verification emails.
  * 2. Provide mock and SMTP implementations.
- * 3. Build plain text RFC822 messages for outbound SMTP delivery.
+ * 3. Build plain text and HTML RFC822 messages for outbound SMTP delivery.
  */
 package service
 
@@ -19,9 +19,10 @@ import (
 	"ajoliving_web/http_service/internal/config"
 )
 
-// 1. MailSender sends plain text emails.
+// 1. MailSender sends plain text and HTML emails.
 type MailSender interface {
 	Send(ctx context.Context, recipient string, subject string, body string) error
+	SendHTML(ctx context.Context, recipient string, subject string, htmlBody string) error
 }
 
 // 2. MockMailSender accepts email delivery without external side effects.
@@ -46,8 +47,23 @@ func (s *MockMailSender) Send(context.Context, string, string, string) error {
 	return nil
 }
 
+// 5.1 SendHTML accepts mock HTML email delivery.
+func (s *MockMailSender) SendHTML(context.Context, string, string, string) error {
+	return nil
+}
+
 // 6. Send sends one plain text email through SMTP.
 func (s *SMTPMailSender) Send(_ context.Context, recipient string, subject string, body string) error {
+	return s.deliver(recipient, subject, body, "text/plain")
+}
+
+// 6.1 SendHTML sends one HTML email through SMTP.
+func (s *SMTPMailSender) SendHTML(_ context.Context, recipient string, subject string, htmlBody string) error {
+	return s.deliver(recipient, subject, htmlBody, "text/html")
+}
+
+// 6.2 deliver sends one email with the given content type through SMTP.
+func (s *SMTPMailSender) deliver(recipient string, subject string, body string, contentType string) error {
 	if strings.TrimSpace(recipient) == "" {
 		return nil
 	}
@@ -55,7 +71,7 @@ func (s *SMTPMailSender) Send(_ context.Context, recipient string, subject strin
 		return err
 	}
 
-	message := buildEmailMessage(s.config.SMTPFrom, recipient, subject, body)
+	message := buildEmailMessage(s.config.SMTPFrom, recipient, subject, body, contentType)
 	conn, err := smtp.Dial(s.config.SMTPAddress())
 	if err != nil {
 		return fmt.Errorf("dial smtp server: %w", err)
@@ -121,14 +137,14 @@ func validateSMTPConfig(cfg *config.Config) error {
 	return nil
 }
 
-// 8. buildEmailMessage creates the RFC822 plain text message.
-func buildEmailMessage(from string, recipient string, subject string, body string) []byte {
+// 8. buildEmailMessage creates the RFC822 message with the given content type.
+func buildEmailMessage(from string, recipient string, subject string, body string, contentType string) []byte {
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	buffer.WriteString(fmt.Sprintf("To: %s\r\n", recipient))
 	buffer.WriteString(fmt.Sprintf("Subject: %s\r\n", mime.QEncoding.Encode("UTF-8", subject)))
 	buffer.WriteString("MIME-Version: 1.0\r\n")
-	buffer.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buffer.WriteString(fmt.Sprintf("Content-Type: %s; charset=UTF-8\r\n", contentType))
 	buffer.WriteString("Content-Transfer-Encoding: 8bit\r\n")
 	buffer.WriteString("\r\n")
 	buffer.WriteString(body)

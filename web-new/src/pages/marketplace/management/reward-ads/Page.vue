@@ -5,7 +5,6 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { fetchStaffRewardAds, renewStaffRewardAd, updateStaffRewardAd } from '@/httpapis/wallet';
 import type { StaffRewardAdResponse, StaffRewardAdType } from '@/model/wallet';
@@ -21,8 +20,10 @@ import {
 } from '../composables/useStaffManagementList';
 import ManagementPagination from '../widgets/ManagementPagination.vue';
 import '../styles.scss';
+import RewardAdEditorPanel from '../wallet/widgets/RewardAdEditorPanel.vue';
+import { useRewardAdEditorPage } from '../wallet/wallet';
+import '../wallet/styles.scss';
 
-const router = useRouter();
 const preferenceStore = usePreferenceStore();
 const adTypeFilter = ref<StaffRewardAdType | ''>('');
 
@@ -60,6 +61,18 @@ const {
   updateSuccessKey: 'marketplace.management.walletAdStatusUpdated',
 });
 const renewalDialogAd = ref<StaffRewardAdResponse | null>(null);
+const isAdEditorOpen = ref(false);
+const {
+  adForm,
+  isEditingAd,
+  loadingAd,
+  openRewardAd,
+  resetRewardAdForm,
+  saveRewardAd,
+  savingAd,
+  stageRewardAdMedia,
+  uploadingMedia,
+} = useRewardAdEditorPage();
 const renewalDays = ref(14);
 const renewing = ref(false);
 const renewalDayOptions = [7, 14, 30, 60, 90];
@@ -110,14 +123,19 @@ const formatAdType = (ad: StaffRewardAdResponse): string => {
 const formatPoints = (value: number): string =>
   formatAjoPoints(value, t('common.brand.pointsName'), preferenceStore.locale);
 
-// 6. 跳轉廣告編輯頁
 const editRewardAd = async (ad: StaffRewardAdResponse): Promise<void> => {
-  await router.push(`/account/marketplace/management/reward-ad-editor/${ad.task_id}`);
+  isAdEditorOpen.value = true;
+  await openRewardAd(ad.task_id);
 };
 
-// 7. 跳轉新增廣告頁
 const createRewardAd = async (): Promise<void> => {
-  await router.push('/account/marketplace/management/reward-ad-editor');
+  isAdEditorOpen.value = true;
+  await openRewardAd();
+};
+
+const closeAdEditor = async (): Promise<void> => {
+  isAdEditorOpen.value = false;
+  resetRewardAdForm();
 };
 
 // 8. 啟停廣告任務
@@ -416,6 +434,19 @@ const submitRenewal = async (): Promise<void> => {
           </section>
         </div>
       </Transition>
+    </Teleport>
+    <Teleport to="body">
+      <RewardAdEditorPanel
+        v-if="isAdEditorOpen"
+        :ad-form="adForm"
+        :is-editing-ad="isEditingAd"
+        :saving-ad="savingAd || uploadingMedia || loadingAd"
+        :t="t"
+        @close="closeAdEditor"
+        @reset="resetRewardAdForm"
+        @save="saveRewardAd"
+        @stage-media="stageRewardAdMedia"
+      />
     </Teleport>
   </section>
 </template>

@@ -88,16 +88,20 @@ export const formatSupermarketHKPrice = (
   })}`;
 };
 
-// 5. 格式化日期
-export const formatSupermarketDate = (value: string | undefined, locale: AppLocale = 'zh-HK'): string => {
+// 5. 固定以年月日順序格式化日期。
+export const formatSupermarketDate = (value: string | undefined, _locale: AppLocale = 'zh-HK'): string => {
   if (!value) return '';
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value;
+  const [, year, month, day] = match;
   const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== Number(year)
+    || date.getMonth() + 1 !== Number(month)
+    || date.getDate() !== Number(day)
+  ) return value;
+  return `${year}/${month}/${day}`;
 };
 
 // 6. 格式化日期時間

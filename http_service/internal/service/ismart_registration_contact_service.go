@@ -1,7 +1,7 @@
 /*
  * iSmart 註冊聯絡方式檢查服務。
- * 1. 以 iSmart integration API 檢查電郵及手提電話是否可建立帳戶。
- * 2. 副戶授權只查 iSmart：電郵與電話分別走 check-contact；電話先按提交的國際號碼查，再兼容舊格式。
+ * 1. 註冊預檢與副戶授權統一復用 CheckSubaccountContacts，走同一條 subaccount integration check-contact 上游與解析路徑。
+ * 2. 副戶授權以一次 check-contact 同時檢查電郵及電話，電話先規範化為 E.164。
  * 3. 將上游回應收斂為 AJO 穩定的帳戶可用性與副戶解析結果。
  */
 package service
@@ -45,26 +45,19 @@ type IsmartSubaccountContactResult struct {
 	ConflictReason string `json:"conflict_reason,omitempty"`
 }
 
-// 5. CheckRegistrationContact checks whether iSmart can create an account with the submitted contact values.
+// 5. CheckRegistrationContact checks iSmart contact availability via the shared subaccount check-contact path.
 func (s *IsmartExternalService) CheckRegistrationContact(ctx context.Context, params IsmartRegistrationContactParams) (*IsmartRegistrationContactResult, error) {
-	result, err := s.postIntegration(ctx, "/auth/check-contact/", map[string]any{
-		"email": normalizeEmail(params.Email),
-		"phone": strings.TrimSpace(params.Phone),
+	result, err := s.CheckSubaccountContacts(ctx, IsmartSubaccountContactParams{
+		Email: params.Email,
+		Phone: params.Phone,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	payload := paymentMapValue(result.Payload)
-	emailAvailable, emailOK := payload["email_available"].(bool)
-	phoneAvailable, phoneOK := payload["phone_available"].(bool)
-	if !emailOK || !phoneOK {
-		return nil, errcode.New(errcode.CodeInternalError, "invalid ismart contact availability response")
-	}
-
 	return &IsmartRegistrationContactResult{
-		EmailAvailable: emailAvailable,
-		PhoneAvailable: phoneAvailable,
+		EmailAvailable: !result.EmailExists,
+		PhoneAvailable: !result.PhoneExists,
 	}, nil
 }
 
@@ -81,20 +74,48 @@ func (s *IsmartExternalService) CheckSubaccountContacts(ctx context.Context, par
 		if !isValidEmail(email) {
 			return nil, errcode.New(errcode.CodeValidationError, "valid email is required")
 		}
-		userID, err := s.lookupSubaccountContactUserID(ctx, map[string]any{"email": email}, "email_available", "email_user_id")
-		if err != nil {
-			return nil, err
-		}
-		result.EmailUserID = userID
-		result.EmailExists = userID > 0
 	}
 	if phone != "" {
-		userID, err := s.lookupSubaccountPhoneUserID(ctx, phone)
-		if err != nil {
-			return nil, err
+		phone = normalizeSubaccountRegistrationPhone(phone)
+		result.Phone = phone
+	}
+
+	payload := map[string]any{}
+	if email != "" {
+		payload["email"] = email
+	}
+	if phone != "" {
+		payload["phone"] = phone
+	}
+	upstream, err := s.postSubaccountIntegration(ctx, "/auth/check-contact/", payload)
+	if err != nil {
+		return nil, err
+	}
+	data := paymentMapValue(upstream.Payload)
+	if email != "" {
+		available, ok := data["email_available"].(bool)
+		if !ok {
+			return nil, errcode.New(errcode.CodeInternalError, "invalid ismart email contact response")
 		}
-		result.PhoneUserID = userID
-		result.PhoneExists = userID > 0
+		result.EmailExists = !available
+		result.EmailUserID = paymentInt64Value(data["email_user_id"])
+		if result.EmailUserID <= 0 {
+			result.EmailUserID = paymentInt64Value(data["user_id"])
+		}
+	}
+	if phone != "" {
+		available, ok := data["phone_available"].(bool)
+		if !ok {
+			return nil, errcode.New(errcode.CodeInternalError, "invalid ismart phone contact response")
+		}
+		result.PhoneExists = !available
+		result.PhoneUserID = paymentInt64Value(data["phone_user_id"])
+		if result.PhoneUserID <= 0 {
+			result.PhoneUserID = paymentInt64Value(data["user_id"])
+		}
+	}
+	if email == "" || phone == "" {
+		return result, nil
 	}
 	switch {
 	case result.EmailExists && result.PhoneExists && result.EmailUserID == result.PhoneUserID:
@@ -103,7 +124,7 @@ func (s *IsmartExternalService) CheckSubaccountContacts(ctx context.Context, par
 	case result.EmailExists && result.PhoneExists:
 		result.ConflictReason = "target phone and email belong to different ismart users"
 	case result.EmailExists || result.PhoneExists:
-		result.ConflictReason = "enter the other contact for the same ismart account"
+		result.ConflictReason = "target phone and email do not match the same ismart account"
 	}
 	return result, nil
 }
@@ -116,123 +137,23 @@ func (s *IsmartExternalService) ResolveSubaccountTargetUser(ctx context.Context,
 		return 0, errcode.New(errcode.CodeValidationError, "valid target phone and email are required")
 	}
 
-	emailUserID, err := s.lookupSubaccountContactUserID(ctx, map[string]any{"email": email}, "email_available", "email_user_id")
+	result, err := s.CheckSubaccountContacts(ctx, IsmartSubaccountContactParams{Phone: phone, Email: email})
 	if err != nil {
 		return 0, err
 	}
-	if emailUserID <= 0 {
+	if !result.EmailExists || result.EmailUserID <= 0 {
 		return 0, errcode.New(errcode.CodeNotFound, "ismart target user was not found for the supplied email")
 	}
-
-	phoneUserID, err := s.lookupSubaccountPhoneUserID(ctx, phone)
-	if err != nil {
-		return 0, err
-	}
-	if phoneUserID <= 0 {
+	if !result.PhoneExists || result.PhoneUserID <= 0 {
 		return 0, errcode.New(errcode.CodeNotFound, "ismart target user was not found for the supplied phone")
 	}
-	if phoneUserID != emailUserID {
+	if result.PhoneUserID != result.EmailUserID {
 		return 0, errcode.New(errcode.CodeValidationError, "target phone and email belong to different ismart users")
 	}
-	return phoneUserID, nil
+	return result.PhoneUserID, nil
 }
 
-// 8. lookupSubaccountPhoneUserID finds one iSmart user across stored and legacy phone formats.
-func (s *IsmartExternalService) lookupSubaccountPhoneUserID(ctx context.Context, phone string) (int64, error) {
-	var matchedID int64
-	for _, candidate := range ismartSubaccountPhoneCandidates(phone) {
-		userID, err := s.lookupSubaccountContactUserID(ctx, map[string]any{"phone": candidate}, "phone_available", "phone_user_id")
-		if err != nil {
-			if isIsmartPhoneNormalizationError(err) {
-				continue
-			}
-			return 0, err
-		}
-		if userID <= 0 {
-			continue
-		}
-		if matchedID > 0 && matchedID != userID {
-			return 0, errcode.New(errcode.CodeValidationError, "target phone matches multiple ismart users")
-		}
-		matchedID = userID
-	}
-	return matchedID, nil
-}
-
-// 9. lookupSubaccountContactUserID reads one check-contact field from the subaccount API.
-func (s *IsmartExternalService) lookupSubaccountContactUserID(ctx context.Context, payload map[string]any, availableKey string, userIDKey string) (int64, error) {
-	result, err := s.postSubaccountIntegration(ctx, "/auth/check-contact/", payload)
-	if err != nil {
-		return 0, err
-	}
-	data := paymentMapValue(result.Payload)
-	if available, ok := data[availableKey].(bool); ok && available {
-		return 0, nil
-	}
-	for _, key := range []string{userIDKey, "user_id", "target_user_id"} {
-		if id := paymentInt64Value(data[key]); id > 0 {
-			return id, nil
-		}
-	}
-	return 0, nil
-}
-
-// 10. ismartSubaccountPhoneCandidates builds iSmart phone lookup values for one submitted number.
-func ismartSubaccountPhoneCandidates(phone string) []string {
-	raw := strings.TrimSpace(phone)
-	if raw == "" {
-		return nil
-	}
-
-	digits := digitsOnly(raw)
-	national := ismartSubaccountNationalNumber(digits)
-	candidates := make([]string, 0, 12)
-	seen := map[string]struct{}{}
-	add := func(value string) {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return
-		}
-		if _, exists := seen[value]; exists {
-			return
-		}
-		seen[value] = struct{}{}
-		candidates = append(candidates, value)
-	}
-
-	add(raw)
-	add(digits)
-	if digits != "" {
-		add("+" + digits)
-	}
-	add(national)
-	if national != "" {
-		add("+" + national)
-		add("+86" + national)
-		add("86" + national)
-		add("+852" + national)
-		add("852" + national)
-		add("+1" + national)
-		add("1" + national)
-	}
-	return candidates
-}
-
-// 11. ismartSubaccountNationalNumber strips known country prefixes from one phone value.
-func ismartSubaccountNationalNumber(digits string) string {
-	switch {
-	case strings.HasPrefix(digits, "86") && len(digits) == 13:
-		return digits[2:]
-	case strings.HasPrefix(digits, "852") && len(digits) == 11:
-		return digits[3:]
-	case strings.HasPrefix(digits, "1") && len(digits) == 12:
-		return digits[1:]
-	default:
-		return digits
-	}
-}
-
-// 10. digitsOnly keeps numeric characters from one phone value.
+// 8. digitsOnly keeps numeric characters from one phone value.
 func digitsOnly(value string) string {
 	var builder strings.Builder
 	for _, item := range value {
@@ -241,16 +162,4 @@ func digitsOnly(value string) string {
 		}
 	}
 	return builder.String()
-}
-
-// 11. isIsmartPhoneNormalizationError ignores invalid candidate formats from iSmart.
-func isIsmartPhoneNormalizationError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := err.Error()
-	if appErr, ok := err.(*errcode.AppError); ok && appErr != nil {
-		message = appErr.Message
-	}
-	return strings.Contains(message, "電話號碼格式無效") || strings.Contains(message, "未能識別國家碼")
 }

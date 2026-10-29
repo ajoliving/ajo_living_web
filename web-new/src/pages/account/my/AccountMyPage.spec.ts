@@ -140,6 +140,70 @@ vi.mock('@/httpapis/me', () => ({
   updateMemberIsmartProfile: mocks.updateMemberIsmartProfile,
 }));
 
+const initialMemberSession = JSON.parse(JSON.stringify(mocks.session.me)) as typeof mocks.session.me;
+
+// 0. 建立可覆蓋同樓及跨樓單位的會員物業資料
+const configureLinkedPropertyFixture = (): void => {
+  const buildingA = '1234500';
+  const buildingB = '1234600';
+  const unitA = '12345000401';
+  const unitG = '12345000407';
+  const unitB = '12346000201';
+  const me = JSON.parse(JSON.stringify(initialMemberSession)) as typeof initialMemberSession;
+
+  me.primary_community = {
+    public_id: buildingA,
+    name_zh: '測試甲大廈',
+    name_en: 'Test Building A',
+    address_text: '測試甲大廈',
+  };
+  me.bound_building_ids = [buildingA, buildingB];
+  me.bound_flat_unit_ids = [unitA, unitG, unitB];
+  me.residence_floor = '04';
+  me.residence_unit = 'G';
+  me.ismart_msg = {
+    ...me.ismart_msg,
+    client_building_flat_units_permissions: [unitA, unitG, unitB],
+  };
+  mocks.session.me = me;
+
+  mocks.fetchMemberBuildings.mockResolvedValue([
+    { building_id: buildingA, buildname_chi: '測試甲大廈', buildname: 'Test Building A' },
+    { building_id: buildingB, buildname_chi: '測試乙大廈', buildname: 'Test Building B' },
+  ]);
+  mocks.fetchMemberUnits.mockImplementation(async (buildingID: string) => {
+    if (buildingID === buildingA) {
+      return [
+        { unit_id: unitA, floor: '04', unit: 'A' },
+        { unit_id: unitG, floor: '04', unit: 'G' },
+      ];
+    }
+    if (buildingID === buildingB) {
+      return [{ unit_id: unitB, floor: '02', unit: 'A' }];
+    }
+    return [];
+  });
+  mocks.updateMe.mockImplementation(async (payload: {
+    primary_community_id: string;
+    primary_community_name: string;
+    residence_floor: string;
+    residence_unit: string;
+  }) => ({
+    data: {
+      data: {
+        ...mocks.session.me,
+        primary_community: {
+          ...mocks.session.me.primary_community,
+          public_id: payload.primary_community_id,
+          name_zh: payload.primary_community_name,
+        },
+        residence_floor: payload.residence_floor,
+        residence_unit: payload.residence_unit,
+      },
+    },
+  }));
+};
+
 // 1. 掛載會員中心並等待初始化請求完成
 const mountAccountPage = async () => {
   const wrapper = mount(AccountMyPage, {
@@ -173,6 +237,7 @@ describe('AccountMyPage lazy data loading', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     applyLocale('zh-HK');
+    mocks.session.me = JSON.parse(JSON.stringify(initialMemberSession)) as typeof initialMemberSession;
     mocks.route.path = '/account/profile';
     mocks.route.query = {};
     mocks.fetchMemberBuildings.mockReset();
@@ -486,7 +551,7 @@ describe('AccountMyPage lazy data loading', () => {
     const wrapper = await mountAccountPage();
 
     const bindButton = wrapper.findAll('.work-property-table button').find((item) =>
-      item.text().includes(i18n.global.t('account.center.account.bindProperty')),
+      item.text().includes(i18n.global.t('account.center.account.switchProperty')),
     );
     expect(bindButton).toBeTruthy();
     await bindButton!.trigger('click');
@@ -498,6 +563,145 @@ describe('AccountMyPage lazy data loading', () => {
       residence_floor: '01',
       residence_unit: 'C',
     });
+  });
+
+  // 4.1 已連結物業以獨立切換欄顯示目前狀態
+  it('renders a separate property switch column and marks only the current unit', async () => {
+    configureLinkedPropertyFixture();
+    const wrapper = await mountAccountPage();
+    const switchLabel = i18n.global.t('account.center.account.switchProperty');
+    const currentLabel = i18n.global.t('account.center.account.currentProperty');
+
+    const headers = wrapper.findAll('.work-property-table th').map((item) => item.text());
+    expect(headers).toContain(switchLabel);
+    expect(headers).not.toContain(currentLabel);
+
+    const rows = wrapper.findAll('.work-property-table tbody tr');
+    const currentRow = rows.find((item) => item.text().includes('測試甲大廈 / 04 / G'));
+    const sameBuildingRow = rows.find((item) => item.text().includes('測試甲大廈 / 04 / A'));
+    const crossBuildingRow = rows.find((item) => item.text().includes('測試乙大廈 / 02 / A'));
+
+    expect(currentRow?.text()).toContain(currentLabel);
+    expect(sameBuildingRow?.text()).toContain(switchLabel);
+    expect(crossBuildingRow?.text()).toContain(switchLabel);
+  });
+
+  // 4.2 同樓及跨樓切換沿用完整物業上下文
+  it('switches to same-building and cross-building units after a successful save', async () => {
+    configureLinkedPropertyFixture();
+    const wrapper = await mountAccountPage();
+    const switchLabel = i18n.global.t('account.center.account.switchProperty');
+    const currentLabel = i18n.global.t('account.center.account.currentProperty');
+
+    const sameBuildingRow = wrapper.findAll('.work-property-table tbody tr')
+      .find((item) => item.text().includes('測試甲大廈 / 04 / A'));
+    const sameBuildingButton = sameBuildingRow?.find('button');
+    expect(sameBuildingButton?.text()).toContain(switchLabel);
+    await sameBuildingButton!.trigger('click');
+    await flushPromises();
+
+    expect(mocks.updateMe).toHaveBeenLastCalledWith({
+      primary_community_id: '1234500',
+      primary_community_name: '測試甲大廈',
+      residence_floor: '04',
+      residence_unit: 'A',
+    });
+    expect(wrapper.findAll('.work-property-table tbody tr')
+      .find((item) => item.text().includes('測試甲大廈 / 04 / A'))?.text()).toContain(currentLabel);
+
+    const crossBuildingRow = wrapper.findAll('.work-property-table tbody tr')
+      .find((item) => item.text().includes('測試乙大廈 / 02 / A'));
+    const crossBuildingButton = crossBuildingRow?.find('button');
+    expect(crossBuildingButton?.text()).toContain(switchLabel);
+    await crossBuildingButton!.trigger('click');
+    await flushPromises();
+
+    expect(mocks.updateMe).toHaveBeenLastCalledWith({
+      primary_community_id: '1234600',
+      primary_community_name: '測試乙大廈',
+      residence_floor: '02',
+      residence_unit: 'A',
+    });
+    expect(wrapper.findAll('.work-property-table tbody tr')
+      .find((item) => item.text().includes('測試乙大廈 / 02 / A'))?.text()).toContain(currentLabel);
+  });
+
+  // 4.3 切換失敗不提前改變目前物業標記
+  it('keeps the current property marker when switching fails', async () => {
+    configureLinkedPropertyFixture();
+    mocks.updateMe.mockRejectedValueOnce(new Error('save failed'));
+    const wrapper = await mountAccountPage();
+    const switchLabel = i18n.global.t('account.center.account.switchProperty');
+    const currentLabel = i18n.global.t('account.center.account.currentProperty');
+    const rows = () => wrapper.findAll('.work-property-table tbody tr');
+
+    const targetRow = rows().find((item) => item.text().includes('測試甲大廈 / 04 / A'));
+    await targetRow?.find('button').trigger('click');
+    await flushPromises();
+
+    expect(rows().find((item) => item.text().includes('測試甲大廈 / 04 / G'))?.text()).toContain(currentLabel);
+    expect(rows().find((item) => item.text().includes('測試甲大廈 / 04 / A'))?.text()).toContain(switchLabel);
+  });
+
+  // 4.4 保存期間忽略重複切換提交
+  it('does not submit the same property switch more than once while saving', async () => {
+    configureLinkedPropertyFixture();
+    let resolveUpdate: ((value: unknown) => void) | undefined;
+    mocks.updateMe.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveUpdate = resolve;
+    }));
+    const wrapper = await mountAccountPage();
+    const targetRow = wrapper.findAll('.work-property-table tbody tr')
+      .find((item) => item.text().includes('測試甲大廈 / 04 / A'));
+    const button = targetRow?.find('button');
+    expect(button?.exists()).toBe(true);
+
+    await button!.trigger('click');
+    await button!.trigger('click');
+    expect(mocks.updateMe).toHaveBeenCalledTimes(1);
+
+    resolveUpdate?.({
+      data: {
+        data: mocks.session.me,
+      },
+    });
+    await flushPromises();
+  });
+
+  // 4.5 每個已連結物業只顯示一次解除綁定，未接通時維持原有登記
+  it.each(['zh-HK', 'en'] as const)('shows one unbind action per property without changing bindings in %s', async (locale) => {
+    configureLinkedPropertyFixture();
+    applyLocale(locale);
+    const wrapper = await mountAccountPage();
+    const unbindLabel = i18n.global.t('account.center.account.unbindProperty');
+    const currentLabel = i18n.global.t('account.center.account.currentProperty');
+    const switchLabel = i18n.global.t('account.center.account.switchProperty');
+    const rows = wrapper.findAll('.work-property-table tbody tr');
+    const originalSession = structuredClone(mocks.session.me);
+    const originalTableText = wrapper.find('.work-property-table tbody').text();
+
+    expect(rows).toHaveLength(9);
+    expect(rows.filter((row) => row.text().includes(currentLabel))).toHaveLength(1);
+    expect(rows.flatMap((row) => row.findAll('button')).filter((button) => button.text() === switchLabel)).toHaveLength(2);
+
+    for (const [index, row] of rows.entries()) {
+      const unbindButtons = row.findAll('button').filter((button) => button.text() === unbindLabel);
+      expect(unbindButtons).toHaveLength(index % 3 === 0 ? 1 : 0);
+      if (unbindButtons[0]) {
+        await unbindButtons[0].trigger('click');
+      }
+    }
+    await flushPromises();
+
+    expect(mocks.pushToast).toHaveBeenCalledTimes(3);
+    expect(mocks.pushToast).toHaveBeenLastCalledWith(
+      i18n.global.t('account.center.account.unbindUnavailable'),
+      'error',
+    );
+    expect(mocks.updateMe).not.toHaveBeenCalled();
+    expect(mocks.submitOwnerBindingRequest).not.toHaveBeenCalled();
+    expect(mocks.session.me).toEqual(originalSession);
+    expect(wrapper.find('.work-property-table tbody').text()).toBe(originalTableText);
   });
 
   it('updates the member avatar from the account centre portrait', async () => {

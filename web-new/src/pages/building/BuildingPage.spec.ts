@@ -2,12 +2,15 @@
  * 我的大廈頁回歸測試。
  * 1. 驗證進入頁面時重新讀取目前會員資料。
  * 2. 驗證新綁定大廈取代舊 session 大廈並顯示正式名稱。
+ * 3. 驗證單項聯絡資料註冊狀態、雙項帳戶比對與過期查詢失效。
+ * 4. 驗證授權改為發送註冊邀請或授權確認，列表三態與重發／撤銷。
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import i18n, { applyLocale } from '@/i18n';
+import type { IsmartSubaccountContactCheckResponse } from '@/httpapis/building';
 
 import BuildingPage from './BuildingPage.vue';
 
@@ -19,6 +22,13 @@ const mocks = vi.hoisted(() => ({
   fetchPublicBuildings: vi.fn(),
   fetchMemberUnits: vi.fn(),
   fetchBuildingAccess: vi.fn(),
+  fetchSubaccounts: vi.fn(),
+  checkSubaccountContacts: vi.fn(),
+  fetchAuthorizations: vi.fn(),
+  createAuthorization: vi.fn(),
+  resendAuthorization: vi.fn(),
+  revokeAuthorization: vi.fn(),
+  revokeSubaccount: vi.fn(),
   openDoor: vi.fn(),
   fetchICCTV: vi.fn(),
   fetchServiceCase: vi.fn(),
@@ -87,6 +97,13 @@ vi.mock('@/httpapis/building', () => ({
   fetchPosBuildings: mocks.fetchPublicBuildings,
   fetchMemberICCTVPublicCameras: mocks.fetchICCTV,
   fetchMemberIsmartBuildingAccess: mocks.fetchBuildingAccess,
+  fetchMemberIsmartSubaccounts: mocks.fetchSubaccounts,
+  checkMemberIsmartSubaccountContacts: mocks.checkSubaccountContacts,
+  fetchMemberIsmartSubaccountAuthorizations: mocks.fetchAuthorizations,
+  createMemberIsmartSubaccountAuthorization: mocks.createAuthorization,
+  resendMemberIsmartSubaccountAuthorization: mocks.resendAuthorization,
+  revokeMemberIsmartSubaccountAuthorization: mocks.revokeAuthorization,
+  revokeMemberIsmartSubaccount: mocks.revokeSubaccount,
   fetchMemberIsmartManagementFees: vi.fn(),
   fetchMemberIsmartOtherFees: vi.fn(),
   fetchMemberIsmartServiceCase: mocks.fetchServiceCase,
@@ -117,6 +134,15 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchPublicBuildings.mockReset();
     mocks.fetchMemberUnits.mockReset();
     mocks.fetchBuildingAccess.mockReset();
+    mocks.fetchSubaccounts.mockReset();
+    mocks.checkSubaccountContacts.mockReset();
+    mocks.fetchAuthorizations.mockReset();
+    mocks.createAuthorization.mockReset();
+    mocks.resendAuthorization.mockReset();
+    mocks.revokeAuthorization.mockReset();
+    mocks.revokeSubaccount.mockReset();
+    mocks.fetchSubaccounts.mockResolvedValue({ items: [] });
+    mocks.fetchAuthorizations.mockResolvedValue([]);
     mocks.openDoor.mockReset();
     mocks.fetchICCTV.mockReset();
     mocks.fetchServiceCase.mockReset();
@@ -262,6 +288,253 @@ describe('BuildingPage binding refresh', () => {
     expect(mocks.fetchBuildingInfo).toHaveBeenCalledWith('0999900');
     expect(mocks.fetchBuildingNotices).toHaveBeenCalledWith('0999900');
     expect(wrapper.text()).toContain('測試1大廈');
+  });
+
+  // 3. 單項與雙項檢查各自只顯示一條對應結果，未命中同一帳戶時不得提交
+  it.each([
+    { phone: '61234567', email: '', phoneExists: true, emailExists: false, sameUser: false, tone: 'success', message: '該手機號碼已註冊帳戶。', submittable: false },
+    { phone: '61234567', email: '', phoneExists: false, emailExists: false, sameUser: false, tone: '', message: '該手機號碼未註冊帳戶。', submittable: false },
+    { phone: '', email: 'resident@example.com', phoneExists: false, emailExists: true, sameUser: false, tone: 'success', message: '該電郵已註冊帳戶。', submittable: true },
+    { phone: '', email: 'resident@example.com', phoneExists: false, emailExists: false, sameUser: false, tone: '', message: '該電郵未註冊帳戶。', submittable: true },
+    { phone: '61234567', email: 'resident@example.com', phoneExists: true, emailExists: true, sameUser: true, tone: 'success', message: '手機號碼和電郵屬於同一個帳戶，將向對方發送授權確認電郵。', submittable: true },
+    { phone: '61234567', email: 'resident@example.com', phoneExists: true, emailExists: true, sameUser: false, tone: 'warn', message: '手機號碼和電郵不屬於同一個帳戶。兩項均已註冊帳戶，請核對後重新輸入。', submittable: false },
+    { phone: '61234567', email: 'resident@example.com', phoneExists: true, emailExists: false, sameUser: false, tone: 'warn', message: '手機號碼和電郵不屬於同一個帳戶。該手機號碼已註冊帳戶；請核對電郵，或改用該手機號碼所屬帳戶的電郵。', submittable: false },
+    { phone: '61234567', email: 'resident@example.com', phoneExists: false, emailExists: true, sameUser: false, tone: 'warn', message: '手機號碼和電郵不屬於同一個帳戶。該電郵已註冊帳戶；請核對手機號碼，或改用該電郵所屬帳戶的手機號碼。', submittable: false },
+    { phone: '61234567', email: 'resident@example.com', phoneExists: false, emailExists: false, sameUser: false, tone: '', message: '手機號碼和電郵均未註冊帳戶，將向對方發送註冊邀請電郵。', submittable: true },
+  ])('shows "$message" after checking contacts', async ({ phone, email, phoneExists, emailExists, sameUser, tone, message, submittable }) => {
+    mocks.checkSubaccountContacts.mockResolvedValue({
+      phone_exists: phoneExists,
+      email_exists: emailExists,
+      same_user: sameUser,
+      can_authorize: sameUser,
+    });
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="tel"]').setValue(phone);
+    await panel.get('input[type="email"]').setValue(email);
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+
+    expect(mocks.checkSubaccountContacts).toHaveBeenCalledWith({ phone: phone ? '+85261234567' : '', email });
+    expect(panel.findAll('.authorization-contact-result')).toHaveLength(1);
+    expect(panel.get('.authorization-contact-result').text()).toBe(message);
+    expect(panel.get('.authorization-contact-result').classes('success')).toBe(tone === 'success');
+    expect(panel.get('.authorization-contact-result').classes('warn')).toBe(tone === 'warn');
+    expect(panel.get('button[type="submit"]').attributes('disabled') === undefined).toBe(submittable);
+    expect(panel.find('.authorization-name-field').exists()).toBe(false);
+    expect(panel.find('.authorization-password-field').exists()).toBe(false);
+    if (!phone || !email) expect(panel.find('.authorization-email-optin').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  // 3.2 未註冊對象送出註冊邀請，已註冊對象送出授權確認
+  it.each([
+    {
+      mode: 'invitation',
+      contacts: { phone_exists: false, email_exists: false, same_user: false, can_authorize: false },
+      response: { authorization_id: 'auth-1', status: 'pending_registration', requires_registration: true, email_sent: true },
+      message: '已向對方發送註冊邀請電郵，對方註冊後需再確認授權。',
+    },
+    {
+      mode: 'confirmation',
+      contacts: { phone_exists: true, email_exists: true, same_user: true, can_authorize: true },
+      response: { authorization_id: 'auth-2', status: 'awaiting_confirmation', requires_registration: false, email_sent: true },
+      message: '已向對方發送授權確認電郵，對方確認後即完成授權。',
+    },
+  ])('sends the $mode notice without asking for a password', async ({ contacts, response, message }) => {
+    mocks.checkSubaccountContacts.mockResolvedValue(contacts);
+    mocks.createAuthorization.mockResolvedValue(response);
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="tel"]').setValue('61234567');
+    await panel.get('input[type="email"]').setValue('resident@example.com');
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+    expect(panel.find('.authorization-password-field').exists()).toBe(false);
+    await panel.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(mocks.createAuthorization).toHaveBeenCalledWith({
+      unit_id: '09999000012',
+      phone: '+85261234567',
+      email: 'resident@example.com',
+      send_email: true,
+    });
+    expect(panel.get('.authorization-success').text()).toBe(message);
+    expect(panel.get('input[type="tel"]').element).toHaveProperty('value', '');
+    expect(panel.get('input[type="email"]').element).toHaveProperty('value', '');
+    wrapper.unmount();
+  });
+
+  // 3.3 發出通知失敗時提示可稍後重發
+  it('warns the owner when the notice email could not be sent', async () => {
+    mocks.checkSubaccountContacts.mockResolvedValue({
+      phone_exists: false, email_exists: false, same_user: false, can_authorize: false,
+    });
+    mocks.createAuthorization.mockResolvedValue({
+      authorization_id: 'auth-3', status: 'pending_registration', requires_registration: true, email_sent: false,
+    });
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="email"]').setValue('resident@example.com');
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+    await panel.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(panel.get('.authorization-success').text())
+      .toBe('註冊邀請已建立，但邀請電郵未能發送，請稍後重發授權通知。');
+    wrapper.unmount();
+  });
+
+  // 3.4 缺少電郵時阻止提交並提示
+  it('requires an email before sending any notice', async () => {
+    mocks.checkSubaccountContacts.mockResolvedValue({ phone_exists: true, email_exists: false, same_user: false, can_authorize: false });
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="tel"]').setValue('61234567');
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+    await panel.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(mocks.createAuthorization).not.toHaveBeenCalled();
+    expect(panel.get('.authorization-error').text())
+      .toBe('請填寫電郵地址，授權通知與確認連結將發送到此電郵。');
+    wrapper.unmount();
+  });
+
+  // 3.5 列表合併本地待處理與 iSmart 已生效記錄，並可重發與撤銷
+  it('lists pending and active authorizations with resend and revoke actions', async () => {
+    mocks.fetchAuthorizations.mockResolvedValue([
+      {
+        authorization_id: 'auth-1',
+        unit_id: '09999000012',
+        phone: '+85261234567',
+        email: 'pending@example.com',
+        status: 'pending_registration',
+        invitation_expires_at: '2026-10-20T00:00:00Z',
+      },
+      {
+        authorization_id: 'auth-2',
+        unit_id: '09999000012',
+        phone: '+85269876543',
+        email: 'confirm@example.com',
+        status: 'awaiting_confirmation',
+        confirm_expires_at: '2026-10-20T00:00:00Z',
+      },
+    ]);
+    mocks.fetchSubaccounts.mockResolvedValue({
+      items: [{ relation_info_id: 9, unit_id: '09999000012', target_user_id: 88, target_name: 'CHAN TAI MAN', target_email: 'active@example.com' }],
+    });
+    mocks.resendAuthorization.mockResolvedValue({ authorization_id: 'auth-1', unit_id: '09999000012', status: 'pending_registration' });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('.authorization-refresh-action').trigger('click');
+    await flushPromises();
+
+    expect(mocks.fetchAuthorizations).toHaveBeenCalledWith('09999000012');
+    const rows = panel.findAll('.authorization-record');
+    expect(rows).toHaveLength(3);
+    expect(rows[0].text()).toContain('待對方註冊');
+    expect(rows[1].text()).toContain('等待對方確認');
+    expect(rows[2].text()).toContain('CHAN TAI MAN');
+    expect(rows[2].text()).toContain('已生效');
+    expect(rows[0].find('.authorization-resend-button').exists()).toBe(true);
+    expect(rows[2].find('.authorization-resend-button').exists()).toBe(false);
+
+    await rows[0].get('.authorization-resend-button').trigger('click');
+    await flushPromises();
+    expect(mocks.resendAuthorization).toHaveBeenCalledWith('auth-1', true);
+    expect(panel.get('.authorization-list-message').text()).toBe('已重新發送註冊邀請電郵。');
+
+    await rows[2].get('.authorization-revoke-button').trigger('click');
+    await flushPromises();
+    expect(mocks.revokeSubaccount).toHaveBeenCalledWith({ unit_id: '09999000012', target_user_id: 88 });
+
+    await rows[0].get('.authorization-revoke-button').trigger('click');
+    await flushPromises();
+    expect(mocks.revokeAuthorization).toHaveBeenCalledWith('auth-1');
+    confirmSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  // 3.1 English 同樣區分均未註冊與每項已註冊衝突
+  it.each([
+    { phoneExists: false, emailExists: false, message: 'Neither the mobile number nor the email is registered. A registration invitation email will be sent to the resident.' },
+    { phoneExists: true, emailExists: false, message: 'The mobile number and email do not belong to the same account. This mobile number is already registered; check the email or use the email of the account that owns this mobile number.' },
+    { phoneExists: false, emailExists: true, message: 'The mobile number and email do not belong to the same account. This email is already registered; check the mobile number or use the mobile number of the account that owns this email.' },
+    { phoneExists: true, emailExists: true, message: 'The mobile number and email do not belong to the same account. Both are already registered; check and re-enter them.' },
+  ])('shows the English combined-contact result "$message"', async ({ phoneExists, emailExists, message }) => {
+    applyLocale('en');
+    mocks.checkSubaccountContacts.mockResolvedValue({
+      phone_exists: phoneExists,
+      email_exists: emailExists,
+      same_user: false,
+      can_authorize: false,
+    });
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="tel"]').setValue('61234567');
+    await panel.get('input[type="email"]').setValue('resident@example.com');
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+
+    expect(panel.findAll('.authorization-contact-result')).toHaveLength(1);
+    expect(panel.get('.authorization-contact-result').text()).toBe(message);
+    // 兩項均未註冊時可發送註冊邀請；未命中同一帳戶的衝突情境必須阻止提交
+    expect(panel.get('button[type="submit"]').attributes('disabled') === undefined)
+      .toBe(!phoneExists && !emailExists);
+    wrapper.unmount();
+  });
+
+  // 4. 修改資料或區號後清除結果並丟棄尚未完成的舊請求
+  it('invalidates a contact check when the number or country code changes', async () => {
+    let finishCheck!: (result: IsmartSubaccountContactCheckResponse) => void;
+    mocks.checkSubaccountContacts.mockImplementation(() => new Promise<IsmartSubaccountContactCheckResponse>((resolve) => {
+      finishCheck = resolve;
+    }));
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="tel"]').setValue('61234567');
+    await panel.get('.authorization-check-button').trigger('click');
+    await panel.get('input[type="tel"]').setValue('69876543');
+    finishCheck({ phone_exists: true });
+    await flushPromises();
+    expect(panel.find('.authorization-contact-result').exists()).toBe(false);
+
+    mocks.checkSubaccountContacts.mockResolvedValue({ phone_exists: true });
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+    expect(panel.get('.authorization-contact-result').text()).toBe('該手機號碼已註冊帳戶。');
+    await panel.get('.authorization-country-select').setValue('+86');
+    expect(panel.find('.authorization-contact-result').exists()).toBe(false);
+    expect(panel.get('button[type="submit"]').attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  // 5. 上游錯誤不得被當作未註冊帳戶
+  it('shows a check error without an unregistered result when the lookup fails', async () => {
+    mocks.checkSubaccountContacts.mockRejectedValue(new Error('Upstream unavailable'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const wrapper = mount(BuildingPage, { global: { plugins: [i18n], stubs: { RouterLink: true } } });
+    await flushPromises();
+    const panel = wrapper.get('[data-work-panel="affairs-resident-authorizations"]');
+    await panel.get('input[type="email"]').setValue('resident@example.com');
+    await panel.get('.authorization-check-button').trigger('click');
+    await flushPromises();
+    expect(panel.get('.authorization-error').text()).toBe('帳戶檢查失敗，請稍後再試。');
+    expect(panel.find('.authorization-contact-result').exists()).toBe(false);
+    errorLog.mockRestore();
+    wrapper.unmount();
   });
 
   it('shows the simplified notice and building profile content', async () => {

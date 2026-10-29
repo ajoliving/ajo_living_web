@@ -30,6 +30,7 @@ type Dependencies struct {
 	POSBuildingService           *service.POSBuildingService
 	POSPaymentService            *service.POSPaymentService
 	IsmartExternalService        *service.IsmartExternalService
+	IsmartSubaccountAuthService  *service.IsmartSubaccountAuthorizationService
 	BuildingAuthorizationService *service.BuildingAuthorizationService
 	SecurityICCTVService         *service.SecurityICCTVService
 	WalletService                *service.WalletService
@@ -66,6 +67,7 @@ func New(deps *Dependencies) *gin.Engine {
 	posBuildingHandler := handler.NewPOSBuildingHandler(deps.POSBuildingService, deps.POSPaymentService)
 	posPaymentHandler := handler.NewPOSPaymentHandler(deps.POSPaymentService)
 	ismartHandler := handler.NewIsmartExternalHandler(deps.IsmartExternalService)
+	ismartSubaccountAuthHandler := handler.NewIsmartSubaccountAuthorizationHandler(deps.IsmartSubaccountAuthService)
 	buildingAuthorizationHandler := handler.NewBuildingAuthorizationHandler(deps.BuildingAuthorizationService)
 	securityICCTVHandler := handler.NewSecurityICCTVHandler(deps.SecurityICCTVService)
 	walletHandler := handler.NewWalletHandler(deps.WalletService)
@@ -90,6 +92,8 @@ func New(deps *Dependencies) *gin.Engine {
 	registerAgencyCompanyMemberRoutes(api, agencyCompanyHandler, requireAuth)
 	registerPOSPaymentRoutes(api, posBuildingHandler, posPaymentHandler, requireActive)
 	registerIsmartRoutes(api, ismartHandler, requireActive)
+	registerIsmartSubaccountAuthorizationRoutes(api, ismartSubaccountAuthHandler, requireActive)
+	registerPublicIsmartSubaccountAuthorizationRoutes(api, ismartSubaccountAuthHandler)
 	registerBuildingAuthorizationRoutes(api, buildingAuthorizationHandler, requireAuth)
 	registerSecurityRoutes(api, securityICCTVHandler, requireActive)
 	registerWalletRoutes(api, walletHandler, requireActive)

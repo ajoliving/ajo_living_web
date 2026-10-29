@@ -50,8 +50,9 @@ if [ "$SKIP_BUILD" != "1" ]; then
   popd >/dev/null
 
   pushd "$FRONTEND_DIR" >/dev/null
-  npm ci
-  VITE_API_BASE_URL="/api/v1" VITE_ENABLE_THEME_PICKER=1 npm run build
+  # npm ci 需绕过 WorkBuddy node-language-shim：该代理在大规模解包时会超时并静默丢失文件。
+  env -u NODE_OPTIONS npm ci
+  VITE_API_BASE_URL="/api/v1" VITE_ENABLE_THEME_PICKER=1 env -u NODE_OPTIONS npm run build
   popd >/dev/null
 fi
 
@@ -267,6 +268,8 @@ set_env "OSS_CALLBACK_URL" "$APP_API_PUBLIC_BASE_URL/api/v1/oss/callback"
 set_env "WALLET_RECHARGE_RETURN_BASE_URL" "$APP_PUBLIC_BASE_URL"
 set_env "WALLET_RECHARGE_NOTIFY_URL" "$APP_API_PUBLIC_BASE_URL/api/v1/payments/easylink/notify"
 set_env "WEB_PUBLIC_DIR" "$WEB_DIR/current_public"
+# 統一登入改走 iSmart Integration 登入接口，覆蓋生產 env 帶來的舊 POS Web 地址。
+set_env "POS_LOGIN_URL" "https://ismart.ajoliving.com/api/v1/integration/auth/login/"
 chmod 600 "$APP_DIR/.env"
 
 # 4.1 Re-encrypt retained snapshot values with the independent testing key.
@@ -434,9 +437,8 @@ localIP = "127.0.0.1"
 localPort = $WEB_PORT
 customDomains = ["$WEB_DOMAIN"]
 FRP
+  sudo supervisorctl restart frpc
 fi
-
-sudo supervisorctl restart frpc
 REMOTE_NETWORK
 
 echo "Testing deploy finished: $RELEASE_ID"

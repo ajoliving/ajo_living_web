@@ -618,6 +618,7 @@ func (h *IsmartExternalHandler) RegisterAndGrantSubaccount(c *gin.Context) {
 		Phone     string `json:"phone"`
 		Email     string `json:"email"`
 		EngName   string `json:"eng_name"`
+		Password  string `json:"password"`
 		SendEmail *bool  `json:"send_email"`
 		Remark    string `json:"remark"`
 	}
@@ -634,6 +635,7 @@ func (h *IsmartExternalHandler) RegisterAndGrantSubaccount(c *gin.Context) {
 		Phone:     strings.TrimSpace(request.Phone),
 		Email:     strings.TrimSpace(request.Email),
 		EngName:   strings.TrimSpace(request.EngName),
+		Password:  request.Password,
 		SendEmail: sendEmail,
 		Remark:    strings.TrimSpace(request.Remark),
 	})

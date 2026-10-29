@@ -129,6 +129,8 @@ export default {
       propertyFunctionEnabled: 'Enabled',
       propertyFunctionDisabled: 'Not enabled',
       bindProperty: 'Bind',
+      switchProperty: 'Switch property',
+      currentProperty: 'Current property',
       unbindProperty: 'Unlink',
       linkedPropertyName: 'Linked property',
       functionName: 'Function',

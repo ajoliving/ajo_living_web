@@ -255,6 +255,7 @@ export interface IsmartSubaccountRegisterAndGrantPayload {
   phone: string;
   email: string;
   eng_name?: string;
+  password?: string;
   send_email: boolean;
   remark?: string;
 }
@@ -262,9 +263,61 @@ export interface IsmartSubaccountRegisterAndGrantPayload {
 export interface IsmartSubaccountRegisterAndGrantResponse extends IsmartSubaccountMutationResponse {
   account_created?: boolean;
   email_sent?: boolean;
-  temporary_password_sent?: boolean;
   building_name?: string;
   unit_display?: string;
+}
+
+export type IsmartSubaccountAuthorizationStatus =
+  | 'pending_registration'
+  | 'awaiting_confirmation'
+  | 'active'
+  | 'expired'
+  | 'revoked';
+
+export interface IsmartSubaccountAuthorizationRow {
+  authorization_id: string;
+  unit_id: string;
+  building_id?: string;
+  building_name?: string;
+  unit_display?: string;
+  phone?: string;
+  email?: string;
+  target_user_id?: number | string;
+  target_username?: string;
+  target_name?: string;
+  status: IsmartSubaccountAuthorizationStatus;
+  source?: 'local' | 'ismart';
+  invitation_expires_at?: string;
+  confirm_expires_at?: string;
+  resend_count?: number;
+  remark?: string;
+}
+
+export interface IsmartSubaccountAuthorizationsResponse extends IsmartBuildingOptionResponse {
+  items?: IsmartSubaccountAuthorizationRow[];
+  count?: number;
+}
+
+export interface IsmartSubaccountAuthorizationPayload {
+  unit_id: string;
+  phone?: string;
+  email?: string;
+  send_email: boolean;
+  remark?: string;
+}
+
+export interface IsmartSubaccountAuthorizationResponse extends IsmartBuildingOptionResponse {
+  authorization_id: string;
+  status: IsmartSubaccountAuthorizationStatus;
+  requires_registration?: boolean;
+  email_sent?: boolean;
+  target_user_id?: number | string;
+  upstream_message?: string;
+}
+
+export interface IsmartSubaccountConfirmResponse {
+  status: string;
+  granted: boolean;
 }
 
 export interface IsmartFlatBindingRow {
@@ -517,7 +570,11 @@ export const checkMemberIsmartSubaccountContacts = async (payload: {
   phone?: string;
   email?: string;
 }): Promise<IsmartSubaccountContactCheckResponse> => {
-  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountContactCheckResponse>>('/me/ismart/subaccounts/check-contacts', payload);
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountContactCheckResponse>>(
+    '/me/ismart/subaccounts/check-contacts',
+    payload,
+    { timeout: 30000 },
+  );
   return data.data;
 };
 
@@ -566,6 +623,7 @@ export const registerAndGrantMemberIsmartSubaccount = async (
   const { data } = await httpClient.post<ApiResponse<IsmartSubaccountRegisterAndGrantResponse>>(
     '/me/ismart/subaccounts/register-and-grant',
     payload,
+    { timeout: 60000 },
   );
   return data.data;
 };
@@ -576,6 +634,82 @@ export const revokeMemberIsmartSubaccount = async (
 ): Promise<IsmartSubaccountMutationResponse> => {
   const { data } = await httpClient.post<ApiResponse<IsmartSubaccountMutationResponse>>('/me/ismart/subaccounts/revoke', payload);
   return data.data;
+};
+
+// 10.1 發起目前單位 iSmart 副戶授權（未註冊發註冊邀請，已註冊發授權確認）
+export const createMemberIsmartSubaccountAuthorization = async (
+  payload: IsmartSubaccountAuthorizationPayload,
+): Promise<IsmartSubaccountAuthorizationResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountAuthorizationResponse>>(
+    '/me/ismart/subaccount-authorizations',
+    payload,
+    { timeout: 30000 },
+  );
+  return data.data;
+};
+
+// 10.2 取得目前單位仍在處理中的副戶授權記錄
+export const fetchMemberIsmartSubaccountAuthorizations = async (
+  unitID?: string,
+): Promise<IsmartSubaccountAuthorizationRow[]> => {
+  const params = unitID ? { unit_id: unitID } : undefined;
+  const { data } = await httpClient.get<ApiResponse<IsmartSubaccountAuthorizationsResponse>>(
+    '/me/ismart/subaccount-authorizations',
+    { params },
+  );
+  return data.data.items ?? [];
+};
+
+// 10.3 重發副戶授權通知（邀請或確認）
+export const resendMemberIsmartSubaccountAuthorization = async (
+  authorizationID: string,
+  sendEmail = true,
+): Promise<IsmartSubaccountAuthorizationRow> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountAuthorizationRow>>(
+    `/me/ismart/subaccount-authorizations/${encodeURIComponent(authorizationID)}/resend`,
+    { send_email: sendEmail },
+  );
+  return data.data;
+};
+
+// 10.4 以登入態確認副戶授權（站內通知入口）
+export const confirmMemberIsmartSubaccountAuthorization = async (
+  authorizationID: string,
+): Promise<IsmartSubaccountConfirmResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountConfirmResponse>>(
+    `/me/ismart/subaccount-authorizations/${encodeURIComponent(authorizationID)}/confirm`,
+  );
+  return data.data;
+};
+
+// 10.5 解析副戶授權確認令牌
+export const resolveIsmartSubaccountAuthorizationToken = async (
+  token: string,
+): Promise<IsmartSubaccountAuthorizationRow> => {
+  const { data } = await httpClient.get<ApiResponse<IsmartSubaccountAuthorizationRow>>(
+    `/auth/ismart-subaccount-authorizations/${encodeURIComponent(token)}`,
+  );
+  return data.data;
+};
+
+// 10.6 以確認令牌確認副戶授權（電郵連結入口）
+export const confirmIsmartSubaccountAuthorizationByToken = async (
+  token: string,
+): Promise<IsmartSubaccountConfirmResponse> => {
+  const { data } = await httpClient.post<ApiResponse<IsmartSubaccountConfirmResponse>>(
+    '/auth/ismart-subaccount-authorizations/confirm',
+    { token },
+  );
+  return data.data;
+};
+
+// 10.7 撤銷仍在待註冊或等待確認的副戶授權記錄
+export const revokeMemberIsmartSubaccountAuthorization = async (
+  authorizationID: string,
+): Promise<void> => {
+  await httpClient.post(
+    `/me/ismart/subaccount-authorizations/${encodeURIComponent(authorizationID)}/revoke`,
+  );
 };
 
 // 9.1 取得目前大廈的本地住戶授權

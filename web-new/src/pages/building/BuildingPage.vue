@@ -21,7 +21,10 @@ import {
   fetchMemberIsmartBuildingNotices,
   fetchMemberIsmartSubaccounts,
   checkMemberIsmartSubaccountContacts,
-  registerAndGrantMemberIsmartSubaccount,
+  createMemberIsmartSubaccountAuthorization,
+  fetchMemberIsmartSubaccountAuthorizations,
+  resendMemberIsmartSubaccountAuthorization,
+  revokeMemberIsmartSubaccountAuthorization,
   revokeMemberIsmartSubaccount,
   fetchMemberIsmartOtherFees,
   fetchMemberIsmartServiceCase,
@@ -46,6 +49,8 @@ import {
   type IsmartServiceCaseListResponse,
   type IsmartSubaccountRow,
   type IsmartSubaccountContactCheckResponse,
+  type IsmartSubaccountAuthorizationRow,
+  type IsmartSubaccountAuthorizationStatus,
 } from '@/httpapis/building';
 import type { PosBuilding } from '@/model/community';
 import {
@@ -160,6 +165,17 @@ interface OwnerUnitContext {
   floor: string;
   unit: string;
   unitID: string;
+}
+
+// 住戶授權列表項目：合併本地待處理記錄與 iSmart 已生效記錄
+interface ResidentAuthorizationView {
+  key: string;
+  name: string;
+  phone: string;
+  email: string;
+  status: IsmartSubaccountAuthorizationStatus;
+  pending?: IsmartSubaccountAuthorizationRow;
+  active?: IsmartSubaccountRow;
 }
 
 interface OwnerPaymentRecordRow {
@@ -289,17 +305,19 @@ const icctvProfile = ref<Awaited<ReturnType<typeof fetchMemberICCTVPublicCameras
 const expandedICCTVCameraIDs = ref<string[]>([]);
 const residentAuthorizationLoading = ref(false);
 const residentAuthorizationError = ref('');
-const residentAuthorizations = ref<IsmartSubaccountRow[]>([]);
+const residentAuthorizations = ref<ResidentAuthorizationView[]>([]);
 const residentAuthorizationPhoneCountryCode = ref('+852');
 const residentAuthorizationPhone = ref('');
 const residentAuthorizationEmail = ref('');
-const residentAuthorizationEnglishName = ref('');
 const residentAuthorizationContactCheck = ref<IsmartSubaccountContactCheckResponse | null>(null);
 const residentAuthorizationContactChecking = ref(false);
+let residentAuthorizationContactRevision = 0;
 const residentAuthorizationEmailNotice = ref(true);
 const residentAuthorizationSubmitting = ref(false);
 const residentAuthorizationSuccess = ref('');
 const revokingResidentAuthorization = ref('');
+const resendingResidentAuthorization = ref('');
+const residentAuthorizationListMessage = ref<{ tone: 'success' | 'error'; key: string } | null>(null);
 
 const contextPickerUnitID = ref('');
 const {
@@ -546,24 +564,11 @@ const currentBuilding = computed(() => ismartBuildingProfile.value?.building ?? 
 const currentBuildingInfo = computed(() => ismartBuildingProfile.value?.building_info ?? {});
 const hasPendingResidenceBinding = computed(() => sessionStore.me?.residence_binding_status === 'pending');
 const hasLinkedBuilding = computed(() => {
-  const ismartMessage = sessionStore.me?.ismart_msg;
-  const permissionBuildingIDs = [
-    ...(ismartMessage?.building ?? []),
-    ...(ismartMessage?.staff_building_permissions ?? []),
-    ...(ismartMessage?.client_building_permissions ?? []),
-  ];
-  const profileBuildingIDs = [
-    selectedBuildingID.value,
-    selectedNoticeBuildingID.value,
-    ismartBuildingProfile.value?.selected_building_id,
-    ismartBuildingProfile.value?.building?.building_id,
-    ismartNoticeProfile.value?.selected_building_id,
-    ismartAccessProfile.value?.selected_building_id,
-    icctvProfile.value?.selected_building_id,
-  ];
-
-  return sessionStore.me?.residence_binding_status === 'approved'
-    || [...permissionBuildingIDs, ...profileBuildingIDs].some((buildingID) => String(buildingID ?? '').trim().length > 0);
+  // 6.1 以可解析的授權單位為權威判定，與會員中心「已連結物業」口徑一致。
+  if (contextPropertyOptions.value.length > 0) return true;
+  // 6.2 管理處職員仍可查看其權限範圍內的大廈資料。
+  const staffBuildingIDs = sessionStore.me?.ismart_msg?.staff_building_permissions ?? [];
+  return staffBuildingIDs.some((buildingID) => String(buildingID ?? '').trim().length > 0);
 });
 const buildingName = computed(() => {
   const buildingID = String(currentBuilding.value.building_id || selectedBuildingID.value || '').trim();
@@ -1081,29 +1086,61 @@ const residentAuthorizationUnitID = computed(() => (
   normalizeOwnerTextList(sessionStore.me?.bound_flat_unit_ids)
     .find((unitID) => ownerDigitsOnly(unitID).slice(0, 7) === selectedBuildingID.value) ?? ''
 ));
-const residentAuthorizationNeedsRegistration = computed(() => {
+// 10.1 判定提交後要走「註冊邀請」或「授權確認」；兩項未命中同一帳戶時回傳 null 以阻止提交
+const residentAuthorizationSendMode = computed<'invitation' | 'confirmation' | null>(() => {
   const result = residentAuthorizationContactCheck.value;
-  return Boolean(
-    result
-      && !result.can_authorize
-      && result.email_exists === false
-      && result.phone_exists === false
-      && residentAuthorizationPhone.value.trim()
-      && residentAuthorizationEmail.value.trim(),
-  );
+  if (!result || residentAuthorizationContactChecking.value) return null;
+  if (!residentAuthorizationUnitID.value || !residentAuthorizationEmail.value.trim()) return null;
+  if (residentAuthorizationPhone.value.trim()) {
+    if (result.can_authorize === true) return 'confirmation';
+    if (result.phone_exists === false && result.email_exists === false) return 'invitation';
+    return null;
+  }
+  return result.email_exists === true ? 'confirmation' : 'invitation';
 });
-const residentAuthorizationCanSubmit = computed(() => (
-  Boolean(
-    residentAuthorizationContactCheck.value?.can_authorize
-      || (residentAuthorizationNeedsRegistration.value && residentAuthorizationEnglishName.value.trim()),
-  )
-));
+const residentAuthorizationCanSubmit = computed(() => residentAuthorizationSendMode.value !== null);
 
-// 10.1 聯絡資料或目前單位變更後要求重新檢查，避免沿用過期的帳戶結果
+// 10.2 顯示帳戶檢查結果：雙項需命中同一帳戶，單項僅比對該項，均未註冊提示將發送註冊邀請
+const residentAuthorizationContactResult = computed(() => {
+  const result = residentAuthorizationContactCheck.value;
+  if (!result) return null;
+  const phone = residentAuthorizationPhone.value.trim();
+  const email = residentAuthorizationEmail.value.trim();
+  if (phone && email) {
+    if (result.can_authorize === true || result.same_user === true) {
+      return { tone: 'success', message: t('building.authorizations.accountFound') };
+    }
+    if (result.phone_exists === false && result.email_exists === false) {
+      return { tone: '', message: t('building.authorizations.accountNotFound') };
+    }
+    if (result.phone_exists === true && result.email_exists === true) {
+      return { tone: 'warn', message: t('building.authorizations.bothRegisteredConflict') };
+    }
+    if (result.phone_exists === true) {
+      return { tone: 'warn', message: t('building.authorizations.phoneRegisteredConflict') };
+    }
+    if (result.email_exists === true) {
+      return { tone: 'warn', message: t('building.authorizations.emailRegisteredConflict') };
+    }
+    return { tone: 'warn', message: t('building.authorizations.accountNotReady') };
+  }
+  const isPhone = Boolean(phone);
+  const registered = (isPhone ? result.phone_exists : result.email_exists) === true;
+  return {
+    tone: registered ? 'success' : '',
+    message: t(`building.authorizations.${isPhone
+      ? (registered ? 'phoneRegistered' : 'phoneUnregistered')
+      : (registered ? 'emailRegistered' : 'emailUnregistered')}`),
+  };
+});
+
+// 10.3 聯絡資料或目前單位變更後要求重新檢查，避免沿用過期的帳戶結果
 watch(
-  [residentAuthorizationPhone, residentAuthorizationEmail, residentAuthorizationUnitID],
+  [residentAuthorizationPhone, residentAuthorizationPhoneCountryCode, residentAuthorizationEmail, residentAuthorizationUnitID],
   () => {
+    residentAuthorizationContactRevision += 1;
     residentAuthorizationContactCheck.value = null;
+    residentAuthorizationError.value = '';
     residentAuthorizationSuccess.value = '';
   },
 );
@@ -1495,41 +1532,104 @@ const loadICCTV = async () => {
   }
 };
 
-// 15.1 讀取目前單位的 iSmart 授權住戶
-const loadResidentAuthorizations = async (): Promise<void> => {
-  residentAuthorizationLoading.value = true;
-  residentAuthorizationError.value = '';
-  try {
-    const response = residentAuthorizationUnitID.value
-      ? await fetchMemberIsmartSubaccounts(residentAuthorizationUnitID.value)
-      : { items: [] };
-    residentAuthorizations.value = response.items ?? [];
-  } catch (error) {
-    console.error(error);
-    residentAuthorizations.value = [];
-    residentAuthorizationError.value = 'building.authorizations.loadError';
-  } finally {
-    residentAuthorizationLoading.value = false;
+// 15.1 合併本地待處理記錄與 iSmart 已生效記錄，待處理記錄優先顯示
+const buildResidentAuthorizationViews = (
+  pending: IsmartSubaccountAuthorizationRow[],
+  active: IsmartSubaccountRow[],
+): ResidentAuthorizationView[] => {
+  const views: ResidentAuthorizationView[] = pending.map((row) => ({
+    key: row.authorization_id,
+    name: row.target_username || row.target_name || t('building.authorizations.authorizedUser'),
+    phone: row.phone ?? '',
+    email: row.email ?? '',
+    status: row.status,
+    pending: row,
+  }));
+  for (const row of active) {
+    views.push({
+      key: `ismart:${row.relation_info_id ?? `${row.unit_id ?? ''}:${row.target_user_id ?? ''}`}`,
+      name: row.target_name || row.target_username || t('building.authorizations.authorizedUser'),
+      phone: row.target_phone ?? '',
+      email: row.target_email ?? '',
+      status: 'active',
+      active: row,
+    });
+  }
+  return views;
+};
+
+// 15.2 待處理狀態顯示為警示色，已生效顯示為成功色
+const residentAuthorizationStatusTone = (
+  status: IsmartSubaccountAuthorizationStatus,
+): 'active' | 'pending' | '' => {
+  if (status === 'active') return 'active';
+  if (status === 'pending_registration' || status === 'awaiting_confirmation') return 'pending';
+  return '';
+};
+
+// 15.3 對應狀態文案
+const residentAuthorizationStatusKey = (status: IsmartSubaccountAuthorizationStatus): string => {
+  switch (status) {
+    case 'active':
+      return 'building.authorizations.status.active';
+    case 'pending_registration':
+      return 'building.authorizations.status.pendingRegistration';
+    case 'awaiting_confirmation':
+      return 'building.authorizations.status.awaitingConfirmation';
+    case 'expired':
+      return 'building.authorizations.status.expired';
+    default:
+      return 'building.authorizations.status.revoked';
   }
 };
 
-// 15.2 以電話及電郵解析 iSmart 用戶，必要時註冊後授予單位權限
+// 15.4 讀取目前單位的 iSmart 授權住戶
+const loadResidentAuthorizations = async (): Promise<void> => {
+  residentAuthorizationLoading.value = true;
+  residentAuthorizationError.value = '';
+  const unitID = residentAuthorizationUnitID.value;
+  if (!unitID) {
+    residentAuthorizations.value = [];
+    residentAuthorizationLoading.value = false;
+    return;
+  }
+  const [pendingResult, activeResult] = await Promise.allSettled([
+    fetchMemberIsmartSubaccountAuthorizations(unitID),
+    fetchMemberIsmartSubaccounts(unitID),
+  ]);
+  if (pendingResult.status === 'rejected') {
+    console.error(pendingResult.reason);
+    residentAuthorizationError.value = 'building.authorizations.loadError';
+  }
+  if (activeResult.status === 'rejected') {
+    console.error(activeResult.reason);
+    residentAuthorizationError.value = 'building.authorizations.loadError';
+  }
+  residentAuthorizations.value = buildResidentAuthorizationViews(
+    pendingResult.status === 'fulfilled' ? pendingResult.value : [],
+    activeResult.status === 'fulfilled' ? (activeResult.value.items ?? []) : [],
+  );
+  residentAuthorizationLoading.value = false;
+};
+
+// 15.5 依帳戶檢查結果送出註冊邀請或授權確認通知
 const submitResidentAuthorization = async (): Promise<void> => {
   const phone = residentAuthorizationPhone.value.trim();
   const email = residentAuthorizationEmail.value.trim();
-  if (!residentAuthorizationUnitID.value || !phone || !email) {
+  const mode = residentAuthorizationSendMode.value;
+  if (!residentAuthorizationUnitID.value || (!phone && !email)) {
     residentAuthorizationError.value = 'building.authorizations.validation';
+    return;
+  }
+  if (!email) {
+    residentAuthorizationError.value = 'building.authorizations.emailRequired';
     return;
   }
   if (!residentAuthorizationContactCheck.value) {
     residentAuthorizationError.value = 'building.authorizations.contactValidation';
     return;
   }
-  if (residentAuthorizationNeedsRegistration.value && !residentAuthorizationEnglishName.value.trim()) {
-    residentAuthorizationError.value = 'building.authorizations.englishNameRequired';
-    return;
-  }
-  if (!residentAuthorizationCanSubmit.value) {
+  if (!mode) {
     residentAuthorizationError.value = 'building.authorizations.accountNotReady';
     return;
   }
@@ -1537,39 +1637,66 @@ const submitResidentAuthorization = async (): Promise<void> => {
   residentAuthorizationError.value = '';
   residentAuthorizationSuccess.value = '';
   try {
-    const normalizedPhone = phone.startsWith('+')
-      ? phone.replace(/[^\d+]/g, '')
-      : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`;
-    const response = await registerAndGrantMemberIsmartSubaccount({
+    const normalizedPhone = phone
+      ? (phone.startsWith('+')
+        ? phone.replace(/[^\d+]/g, '')
+        : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`)
+      : '';
+    const emailRequested = residentAuthorizationEmailNotice.value;
+    const response = await createMemberIsmartSubaccountAuthorization({
       unit_id: residentAuthorizationUnitID.value,
       phone: normalizedPhone,
       email,
-      eng_name: residentAuthorizationEnglishName.value.trim(),
-      send_email: residentAuthorizationNeedsRegistration.value || residentAuthorizationEmailNotice.value,
+      send_email: emailRequested,
     });
-    const accountCreated = response.account_created === true;
-    const emailSent = response.email_sent === true || response.temporary_password_sent === true;
-    residentAuthorizationSuccess.value = accountCreated
-      ? (!emailSent
-        ? 'building.authorizations.registeredEmailFailed'
-        : 'building.authorizations.registeredSuccess')
-      : (emailSent
-        ? 'building.authorizations.authorizedEmailSent'
-        : 'building.authorizations.authorizedSuccess');
+    const emailSent = response.email_sent === true;
+    const invitation = response.requires_registration === true
+      || response.status === 'pending_registration'
+      || mode === 'invitation';
     residentAuthorizationPhone.value = '';
     residentAuthorizationEmail.value = '';
-    residentAuthorizationEnglishName.value = '';
     residentAuthorizationContactCheck.value = null;
+    await nextTick();
+    residentAuthorizationSuccess.value = invitation
+      ? (emailRequested && !emailSent
+        ? 'building.authorizations.invitationEmailFailed'
+        : 'building.authorizations.invitationSentSuccess')
+      : (emailRequested && !emailSent
+        ? 'building.authorizations.confirmationEmailFailed'
+        : 'building.authorizations.confirmationSentSuccess');
     await loadResidentAuthorizations();
   } catch (error) {
     console.error(error);
-    residentAuthorizationError.value = 'building.authorizations.submitError';
+    await loadResidentAuthorizations();
+    const errorCode = (
+      typeof error === 'object'
+      && error !== null
+      && 'code' in error
+      && typeof error.code === 'string'
+    ) ? error.code : '';
+    const errorMessage = (
+      typeof error === 'object'
+      && error !== null
+      && 'response' in error
+      && error.response
+      && typeof error.response === 'object'
+      && 'data' in error.response
+      && error.response.data
+      && typeof error.response.data === 'object'
+      && 'message' in error.response.data
+      && typeof error.response.data.message === 'string'
+    ) ? error.response.data.message.toLowerCase() : '';
+    residentAuthorizationError.value = errorCode === 'ECONNABORTED'
+      || errorCode === 'ETIMEDOUT'
+      || errorMessage.includes('timed out')
+      ? 'building.authorizations.requestTimeout'
+      : 'building.authorizations.submitError';
   } finally {
     residentAuthorizationSubmitting.value = false;
   }
 };
 
-// 15.3 預先檢查授權副戶聯絡資料
+// 15.8 預先檢查授權副戶聯絡資料
 const checkResidentAuthorizationContacts = async (): Promise<void> => {
   const phone = residentAuthorizationPhone.value.trim();
   const email = residentAuthorizationEmail.value.trim();
@@ -1578,18 +1705,24 @@ const checkResidentAuthorizationContacts = async (): Promise<void> => {
     return;
   }
   residentAuthorizationContactChecking.value = true;
+  const revision = residentAuthorizationContactRevision;
+  residentAuthorizationContactCheck.value = null;
   residentAuthorizationError.value = '';
   residentAuthorizationSuccess.value = '';
   try {
     const normalizedPhone = phone
       ? (phone.startsWith('+') ? phone.replace(/[^\d+]/g, '') : `${residentAuthorizationPhoneCountryCode.value}${phone.replace(/\D/g, '')}`)
       : '';
-    residentAuthorizationContactCheck.value = await checkMemberIsmartSubaccountContacts({
+    const result = await checkMemberIsmartSubaccountContacts({
       phone: normalizedPhone,
       email,
     });
+    if (revision === residentAuthorizationContactRevision) {
+      residentAuthorizationContactCheck.value = result;
+    }
   } catch (error) {
     console.error(error);
+    if (revision !== residentAuthorizationContactRevision) return;
     residentAuthorizationContactCheck.value = null;
     residentAuthorizationError.value = 'building.authorizations.checkError';
   } finally {
@@ -1597,18 +1730,48 @@ const checkResidentAuthorizationContacts = async (): Promise<void> => {
   }
 };
 
-// 15.3 撤銷一項 iSmart 單位授權
-const revokeResidentAuthorization = async (row: IsmartSubaccountRow): Promise<void> => {
-  const targetUserID = Number(row.target_user_id);
-  const rowKey = String(row.relation_info_id ?? `${row.unit_id ?? ''}:${row.target_user_id ?? ''}`);
-  if (!residentAuthorizationUnitID.value || !Number.isInteger(targetUserID) || targetUserID <= 0 || !window.confirm(t('building.authorizations.revokeConfirm'))) return;
-  revokingResidentAuthorization.value = rowKey;
+// 15.6 重發待處理授權的註冊邀請或授權確認通知
+const resendResidentAuthorization = async (row: ResidentAuthorizationView): Promise<void> => {
+  const authorizationID = row.pending?.authorization_id ?? '';
+  if (!authorizationID) return;
+  resendingResidentAuthorization.value = authorizationID;
+  residentAuthorizationListMessage.value = null;
   try {
-    await revokeMemberIsmartSubaccount({ unit_id: residentAuthorizationUnitID.value, target_user_id: targetUserID });
+    const updated = await resendMemberIsmartSubaccountAuthorization(authorizationID, true);
+    residentAuthorizationListMessage.value = {
+      tone: 'success',
+      key: updated.status === 'pending_registration'
+        ? 'building.authorizations.invitationResentSuccess'
+        : 'building.authorizations.confirmationResentSuccess',
+    };
     await loadResidentAuthorizations();
   } catch (error) {
     console.error(error);
-    residentAuthorizationError.value = 'building.authorizations.submitError';
+    residentAuthorizationListMessage.value = { tone: 'error', key: 'building.authorizations.submitError' };
+  } finally {
+    resendingResidentAuthorization.value = '';
+  }
+};
+
+// 15.7 撤銷一項授權：待處理記錄走本地撤銷，已生效記錄走 iSmart 撤銷
+const revokeResidentAuthorization = async (row: ResidentAuthorizationView): Promise<void> => {
+  const unitID = residentAuthorizationUnitID.value;
+  if (!unitID || !window.confirm(t('building.authorizations.revokeConfirm'))) return;
+  const pendingID = row.pending?.authorization_id ?? '';
+  const targetUserID = Number(row.active?.target_user_id);
+  if (!pendingID && (!Number.isInteger(targetUserID) || targetUserID <= 0)) return;
+  revokingResidentAuthorization.value = row.key;
+  residentAuthorizationListMessage.value = null;
+  try {
+    if (pendingID) {
+      await revokeMemberIsmartSubaccountAuthorization(pendingID);
+    } else {
+      await revokeMemberIsmartSubaccount({ unit_id: unitID, target_user_id: targetUserID });
+    }
+    await loadResidentAuthorizations();
+  } catch (error) {
+    console.error(error);
+    residentAuthorizationListMessage.value = { tone: 'error', key: 'building.authorizations.submitError' };
   } finally {
     revokingResidentAuthorization.value = '';
   }
@@ -1948,11 +2111,17 @@ const initializeBuildingPage = async (): Promise<void> => {
     console.error(error);
   }
 
-  const buildingID = preferredMemberBuildingID(sessionStore.me);
-  selectedBuildingID.value = buildingID;
-  selectedNoticeBuildingID.value = buildingID;
   await loadBuildingDirectory();
   await initializeBuildingContext();
+  // 31.1 嚴格以可解析授權單位或管理處權限判定目前大廈，避免殘留主社區資料誤導面板。
+  const hasStaffBuilding = (sessionStore.me?.ismart_msg?.staff_building_permissions ?? [])
+    .some((staffBuildingID) => String(staffBuildingID ?? '').trim().length > 0);
+  const buildingID = contextPropertyOptions.value.length > 0 || hasStaffBuilding
+    ? preferredMemberBuildingID(sessionStore.me)
+    : '';
+  selectedBuildingID.value = buildingID;
+  selectedNoticeBuildingID.value = buildingID;
+  if (!buildingID) return;
   await Promise.all([
     loadBuildingInfo(buildingID),
     loadBuildingNotices(buildingID),
@@ -2059,7 +2228,7 @@ onMounted(() => {
           </RouterLink>
         </section>
         <section
-          v-else-if="!hasLinkedBuilding && !buildingInfoLoading && !noticeLoading"
+          v-else-if="!hasLinkedBuilding && !contextLoading && !buildingInfoLoading && !noticeLoading"
           class="work-card building-binding-empty"
         >
           <div>
@@ -2075,7 +2244,7 @@ onMounted(() => {
         </section>
         <!-- 最新通告 -->
         <div
-          v-show="activeTab === 'affairs-notices'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-notices'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-notices' }"
           data-work-panel="affairs-notices"
@@ -2148,7 +2317,7 @@ onMounted(() => {
 
         <!-- 大廈資料 -->
         <div
-          v-show="activeTab === 'affairs-building'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-building'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-building' }"
           data-work-panel="affairs-building"
@@ -2413,7 +2582,7 @@ onMounted(() => {
 
         <!-- 大廈財務 -->
         <div
-          v-show="activeTab === 'affairs-finance'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-finance'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-finance' }"
           data-work-panel="affairs-finance"
@@ -2729,7 +2898,7 @@ onMounted(() => {
 
         <!-- 業戶帳目 -->
         <div
-          v-show="activeTab === 'affairs-owner-account'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-owner-account'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-owner-account' }"
           data-work-panel="affairs-owner-account"
@@ -2953,7 +3122,7 @@ onMounted(() => {
 
         <!-- 申請表格 -->
         <div
-          v-show="activeTab === 'affairs-forms'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-forms'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-forms' }"
           data-work-panel="affairs-forms"
@@ -3003,7 +3172,7 @@ onMounted(() => {
 
         <!-- 意見提供/維修報修 -->
         <div
-          v-show="activeTab === 'affairs-feedback'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-feedback'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-feedback' }"
           data-work-panel="affairs-feedback"
@@ -3429,7 +3598,7 @@ onMounted(() => {
 
         <!-- 智能門禁 -->
         <div
-          v-show="activeTab === 'affairs-access'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-access'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-access' }"
           data-work-panel="affairs-access"
@@ -3643,7 +3812,7 @@ onMounted(() => {
 
         <!-- 住戶授權 -->
         <div
-          v-show="activeTab === 'affairs-resident-authorizations'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-resident-authorizations'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-resident-authorizations' }"
           data-work-panel="affairs-resident-authorizations"
@@ -3692,6 +3861,7 @@ onMounted(() => {
                         <input v-model="residentAuthorizationEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" :placeholder="t('building.authorizations.emailPlaceholder')">
                         <AppIcon name="inbox" :size="18" />
                       </div>
+                      <small class="authorization-field-hint">{{ t('building.authorizations.emailNoticeHint') }}</small>
                     </label>
                     <button
                       type="button"
@@ -3702,39 +3872,22 @@ onMounted(() => {
                       {{ residentAuthorizationContactChecking ? t('building.authorizations.checking') : t('building.authorizations.checkContacts') }}
                     </button>
                     <p
-                      v-if="residentAuthorizationContactCheck"
+                      v-if="residentAuthorizationContactResult"
                       class="authorization-contact-result"
-                      :class="{ success: residentAuthorizationContactCheck.can_authorize, warn: !residentAuthorizationContactCheck.can_authorize }"
+                      :class="residentAuthorizationContactResult.tone"
                       aria-live="polite"
                     >
-                      {{
-                        residentAuthorizationContactCheck.can_authorize
-                          ? t('building.authorizations.accountFound')
-                          : residentAuthorizationNeedsRegistration
-                            ? t('building.authorizations.accountNotFound')
-                            : t('building.authorizations.accountNotReady')
-                      }}
+                      {{ residentAuthorizationContactResult.message }}
                     </p>
                     <label
-                      v-if="residentAuthorizationContactCheck"
+                      v-if="residentAuthorizationContactCheck && residentAuthorizationPhone.trim() && residentAuthorizationEmail.trim()"
                       class="authorization-email-optin"
                     >
                       <input
                         v-model="residentAuthorizationEmailNotice"
                         type="checkbox"
-                        :disabled="residentAuthorizationNeedsRegistration"
                       >
                       <span>{{ t('building.authorizations.emailNoticeOptIn') }}</span>
-                    </label>
-                    <label
-                      v-if="residentAuthorizationNeedsRegistration"
-                      class="authorization-field authorization-name-field"
-                    >
-                      <span>{{ t('building.authorizations.englishName') }}</span>
-                      <div class="authorization-input-shell">
-                        <input v-model="residentAuthorizationEnglishName" type="text" autocomplete="name" :placeholder="t('building.authorizations.englishNamePlaceholder')">
-                        <AppIcon name="user" :size="18" />
-                      </div>
                     </label>
                   </div>
                 </div>
@@ -3769,6 +3922,14 @@ onMounted(() => {
               </div>
               <span class="authorization-count-chip">{{ residentAuthorizations.length }}</span>
             </div>
+            <p
+              v-if="residentAuthorizationListMessage"
+              class="authorization-list-message"
+              :class="residentAuthorizationListMessage.tone"
+              aria-live="polite"
+            >
+              {{ t(residentAuthorizationListMessage.key) }}
+            </p>
             <div v-if="residentAuthorizationLoading" class="authorization-empty-state">
               {{ t('building.common.loading') }}
             </div>
@@ -3777,28 +3938,43 @@ onMounted(() => {
               <strong>{{ t('building.authorizations.empty') }}</strong>
             </div>
             <div v-else class="authorization-record-list">
-              <div v-for="row in residentAuthorizations" :key="row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`" class="authorization-record">
+              <div v-for="row in residentAuthorizations" :key="row.key" class="authorization-record">
                 <div class="authorization-record-person">
                   <span class="authorization-record-avatar"><AppIcon name="user" :size="16" /></span>
                   <div>
-                    <strong>{{ row.target_name || row.target_username || t('building.authorizations.authorizedUser') }}</strong>
-                    <span class="authorization-status active">{{ t('building.authorizations.status.active') }}</span>
+                    <strong>{{ row.name }}</strong>
+                    <span
+                      class="authorization-status"
+                      :class="residentAuthorizationStatusTone(row.status)"
+                    >{{ t(residentAuthorizationStatusKey(row.status)) }}</span>
                   </div>
                 </div>
                 <div class="authorization-record-contact">
-                  <span v-if="row.target_phone"><AppIcon name="phone" :size="14" />{{ row.target_phone }}</span>
-                  <span v-if="row.target_email"><AppIcon name="inbox" :size="14" />{{ row.target_email }}</span>
+                  <span v-if="row.phone"><AppIcon name="phone" :size="14" />{{ row.phone }}</span>
+                  <span v-if="row.email"><AppIcon name="inbox" :size="14" />{{ row.email }}</span>
                 </div>
-                <button
-                  type="button"
-                  class="authorization-revoke-button"
-                  :disabled="revokingResidentAuthorization === String(row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`)"
-                  :aria-label="t('building.authorizations.revoke')"
-                  @click="revokeResidentAuthorization(row)"
-                >
-                  <AppIcon name="close" :size="16" />
-                  <span>{{ revokingResidentAuthorization === String(row.relation_info_id ?? `${row.unit_id}:${row.target_user_id}`) ? t('building.authorizations.revoking') : t('building.authorizations.revoke') }}</span>
-                </button>
+                <div class="authorization-record-actions">
+                  <button
+                    v-if="row.pending"
+                    type="button"
+                    class="authorization-resend-button"
+                    :disabled="resendingResidentAuthorization === row.pending.authorization_id"
+                    @click="resendResidentAuthorization(row)"
+                  >
+                    <AppIcon name="reload" :size="16" />
+                    <span>{{ resendingResidentAuthorization === row.pending.authorization_id ? t('building.authorizations.resending') : t('building.authorizations.resend') }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="authorization-revoke-button"
+                    :disabled="revokingResidentAuthorization === row.key"
+                    :aria-label="t('building.authorizations.revoke')"
+                    @click="revokeResidentAuthorization(row)"
+                  >
+                    <AppIcon name="close" :size="16" />
+                    <span>{{ revokingResidentAuthorization === row.key ? t('building.authorizations.revoking') : t('building.authorizations.revoke') }}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -3806,7 +3982,7 @@ onMounted(() => {
 
         <!-- 視像監控 -->
         <div
-          v-show="activeTab === 'affairs-icctv'"
+          v-show="hasLinkedBuilding && activeTab === 'affairs-icctv'"
           class="work-panel"
           :class="{ on: activeTab === 'affairs-icctv' }"
           data-work-panel="affairs-icctv"

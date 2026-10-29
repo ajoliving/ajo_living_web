@@ -995,7 +995,28 @@ export const useLoginPage = () => {
     validationErrors.value = {};
   };
 
+  // 34. 由授權邀請電郵連結帶入註冊模式並預填聯絡資料。
+  const applyInvitationPrefill = (): void => {
+    if (route.query.action !== 'register') return;
+    emailAction.value = 'register';
+    registrationStep.value = 1;
+    const inviteEmail = typeof route.query.email === 'string' ? route.query.email.trim() : '';
+    const invitePhone = typeof route.query.phone === 'string' ? route.query.phone.trim() : '';
+    if (inviteEmail) {
+      formState.email = inviteEmail;
+    }
+    if (invitePhone) {
+      const { phoneCountryCode, phoneNumber } = parsePhoneInput(invitePhone);
+      if (phoneCountryCode && phoneNumber) {
+        formState.phoneCountryCode = phoneCountryCode;
+        formState.phone = phoneNumber;
+      }
+    }
+    validationErrors.value = {};
+  };
+
   onMounted(() => {
+    applyInvitationPrefill();
     void loadConfiguredHero();
   });
 

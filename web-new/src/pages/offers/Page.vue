@@ -35,10 +35,7 @@ import {
   displaySupermarketStore,
   formatSupermarketDate,
   formatSupermarketHKPrice,
-  supermarketPriceDiscountRate,
-  supermarketOfferTexts,
   supermarketOfferDisplayText,
-  supermarketIsSimpleOffer,
   supermarketPrimaryPrice,
   resolveSupermarketProductBrand,
   resolveSupermarketProductCategory,
@@ -47,8 +44,6 @@ import {
   resolveSupermarketProductUnit,
   supermarketStorePrices,
 } from '@/utils/supermarket-offers';
-
-type ViewMode = 'grid' | 'table';
 
 interface FilterPill {
   label: string;
@@ -75,18 +70,28 @@ interface PageButton {
   disabled: boolean;
 }
 
+interface HomeCategorySection {
+  id: string;
+  category: string;
+  label: string;
+  items: SupermarketProduct[];
+}
+
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const pageSize = 20;
+const categoryPageSize = 15;
 const summary = ref<SupermarketSummary | null>(null);
 const searchResult = ref<SupermarketSearchResult | null>(null);
+const homeSections = ref<HomeCategorySection[]>([]);
 const favorites = ref<SupermarketProduct[]>([]);
 const bannerAds = ref<PublicDisplayAdResponse[]>([]);
 const summaryLoading = ref(false);
 const searchLoading = ref(false);
 const favoritesLoading = ref(false);
+const homeSectionsLoading = ref(false);
 const summaryError = ref('');
 const searchError = ref('');
 const actionMessage = ref('');
@@ -101,7 +106,6 @@ const activeStore = ref('');
 const activeBrand = ref('');
 const activeSort = ref('discount');
 const showFavoritesOnly = ref(false);
-const viewMode = ref<ViewMode>('grid');
 const currentPage = ref(1);
 const isMobileFilterOpen = ref(false);
 let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -193,7 +197,72 @@ const visibleProducts = computed<SupermarketProduct[]>(() => {
 const totalCount = computed(() => (showFavoritesOnly.value ? favorites.value.length : searchResult.value?.total ?? 0));
 
 // 9. 取得目前總頁數
-const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)));
+const currentPageSize = computed(() =>
+  activeCategory.value && !showFavoritesOnly.value ? categoryPageSize : pageSize,
+);
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / currentPageSize.value)));
+
+// 9.1 分類首頁按六個快捷分類建立橫向商品列。
+const loadHomeSections = async (): Promise<void> => {
+  if (activeCategory.value || showFavoritesOnly.value) {
+    homeSections.value = [];
+    homeSectionsLoading.value = false;
+    return;
+  }
+
+  const categories = categoryTiles
+    .map((tile) => ({
+      tile,
+      category: categoryOptions.value.find((item) => categoryMatchesTile(item.value, tile))?.value ?? '',
+    }))
+    .filter((item): item is { tile: CategoryTile; category: string } => Boolean(item.category));
+
+  homeSectionsLoading.value = true;
+  const sections = await Promise.all(categories.map(async ({ tile, category }) => {
+    try {
+      const { data } = await searchSupermarketProducts({
+        q: searchQuery.value.trim(),
+        category,
+        brand: activeBrand.value,
+        store: activeStore.value,
+        offerOnly: false,
+        page: 1,
+        pageSize: 6,
+      });
+      return {
+        id: tile.id,
+        category,
+        label: displaySupermarketCategory(category, preferenceStore.locale),
+        items: data.data.items.slice(0, 6),
+      };
+    } catch {
+      return null;
+    }
+  }));
+
+  homeSections.value = sections.filter(
+    (section): section is HomeCategorySection => Boolean(section?.items.length),
+  );
+  homeSectionsLoading.value = false;
+};
+
+// 9.2 首頁分類列與分類結果網格共用商品卡資料結構。
+const displaySections = computed((): Array<HomeCategorySection & { layout: 'rail' | 'grid' }> => {
+  if (!activeCategory.value && !showFavoritesOnly.value) {
+    return homeSections.value.map((section) => ({ ...section, layout: 'rail' }));
+  }
+  return visibleProducts.value.length > 0
+    ? [{
+        id: 'results',
+        category: activeCategory.value,
+        label: activeCategory.value
+          ? displaySupermarketCategory(activeCategory.value, preferenceStore.locale)
+          : t('offers.list.myFavorites'),
+        items: visibleProducts.value,
+        layout: 'grid',
+      }]
+    : [];
+});
 
 // 10. 建立分頁按鈕
 const pageButtons = computed<PageButton[]>(() => {
@@ -202,29 +271,13 @@ const pageButtons = computed<PageButton[]>(() => {
   if (currentPage.value < totalPages.value) pages.add(currentPage.value + 1);
   const numericPages = [...pages].filter((page) => page >= 1 && page <= totalPages.value).sort((a, b) => a - b);
 
-  return [
-    {
-      label: t('offers.list.previous'),
-      key: 'prev',
-      page: Math.max(1, currentPage.value - 1),
-      active: false,
-      disabled: currentPage.value <= 1,
-    },
-    ...numericPages.map((page) => ({
-      label: page,
-      key: String(page),
-      page,
-      active: page === currentPage.value,
-      disabled: false,
-    })),
-    {
-      label: t('offers.list.next'),
-      key: 'next',
-      page: Math.min(totalPages.value, currentPage.value + 1),
-      active: false,
-      disabled: currentPage.value >= totalPages.value,
-    },
-  ];
+  return numericPages.map((page) => ({
+    label: page,
+    key: String(page),
+    page,
+    active: page === currentPage.value,
+    disabled: false,
+  }));
 });
 
 // 11. 建立更新資訊文字
@@ -247,6 +300,9 @@ const loadSummary = async (): Promise<void> => {
   try {
     const { data } = await fetchSupermarketSummary();
     summary.value = data.data;
+    if (searchResult.value && !activeCategory.value && !showFavoritesOnly.value) {
+      await loadHomeSections();
+    }
   } catch {
     summaryError.value = t('offers.list.summaryError');
   } finally {
@@ -282,10 +338,11 @@ const loadSearch = async (): Promise<void> => {
       offerOnly: false,
       sort: activeSort.value,
       page: currentPage.value,
-      pageSize,
+      pageSize: activeCategory.value ? categoryPageSize : pageSize,
     };
     const { data } = await searchSupermarketProducts(params);
     searchResult.value = data.data;
+    await loadHomeSections();
   } catch {
     searchError.value = t('offers.list.searchError');
   } finally {
@@ -483,6 +540,7 @@ const toggleFavoritesOnly = async (): Promise<void> => {
   showFavoritesOnly.value = !showFavoritesOnly.value;
   currentPage.value = 1;
   if (showFavoritesOnly.value) {
+    homeSections.value = [];
     await loadFavorites();
   } else {
     await loadSearch();
@@ -515,16 +573,6 @@ const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
   }
 };
 
-// 32. 切換視圖模式
-const setView = (mode: ViewMode): void => {
-  viewMode.value = mode;
-};
-
-// 32.1 在網格與表格之間切換
-const toggleView = (): void => {
-  setView(viewMode.value === 'grid' ? 'table' : 'grid');
-};
-
 // 33. 切換分頁
 const selectPage = (page: PageButton): void => {
   if (page.disabled || currentPage.value === page.page) {
@@ -548,7 +596,6 @@ const openDetail = (product: SupermarketProduct): void => {
       brand: activeBrand.value || undefined,
       sort: activeSort.value || undefined,
       page: currentPage.value > 1 ? String(currentPage.value) : undefined,
-      view: viewMode.value !== 'grid' ? viewMode.value : undefined,
     },
   });
 };
@@ -603,25 +650,11 @@ const productStorePrices = (product: SupermarketProduct) =>
 const productPrimaryPrice = (product: SupermarketProduct) =>
   supermarketPrimaryPrice(product, preferenceStore.locale);
 
-// 43. 取得商品優惠文字
-const productOfferTexts = (product: SupermarketProduct): string[] =>
-  supermarketOfferTexts(product, preferenceStore.locale)
-    .map((value) => supermarketOfferDisplayText(value))
-    .filter(Boolean);
-
 // 44. 顯示商品主標題名稱
 const productDisplayName = (product: SupermarketProduct): string =>
   [resolveSupermarketProductName(product), resolveSupermarketProductUnit(product)]
     .filter(Boolean)
     .join(' ');
-
-// 45. 顯示不含單位的商品名稱
-const productTitleName = (product: SupermarketProduct): string =>
-  resolveSupermarketProductName(product);
-
-// 46. 顯示商品單位
-const productDisplayUnit = (product: SupermarketProduct): string =>
-  resolveSupermarketProductUnit(product);
 
 // 47. 顯示商品品牌
 const productDisplayBrand = (product: SupermarketProduct): string =>
@@ -631,13 +664,13 @@ const productDisplayBrand = (product: SupermarketProduct): string =>
 const productDisplayTitle = (product: SupermarketProduct): string =>
   resolveSupermarketProductFullTitle(product);
 
+// 49.1 圖片缺失時以品牌或商品名稱首字回退。
+const productFallbackInitial = (product: SupermarketProduct): string =>
+  productDisplayBrand(product).slice(0, 1) || productDisplayName(product).slice(0, 1);
+
 // 50. 顯示商品完整分類。
 const productCategoryText = (product: SupermarketProduct): string =>
   resolveSupermarketProductCategory(product);
-
-// 51. 顯示單位價格
-const formatOfferUnitPrice = (value: number | null | undefined): string =>
-  `${formatOfferPrice(value)}${t('offers.list.perItem')}`;
 
 // 53. 顯示不含港幣前綴的金額
 const formatPlainDollar = (value: number): string =>
@@ -647,59 +680,75 @@ const formatPlainDollar = (value: number): string =>
   })}`;
 
 // 54. 取得最低價門店
+const productFeaturedPrices = (product: SupermarketProduct): SupermarketStorePrice[] => {
+  const prices = productStorePrices(product);
+  const lowest = prices[0]?.effectiveUnitPrice;
+  return prices.filter((price) => price.effectiveUnitPrice === lowest);
+};
+
 const productFeaturedPrice = (product: SupermarketProduct): SupermarketStorePrice =>
-  productStorePrices(product)[0] ?? productPrimaryPrice(product);
+  productFeaturedPrices(product)[0] ?? productPrimaryPrice(product);
+
+// 54.1 顯示所有並列最低價門店，其他門店不進入商品卡。
+const productFeaturedStoreLabel = (product: SupermarketProduct): string =>
+  productFeaturedPrices(product).map((price) => formatStore(price.store)).join(' / ');
+
+// 54.2 按分類標題的左右控制按鈕捲動對應商品列。
+const scrollProductSection = (event: MouseEvent, direction: -1 | 1): void => {
+  const button = event.currentTarget;
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+
+  const track = button.closest('.gp-product-section')?.querySelector<HTMLElement>('.gp-product-track.is-rail');
+  if (!track) {
+    return;
+  }
+
+  const distance = Math.max(track.clientWidth * 0.85, 220);
+  if (typeof track.scrollBy === 'function') {
+    track.scrollBy({ left: direction * distance, behavior: 'smooth' });
+    return;
+  }
+  track.scrollLeft += direction * distance;
+};
 
 // 55. 取得其餘可對比門店
 const productOtherPrices = (product: SupermarketProduct): SupermarketStorePrice[] =>
-  productStorePrices(product).slice(1, 3);
+  productStorePrices(product).filter((price) => price.effectiveUnitPrice > productFeaturedPrice(product).effectiveUnitPrice);
 
-// 56. 判斷門店是否已計算優惠
-const productHasCalculatedOffer = (price: SupermarketStorePrice): boolean =>
-  supermarketPriceDiscountRate(price) > 0 || Boolean(supermarketOfferDisplayText(price.offer));
-
-// 57. 顯示最低價主卡標籤
-const productBestBadgeText = (price: SupermarketStorePrice): string => {
-  const lowestLabel = t('offers.list.lowestAcrossStores');
-  return productHasCalculatedOffer(price)
-    ? `${lowestLabel} · ${t('offers.list.offerApplied')}`
-    : lowestLabel;
-};
-
-// 58. 顯示最低價主卡優惠說明
+// 57. 顯示每件節省金額，不把商店優惠原文帶入商品卡。
 const productFeaturedOfferText = (product: SupermarketProduct, price: SupermarketStorePrice): string => {
   const offer = supermarketOfferDisplayText(price.offer);
-  if (offer) {
-    return `${offer} · ${t('offers.list.paidUnitPrice')}`;
+  const existingSaving = offer.match(/(?:每件慳|saved per item)\s*[$HK]*\s*([\d,.]+)/i);
+  if (existingSaving) {
+    return t('offers.list.savedPerItem', { amount: formatCompactDollar(Number(existingSaving[1]?.replace(/,/g, ''))) });
   }
-  const othersHaveExtra = productStorePrices(product)
-    .slice(1)
-    .some((item) => Boolean(supermarketOfferDisplayText(item.offer)) && !supermarketIsSimpleOffer(item.offer));
-  return othersHaveExtra ? t('offers.list.currentPriceNoExtra') : t('offers.list.currentPrice');
+  const savings = price.listPrice > price.effectiveUnitPrice
+    ? price.listPrice - price.effectiveUnitPrice
+    : (() => {
+        const nextPrice = productOtherPrices(product)
+          .map((item) => item.effectiveUnitPrice)
+          .sort((a, b) => a - b)[0];
+        return nextPrice === undefined ? 0 : nextPrice - price.effectiveUnitPrice;
+      })();
+  return t('offers.list.savedPerItem', { amount: formatCompactDollar(Math.max(0, savings)) });
 };
 
-// 59. 顯示最低價主卡對照價
-const productFeaturedCompareText = (product: SupermarketProduct, price: SupermarketStorePrice): string => {
+// 58. 只顯示商品實際原價，不以其他商店價格作為比較價。
+const productFeaturedCompareText = (price: SupermarketStorePrice): string => {
   if (price.listPrice > price.effectiveUnitPrice) {
     return t('offers.list.originalPrice', { price: formatPlainDollar(price.listPrice) });
   }
-  const otherPrices = productStorePrices(product)
-    .slice(1)
-    .map((item) => item.effectiveUnitPrice)
-    .filter((value) => Number.isFinite(value) && value > price.effectiveUnitPrice);
-  if (otherPrices.length === 0) {
-    return '';
-  }
-  const maxOther = Math.max(...otherPrices);
-  const minOther = Math.min(...otherPrices);
-  return minOther === maxOther
-    ? t('offers.list.otherStorePrice', { price: formatPlainDollar(maxOther) })
-    : t('offers.list.otherStoreUpTo', { price: formatPlainDollar(maxOther) });
+  return '';
 };
 
-// 60. 顯示其他門店優惠說明
-const productStoreOfferLabel = (price: SupermarketStorePrice): string =>
-  supermarketOfferDisplayText(price.offer) || t('offers.list.currentPrice');
+// 60. 格式化優惠金額，整數不保留小數。
+const formatCompactDollar = (value: number): string =>
+  `$${value.toLocaleString(preferenceStore.locale, {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 // 35. 還原由商品詳情頁帶回的搜尋條件。
 const restoreSearchState = (): void => {
@@ -711,7 +760,6 @@ const restoreSearchState = (): void => {
   activeSort.value = typeof query.sort === 'string' && sortOptions.value.some((item) => item.value === query.sort)
     ? query.sort
     : 'discount';
-  viewMode.value = query.view === 'table' ? 'table' : 'grid';
   const page = typeof query.page === 'string' ? Number(query.page) : 1;
   currentPage.value = Number.isInteger(page) && page > 0 ? page : 1;
 };
@@ -832,17 +880,6 @@ onBeforeUnmount(() => {
           </select>
         </label>
 
-        <section class="gp-filter-section gp-view-filter-section">
-          <h3>{{ t('offers.list.viewMode') }}</h3>
-          <button
-            type="button"
-            class="gp-view-switch"
-            :aria-pressed="viewMode === 'table'"
-            @click="toggleView"
-          >
-            {{ viewMode === 'grid' ? t('offers.list.table') : t('offers.list.grid') }}
-          </button>
-        </section>
       </div>
 
       <footer class="gp-filter-sheet-actions filter-sheet-actions">
@@ -861,9 +898,13 @@ onBeforeUnmount(() => {
 
     <!-- 1. 控制欄 -->
     <section class="gp-controls">
+      <header class="gp-page-heading">
+        <h1>{{ t('offers.list.heroTitle') }}</h1>
+        <p>{{ t('offers.list.heroSubtitle') }}</p>
+      </header>
       <div
         class="gp-ad-banner"
-        :aria-label="t('offers.list.adSlotTitle')"
+        aria-hidden="true"
       >
         <a
           v-if="desktopBanner"
@@ -880,10 +921,7 @@ onBeforeUnmount(() => {
         <div
           v-else
           class="gp-ad-frame gp-ad-placeholder gp-ad-desktop"
-        >
-          <strong>{{ t('offers.list.adSlotTitle') }}</strong>
-          <span>{{ t('offers.list.adSlotSizeDesktop') }}</span>
-        </div>
+        ></div>
         <a
           v-if="mobileBanner"
           class="gp-ad-frame gp-ad-mobile"
@@ -899,10 +937,7 @@ onBeforeUnmount(() => {
         <div
           v-else
           class="gp-ad-frame gp-ad-placeholder gp-ad-mobile"
-        >
-          <strong>{{ t('offers.list.adSlotTitle') }}</strong>
-          <span>{{ t('offers.list.adSlotSizeMobile') }}</span>
-        </div>
+        ></div>
       </div>
       <form
         class="gp-search-row"
@@ -1059,7 +1094,11 @@ onBeforeUnmount(() => {
           @click="resetFilters"
         >{{ t('offers.list.reset') }}</button>
       </div>
-      <div class="gp-cat-nav">
+      <div
+        v-if="!activeCategory && !showFavoritesOnly"
+        class="gp-cat-nav"
+      >
+        <h2 class="gp-cat-nav-title">{{ t('offers.list.popularCategories') }}</h2>
         <button
           v-for="tile in categoryTiles"
           :key="tile.id"
@@ -1092,6 +1131,21 @@ onBeforeUnmount(() => {
     <!-- 3. 內容區 -->
     <section class="gp-content">
       <div class="gp-content-header">
+        <div
+          v-if="activeCategory || showFavoritesOnly"
+          class="gp-category-heading"
+        >
+          <h2>
+            {{ showFavoritesOnly
+              ? t('offers.list.myFavorites')
+              : displaySupermarketCategory(activeCategory, preferenceStore.locale) }}
+          </h2>
+          <button
+            v-if="activeCategory"
+            type="button"
+            @click="selectCategory('')"
+          >{{ t('offers.list.allCategories') }}</button>
+        </div>
         <span class="gp-count">
           {{ searchLoading
             ? t('offers.list.loading')
@@ -1138,28 +1192,6 @@ onBeforeUnmount(() => {
               {{ brand }}
             </option>
           </select>
-          <button
-            type="button"
-            class="gp-view-switch"
-            :aria-pressed="viewMode === 'table'"
-            :aria-label="t('offers.list.viewMode')"
-            @click="toggleView"
-          >
-            {{ viewMode === 'grid' ? t('offers.list.table') : t('offers.list.grid') }}
-          </button>
-          <select
-            v-model="activeSort"
-            class="gp-sort gp-order-select"
-            @change="selectSort"
-          >
-            <option
-              v-for="option in sortOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
         </div>
       </div>
 
@@ -1188,147 +1220,112 @@ onBeforeUnmount(() => {
         {{ t('offers.list.loadingProducts') }}
       </p>
       <p
-        v-else-if="!searchLoading && visibleProducts.length === 0"
+        v-else-if="!searchLoading && !homeSectionsLoading && displaySections.length === 0"
         class="gp-state"
       >
-        {{ t('offers.list.empty') }}
+        {{ t('offers.list.noRelevantProducts') }}
       </p>
 
-      <!-- 3.1 網格視圖 -->
       <div
-        v-if="visibleProducts.length > 0 && viewMode === 'grid'"
-        class="gp-grid"
+        class="gp-product-sections"
       >
-        <article
-          v-for="product in visibleProducts"
-          :key="product.code"
-          class="gp-card"
-          @click="openDetail(product)"
+        <section
+          v-for="section in displaySections"
+          :key="section.id"
+          class="gp-product-section"
         >
-          <div class="gp-card-media">
-            <div class="gp-card-img">
+          <header
+            v-if="section.layout === 'rail'"
+            class="gp-product-section-header"
+          >
+            <h2>{{ section.label }}</h2>
+            <div class="gp-product-section-actions">
               <button
                 type="button"
-                class="gp-card-fav"
-                :class="product.isFavorite ? 'on' : ''"
-                :aria-label="product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite')"
-                @click.stop="toggleFavorite(product)"
+                class="gp-product-rail-control"
+                :aria-label="t('offers.list.scrollLeft')"
+                :title="t('offers.list.scrollLeft')"
+                @click.stop="scrollProductSection($event, -1)"
               >
-                <AppIcon
-                  name="heart"
-                  :size="16"
-                />
+                <AppIcon name="arrow-left" :size="17" />
               </button>
-              <img
-                v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
-                :src="product.image_url || product.imageUrl"
-                :alt="productDisplayTitle(product)"
-                @error="handleProductImageError(product.code)"
+              <button
+                type="button"
+                class="gp-product-rail-control"
+                :aria-label="t('offers.list.scrollRight')"
+                :title="t('offers.list.scrollRight')"
+                @click.stop="scrollProductSection($event, 1)"
               >
-              <div
-                v-else
-                class="gp-card-img-ph"
-              />
+                <AppIcon name="arrow-right" :size="17" />
+              </button>
+              <button
+                type="button"
+                class="gp-more-products"
+                @click="selectCategory(section.category)"
+              >{{ t('offers.list.moreProducts') }}</button>
             </div>
-          </div>
-          <div class="gp-card-body">
-            <div class="gp-card-title-row">
-              <span
-                v-if="productDisplayBrand(product)"
-                class="gp-card-brand-chip"
-              >{{ productDisplayBrand(product) }}</span>
-              <div class="gp-card-name">
-                <span>{{ productTitleName(product) }}</span>
-                <span
-                  v-if="productDisplayUnit(product)"
-                  class="gp-card-unit"
-                >{{ productDisplayUnit(product) }}</span>
-              </div>
-            </div>
-            <div class="gp-card-best">
-              <div class="gp-card-best-copy">
-                <div class="gp-card-best-badge">{{ productBestBadgeText(productFeaturedPrice(product)) }}</div>
-                <div class="gp-card-best-store">{{ formatStore(productFeaturedPrice(product).store) }}</div>
-                <div class="gp-card-best-offer">{{ productFeaturedOfferText(product, productFeaturedPrice(product)) }}</div>
-              </div>
-              <div class="gp-card-best-price">
-                <div class="gp-card-best-amount">{{ formatOfferPrice(productFeaturedPrice(product).effectiveUnitPrice) }}</div>
-                <div
-                  v-if="productFeaturedCompareText(product, productFeaturedPrice(product))"
-                  class="gp-card-best-compare"
-                >{{ productFeaturedCompareText(product, productFeaturedPrice(product)) }}</div>
-              </div>
-            </div>
-            <div
-              v-if="productOtherPrices(product).length > 0"
-              class="gp-card-others"
-            >
-              <div
-                v-for="price in productOtherPrices(product)"
-                :key="`${product.code}-${price.store}-${price.effectiveUnitPrice}`"
-                class="gp-card-other-row"
-              >
-                <span>{{ formatStore(price.store) }}</span>
-                <span>{{ productStoreOfferLabel(price) }}</span>
-                <strong>{{ formatPlainDollar(price.effectiveUnitPrice) }}</strong>
-              </div>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <!-- 3.2 表格視圖 -->
-      <div
-        v-if="visibleProducts.length > 0 && viewMode === 'table'"
-        class="gp-table"
-      >
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t('offers.list.product') }}</th>
-              <th>{{ t('offers.list.store') }}</th>
-              <th>{{ t('offers.list.offer') }}</th>
-              <th>{{ t('offers.list.effectivePrice') }}</th>
-              <th>{{ t('offers.list.favorite') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="product in visibleProducts"
+          </header>
+          <div
+            class="gp-product-track"
+            :class="section.layout === 'rail' ? 'is-rail' : 'is-grid'"
+          >
+            <article
+              v-for="product in section.items"
               :key="product.code"
+              class="gp-card"
               @click="openDetail(product)"
             >
-              <td>
-                <div class="gp-table-product">
-                  <div class="gp-table-product-head">
-                    <span
-                      v-if="productDisplayBrand(product)"
-                      class="gp-table-brand-chip"
-                    >{{ productDisplayBrand(product) }}</span>
-                    <strong>{{ productDisplayName(product) }}</strong>
-                  </div>
-                </div>
-              </td>
-              <td>{{ formatStore(productPrimaryPrice(product).store) }}</td>
-              <td>{{ productOfferTexts(product).join(' / ') || '-' }}</td>
-              <td>{{ formatOfferUnitPrice(productPrimaryPrice(product).effectiveUnitPrice) }}</td>
-              <td>
+              <div class="gp-card-img">
+                <span
+                  v-if="productDisplayBrand(product)"
+                  class="gp-card-brand-chip"
+                >{{ productDisplayBrand(product) }}</span>
                 <button
                   type="button"
-                  class="gp-table-fav"
+                  class="gp-card-fav"
+                  :class="product.isFavorite ? 'on' : ''"
+                  :aria-label="product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite')"
                   @click.stop="toggleFavorite(product)"
                 >
-                  {{ product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite') }}
+                  <AppIcon
+                    name="heart"
+                    :size="16"
+                  />
                 </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <img
+                  v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
+                  :src="product.image_url || product.imageUrl"
+                  :alt="productDisplayTitle(product)"
+                  @error="handleProductImageError(product.code)"
+                >
+                <span
+                  v-else
+                  class="gp-card-img-ph"
+                >{{ productFallbackInitial(product) }}</span>
+              </div>
+              <div class="gp-card-body">
+                <div class="gp-card-name">
+                  <span class="gp-card-name-text">{{ productDisplayName(product) }}</span>
+                </div>
+                <div class="gp-card-best-store">{{ productFeaturedStoreLabel(product) }}</div>
+                <div class="gp-card-best-price">
+                  <span>{{ formatOfferPrice(productFeaturedPrice(product).effectiveUnitPrice) }}</span>
+                  <small>{{ t('offers.list.perItem') }}</small>
+                </div>
+                <div
+                  v-if="productFeaturedCompareText(productFeaturedPrice(product))"
+                  class="gp-card-best-compare"
+                >{{ productFeaturedCompareText(productFeaturedPrice(product)) }}</div>
+                <div class="gp-card-best-offer">{{ productFeaturedOfferText(product, productFeaturedPrice(product)) }}</div>
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
 
       <!-- 3.3 分頁 -->
       <div
-        v-if="totalPages > 1"
+        v-if="activeCategory && totalPages > 1"
         class="gp-pagination"
       >
         <button
@@ -1772,23 +1769,6 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.gp-view-switch {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: rgb(var(--color-surface));
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 13px;
-  white-space: nowrap;
-}
-
 .gp-sort {
   max-width: 180px;
   border: 1px solid var(--bdr);
@@ -1891,15 +1871,16 @@ onBeforeUnmount(() => {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 0;
+    left: 50%;
     z-index: 3;
-    width: var(--gp-media-hover-width);
+    width: min(var(--gp-media-hover-width), 100%);
     height: 100%;
+    transform: translateX(-50%);
   }
 
   .gp-card-img:hover img {
     max-width: 100%;
-    max-height: 176px;
+    max-height: 100%;
   }
 }
 
@@ -2245,8 +2226,7 @@ onBeforeUnmount(() => {
   .gp-filter-pills,
   .gp-store-pills,
   .gp-search-row .gp-fav-btn,
-  .gp-brand-select,
-  .gp-toolbar .gp-view-switch {
+  .gp-toolbar {
     display: none;
   }
 
@@ -2293,14 +2273,8 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
-  .gp-toolbar {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .gp-toolbar .gp-sort {
-    max-width: none;
-    flex: 1 1 140px;
+  .gp-cat-icon {
+    transform: translateY(3px);
   }
 
   .gp-search-row {
@@ -2688,7 +2662,527 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 10. 夜間護眼色 */
+/* 10. AJO 超市情報版面 */
+.page {
+  background: #fff;
+  color: #2c2824;
+  overflow-x: clip;
+  font-family: "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", sans-serif;
+}
+
+.gp-controls,
+.gp-content {
+  width: min(100%, 1120px);
+  box-sizing: border-box;
+  padding-right: 18px;
+  padding-left: 18px;
+}
+
+.gp-controls {
+  border-bottom: 0;
+  background: #fff;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.gp-page-heading {
+  padding: 22px 0 18px;
+  text-align: center;
+}
+
+.gp-page-heading h1 {
+  margin: 0;
+  color: #4a433c;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.gp-page-heading p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.gp-ad-banner {
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.gp-ad-placeholder {
+  border: 0;
+}
+
+.gp-search-row {
+  justify-content: stretch;
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+.gp-search-box {
+  max-width: none;
+  border-color: #e6e1d8;
+  border-radius: 8px;
+}
+
+.gp-search-btn {
+  border-color: rgb(var(--color-primary));
+  border-radius: 8px;
+  background: rgb(var(--color-primary));
+  color: #fff;
+}
+
+.gp-search-btn:hover:not(:disabled) {
+  border-color: rgb(var(--color-brand-dark));
+  background: rgb(var(--color-brand-dark));
+}
+
+.gp-fav-btn {
+  border-color: #e6e1d8;
+  border-radius: 8px;
+}
+
+.gp-cat-nav {
+  margin: 14px auto 0;
+  gap: 8px;
+}
+
+.gp-cat-nav-title {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  color: rgb(var(--color-text));
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.gp-cat-tile {
+  min-height: 68px;
+  border-color: rgb(var(--color-primary) / 0.16);
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-primary));
+}
+
+.gp-cat-tile.on {
+  border-color: rgb(var(--color-primary));
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-brand-dark));
+}
+
+.gp-cat-icon {
+  color: rgb(var(--color-brand-mid));
+}
+
+.gp-content {
+  padding-top: 20px;
+  padding-bottom: 48px;
+  background: #fff;
+}
+
+.gp-content-header {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.gp-count,
+.gp-state {
+  color: #6b7280;
+}
+
+.gp-category-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.gp-category-heading h2,
+.gp-product-section-header h2 {
+  margin: 0;
+  color: #4a433c;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.gp-category-heading button,
+.gp-product-section-header .gp-more-products {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #4a433c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gp-product-section-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.gp-product-rail-control {
+  display: inline-grid;
+  width: 50px;
+  height: 28px;
+  flex: 0 0 50px;
+  place-items: center;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 6px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  cursor: pointer;
+  padding: 0;
+}
+
+.gp-product-rail-control:hover {
+  border-color: rgb(var(--color-primary) / 0.35);
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
+}
+
+.gp-product-rail-control:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
+.gp-product-sections {
+  display: grid;
+  gap: 28px;
+}
+
+.gp-product-section {
+  min-width: 0;
+}
+
+.gp-product-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gp-product-track {
+  min-width: 0;
+}
+
+.gp-product-track.is-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding: 0 0 6px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gp-product-track.is-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.gp-card {
+  display: flex;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-color: #e6e1d8;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: none;
+  isolation: auto;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.gp-product-track.is-rail .gp-card {
+  flex: 0 0 240px;
+  scroll-snap-align: start;
+}
+
+.gp-product-track.is-grid .gp-card {
+  width: 100%;
+  min-width: 0;
+}
+
+.gp-card:hover {
+  border-color: #ff6a00;
+  box-shadow: none;
+  transform: translateY(-2px);
+}
+
+.gp-card-img {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 148px;
+  height: 148px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  padding: 0;
+}
+
+.gp-card-img img {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.gp-card-img-ph {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #4a433c;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.gp-card-brand-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: block;
+  max-width: calc(100% - 56px);
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+  border-radius: 5px;
+  background: #2a7a6e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 2px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-card-fav {
+  top: 7px;
+  right: 7px;
+  width: 30px;
+  height: 30px;
+}
+
+.gp-card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 8px;
+  border-top: 1px solid #e6e1d8;
+  padding: 10px 10px 12px;
+  text-align: center;
+}
+
+.gp-card-name {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.gp-card-name-text {
+  display: -webkit-box;
+  max-height: 40px;
+  min-width: 0;
+  color: #2c2824;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.gp-card-best-store {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 8px;
+  background: #ff6a00;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  padding: 7px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-card-best-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  color: #2c2824;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gp-card-best-price small {
+  color: #2c2824;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gp-card-best-compare {
+  margin: 0;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-decoration: line-through;
+}
+
+.gp-card-best-offer {
+  margin-top: auto;
+  color: #ff6a00;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.gp-pagination {
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.gp-page-btn {
+  min-width: 38px;
+  min-height: 38px;
+  border-color: #e6e1d8;
+  border-radius: 6px;
+  background: #fff;
+  color: #2c2824;
+  font-size: 14px;
+}
+
+.gp-page-btn.on {
+  border-color: #ff6a00;
+  background: #ff6a00;
+  color: #fff;
+}
+
+.gp-updated-bar {
+  color: #6b7280;
+}
+
+@media (max-width: 1023px) {
+  .gp-controls,
+  .gp-content {
+    width: 100%;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .gp-page-heading {
+    padding: 18px 0 14px;
+  }
+
+  .gp-page-heading h1 {
+    font-size: 22px;
+  }
+
+  .gp-page-heading p {
+    font-size: 13px;
+  }
+
+  .gp-content-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 800px) {
+  .gp-ad-banner {
+    min-height: 96px;
+  }
+
+  .gp-cat-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gp-product-track.is-rail {
+    gap: 10px;
+  }
+
+  .gp-product-track.is-rail .gp-card {
+    flex-basis: 68%;
+    max-width: none;
+  }
+
+  .gp-product-rail-control {
+    width: 75px;
+    flex-basis: 75px;
+  }
+
+  .gp-product-track.is-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .gp-content {
+    padding-top: 14px;
+    padding-bottom: calc(36px + var(--app-mobile-content-bottom));
+  }
+
+  .gp-card-body {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .gp-card-best-store,
+  .gp-card-best-offer {
+    font-size: 16px;
+  }
+
+  .gp-card-best-price {
+    font-size: 18px;
+  }
+
+  .gp-category-heading {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* 11. 夜間護眼色 */
 :global(html[data-theme="night"]) .gp-card-img img,
 :global(html[data-theme="night"]) .gp-card-media {
   background: rgb(42 48 56);

@@ -158,7 +158,7 @@ func Load() *Config {
 		JWTSecret:                   getEnv("JWT_SECRET", "dev-secret-key"),
 		EncryptionKey:               getEnv("ENCRYPTION_KEY", "dev-encryption-key"),
 		BootstrapStaffPhones:        getEnv("BOOTSTRAP_STAFF_PHONES", ""),
-		POSLoginURL:                 getEnv("POS_LOGIN_URL", defaultPOSLoginURL(posAPIBaseURL)),
+		POSLoginURL:                 getEnv("POS_LOGIN_URL", defaultPOSLoginURL(getEnv("ISMART_INTEGRATION_API_BASE_URL", ""))),
 		POSAPIBaseURL:               posAPIBaseURL,
 		POSAPIUsername:              getEnv("POS_API_USERNAME", "testowner02"),
 		POSAPIPassword:              getEnv("POS_API_PASSWORD", "test02test02"),
@@ -645,14 +645,16 @@ func defaultPOSAPIBaseURL() string {
 	return "https://pos.ismart.skylinedances.com/api"
 }
 
-// 23. defaultPOSLoginURL builds the POS Web login endpoint from the API base URL.
-func defaultPOSLoginURL(baseURL string) string {
-	value := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+// 23. defaultPOSLoginURL builds the iSmart integration login endpoint.
+// The unified login verifies credentials against iSmart (integration auth login),
+// not the legacy POS Web endpoint.
+func defaultPOSLoginURL(integrationBaseURL string) string {
+	value := strings.TrimRight(strings.TrimSpace(integrationBaseURL), "/")
 	if value == "" {
-		value = defaultPOSAPIBaseURL()
+		value = defaultIsmartIntegrationAPIBaseURL()
 	}
 
-	return value + "/poslogin"
+	return value + "/auth/login/"
 }
 
 // 24. defaultPOSPaymentServiceURL returns the deployed POS H5 payment API base URL.
@@ -680,9 +682,9 @@ func defaultIsmartServiceCaseAPIBaseURL() string {
 	return "https://clouddev.ismart.ajoliving.com/api/v1/integration"
 }
 
-// 28.1 defaultIsmartSubaccountAPIBaseURL returns the iSmart subaccount API base URL.
+// 28.1 defaultIsmartSubaccountAPIBaseURL returns the production iSmart subaccount API base URL.
 func defaultIsmartSubaccountAPIBaseURL() string {
-	return "https://clouddev.ismart.ajoliving.com/api/v1/integration"
+	return "https://ismart.ajoliving.com/api/v1/integration"
 }
 
 // 29. defaultICCTVAPIBaseURL returns the deployed iCCTV API base URL.

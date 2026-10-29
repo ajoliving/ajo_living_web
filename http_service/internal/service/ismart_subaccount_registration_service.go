@@ -1,26 +1,18 @@
 /*
  * iSmart 副戶註冊與授權服務。
  * 1. 解析目標電話及電郵是否屬於同一個既有 iSmart 帳戶。
- * 2. 沒有既有帳戶時由 AJO 產生臨時密碼，建立 iSmart 帳戶後再授權單位。
+ * 2. 沒有既有帳戶時使用手動輸入的密碼，建立 iSmart 帳戶後再授權單位。
  * 3. 授權完成後以 Redis/POS 目錄解析大廈及單位名稱，發送正式通知電郵。
  */
 package service
 
 import (
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"math/big"
 	"strings"
+	"unicode/utf8"
 
 	"ajoliving_web/http_service/internal/errcode"
-)
-
-const (
-	temporaryPasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-	temporaryPasswordUpper    = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-	temporaryPasswordLower    = "abcdefghijkmnopqrstuvwxyz"
-	temporaryPasswordDigits   = "23456789"
 )
 
 // 1. IsmartSubaccountRegisterGrantParams defines the register-and-grant request.
@@ -29,20 +21,20 @@ type IsmartSubaccountRegisterGrantParams struct {
 	Phone     string
 	Email     string
 	EngName   string
+	Password  string
 	SendEmail bool
 	Remark    string
 }
 
 // 2. IsmartSubaccountRegisterGrantResult reports the committed grant and notification state.
 type IsmartSubaccountRegisterGrantResult struct {
-	AccountCreated        bool   `json:"account_created"`
-	TargetUserID          int64  `json:"target_user_id"`
-	TargetUsername        string `json:"target_username,omitempty"`
-	BuildingName          string `json:"building_name,omitempty"`
-	UnitDisplay           string `json:"unit_display,omitempty"`
-	EmailSent             bool   `json:"email_sent"`
-	TemporaryPasswordSent bool   `json:"temporary_password_sent"`
-	UpstreamMessage       string `json:"upstream_message,omitempty"`
+	AccountCreated  bool   `json:"account_created"`
+	TargetUserID    int64  `json:"target_user_id"`
+	TargetUsername  string `json:"target_username,omitempty"`
+	BuildingName    string `json:"building_name,omitempty"`
+	UnitDisplay     string `json:"unit_display,omitempty"`
+	EmailSent       bool   `json:"email_sent"`
+	UpstreamMessage string `json:"upstream_message,omitempty"`
 }
 
 // 3. RegisterAndGrantSubaccount creates an iSmart account when needed and grants the current unit.
@@ -67,7 +59,6 @@ func (s *IsmartExternalService) RegisterAndGrantSubaccount(ctx context.Context, 
 
 	result := &IsmartSubaccountRegisterGrantResult{}
 	targetUserID := int64(0)
-	temporaryPassword := ""
 	switch {
 	case contacts.CanAuthorize:
 		targetUserID = contacts.EmailUserID
@@ -78,24 +69,17 @@ func (s *IsmartExternalService) RegisterAndGrantSubaccount(ctx context.Context, 
 		if engName == "" {
 			return nil, errcode.New(errcode.CodeValidationError, "eng_name is required when registering a new account")
 		}
-		if !params.SendEmail {
-			return nil, errcode.New(errcode.CodeValidationError, "email notification is required for a new account")
+		if params.Password != strings.TrimSpace(params.Password) || utf8.RuneCountInString(params.Password) < 8 {
+			return nil, errcode.New(errcode.CodeValidationError, "password must contain at least 8 characters without leading or trailing whitespace")
 		}
-		if s.runtime == nil || s.runtime.MailSender == nil {
-			return nil, errcode.New(errcode.CodeInternalError, "mail sender is unavailable")
-		}
-		temporaryPassword, err = generateTemporaryPassword()
-		if err != nil {
-			return nil, errcode.New(errcode.CodeInternalError, "failed to generate temporary password")
-		}
-		registered, registerErr := s.RegisterDirectAccount(ctx, IsmartDirectRegistrationParams{
+		registered, registerErr := s.RegisterDirectAccountOnSubaccountAPI(ctx, IsmartDirectRegistrationParams{
 			Phone:          phone,
 			Email:          email,
 			EngName:        engName,
 			LegalEntity:    "NA",
 			Remark:         strings.TrimSpace(params.Remark),
 			IsReceiveEmail: true,
-			Password:       temporaryPassword,
+			Password:       params.Password,
 		})
 		if registerErr != nil {
 			return nil, registerErr
@@ -122,9 +106,8 @@ func (s *IsmartExternalService) RegisterAndGrantSubaccount(ctx context.Context, 
 	result.UpstreamMessage = strings.TrimSpace(paymentStringValue(grant["upstream_message"]))
 	result.BuildingName, result.UnitDisplay = s.resolveSubaccountUnitDisplay(ctx, unitID)
 
-	if params.SendEmail || result.AccountCreated {
-		result.EmailSent = s.sendSubaccountEmail(ctx, email, result, temporaryPassword)
-		result.TemporaryPasswordSent = result.AccountCreated && result.EmailSent
+	if params.SendEmail {
+		result.EmailSent = s.sendSubaccountEmail(ctx, email, result)
 	}
 	return result, nil
 }
@@ -142,12 +125,12 @@ func (s *IsmartExternalService) validateSubaccountOwnerUnit(ctx context.Context,
 }
 
 // 5. sendSubaccountEmail sends the post-grant notice without rolling back iSmart changes.
-func (s *IsmartExternalService) sendSubaccountEmail(ctx context.Context, recipient string, result *IsmartSubaccountRegisterGrantResult, temporaryPassword string) bool {
+func (s *IsmartExternalService) sendSubaccountEmail(ctx context.Context, recipient string, result *IsmartSubaccountRegisterGrantResult) bool {
 	if s.runtime == nil || s.runtime.MailSender == nil {
 		return false
 	}
 	subject := "[AJO Living] iSmart 副戶授權通知"
-	body := buildSubaccountEmailBody(result, temporaryPassword, strings.TrimSpace(recipient))
+	body := buildSubaccountEmailBody(result, strings.TrimSpace(recipient))
 	if s.runtime.Config != nil {
 		loginURL := strings.TrimRight(strings.TrimSpace(s.runtime.Config.AppPublicBaseURL), "/") + "/account/login"
 		body += fmt.Sprintf("\n登入入口：%s\n", loginURL)
@@ -209,7 +192,7 @@ func sameSubaccountBuildingID(left string, right string) bool {
 }
 
 // 8. buildSubaccountEmailBody builds the account or authorization notice.
-func buildSubaccountEmailBody(result *IsmartSubaccountRegisterGrantResult, temporaryPassword string, recipient string) string {
+func buildSubaccountEmailBody(result *IsmartSubaccountRegisterGrantResult, recipient string) string {
 	lines := []string{
 		"您好，",
 		"",
@@ -223,9 +206,8 @@ func buildSubaccountEmailBody(result *IsmartSubaccountRegisterGrantResult, tempo
 	if result.AccountCreated {
 		lines = append(lines,
 			fmt.Sprintf("登入用戶 ID：%s", result.TargetUsername),
-			fmt.Sprintf("臨時密碼：%s", temporaryPassword),
 			"",
-			"此為新建立的 iSmart 帳戶。請盡快登入並修改臨時密碼。",
+			"此為新建立的 iSmart 帳戶。請使用註冊時自行設定的密碼登入。",
 		)
 	} else {
 		lines = append(lines, "請使用您現有的 iSmart 帳戶登入。")
@@ -237,49 +219,15 @@ func buildSubaccountEmailBody(result *IsmartSubaccountRegisterGrantResult, tempo
 // 9. normalizeSubaccountRegistrationPhone normalizes common HK input before iSmart registration.
 func normalizeSubaccountRegistrationPhone(value string) string {
 	raw := strings.TrimSpace(value)
-	if raw == "" || strings.HasPrefix(raw, "+") {
+	if raw == "" {
 		return raw
+	}
+	if strings.HasPrefix(raw, "+") {
+		return "+" + digitsOnly(raw)
 	}
 	digits := digitsOnly(raw)
 	if len(digits) == 8 {
 		return "+852" + digits
 	}
 	return raw
-}
-
-// 10. generateTemporaryPassword creates a random password suitable for a new iSmart account.
-func generateTemporaryPassword() (string, error) {
-	const passwordLength = 12
-	password := make([]byte, passwordLength)
-	for index, alphabet := range []string{temporaryPasswordUpper, temporaryPasswordLower, temporaryPasswordDigits} {
-		value, err := randomPasswordCharacter(alphabet)
-		if err != nil {
-			return "", err
-		}
-		password[index] = value
-	}
-	for index := 3; index < len(password); index++ {
-		value, err := randomPasswordCharacter(temporaryPasswordAlphabet)
-		if err != nil {
-			return "", err
-		}
-		password[index] = value
-	}
-	for index := len(password) - 1; index > 0; index-- {
-		randomIndex, err := crand.Int(crand.Reader, big.NewInt(int64(index+1)))
-		if err != nil {
-			return "", err
-		}
-		password[index], password[randomIndex.Int64()] = password[randomIndex.Int64()], password[index]
-	}
-	return string(password), nil
-}
-
-// 11. randomPasswordCharacter returns one cryptographically random alphabet character.
-func randomPasswordCharacter(alphabet string) (byte, error) {
-	value, err := crand.Int(crand.Reader, big.NewInt(int64(len(alphabet))))
-	if err != nil {
-		return 0, err
-	}
-	return alphabet[value.Int64()], nil
 }

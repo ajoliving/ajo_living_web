@@ -181,7 +181,8 @@ interface LinkedPropertyFunctionRow {
   showProperty: boolean;
   functionName: string;
   enabled: boolean;
-  canBind: boolean;
+  canSwitch: boolean;
+  isCurrent: boolean;
   canUnbind: boolean;
 }
 
@@ -534,6 +535,7 @@ const residentUnitDetails = ref<PosBuildingUnit[]>([]);
 const bindBuildingID = ref('');
 const bindFloor = ref('');
 const bindUnitID = ref('');
+const currentBoundUnitID = ref('');
 const bindLoading = ref(false);
 const bindUnitsLoading = ref(false);
 const bindSaving = ref(false);
@@ -952,7 +954,7 @@ const linkedPropertyFunctionRows = computed<LinkedPropertyFunctionRow[]>(() => {
     { key: 'rental', name: t('account.center.account.propertyFunctionRental'), enabled: false },
     { key: 'home', name: t('account.center.account.propertyFunctionHome'), enabled: false },
   ];
-  const currentUnitID = bindUnitID.value;
+  const currentUnitID = currentBoundUnitID.value;
   return bindPropertyOptions.value.flatMap((property) =>
     functions.map((item, index) => ({
       key: `${property.value}-${item.key}`,
@@ -961,8 +963,9 @@ const linkedPropertyFunctionRows = computed<LinkedPropertyFunctionRow[]>(() => {
       showProperty: index === 0,
       functionName: item.name,
       enabled: item.enabled,
-      canBind: item.key === 'building' && property.value !== currentUnitID,
-      canUnbind: item.key === 'building' && property.value === currentUnitID,
+      canSwitch: item.key === 'building' && property.value !== currentUnitID,
+      isCurrent: item.key === 'building' && property.value === currentUnitID,
+      canUnbind: item.key === 'building',
     })),
   );
 });
@@ -991,11 +994,14 @@ const propertyOwnershipLabel = computed(() => {
 
 // 6.25 將指定已連結物業設為目前使用單位
 const handleBindProperty = async (unitID: string): Promise<void> => {
+  if (bindSaving.value) {
+    return;
+  }
   bindUnitID.value = unitID;
   await handleSaveBindUnit();
 };
 
-// 6.26 解除綁定目前只影響 AJO 本地目前使用物業
+// 6.26 上游未提供解除登記接口時只顯示提示，不修改物業關聯
 const handleUnbindProperty = (): void => {
   feedbackStore.pushToast(t('account.center.account.unbindUnavailable'), 'error');
 };
@@ -1019,13 +1025,16 @@ const syncBindUnitFromProfile = (): void => {
   const unitName = sessionStore.me?.residence_unit?.trim() ?? '';
   if (!unitName) {
     bindUnitID.value = '';
+    currentBoundUnitID.value = '';
     return;
   }
 
   const matchedUnit = visibleBindUnits.value.find((item) =>
     getBindDisplayUnitFloor(item) === floor && getBindUnitName(item) === unitName,
   );
-  bindUnitID.value = matchedUnit ? getBindUnitID(matchedUnit) : '';
+  const matchedUnitID = matchedUnit ? getBindUnitID(matchedUnit) : '';
+  bindUnitID.value = matchedUnitID;
+  currentBoundUnitID.value = matchedUnitID;
 };
 
 // 6.8 載入 POS 大廈與單位資料
@@ -1149,6 +1158,7 @@ const handleSaveBindUnit = async (): Promise<void> => {
       residence_unit: selectedProperty.unit,
     });
     sessionStore.me = data.data;
+    currentBoundUnitID.value = selectedProperty.value;
     feedbackStore.pushToast(t('account.center.account.unitSaved'), 'success');
   } catch {
     feedbackStore.pushToast(t('account.center.account.unitSaveError'), 'error');
@@ -2109,12 +2119,13 @@ watch(activePanel, () => {
                         <th>{{ t('account.center.account.linkedPropertyName') }}</th>
                         <th>{{ t('account.center.account.functionName') }}</th>
                         <th>{{ t('account.center.account.staffEnabled') }}</th>
+                        <th>{{ t('account.center.account.switchProperty') }}</th>
                         <th>{{ t('account.center.account.unbindProperty') }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="linkedPropertyFunctionRows.length === 0">
-                        <td colspan="4">{{ t('account.center.account.propertyFunctionsEmpty') }}</td>
+                        <td colspan="5">{{ t('account.center.account.propertyFunctionsEmpty') }}</td>
                       </tr>
                       <tr
                         v-for="row in linkedPropertyFunctionRows"
@@ -2131,17 +2142,25 @@ watch(activePanel, () => {
                           </span>
                         </td>
                         <td>
+                          <span
+                            v-if="row.isCurrent"
+                            class="work-chip good"
+                          >
+                            {{ t('account.center.account.currentProperty') }}
+                          </span>
                           <button
-                            v-if="row.canBind"
+                            v-else-if="row.canSwitch"
                             type="button"
                             class="work-action work-compact-action"
                             :disabled="bindSaving"
                             @click="handleBindProperty(row.unitID)"
                           >
-                            {{ bindSaving ? t('account.center.common.saving') : t('account.center.account.bindProperty') }}
+                            {{ bindSaving ? t('account.center.common.saving') : t('account.center.account.switchProperty') }}
                           </button>
+                        </td>
+                        <td>
                           <button
-                            v-else-if="row.canUnbind"
+                            v-if="row.canUnbind"
                             type="button"
                             class="work-action work-compact-action secondary"
                             @click="handleUnbindProperty"

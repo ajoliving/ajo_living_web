@@ -2,7 +2,8 @@
  * 綜合優惠頁搜尋測試。
  * 1. 確認一般搜尋不會排除無優惠商品。
  * 2. 確認輸入文字會顯示品牌及包含規格的商品名稱。
- * 3. 確認六個分類入口使用本地 SVG，並保留分類切換。
+ * 3. 確認熱門分類標題及桌面、手機篩選入口。
+ * 4. 確認商品卡只顯示實際原價，不顯示跨店比較 fallback。
  */
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -154,6 +155,18 @@ describe('SupermarketOffersPage search', () => {
     ]);
   });
 
+  it('keeps desktop filters but removes desktop sorting and view switching', async () => {
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+
+    expect(wrapper.find('.gp-toolbar .gp-category-select').exists()).toBe(true);
+    expect(wrapper.find('.gp-toolbar .gp-store-select').exists()).toBe(true);
+    expect(wrapper.find('.gp-toolbar .gp-brand-select').exists()).toBe(true);
+    expect(wrapper.find('.gp-toolbar .gp-order-select').exists()).toBe(false);
+    expect(wrapper.find('.gp-view-switch').exists()).toBe(false);
+    expect(wrapper.find('.gp-mobile-sort-select').exists()).toBe(true);
+  });
+
   // 2.1 每個快捷分類均有可渲染、同色描邊的 Lucide 圖示。
   it('renders six local category SVG icons matching the category labels', async () => {
     const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
@@ -165,6 +178,7 @@ describe('SupermarketOffersPage search', () => {
 
     expect(sprite.querySelector('parsererror')).toBeNull();
     expect(sprite.querySelectorAll('symbol')).toHaveLength(6);
+    expect(wrapper.find('.gp-cat-nav-title').text()).toBe('熱門分類');
     expect(tiles.map((tile) => tile.text())).toEqual([
       '個人護理', '保健食品', '家居用品', '米油雜貨', '奶類乳品', '零食飲品',
     ]);
@@ -183,26 +197,47 @@ describe('SupermarketOffersPage search', () => {
     }
   });
 
-  // 2.2 替換圖示不得改變分類選取與再次點擊取消的行為。
-  it('keeps category filtering and toggle-off behavior for all six shortcuts', async () => {
+  it('scrolls the selected category rail in either direction', async () => {
+    mockedSearchProducts.mockImplementation((params) =>
+      Promise.resolve(createSearchResponse(params.category ? '分類商品' : params.q)),
+    );
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+    await flushPromises();
+
+    const rails = wrapper.findAll('.gp-product-track.is-rail');
+    expect(rails).toHaveLength(6);
+    const targetRail = rails[1]!;
+    const scrollBy = vi.fn();
+    Object.defineProperty(targetRail.element, 'clientWidth', { configurable: true, value: 400 });
+    Object.defineProperty(targetRail.element, 'scrollBy', { configurable: true, value: scrollBy });
+    const section = wrapper.findAll('.gp-product-section')[1]!;
+
+    await section.find('.gp-product-rail-control[aria-label="向右捲動商品"]').trigger('click');
+    expect(scrollBy).toHaveBeenLastCalledWith({ left: 340, behavior: 'smooth' });
+
+    await section.find('.gp-product-rail-control[aria-label="向左捲動商品"]').trigger('click');
+    expect(scrollBy).toHaveBeenLastCalledWith({ left: -340, behavior: 'smooth' });
+  });
+
+  // 2.2 分類入口進入分類頁後隱藏，改由分類標題的返回入口回到首頁。
+  it('enters a category page and returns to the home sections', async () => {
     const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
     await flushPromises();
 
-    for (const tile of wrapper.findAll('.gp-cat-tile')) {
-      await tile.trigger('click');
-      await flushPromises();
+    const tile = wrapper.find('.gp-cat-tile');
+    await tile.trigger('click');
+    await flushPromises();
 
-      expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({ category: tile.text() }));
-      expect(tile.classes()).toContain('on');
-      expect(tile.attributes('aria-pressed')).toBe('true');
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '個人護理' }));
+    expect(wrapper.find('.gp-cat-nav').exists()).toBe(false);
+    expect(wrapper.find('.gp-category-heading h2').text()).toBe('個人護理');
 
-      await tile.trigger('click');
-      await flushPromises();
+    await wrapper.find('.gp-category-heading button').trigger('click');
+    await flushPromises();
 
-      expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({ category: '' }));
-      expect(tile.classes()).not.toContain('on');
-      expect(tile.attributes('aria-pressed')).toBe('false');
-    }
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '' }));
+    expect(wrapper.find('.gp-cat-nav').exists()).toBe(true);
   });
 
   // 3. 輸入文字後應顯示可直接選取的搜尋建議。
@@ -217,7 +252,7 @@ describe('SupermarketOffersPage search', () => {
     expect(wrapper.find('.gp-search-suggestion-name').text()).toBe('花生醬 - 幼滑裝 340克');
     expect(wrapper.find('.gp-search-suggestion-chip').text()).toBe('Meadows');
     expect(wrapper.find('.gp-search-suggestion-category').text()).toBe('個人護理 / 女士衛生用品 / 衛生巾');
-    expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({
       q: '花生醬',
       offerOnly: false,
       pageSize: 12,
@@ -227,14 +262,14 @@ describe('SupermarketOffersPage search', () => {
     await flushPromises();
 
     expect(wrapper.find<HTMLInputElement>('.gp-sinput').element.value).toBe('花生醬 - 幼滑裝 340克');
-    expect(mockedSearchProducts).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({
       q: '花生醬 - 幼滑裝 340克',
       offerOnly: false,
       pageSize: 20,
     }));
   });
 
-  // 4. 商品卡片必須在左側圖片旁顯示品牌、含單位名稱、最低價主卡及其他門店。
+  // 4. 商品卡片顯示品牌、含規格名稱、最低價門店、實付價與節省金額。
   it('shows brand, unit-inclusive name, and a featured lowest-price panel', async () => {
     const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
     await flushPromises();
@@ -244,12 +279,36 @@ describe('SupermarketOffersPage search', () => {
     await flushPromises();
 
     expect(wrapper.find('.gp-card-name').text().replace(/\s+/g, ' ').trim()).toContain('花生醬 - 幼滑裝');
-    expect(wrapper.find('.gp-card-unit').text()).toBe('340克');
     expect(wrapper.find('.gp-card-brand-chip').text()).toBe('Meadows');
-    expect(wrapper.find('.gp-card-best-badge').text()).toContain('全場最低');
     expect(wrapper.find('.gp-card-best-store').text()).toBe('百佳');
+    expect(wrapper.find('.gp-card-best-price').text()).toContain('HK$ 39.00');
     expect(wrapper.find('.gp-card-best-compare').text()).toContain('原價');
-    expect(wrapper.find('.gp-card-other-row').text()).toContain('惠康');
+    expect(wrapper.find('.gp-card-best-compare').text()).toContain('$64.00');
+    expect(wrapper.find('.gp-card-best-offer').text()).toContain('每件慳');
+    expect(wrapper.find('.gp-card-other-row').exists()).toBe(false);
+  });
+
+  it('does not use another store as a comparison-price fallback', async () => {
+    const response = createSearchResponse('花生醬');
+    const product = response.data.data.items[0]!;
+    const firstStorePrice = product.storePrices?.[0];
+    expect(firstStorePrice).toBeDefined();
+    product.listPrice = 39;
+    firstStorePrice!.listPrice = 39;
+    firstStorePrice!.effectiveUnitPrice = 39;
+    mockedSearchProducts.mockResolvedValue(response);
+
+    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
+    await wrapper.find('.gp-sinput').setValue('花生醬');
+    await wrapper.find('.gp-search-row').trigger('submit');
+    await flushPromises();
+
+    const card = wrapper.find('.gp-card');
+    expect(card.find('.gp-card-name-text').text()).toContain('花生醬 - 幼滑裝 340克');
+    expect(card.find('.gp-card-brand-chip').text()).toBe('Meadows');
+    expect(card.find('.gp-card-best-compare').exists()).toBe(false);
+    expect(card.text()).not.toMatch(/他店|其他店鋪/);
   });
 
   // 5. 搜尋建議預設顯示 6 項，點選後可展開至 12 項。

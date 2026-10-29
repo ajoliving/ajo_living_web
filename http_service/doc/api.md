@@ -53,7 +53,7 @@ go run ./http_service/cmd/server
 | 35 | /api/v1/auth/email/otp/verify | POST | 驗證 Email OTP 並登入 | 無 |
 | 48.1 | /api/v1/auth/registration/availability | POST | 檢查 AJO 與 iSmart 的註冊電郵及手提電話是否可用 | 無 |
 | 49 | /api/v1/auth/email/register | POST | 建立電郵與手機密碼帳戶 | 無 |
-| 49.1 | /api/v1/auth/login | POST | 自動識別手提電話、電郵、本地用戶名稱或 iSmart username 並登入 | 無 |
+| 49.1 | /api/v1/auth/login | POST | 自動識別手提電話、電郵或 username，統一交由 iSmart Integration 登入接口驗證 | 無 |
 | 50 | /api/v1/auth/email/login | POST | 使用郵箱密碼登入 | 無 |
 | 50.2 | /api/v1/auth/password/email/request | POST | 申請電郵重設密碼驗證碼 | 無 |
 | 50.3 | /api/v1/auth/password/email/reset | POST | 使用電郵驗證碼重設密碼 | 無 |
@@ -589,7 +589,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
 ---
 
 ### 48.1 /api/v1/auth/registration/availability [POST]
-- **簡介**: 註冊提交前同時檢查本地 AJO 與 iSmart 帳戶的電郵及手提電話是否已被使用。任一系統已使用即回應不可用；個人代理未填電郵時可省略 `email`。
+- **簡介**: 註冊提交前檢查 iSmart 的註冊電郵及手提電話是否已被使用；與 `/api/v1/me/ismart/subaccounts/check-contacts` 共用同一條 iSmart check-contact 上游與檢查邏輯；個人代理未填電郵時可省略 `email`。
 - **請求參數**
 ```json
 {
@@ -609,7 +609,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/otp/verify" -Met
   }
 }
 ```
-- **說明**: 此為註冊前提示；`/api/v1/auth/email/register` 仍會在寫入時再次驗證，避免並發註冊或 iSmart 寫入造成重複帳戶。
+- **說明**: 此為註冊前提示，僅反映 iSmart 側可用性；`/api/v1/auth/email/register` 仍會在寫入時再次驗證 AJO 本地與 iSmart，避免並發註冊或 iSmart 寫入造成重複帳戶。
 
 ---
 
@@ -702,10 +702,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/email/register" -Metho
 ---
 
 ### 49.1 /api/v1/auth/login [POST]
-- **簡介**: 單一密碼登入入口，自動識別手提電話、電郵或 username；舊有分流登入接口維持兼容。
-- **識別規則**: 電郵按小寫本地帳戶查找；8 位香港電話、`+852` 香港電話及 `+86` 中國內地電話會移除空格、連字號與括號後查找；其餘有效字串按本地 username 查找。
-- **降級規則**: 本地帳密成功時不會呼叫 iSmart；只有本地明確回傳帳密不符時才嘗試 iSmart。資料庫錯誤、本地內部錯誤或 iSmart 上游網絡錯誤會立即中止，不會被改寫成帳密錯誤或繼續重試。
-- **錯誤語義**: 本地及 iSmart 均拒絕憑證時，統一回傳 `VALIDATION_ERROR` 與 `account or password is incorrect`，不透露帳戶是否存在。
+- **簡介**: 單一密碼登入入口，自動識別手提電話、電郵或 username；憑證統一交由 iSmart 驗證，不再查詢 AJO 本地帳戶密碼。
+- **識別規則**: 電郵按小寫交給 iSmart 以 `login_type=email` 驗證；8 位香港電話、`+852` 香港電話及 `+86` 中國內地電話會移除空格、連字號與括號後以 `login_type=phone` 驗證；其餘有效字串按 iSmart username 驗證。
+- **上游規則**: 憑證一律呼叫 iSmart Integration 登入接口（`ISMART_INTEGRATION_API_BASE_URL` + `/auth/login/`，可用 `POS_LOGIN_URL` 覆蓋），不再使用舊 POS Web `/poslogin`。成功後以 `ismart_msg.user_id` 綁定本地會員，本地不存在時自動建立。iSmart 上游網絡錯誤會立即中止，不會被改寫成帳密錯誤。
+- **錯誤語義**: iSmart 拒絕憑證時，統一回傳 `VALIDATION_ERROR` 與 `account or password is incorrect`，不透露帳戶是否存在。
 - **請求參數**
 ```json
 {
@@ -927,7 +927,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/auth/phone/login" -Method P
 ---
 
 ### 73. /api/v1/auth/ismart/login [POST]
-- **簡介**: 使用 ismart 帳戶登入並同步 POS 權限。後端預設呼叫 `https://pos.ismart.skylinedances.com/api/poslogin`，也可透過 `POS_LOGIN_URL` 覆蓋；成功後以 `ismart_msg.user_id` 綁定本地會員，若本地不存在會自動建立會員並簽發本系統 token。
+- **簡介**: 使用 ismart 帳戶登入並同步 POS 權限。後端預設呼叫 iSmart Integration 登入接口（`ISMART_INTEGRATION_API_BASE_URL` + `/auth/login/`，可用 `POS_LOGIN_URL` 覆蓋），不再使用舊 POS Web `/poslogin`；成功後以 `ismart_msg.user_id` 綁定本地會員，若本地不存在會自動建立會員並簽發本系統 token。
 - **原始 iSmart 資料**: 登入回應 `data.user.ismart_raw` 及 `GET /api/v1/me` 的 `data.ismart_raw` 返回已保存的上游註冊 `data` 與 POS 登入 `msg` 業務欄位；未知欄位會保留，後續 POS 回應只補充可用欄位，不會以空值覆蓋註冊資料。`password`、`token`、`secret`、`authorization`、憑證與 session 類欄位會遞迴移除。`ismart_msg` 維持固定摘要欄位。
 - **帳號判斷**: `account` 若符合香港手機格式，會先以 8 位本地手機號登入，失敗後再用原始輸入登入；若 `account` 是用戶名且有傳入 `phone`，會在用戶名失敗後繼續嘗試手機候選值。全部失敗後才回傳帳號或密碼錯誤。
 - **請求參數**
@@ -1255,9 +1255,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
 - **業主綁定狀態查詢**: `GET /api/v1/me/ismart/owner-binding-requests?building_id=&status=` 代理 iSmart `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`，查詢目前會員本人的 `OwnerReg` 申請與審批狀態。`status` 可為 `pending_approval`、`approved` 或 `rejected`；回應 `items` 依 `id` 倒序，最新在前。只回 `OwnerReg.user` 等於目前 iSmart `user_id` 的列，以外電話或姓名提交、未帶 `user` 的申請不會返回。
 - **有效單位綁定查詢**: `GET /api/v1/me/ismart/flat-bindings?building_id=&cli_role=` 代理 iSmart `GET /api/v1/integration/buildings/flat-bindings/`，查詢目前會員已審批生效的單位角色綁定（`i_flatcli_rel_tbl`，只含 `is_active`），回應 `items` 為平坦清單，含 `building_id`、`building_name`、`unit_id`、`unit_display`、`floor`、`unit`、`cli_role`。系統產生的 `單位戶口` 角色已由上游排除；同一單位持有多個角色時會出現多筆，使用單位清單時需自行去重。此接口不包含未審批申請，判斷「審批中」必須與上一條接口合併使用。
 - **本地大廈副戶授權接口（歷史兼容）**: `GET /api/v1/me/building-authorizations/permissions`、`GET|POST /api/v1/me/building-authorizations` 及 `DELETE /api/v1/me/building-authorizations/{authorizationId}` 保留兼容既有資料，不再由「我的大廈」住戶授權頁使用；目前頁面改用 iSmart 單位級授權接口。
-- **單位授權接口**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`、`POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke` 直接代理 iSmart 單位授權。授予請求使用 `unit_id`、`target_phone`、`target_email`。AJO 先分別以手機號與電郵呼叫 iSmart `/auth/check-contact/`；電話會兼容提交值、本地號碼及常見區號舊格式，兩邊對上同一個 `user_id` 才作為 `target_user_id`，再提交原始 `subaccounts/grant/`。上游使用 `ISMART_SUBACCOUNT_API_BASE_URL`，本機目前指向生產 iSmart。現行生產 iSmart 在寫入授權歷史時讀取 `IFlatTbl.building`，該模型實際只有 `building_id`，因此 list/grant/revoke 可能回傳 `'IFlatTbl' object has no attribute 'building'`；AJO 只轉發上游錯誤，不修改 `ajo_ismart` 倉庫。iSmart 副戶為單位級完整授權，包含遙距開門及查看通告，不提供獨立功能勾選；撤銷使用 `unit_id` 與 `target_user_id`。
-- **副戶聯絡檢查**: `POST /api/v1/me/ismart/subaccounts/check-contacts` 可只提交電話或電郵作資訊檢查；真正授權仍要求兩項聯絡資料均存在，且解析到同一個 iSmart `user_id`。
-- **註冊並授權**: `POST /api/v1/me/ismart/subaccounts/register-and-grant` 使用 `unit_id`、`phone`、`email`、未註冊時必填的 `eng_name`、可選 `remark` 及 `send_email`。若兩項聯絡資料均不存在，AJO 後端以 `crypto/rand` 產生臨時密碼，將同一密碼明確傳入 iSmart `/auth/register/`，註冊成功後再呼叫副戶 grant。新帳戶必須發送通知電郵，電郵包含登入 `username`、臨時密碼、大廈名稱、單位名稱及修改密碼提示；密碼不寫入 AJO 資料庫、不返回瀏覽器。大廈與單位名稱優先由 Redis-backed POS 目錄解析，快取只作展示，不能取代即時權限校驗。郵件發送失敗不回滾已完成的 iSmart 註冊及授權，回應以 `email_sent=false` 表示。
+- **單位授權接口**: `GET /api/v1/me/ismart/subaccounts?unit_id=<unit_id>`、`POST /api/v1/me/ismart/subaccounts/grant` 與 `POST /api/v1/me/ismart/subaccounts/revoke` 直接代理 iSmart 單位授權。授予請求使用 `unit_id`、`target_phone`、`target_email`。AJO 將電話先規範化為 E.164，然後以一次同時包含 `phone` 與 `email` 的 iSmart `/auth/check-contact/` 請求取得兩個 `user_id`；兩邊對上同一個 `user_id` 才作為 `target_user_id`，再提交原始 `subaccounts/grant/`。iSmart 上游會在 check-contact 內兼容本地號碼及舊區號格式，AJO 不再逐一重試多種電話寫法。上游使用 `ISMART_SUBACCOUNT_API_BASE_URL`，本機目前指向生產 iSmart。現行生產 iSmart 在寫入授權歷史時讀取 `IFlatTbl.building`，該模型實際只有 `building_id`，因此 list/grant/revoke 可能回傳 `'IFlatTbl' object has no attribute 'building'`；AJO 只轉發上游錯誤，不修改 `ajo_ismart` 倉庫。iSmart 副戶為單位級完整授權，包含遙距開門及查看通告，不提供獨立功能勾選；撤銷使用 `unit_id` 與 `target_user_id`。
+- **副戶聯絡檢查**: `POST /api/v1/me/ismart/subaccounts/check-contacts` 只提交電話或電郵時，僅查詢該項 `phone_exists` 或 `email_exists`，不返回要求補充另一項的 `conflict_reason`，`same_user` 與 `can_authorize` 保持 `false`。同時提交兩項才比較是否解析到同一個 iSmart `user_id`；前端僅顯示一條結果：同帳戶顯示匹配成功，均未註冊直接說明，有註冊但不匹配則指出手機號碼、電郵或兩項已註冊，並提示找回密碼或更換聯絡資料註冊。單項只顯示該手機號碼／電郵已註冊或未註冊；上游錯誤不可當作未註冊。真正授權仍要求兩項資料均存在且匹配，兩項均未註冊時維持既有註冊並授權流程。
+- **註冊並授權**: `POST /api/v1/me/ismart/subaccounts/register-and-grant` 使用 `unit_id`、`phone`、`email`、未註冊時必填的 `eng_name` 及手動 `password`、可選 `remark` 及 `send_email`。若兩項聯絡資料均不存在，密碼必須至少 8 位且沒有首尾空格，AJO 會在同一個 `ISMART_SUBACCOUNT_API_BASE_URL` 環境呼叫 `/auth/check-contact/`、`/auth/register/` 及副戶 grant，避免在不同 iSmart 環境建立帳戶後再授權。不生成臨時密碼。既有帳戶只授權，不要求或修改密碼。通知電郵可選，僅包含登入 `username`、大廈名稱、單位名稱及使用設定密碼登入的提示，絕不包含密碼；密碼不寫入 AJO 資料庫、不返回瀏覽器。大廈與單位名稱優先由 Redis-backed POS 目錄解析，快取只作展示，不能取代即時權限校驗。郵件發送失敗不回滾已完成的 iSmart 註冊及授權，回應以 `email_sent=false` 表示，仍可使用登記電郵及設定的密碼登入。
 
 ```json
 {
@@ -1265,12 +1265,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/me/profile" -Method PATCH -
   "phone": "+85291234567",
   "email": "resident@example.com",
   "eng_name": "CHAN TAI MAN",
+  "password": "ChosenPassword123",
   "send_email": true,
   "remark": "family member"
 }
 ```
 
-成功回應的 `data` 只返回 `account_created`、`target_user_id`、`target_username`、`building_name`、`unit_display`、`email_sent` 及 `temporary_password_sent`；臨時密碼只出現在寄出的電郵，不會返回前端。
+成功回應的 `data` 只返回 `account_created`、`target_user_id`、`target_username`、`building_name`、`unit_display`、`email_sent` 及可選 `upstream_message`；不再返回 `temporary_password_sent`，密碼不會出現在回應或通知電郵。
 - **安全邊界**: 瀏覽器不得提交 iSmart `user_id`。AJO 後端從目前 JWT 與 `UserIsmartAccount` 注入上游身份，並維持 AJO 穩定回應結構。
 - **服務個案提交**: `POST /api/v1/me/ismart/building-comments` 支援 `comment_type`、`comment` 與 `content` 的已註冊兼容分類，也保留 `request_type`、`category`、`subcategory` 的新 taxonomy 欄位。AJO 會員頁目前只提交 `門卡報失`、`冷氣滴水`、`嘈音滋擾`、`樓梯雜物`、`水質問題`、`渠務問題`、`保安事宜`、`清潔衛生`、`增加服務`、`電力問題` 或 `其他事宜` 作為 `comment_type`，並可選 `subject`、`location_text`、`unit_id`、`contact_name`、`contact_phone`。`building_id` 必須等於會員 `BoundBuildingIDs` 的目前正式綁定大廈；沒有綁定時不得提交。`unit_id` 非空時必須同時屬於 `BoundFlatUnitIDs`、目前會員 iSmart 可見單位及同一 `building_id`。上游固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `POST /buildings/comments/`，目前指向 `clouddev` 測試環境，失敗時不得回退生產接口。
 - **服務個案查詢**: `GET /api/v1/me/ismart/service-cases?building_id=&status=&request_type=` 固定查詢目前會員本人個案；`GET /api/v1/me/ismart/service-cases/{caseId}?building_id=` 返回個案內容、非內部訊息與附件。兩者固定使用 `ISMART_SERVICE_CASE_API_BASE_URL` 的 `/buildings/service-cases/...`，目前指向 `clouddev` 測試環境，不設生產接口回退，也不快取動態處理狀態或訊息紀錄。

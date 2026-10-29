@@ -107,6 +107,9 @@ export const useBuildingContextBinding = (buildingDirectory: Ref<PosBuilding[]>)
     const savedOption = propertyOptions.value.find((item) => savedUnitIDs.includes(item.value));
     if (savedOption) return savedOption.label;
 
+    // 3.1 無可解析授權單位時不回退殘留的主社區資料，交由未綁定空狀態呈現。
+    if (propertyOptions.value.length === 0) return '';
+
     const buildingID = preferredMemberBuildingID(sessionStore.me);
     const buildingName = indexedBuildingName(buildingNames.value, buildingID)
       || memberCommunityName(sessionStore.me?.primary_community, locale.value)
@@ -135,7 +138,9 @@ export const useBuildingContextBinding = (buildingDirectory: Ref<PosBuilding[]>)
         });
       });
       units.value = Array.from(unitMap.values());
-      if (allowedUnitIDs.value.length > 0 && units.value.length === 0) {
+      // 4.1 僅在單位接口請求失敗時提示載入錯誤；快照與 POS 無任何匹配單位視為尚未綁定。
+      const hasUnitFetchFailure = results.some((result) => result.status === 'rejected');
+      if (allowedUnitIDs.value.length > 0 && units.value.length === 0 && hasUnitFetchFailure) {
         errorKey.value = 'building.context.unitLoadError';
       }
 

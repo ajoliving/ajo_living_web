@@ -22,6 +22,8 @@ utils/: 無業務狀態的通用工具。
 - `users.is_staff` 是 AJO 管理身份的唯一運行時來源；`user_ismart_accounts.is_staff` 只作上游業務狀態及請求元數據，不得同步提升 AJO 管理身份。一般 iSmart/POS 功能統一按 `client_building_permissions` 與 `client_building_flat_units_permissions` 控制所屬範圍。
 - 不維護 `roles`、`permissions`、`role_permissions`、`user_role_bindings`；也不提供二手 `orders`/`order_logs` 交收流程。
 - 資料模型、API 回應與錯誤語義變更時，同步檢查 `http_service/doc/api.md`、相關測試與 `docs/PROMPT_INDEX.md` 是否受影響。
+- iSmart 副戶 `check-contacts` 單項只查帳戶是否存在，不因缺少另一項回傳衝突提示；只有電話與電郵同時提交才比對 `user_id`。單項不能取得 `can_authorize`，上游失敗不得回傳未註冊結果，真正授權維持雙項一致或既有註冊並授權流程。
+- iSmart 副戶 `register-and-grant` 新建帳戶時必填英文姓名及至少 8 位、無首尾空格的手動 `password`，直接傳入上游註冊；既有帳戶只授權、不修改密碼。不得生成臨時密碼、在通知郵件包含密碼、將新副戶密碼寫入 AJO 資料庫或返回密碼；`send_email` 只控制可選通知，郵件失敗不回滾已完成的註冊及授權。
 - 帳戶身份與樓盤放售跨域時，以 `user_profiles.account_type`、已批准 `agency_profiles` 及公司子帳戶歸屬為權威來源；`publisher_identity_type` 只作兼容派生，不得由會員修改。
 - 代理帳戶在首次資料批准前使用受限 session；除 `/me`、代理資料、同類型代理 OSS 上傳及登出外，會員業務統一要求 `member_status=active`。
 - `pending_profile`、`pending_review`、`rejected` 代理帳戶必須仍可使用本地電郵、手提電話或用戶名稱密碼登入，以查看進度、拒絕原因及重新提交；不得在發出 token 前按非 active 狀態拒絕登入。
@@ -46,6 +48,9 @@ utils/: 無業務狀態的通用工具。
 - 部署與環境操作不在 `internal/` 內新增 prompt，統一回到 `docs/deployment/`。
 
 ## 變更日誌
+2026-10-10: iSmart 副戶檢查、註冊、授權、撤銷統一使用生產 `ISMART_SUBACCOUNT_API_BASE_URL`；註冊與 grant 不得跨 production/clouddev 混用。
+2026-10-09: 副戶註冊取消隨機臨時密碼，改為手動設定密碼並原樣交上游；通知不含密碼，既有帳戶免填密碼。
+2026-10-09: iSmart 副戶聯絡檢查單項不再要求補另一項，雙項才核對同帳戶；新增正式上游回應及失敗保真的回歸測試。
 2026-09-13: `/me` 回傳本地登記用戶名稱 `username`；`PATCH /me/profile` 只更新有提交的欄位。
 2026-09-13: Staff 加入大廈群聊成員不要求目前大廈綁定；群內封禁狀態不得被加入動作覆蓋。
 2026-09-12: `messages.reply_to_message_id` 保存同一會話回覆原文；訊息組裝批次補 `reply_to` 預覽。
