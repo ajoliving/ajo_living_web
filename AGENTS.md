@@ -59,6 +59,7 @@
 - POS 相關部署包括 `easy.payment.skylinedances.com`、`pos.web.skylinedances.com`、`pos.ismart.skylinedances.com`，未來接入 AJO 時應歸入支付、賬單或物業費查詢。
 - iBoard 相關部署包括 `iboard.skylinedances.com` 與 `iboard.service.skylinedances.com`，未來接入 AJO 時應歸入大廈通告或通知內容。
 - iCCTV 相關部署包括 `icctv.skylinedances.com` 與 `icctv.service.skylinedances.com`，未來接入 AJO 時應歸入設備、監控或安防查看。
+- AJO iCCTV 播放 URL 使用 `https://icctv.skylinedances.com/opi/<port>/<camera-path>?token=...`；網關 `icctv_ssl.conf` 將 `29000-29999` 端口的受限播放請求代理至本機 FRP 攝影機端口，只對 AJO 生產／測試來源開放播放回應嵌入並停用含 token 的 access log。攝影機服務目前只接受 `channel...` 或 `playback_...` 路徑；`public-cameras` 若返回 `HKI_MAIN` 等命名路徑會被上游拒絕，須先核實通道映射，不得假設可直接播放。管理頁仍保留 `X-Frame-Options: SAMEORIGIN`。
 - Intercom 相關部署包括 `intercom.skylinedances.com` 與 `intercom.api.skylinedances.com`，未來接入 AJO 時應歸入門禁、對講或 App 端能力。
 - 其他已部署服務如 `pdf.maker.skylinedances.com`、`apis.hk.skylinedances.com`、`svavo.smart.databoard.skylinedances.com`、`svavo.smart.databoard.service.skylinedances.com`、`good.price.skylinedances.com`，接入前必須先確認是否屬於 AJO 主系統核心域。
 - AJO 不應一次性吞併所有舊後台；應按業務優先級逐步接入為可查看、可跳轉、可申請或可操作的模組。
@@ -89,7 +90,8 @@
 - 聊天回覆以同一則訊息的 `reply_to_message_id` 持久化；氣泡以右鍵或長按提供回覆、複製與兩分鐘撤回，輸入框顯示引用條。撤回只對自己兩分鐘內的訊息顯示。被撤回原文的引用預覽顯示「已撤回」，不另建引用表。
 
 ## 專案技術基線
-- 目前正在開發與維護的前端子專案是 `web-new`；後續所有前端功能修改、頁面調整、接口接入與 UI 修正，預設都必須落在 `web-new`。
+- 目前正在開發與維護的前端子專案是 `web_new`；後續所有前端功能修改、頁面調整、接口接入與 UI 修正，預設都必須落在 `web_new`。
+- 活躍源碼的檔案與目錄命名統一使用小寫 `snake_case`；元件主檔仍按既有 PascalCase 規則，路由 URL、API 路徑、CSS class、語系值及外部協議名稱維持其既有格式。`package-lock.json` 與部署工具要求的 `docker-compose.yml` 等生態固定檔名屬於明確例外。
 - `web` 是舊版前端歸檔目錄，只可作為歷史參考；除非使用者明確要求修改舊版歸檔，不得把新功能或修正落到 `web`。
 - 前端統一使用 `Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS + Axios`。
 - 如需元件庫，統一使用 `Ant Design Vue 4`。
@@ -123,7 +125,7 @@
 - 若是三層導航結構，推薦按「主模組 page 目錄 / 子路由 page 目錄 / 具體頁面 widgets 與 composables」的方式組織，而不是把不同層級頁面混放。
 
 ## 子專案提示詞文檔
-- 前端子專案遵循 [`web-new/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/web-new/AGENTS.md)；`web` 僅為舊版歸檔與參考目錄。
+- 前端子專案遵循 [`web_new/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/web_new/AGENTS.md)；`web` 僅為舊版歸檔與參考目錄。
 - 後端子專案遵循 [`http_service/AGENTS.md`](/Users/yangliu/Documents/Code/ajoliving_web/http_service/AGENTS.md)。
 - 子專案文檔與本檔衝突時，以子專案文檔為準。
 
@@ -189,7 +191,7 @@ const handleSubmit = async () => { ... };
 
 ### 成員清單
 docs/: 架構、部署、整合、開發規範、資料與 prompt/context 索引；`docs/archive/` 為歷史資料。
-web-new/: 目前正在開發與維護的 Vue 3 前端子專案。
+web_new/: 目前正在開發與維護的 Vue 3 前端子專案。
 http_service/: 目前正在開發與維護的 Go 後端 API 子專案。
 web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能。
 .codex/skills/: 本專案可複用 Codex skill 與其 agent prompt。
@@ -210,6 +212,7 @@ web/: 舊版前端歸檔與歷史參考，除非明確要求不承接新功能�
 
 ### 變更日誌
 
+2026-11-05: 網關 Nginx `icctv_ssl.conf` 的 `/opi/` 代理已修正嵌入回應頭並將命名通道路徑送達上游；上游回報 `Invalid stream path`，只接受 `channel...` 或 `playback_...`。通道名稱至串流路徑映射尚未確認，不修改 OrangePi 服務或猜測映射。
 2026-10-20: 會員中心每個已連結物業均提供解除綁定入口；目前上游未提供解除登記接口，操作只顯示提示，不切換目前物業或修改本地及上游關聯。
 2026-09-13: 管理端加入群聊成員成功後只更新該列與本地成員狀態，不重載候選列表或整個彈窗。2026-09-13: 會員中心已連結物業功能表按物業名分組，綁定與解除綁定負責切換目前使用單位；修改密碼改到已連結物業登記資料操作區。
 2026-09-13: 管理端大廈群聊可篩選系統已記錄會員並直接加入；群內封禁仍用既有 ban/unban，被封禁會員必須先解除封禁。

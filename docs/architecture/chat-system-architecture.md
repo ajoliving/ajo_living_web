@@ -15,7 +15,7 @@
 ## 2. 整體分層
 
 ```text
-Vue 3 前端（web-new）
+Vue 3 前端（web_new）
    │  REST /api/v1            WebSocket /api/v1/realtime/ws        OSS 直傳
 Nginx
    │

@@ -24,6 +24,8 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 - `docs/archive/`、`.claude/worktrees/`、`dist`、`node_modules`、資料庫備份與 HTML 備份不列入穩定 prompt surface，除非使用者明確要求追溯歷史。
 
 ## 變更日誌
+2026-11-10: 活躍 AJO 源碼、命令目錄與部署入口統一使用小寫 `snake_case`；歷史歸檔、外部 API 路徑與部署工具固定檔名不納入機械改名。
+2026-11-05: 固定 AJO iCCTV iframe 的播放反代邊界：網關 Nginx `/opi/` 的嵌入回應頭已修正，但設備端只接受 `channel...` 或 `playback_...`；`HKI_MAIN` 等命名通道會遭上游拒絕，通道映射尚待核實，OrangePi 服務不得未經確認修改。
 2026-09-14: `docs/integrations/external_app_building_api.zh-HK.md` 對譯底稿升級為 `external_app_building_api(2).md`，新增 `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`（業主綁定申請與審批狀態）與 `GET /api/v1/integration/buildings/flat-bindings/`（會員現行單位角色）兩節，第 3 節改為 3.1 提交與查詢、3.2 會員單位綁定清單、3.3 至 3.5 副戶；兩條路由已在 production 與 clouddev 回應，但本機檢出的 `ajo_ismart` 分支尚未包含，接入仍需以上游部署為準。
 2026-09-14: 新增 `docs/architecture/chat-system-architecture.md`，以現行程式碼為真值記錄聊天系統落地架構（分層、資料模型與枚舉、會話類型、大廈授權三來源、消息與撤回流程、票據式單會話連線、可靠性設計、媒體鏈路與展示門禁、通知邊界、介面索引），並在第 9 節列出與 `realtime-chat-guidance.md` 目標方案的落差，供產品決策使用；`PROMPT_INDEX.md` 已同步索引與變更日誌。
 2026-09-13: 會員中心已連結物業功能表按物業名分組，綁定與解除綁定負責切換目前使用單位；修改密碼改到已連結物業登記資料操作區。
@@ -44,7 +46,7 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 2026-07-08: 補充 iSmart integration API 在 POS relay 與 AJO 後端會員態接口的集成邊界。
 2026-07-09: 補充 `我的大廈` 的大廈財務與業戶帳目會員態接口使用約定。
 2026-07-09: 同步根級每次修改後執行 prompt/context 記憶檢查的默認規則。
-2026-07-09: 在 prompt index 記錄 `web-new` 手機端瀏覽器審計命令與驗收覆蓋範圍。
+2026-07-09: 在 prompt index 記錄 `web_new` 手機端瀏覽器審計命令與驗收覆蓋範圍。
 2026-07-09: 補充手機端審計需覆蓋登入、聊天、付款、錢包、編輯與設定主要操作流。
 2026-07-09: 補充手機端審計需覆蓋舊入口重定向、管理中心全部 tab、底部導航與管理 tab 點擊流。
 2026-07-09: 補充手機端審計需檢查可見觸控目標尺寸，避免手機點擊入口過窄。

@@ -57,6 +57,10 @@
 
 `icctv_orangepi_auth_service` 已部署在各台 OrangePi 上，属于设备端运行项目。除非用户明确要求并确认设备端发布方案，不得修改其代码、配置、Docker 文件、镜像或运行中的服务，也不得因为服务端需求自动重新部署 OrangePi。涉及 ICCTV 功能时，优先只修改 ICCTV 服务端、管理端或公开接口；任何设备端变更必须先单独确认影响范围和发布步骤。
 
+### AJO iCCTV 嵌入播放链路
+
+`AJO /me/security/icctv/public-cameras` 返回的攝像頭播放地址使用 `https://icctv.skylinedances.com/opi/<port>/<camera-path>?token=...`。代理配置位於網關伺服器 `47.83.21.100` 的 `/etc/nginx/sites-enabled/icctv_ssl.conf`，由該 Nginx 將受限 `/opi/` 請求代理至網關本機 FRP 攝影機端口，保留授權查詢參數並停用該路由的 access log。播放路由隱藏上游 `X-Frame-Options`，以 CSP `frame-ancestors` 限定 AJO 生產與測試站；iCCTV 管理頁繼續保留 `SAMEORIGIN`。注意：目前攝影機流服務只接受 `channel...` 或 `playback_...` 路徑；若 `public-cameras` 返回 `HKI_MAIN` 等命名通道，上游會回報 `Invalid stream path`。部署任何映射修正前，須核實命名通道至實際串流路徑的關係；不得僅因列表順序自行映射，也不得未經確認修改或重部署 OrangePi 服務。不要在應用伺服器 `/home/admin/icctv/icctv-http-service/nginx-default.conf` 配置此公開代理。
+
 ### 关键文件路径
 
 **网关 47.83.21.100：**
@@ -580,7 +584,7 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"in
 
 ```bash
 cd /Users/yangliu/Documents/Code/ajoliving_web
-./deploy-ajoliving.sh
+./deploy_ajoliving.sh
 ```
 
 默认行为：
@@ -688,7 +692,7 @@ ssh admin@47.239.117.108 \
 危险操作：
 
 ```bash
-RESTORE_DB=1 RESTORE_DB_CONFIRM=RESTORE_PRODUCTION_AJOLIVING ./deploy-ajoliving.sh
+RESTORE_DB=1 RESTORE_DB_CONFIRM=RESTORE_PRODUCTION_AJOLIVING ./deploy_ajoliving.sh
 ```
 
 只有同时设置以上两个变量，脚本才允许把本地 dump 恢复到服务器。正常更新前后端不要设置 `RESTORE_DB=1`。
@@ -785,7 +789,7 @@ curl -I https://ajoliving.server.skylinedances.com/api/v1/health
 - 首次資料由生產 PostgreSQL 邏輯快照以 `pg_dump -Fc` 建立，再 restore 至獨立測試資料庫；不得複製或共用生產 Docker volume。
 - restore 後的本地 password hash 保留供測試登入；外部服務憑據由測試發布時從生產 `.env` 重新繼承。
 - 測試環境使用獨立 `JWT_SECRET` 與 `ENCRYPTION_KEY`。
-- restore 後保留的樓盤聯絡密文必須由 `rekey-encrypted-data` 在同一交易內以生產密鑰讀取並改用測試 `ENCRYPTION_KEY` 保存；工具不輸出密鑰或明文，已使用測試密鑰的值保持不變，無法識別的歷史測試密文保持原值。
+- restore 後保留的樓盤聯絡密文必須由 `rekey_encrypted_data` 在同一交易內以生產密鑰讀取並改用測試 `ENCRYPTION_KEY` 保存；工具不輸出密鑰或明文，已使用測試密鑰的值保持不變，無法識別的歷史測試密文保持原值。
 - `APP_ENV=testing`；測試站目前公開訪問，測試操作會按生產外部服務配置執行真實 OTP、郵件、OSS、支付、POS、iSmart 及其他上游請求。
 - 測試部署預設不按服務或讀寫類型隔離外部接口；只有產品明確指定的接口才可改用 mock、不可用地址或獨立測試地址。
 - 每次部署先保留測試 `JWT_SECRET` 與 `ENCRYPTION_KEY`，再從生產 `.env` 重新載入外部服務配置，最後覆蓋測試資料庫、Redis、公開域名及回調 URL。
@@ -796,17 +800,26 @@ curl -I https://ajoliving.server.skylinedances.com/api/v1/health
 
 ```bash
 # 正常更新測試前後端，保留測試資料庫
-./deploy-ajoliving-test.sh
+./deploy_ajoliving_test.sh
 
 # 首次建立或明確重建測試資料庫
 INITIALIZE_DB=1 \
 INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
-./deploy-ajoliving-test.sh
+./deploy_ajoliving_test.sh
 ```
 
 `SKIP_BUILD=1` 只可用於同一次已驗證建置後的傳輸重試，不得作為一般發布方式。後端二進制使用 legacy SCP 傳輸，避免目前網絡環境的 SFTP 固定窗口停滯。
 
 一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
+
+2026-10-29 已部署測試 release `20261029110314-test-90661`：
+
+- 重新建置目前工作區前後端，發布「我的大廈」手機內容收窄、表格標籤及按鈕對齊、全寬 16:9 CCTV 框架；模組及財務／帳目選項卡維持左右捲動，不改為下拉框。
+- 超市商品詳情手機版改為中性底色及等寬操作按鈕；樓盤、家具及超市手機快捷篩選下拉箭頭距右側 14px，文字預留 40px。
+- 使用 `INITIALIZE_DB=0` 保留既有測試資料庫、`KEEP_RELEASES=0` 保留所有舊 release；測試資料卷及 JWT／加密密鑰指紋未變。
+- 前端 243 項測試、`go test ./...`、TypeScript 檢查及建置通過；測試公網首頁、health/readiness 均返回 `200`，首頁與本次建置一致，Supervisor、Nginx、PostgreSQL、Redis 及 `noindex` 驗證通過。
+- 已部署前端資源通過大廈 168 項排版／交互檢查、快捷篩選 24 組檢查及真實公開商品詳情中英雙語六種寬度檢查，無頁面橫向溢出或 JavaScript 錯誤。大廈 API／攝影機及外部地圖使用模擬回應，未執行開門、付款或其他寫入；本機 Chromium 連線受代理影響，驗收以 Node 直接讀取線上資源再交由瀏覽器渲染，並非本機 dist 預覽。
+- 生產 release `20261010042129-55503`、二進制及 `.env` 校驗值、生產與共用 `frpc` PID、FRP 配置均未變；生產公網首頁及 health/readiness 返回 `200`，未修改 SSL 或 OSS CORS。
 
 2026-10-20 已部署測試 release `20261020150156-test-1996`：
 
@@ -848,7 +861,7 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 
 - 修復前先建立 `/home/admin/ajoliving-test/db/backups/ajoliving_test_before_rekey_202608070918.dump`，未修改生產資料庫。
 - 將目標樓盤的有效生產聯絡密文只讀同步至測試庫，再使用測試獨立密鑰重加密；帶原測試 Bearer Token 的樓盤詳情請求由 `500` 恢復為 `200` 並返回 `editable_contact`。
-- `deploy-ajoliving-test.sh` 在日後顯式重建測試資料庫時自動執行同一重加密流程，正常保留資料的測試發布不改動現有密文。
+- `deploy_ajoliving_test.sh` 在日後顯式重建測試資料庫時自動執行同一重加密流程，正常保留資料的測試發布不改動現有密文。
 
 驗收命令：
 
@@ -907,13 +920,13 @@ ssh admin@47.239.117.108 \
 
 - 發布「授予副戶」延時授權完整流程：`pending_registration → awaiting_confirmation → active` 狀態機、註冊邀請電郵、註冊命中提升、授權確認電郵（48 小時有效）、令牌／站內雙確認入口、逾期失效 ticker、重發與撤銷；前端移除代填英文姓名／密碼欄位，新增三態授權列表與確認頁 `/auth/ismart-subaccount-authorizations/confirm`。
 - 測試發布使用 `INITIALIZE_DB=0` 保留既有測試資料庫；後端 AutoMigrate 自動建立 `ismart_subaccount_authorizations` 表（22 欄位），未恢復資料庫，未修改 FRP、SSL 或 OSS CORS。
-- 本機部署時需以 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 前綴執行 `./deploy-ajoliving-test.sh`，否則 npm safe-delete 保護會在 `npm ci` 清理 `node_modules/.vite` 時中斷部署。
+- 本機部署時需以 `CODEBUDDY_SAFE_DELETE_ENABLED=0` 前綴執行 `./deploy_ajoliving_test.sh`，否則 npm safe-delete 保護會在 `npm ci` 清理 `node_modules/.vite` 時中斷部署。
 - 驗收：測試前後端公網 `200`、health/readiness `200`、新公開路由 `/api/v1/auth/ismart-subaccount-authorizations/:token` 返回業務 `404 RESOURCE_NOT_FOUND`（證明路由已生效）、`noindex` 保持；生產 Supervisor、API 與前端在測試發布後維持正常。
 
 2026-10-13 已部署測試 release `20261013062348-test-49826`：
 
 - 授權面板布局修正：`authorization-field-stack` 由兩列改為單列（`grid-template-columns: minmax(0, 1fr)`、gap 16px），手提電話（區號＋輸入框）與電郵輸入框同寬、同左緣對齊；「檢查帳戶」按鈕高度統一為 42px。僅 CSS 改動，無模板與邏輯變更。
-- 本機安裝環境根因處理：WorkBuddy 的 `NODE_OPTIONS` language-shim 在 `npm ci` 大規模解包與 vite build 高負載寫入時代理超時，靜默丟失文件（node_modules 隨機缺檔、`@volar/typescript`／`@vue/language-core` 等損壞、rolldown build 崩潰）。兩個部署腳本的 `npm ci` 與 `npm run build` 已改為 `env -u NODE_OPTIONS` 前綴執行；修復工具 `web-new/scripts/repair-package.sh` 可按 lockfile 重解單個損壞包。
+- 本機安裝環境根因處理：WorkBuddy 的 `NODE_OPTIONS` language-shim 在 `npm ci` 大規模解包與 vite build 高負載寫入時代理超時，靜默丟失文件（node_modules 隨機缺檔、`@volar/typescript`／`@vue/language-core` 等損壞、rolldown build 崩潰）。兩個部署腳本的 `npm ci` 與 `npm run build` 已改為 `env -u NODE_OPTIONS` 前綴執行；修復工具 `web_new/scripts/repair-package.sh` 可按 lockfile 重解單個損壞包。
 - 部署操作注意：SSH 需讀 `~/.ssh/`（known_hosts／私鑰），後台 Bash 任務實際仍在沙箱內（即使請求繞過），會卡死在主機密鑰交互確認；部署必須以前台命令＋繞過沙箱執行（逾時會自動轉後台但進程上下文不變）。
 - 驗收：Supervisor／frpc RUNNING、測試 health 200、公網前後端 200、線上 CSS 已含單列規則 `authorization-field-stack{grid-template-columns:minmax(0,1fr)}`；生產 Supervisor 與前端不受影響。
 
@@ -1005,7 +1018,7 @@ ssh admin@47.239.117.108 "cat /home/admin/frp/frpc.toml | grep -A 5 'name = \"go
 
 - 本次以已审核的 Good Price 工作簿和三个图片目录为来源；生产 PostgreSQL 已下架 28 个 `product_code`，并修正 6 个商品名称或品牌。
 - `backend/product_catalog_overrides.go` 的覆盖规则会在每日 CSV 写入前再次执行，避免下架商品或人工修正被日常导入恢复。
-- 335 张可用图片已由 `/home/admin/ajoliving/server/import-supermarket-images` 导入 AJO 生产 OSS，固定物件键前缀为 `ajo_living/supermarket/products/`，并同步建立 `media_assets` 记录；导入命令可重复执行，已有记录默认跳过。
+- 335 张可用图片已由 `/home/admin/ajoliving/server/import_supermarket_images` 导入 AJO 生产 OSS，固定物件键前缀为 `ajo_living/supermarket/products/`，并同步建立 `media_assets` 记录；导入命令可重复执行，已有记录默认跳过。
 - 三条工作簿中标记有图但本地没有文件的商品 `P000002837`、`P000002463`、`P000003230` 保持待补，不以占位图写入 OSS。
 - 本次备份：`/home/admin/good_price_databoard/db/good_price_before_catalog_20260807_181842.dump`、`/home/admin/ajoliving/db/backups/ajoliving_before_supermarket_images_20260807_181842.dump`。Good Price 旧二进制保留为 `/home/admin/good_price_databoard/backend/good_price_backend.bak.20260807_catalog`。
 - 测试环境的 `OSS_PROVIDER=mock` 与外部副作用隔离规则保持不变，本批图片只写入生产 OSS；需要测试图片时应使用独立测试对象存储并另行确认。

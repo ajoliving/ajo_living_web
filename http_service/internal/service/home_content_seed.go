@@ -233,7 +233,7 @@ func defaultHomeModuleCardSeeds(publicDir string) []defaultHomeModuleCardSeed {
 		{
 			ModuleCode: "secondhand",
 			Asset: defaultContentAsset{
-				LocalPath: filepath.Join(publicDir, "home-stage", "secondhand.webp"),
+				LocalPath: filepath.Join(publicDir, "home_stage", "secondhand.webp"),
 				ObjectKey: homeEngMediaObjectPrefix + "secondhand.webp",
 				MimeType:  "image/webp",
 				Width:     2816,
@@ -246,7 +246,7 @@ func defaultHomeModuleCardSeeds(publicDir string) []defaultHomeModuleCardSeed {
 		{
 			ModuleCode: "property_sale",
 			Asset: defaultContentAsset{
-				LocalPath: filepath.Join(publicDir, "home-stage", "property-sale.webp"),
+				LocalPath: filepath.Join(publicDir, "home_stage", "property_sale.webp"),
 				ObjectKey: homeEngMediaObjectPrefix + "property-sale.webp",
 				MimeType:  "image/webp",
 				Width:     2816,
@@ -259,7 +259,7 @@ func defaultHomeModuleCardSeeds(publicDir string) []defaultHomeModuleCardSeed {
 		{
 			ModuleCode: "serviced_apartment",
 			Asset: defaultContentAsset{
-				LocalPath: filepath.Join(publicDir, "home-stage", "serviced-apartment.webp"),
+				LocalPath: filepath.Join(publicDir, "home_stage", "serviced_apartment.webp"),
 				ObjectKey: homeEngMediaObjectPrefix + "serviced-apartment.webp",
 				MimeType:  "image/webp",
 				Width:     2816,

@@ -120,6 +120,7 @@ router -> handler -> service -> model/database
 
 ### 2. 檔案命名
 - 檔名統一使用小寫字母與底線。
+- `cmd/` 下的命令目錄同樣使用小寫 `snake_case`；部署工具要求的產物檔名若有外部相容性需求，須在部署腳本中明確保留映射。
 - 檔名應體現資源或職責。
 - 同一資源的 handler、service、model 建議使用一致命名。
 
@@ -259,7 +260,7 @@ go test ./...
 - 是否遵守主要函式編號註解規範。
 - 是否避免引入無明確收益的新抽象層。
 - 是否同步補充測試與文件。
-- 对于部署，需要参考 `/Users/yangliu/Documents/Code/hk/ajoliving_web/docs/deployment/server-deployment-ai-prompt.md` 文档，以及当前仓库的 `deploy-ajoliving-test.sh` 或 `deploy-ajoliving.sh` 脚本
+- 对于部署，需要参考 `/Users/yangliu/Documents/Code/hk/ajoliving_web/docs/deployment/server-deployment-ai-prompt.md` 文档，以及当前仓库的 `deploy_ajoliving_test.sh` 或 `deploy_ajoliving.sh` 脚本
 - 部署不要破坏我的已经部署好的项目，可以先ssh链接上服务器后直接查看相关的服务器的配置文件等等，然后再部署，不要新加多余的垃圾
 
 ## 子目錄記憶
@@ -267,6 +268,7 @@ go test ./...
 - API 文檔、錯誤語義、模型契約或 AI 文件生成規範受影響時，同步檢查 `doc/api.md` 與 `../docs/PROMPT_INDEX.md`。
 
 ## 變更日誌
+2026-11-10: `cmd/` 命令目錄與 OSS CORS 產物已統一為小寫 `snake_case` 命名，部署腳本同步更新；`docker-compose.yml` 因 Docker 預設識別規則保留原名，API 路徑與外部資源名稱維持既有契約。
 2026-09-13: `/me` 回傳本地登記用戶名稱 `username`；`PATCH /me/profile` 只更新有提交的欄位，避免頭像或單位局部更新清空其他資料。
 2026-09-13: Staff 可把系統已記錄會員直接加入大廈群聊；被群內封禁的會員必須先 unban。
 2026-09-12: 聊天發送可帶 `reply_to_message_id`；列表與即時事件返回 `reply_to` 預覽，被撤回原文顯示「已撤回」。

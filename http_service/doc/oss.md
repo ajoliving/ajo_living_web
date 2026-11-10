@@ -59,7 +59,7 @@ OSS_MEDIA_BASE_URL=https://your-bucket.oss-cn-hongkong.aliyuncs.com
 
 ## 3.1 瀏覽器直傳的 bucket CORS
 
-生產與測試前端共用同一個 bucket `ajo-living`，因此 bucket 的 CORS 允許來源必須同時覆蓋所有已部署的前端網域，不能只寫單一環境的來源。目前寫入職責由生產部署腳本承擔：`deploy-ajoliving.sh` 會以 `APP_PUBLIC_BASE_URL` 加上 `OSS_ALLOWED_ORIGINS` 執行 `oss-cors`，預設值已包含 `https://ajoliving.skylinedances.com` 與 `https://test.ajoliving.skylinedances.com`。
+生產與測試前端共用同一個 bucket `ajo-living`，因此 bucket 的 CORS 允許來源必須同時覆蓋所有已部署的前端網域，不能只寫單一環境的來源。目前寫入職責由生產部署腳本承擔：`deploy_ajoliving.sh` 會以 `APP_PUBLIC_BASE_URL` 加上 `OSS_ALLOWED_ORIGINS` 執行 `oss_cors`，預設值已包含 `https://ajoliving.skylinedances.com` 與 `https://test.ajoliving.skylinedances.com`。
 
 若只允許生產來源，測試站直接 PUT 上傳會在前置請求被 OSS 以 `AccessForbidden`／`0003-00000602` 拒絕，前端表現為「無法上傳圖片」，但既有圖片的 GET 讀取仍正常。調整來源後可用下列方式驗證：
 

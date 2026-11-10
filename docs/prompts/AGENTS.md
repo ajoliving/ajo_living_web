@@ -15,10 +15,10 @@ marketplace-publish-page-prompt.md: 二手發布頁表單、預覽與視覺 prom
 - 本目錄只保存可直接給 AI 或 agent 使用的 UI prompt，不保存產品驗收、API 契約或部署流程。
 - 新增 prompt 前先確認是否能擴充既有文件；只有可獨立重用的頁面、表單或視覺規則才新增文件。
 - 文件正文使用繁體中文或 English；UI 文案保持正式、直接，不使用 emoji，不加入給實作者看的過程文字。
-- prompt 涉及具體頁面時，必須同步確認 `web-new/src/pages/AGENTS.md` 和 `docs/PROMPT_INDEX.md` 是否需要更新。
+- prompt 涉及具體頁面時，必須同步確認 `web_new/src/pages/AGENTS.md` 和 `docs/PROMPT_INDEX.md` 是否需要更新。
 - prompt 描述產品邊界時，以根級 `AGENTS.md` 的 AJO Living 主系統定位為準，不把所有功能寫成 marketplace。
 
 ## 變更日誌
 2026-07-08: 建立 UI prompt 目錄記憶，限制新增 prompt 的用途與維護入口。
 
-[PROTOCOL]: When adding, moving, renaming, or changing a reusable UI prompt here, update this map, `../PROMPT_INDEX.md`, and check related `web-new/src/pages/AGENTS.md` ownership.
+[PROTOCOL]: When adding, moving, renaming, or changing a reusable UI prompt here, update this map, `../PROMPT_INDEX.md`, and check related `web_new/src/pages/AGENTS.md` ownership.
