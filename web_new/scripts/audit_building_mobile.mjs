@@ -2,7 +2,7 @@
  * My Building responsive regression audit.
  * 1. Render compiled pages or an existing frontend without starting a server.
  * 2. Mock all APIs and external media; never perform live mutations.
- * 3. Allow horizontal tab rails while checking content overflow, controls and CCTV geometry.
+ * 3. Check the mobile navigation home, content overflow, controls and CCTV geometry.
  */
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -205,6 +205,9 @@ const inspectLayout = async (page) => page.evaluate(() => {
     selectedTabIndex: tabs.findIndex((tab) => tab.getAttribute('aria-current') === 'page'),
     navigation: {
       tabCount: tabs.length, hasDropdown: Boolean(root.querySelector('.building-module-select')),
+      visible: visible(nav), backVisible: visible(root.querySelector('.building-mobile-back')),
+      visibleTabs: tabs.filter(visible).length,
+      iconCount: tabs.filter((tab) => visible(tab.querySelector('.work-nav-icon'))).length,
       left: navRect.left, right: navRect.right, scrollLeft: nav.scrollLeft,
       clientWidth: nav.clientWidth, scrollWidth: nav.scrollWidth, overflowX: getComputedStyle(nav).overflowX,
     },
@@ -218,7 +221,7 @@ const browser = await chromium.launch({ headless: true });
 const report = {
   mode: staticMode ? 'compiled-static' : 'existing-server',
   cctvPlayback: 'Mock frame only; live playback not verified.',
-  overflowScope: 'Mobile checks every visible content container except the explicit .work-nav and .acct-tabs horizontal tab rails. Tab buttons may scroll offscreen, but the rail and page must fit the viewport. Desktop preserves existing internal table scrolling.',
+  overflowScope: 'Mobile checks visible content containers; finance and account subtabs may scroll horizontally. Desktop preserves existing internal table scrolling.',
   headerExclusion: 'Only descendants of .stack-table thead with absolute position, hidden overflow, a CSS clip and at most 1px width/height are excluded as visually clipped accessibility headers.',
   skippedActions: ['Door opening and QR generation require POST and are not invoked.', 'Door camera is a text-only field in the current UI; no camera popup is available.'],
   results: [], errors: [], blockedExternalRequests: [],
@@ -274,18 +277,50 @@ try {
       return route.abort();
     });
     await page.goto(`${base}/building`, { waitUntil: 'networkidle' });
-    await page.locator('.notice-table td[data-label]').first().waitFor();
+    if (scenario.width < 1024) {
+      await page.locator('.work-nav-item').first().waitFor();
+      const home = await inspectLayout(page);
+      report.results.push({
+        ...scenario, module: 'home', state: 'default',
+        pass: home.documentOverflow <= 1 && home.navigation.visible && home.navigation.visibleTabs === modules.length
+          && home.navigation.iconCount === modules.length && home.visiblePanels.length === 0
+          && home.navigation.scrollWidth <= home.navigation.clientWidth + 1,
+        ...home,
+      });
+      if (scenario.locale === 'zh-HK' && scenario.width === 390) {
+        await page.screenshot({ path: join(output, 'mobile-building-home-390-after.png') });
+      }
+    } else {
+      await page.locator('.notice-table td[data-label]').first().waitFor();
+    }
     for (const [module, populatedSelector] of modules) {
       const index = modules.findIndex(([name]) => name === module);
+      if (scenario.width < 1024 && index > 0) {
+        await page.locator('.building-mobile-back').click();
+        await page.locator('.work-nav-item').first().waitFor();
+      }
       await page.locator('.work-nav-item').nth(index).click();
       const panel = page.locator(`[data-work-panel="${module}"]`);
       await panel.locator(populatedSelector).first().waitFor();
       await page.waitForTimeout(200);
+      if (scenario.width < 1024 && index === 0) {
+        await page.goBack({ waitUntil: 'domcontentloaded' });
+        await page.locator('.work-nav-item').first().waitFor();
+        const returnedHome = await inspectLayout(page);
+        report.results.push({
+          ...scenario, module: 'home', state: 'history-back',
+          pass: returnedHome.navigation.visible && returnedHome.visiblePanels.length === 0,
+          ...returnedHome,
+        });
+        await page.goForward({ waitUntil: 'domcontentloaded' });
+        await panel.locator(populatedSelector).first().waitFor();
+      }
       const capture = async (state) => {
         const layout = await inspectLayout(page);
-        const navigationFits = layout.navigation.left >= -1 && layout.navigation.right <= scenario.width + 1
-          && layout.navigation.tabCount === modules.length && !layout.navigation.hasDropdown
-          && (scenario.width >= 1024 || layout.navigation.overflowX === 'auto');
+        const navigationFits = layout.navigation.tabCount === modules.length && !layout.navigation.hasDropdown
+          && (scenario.width < 1024
+            ? !layout.navigation.visible && layout.navigation.backVisible
+            : layout.navigation.left >= -1 && layout.navigation.right <= scenario.width + 1);
         const pass = layout.documentOverflow <= 1 && (scenario.width >= 1024 || layout.overflows.length === 0) && layout.controls.length === 0
           && navigationFits && layout.selectedTabIndex === index && layout.visiblePanels.length === 1 && layout.visiblePanels[0] === module;
         report.results.push({ ...scenario, module, state, pass, ...layout });

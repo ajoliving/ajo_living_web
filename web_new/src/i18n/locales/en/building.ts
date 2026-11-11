@@ -39,6 +39,7 @@ export default {
     saveError: 'Unable to save the current property. Try again later.',
   },
   nav: {
+    backToHome: 'Back to My Building',
     notices: 'Latest notices',
     building: 'Building profile',
     finance: 'Building finance',

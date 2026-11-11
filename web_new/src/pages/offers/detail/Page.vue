@@ -214,7 +214,7 @@ const selectedNearbyStore = computed(() =>
 const sameCategoryProducts = computed<SupermarketProduct[]>(() =>
   (detail.value?.sameCategory ?? [])
     .filter((item) => item.code !== product.value?.code)
-    .slice(0, 6),
+    .slice(0, 10),
 );
 
 // 10.1 左右移動同分類商品。
@@ -700,7 +700,16 @@ const buildTrendChart = (history: SupermarketDailyStorePrice[], mode: PriceChart
   const minValue = values.length > 0 ? Math.min(...values) : 0;
   const maxValue = values.length > 0 ? Math.max(...values) : 1;
   const span = Math.max(1, maxValue - minValue);
-  const colors = ['#FF5A00', '#1A7A3A', '#1A1A1A', '#006973', '#974301', '#6d28d9', '#0f766e', '#a16207'];
+  const colors = [
+    'var(--gp-series-1, #FF5A00)',
+    'var(--gp-series-2, #1A7A3A)',
+    'var(--gp-series-3, #1A1A1A)',
+    'var(--gp-series-4, #006973)',
+    'var(--gp-series-5, #974301)',
+    'var(--gp-series-6, #6d28d9)',
+    'var(--gp-series-7, #0f766e)',
+    'var(--gp-series-8, #a16207)',
+  ];
   const xFor = (date: string): number => {
     const index = Math.max(0, dates.indexOf(date));
     return padding.left + (index / Math.max(1, dates.length - 1)) * (width - padding.left - padding.right);
@@ -1235,6 +1244,7 @@ onBeforeUnmount(() => {
               class="gp-chart"
             >
               <svg
+                :key="productCode"
                 :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`"
                 preserveAspectRatio="none"
                 role="img"
@@ -1292,25 +1302,29 @@ onBeforeUnmount(() => {
                   :y1="trendChart.padding.top"
                   :y2="trendChart.height - trendChart.padding.bottom"
                 />
-                <polyline
-                  v-for="series in trendChart.series"
-                  :key="series.store"
-                  :points="series.points"
-                  :stroke="series.color"
-                />
-                <template
-                  v-for="series in trendChart.series"
-                  :key="`${series.store}-dots`"
-                >
-                  <circle
-                    v-for="point in series.dots"
-                    :key="point.key"
-                    :cx="point.x"
-                    :cy="point.y"
-                    r="3"
-                    :fill="series.color"
+                <g class="gp-chart-series">
+                  <polyline
+                    v-for="series in trendChart.series"
+                    :key="series.store"
+                    :points="series.points"
+                    :stroke="series.color"
                   />
-                </template>
+                  <template
+                    v-for="series in trendChart.series"
+                    :key="`${series.store}-dots`"
+                  >
+                    <template v-if="series.dots.length === 1">
+                      <circle
+                        v-for="point in series.dots"
+                        :key="point.key"
+                        :cx="point.x"
+                        :cy="point.y"
+                        r="3"
+                        :fill="series.color"
+                      />
+                    </template>
+                  </template>
+                </g>
               </svg>
               <div
                 v-if="trendHover"
@@ -1364,67 +1378,71 @@ onBeforeUnmount(() => {
             </div>
           </header>
           <p class="gp-detail-subtitle">{{ productCategories[0]?.label }}</p>
-          <button
-            type="button"
-            class="gp-related-arrow is-previous"
-            :aria-label="t('offers.list.scrollLeft')"
-            :title="t('offers.list.scrollLeft')"
-            @click="scrollRelatedProducts(-1)"
-          >
-            <AppIcon name="arrow-left" :size="17" />
-          </button>
-          <button
-            type="button"
-            class="gp-related-arrow is-next"
-            :aria-label="t('offers.list.scrollRight')"
-            :title="t('offers.list.scrollRight')"
-            @click="scrollRelatedProducts(1)"
-          >
-            <AppIcon name="arrow-right" :size="17" />
-          </button>
           <div
-            ref="relatedProductsTrack"
-            class="gp-related-scroll"
+            class="gp-related-rail"
           >
             <button
-              v-for="item in sameCategoryProducts"
-              :key="item.code"
               type="button"
-              class="gp-related-card"
-              @click="openRelatedProduct(item)"
+              class="gp-related-arrow is-previous"
+              :aria-label="t('offers.list.scrollLeft')"
+              :title="t('offers.list.scrollLeft')"
+              @click="scrollRelatedProducts(-1)"
             >
-              <div class="gp-related-img">
-                <span
-                  v-if="formatProductBrand(item)"
-                  class="gp-related-brand-chip"
-                >{{ formatProductBrand(item) }}</span>
-                <img
-                  v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
-                  :src="item.image_url || item.imageUrl"
-                  :alt="formatProductTitle(item)"
-                  @error="handleProductImageError(item.code)"
-                >
-                <span
-                  v-else
-                  class="gp-related-img-text"
-                >
-                  {{ relatedProductInitial(item) }}
-                </span>
-              </div>
-              <div class="gp-related-body">
-                <div class="gp-related-name">{{ formatProductName(item) }}</div>
-                <div class="gp-related-store">{{ relatedProductStoreText(item) }}</div>
-                <div class="gp-related-price">{{ relatedProductPriceText(item) }}<small>{{ t('offers.detail.perItem') }}</small></div>
-                <div
-                  v-if="relatedProductCompareText(item)"
-                  class="gp-related-compare"
-                >{{ relatedProductCompareText(item) }}</div>
-                <div
-                  v-if="relatedProductSavingText(item)"
-                  class="gp-related-saving"
-                >{{ relatedProductSavingText(item) }}</div>
-              </div>
+              <AppIcon name="arrow-left" :size="17" />
             </button>
+            <button
+              type="button"
+              class="gp-related-arrow is-next"
+              :aria-label="t('offers.list.scrollRight')"
+              :title="t('offers.list.scrollRight')"
+              @click="scrollRelatedProducts(1)"
+            >
+              <AppIcon name="arrow-right" :size="17" />
+            </button>
+            <div
+              ref="relatedProductsTrack"
+              class="gp-related-scroll"
+            >
+              <button
+                v-for="item in sameCategoryProducts"
+                :key="item.code"
+                type="button"
+                class="gp-related-card"
+                @click="openRelatedProduct(item)"
+              >
+                <div class="gp-related-img">
+                  <span
+                    v-if="formatProductBrand(item)"
+                    class="gp-related-brand-chip"
+                  >{{ formatProductBrand(item) }}</span>
+                  <img
+                    v-if="(item.image_url || item.imageUrl) && !failedImageCodes.has(item.code)"
+                    :src="item.image_url || item.imageUrl"
+                    :alt="formatProductTitle(item)"
+                    @error="handleProductImageError(item.code)"
+                  >
+                  <span
+                    v-else
+                    class="gp-related-img-text"
+                  >
+                    {{ relatedProductInitial(item) }}
+                  </span>
+                </div>
+                <div class="gp-related-body">
+                  <div class="gp-related-name">{{ formatProductName(item) }}</div>
+                  <div class="gp-related-store">{{ relatedProductStoreText(item) }}</div>
+                  <div class="gp-related-price">{{ relatedProductPriceText(item) }}<small>{{ t('offers.detail.perItem') }}</small></div>
+                  <div
+                    v-if="relatedProductCompareText(item)"
+                    class="gp-related-compare"
+                  >{{ relatedProductCompareText(item) }}</div>
+                  <div
+                    v-if="relatedProductSavingText(item)"
+                    class="gp-related-saving"
+                  >{{ relatedProductSavingText(item) }}</div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1498,7 +1516,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   border: 0;
   border-radius: 0;
-  background: #ffffff;
+  background: var(--sur);
   padding: 0;
 }
 
@@ -1512,7 +1530,7 @@ onBeforeUnmount(() => {
   margin: 0;
   background: transparent;
   border: 0;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1520,7 +1538,7 @@ onBeforeUnmount(() => {
 .gp-breadcrumb .bc-link {
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: var(--ink-3);
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1537,7 +1555,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-breadcrumb .bc-current {
-  color: #2c2824;
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -1548,9 +1566,9 @@ onBeforeUnmount(() => {
   gap: 22px;
   align-items: start;
   margin: 0;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--sur);
   padding: 20px;
 }
 
@@ -1561,7 +1579,7 @@ onBeforeUnmount(() => {
   height: 200px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 12px;
   background: #ffe8d6;
   overflow: hidden;
@@ -1645,7 +1663,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-detail-title {
-  color: #2c2824;
+  color: var(--ink);
   font-size: 22px;
   font-weight: 800;
   line-height: 1.25;
@@ -1653,7 +1671,7 @@ onBeforeUnmount(() => {
 
 .gp-detail-unit {
   margin-top: 4px;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
@@ -1681,7 +1699,7 @@ onBeforeUnmount(() => {
 
 .gp-product-cat {
   margin-top: 8px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 13px;
 }
 
@@ -1768,7 +1786,7 @@ onBeforeUnmount(() => {
 
 .gp-series-label {
   flex: 0 0 70px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 32px;
 }
@@ -1781,10 +1799,10 @@ onBeforeUnmount(() => {
 
 .gp-series-option {
   min-height: 32px;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #ffffff;
-  color: #2c2824;
+  background: var(--sur);
+  color: var(--ink);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -1799,7 +1817,7 @@ onBeforeUnmount(() => {
 
 .gp-series-option.on {
   border-color: #ff6a00;
-  background: #fff0e8;
+  background: var(--brand-light);
   color: #ff6a00;
   font-weight: 700;
 }
@@ -1830,7 +1848,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   border: 1px solid #ff6a00;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--sur);
   color: #ff6a00;
   cursor: pointer;
   font-family: inherit;
@@ -1853,32 +1871,32 @@ onBeforeUnmount(() => {
 /* 5. 操作訊息 */
 .gp-action-message {
   margin: 0;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #ffffff;
-  color: #6b7280;
+  background: var(--sur);
+  color: var(--ink-3);
   font-size: 12px;
   padding: 10px 12px;
 }
 
 /* 6. 通用卡片 */
 .gp-detail-card {
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--sur);
   padding: 18px;
 }
 
 .gp-detail-card h3 {
   margin: 0 0 10px;
-  color: #4a433c;
+  color: var(--ink-2);
   font-size: 18px;
   font-weight: 700;
 }
 
 .gp-detail-subtitle {
   margin: 6px 0 14px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1910,9 +1928,9 @@ onBeforeUnmount(() => {
 }
 
 .gp-link-btn {
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--sur);
   color: #ff6a00;
   cursor: pointer;
   font-family: inherit;
@@ -1930,9 +1948,9 @@ onBeforeUnmount(() => {
 
 .gp-alert-form input[type='number'],
 .gp-alert-form select {
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  color: #2c2824;
+  color: var(--ink);
   font: inherit;
   font-size: 12px;
   padding: 9px 10px;
@@ -1942,7 +1960,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
 }
 
@@ -1985,7 +2003,7 @@ onBeforeUnmount(() => {
 }
 
 .gp-price-table th {
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
   font-weight: 700;
   padding: 10px 8px;
@@ -1997,13 +2015,13 @@ onBeforeUnmount(() => {
 }
 
 .gp-price-table td {
-  border-top: 1px solid #e6e1d8;
+  border-top: 1px solid var(--bdr);
   padding: 10px 8px;
   vertical-align: middle;
 }
 
 .gp-price-table tr.is-best td {
-  background: #fff0e8;
+  background: var(--brand-light);
 }
 
 .gp-price-unit {
@@ -2029,8 +2047,8 @@ onBeforeUnmount(() => {
 }
 
 .gp-saving-pill {
-  border: 1px solid #e6e1d8;
-  background: #ffffff;
+  border: 1px solid var(--bdr);
+  background: var(--sur);
   color: #ff6a00;
 }
 
@@ -2040,9 +2058,9 @@ onBeforeUnmount(() => {
   height: 180px;
   margin-top: 12px;
   overflow: hidden;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--sur);
 }
 
 .gp-store-map-frame {
@@ -2074,12 +2092,12 @@ onBeforeUnmount(() => {
 }
 
 .gp-store-map-meta strong {
-  color: #2c2824;
+  color: var(--ink);
   font-size: 14px;
 }
 
 .gp-store-map-meta span {
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -2095,7 +2113,7 @@ onBeforeUnmount(() => {
 .gp-store-route-button,
 .gp-store-branch-select {
   min-height: 40px;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 8px;
   font: inherit;
   font-size: 13px;
@@ -2108,7 +2126,7 @@ a.gp-store-route-button {
   justify-content: center;
   border-color: rgb(var(--color-primary));
   background: rgb(var(--color-primary));
-  color: rgb(var(--color-primary-contrast));
+  color: #fff;
   padding: 0 14px;
   text-decoration: none;
 }
@@ -2121,8 +2139,8 @@ a.gp-store-route-button {
 .gp-store-branch-select {
   min-width: 150px;
   max-width: 100%;
-  background: #ffffff;
-  color: #2c2824;
+  background: var(--sur);
+  color: var(--ink);
   cursor: pointer;
   padding: 0 34px 0 12px;
 }
@@ -2145,21 +2163,21 @@ a.gp-store-route-button {
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--sur);
   padding: 12px;
 }
 
 .gp-nearest-card strong {
   display: block;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 15px;
 }
 
 .gp-nearest-card p {
   margin: 4px 0 0;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 12px;
 }
 
@@ -2345,21 +2363,21 @@ a.gp-store-route-button {
 }
 
 .gp-summary-item {
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--sur);
   padding: 12px;
 }
 
 .gp-summary-label {
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 11px;
   font-weight: 700;
 }
 
 .gp-summary-value {
   margin-top: 6px;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 18px;
   font-weight: 800;
 }
@@ -2372,10 +2390,10 @@ a.gp-store-route-button {
 }
 
 .gp-mode-pill {
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 999px;
-  background: #ffffff;
-  color: #6b7280;
+  background: var(--sur);
+  color: var(--ink-3);
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
@@ -2385,16 +2403,16 @@ a.gp-store-route-button {
 
 .gp-mode-pill.on {
   border-color: #ff6a00;
-  background: #fff0e8;
+  background: var(--brand-light);
   color: #ff6a00;
 }
 
 .gp-chart {
   position: relative;
   height: 280px;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--sur);
   padding: 12px;
 }
 
@@ -2409,18 +2427,38 @@ a.gp-store-route-button {
 }
 
 .gp-chart line {
-  stroke: #e6e1d8;
+  stroke: var(--bdr);
   stroke-width: 1;
 }
 
 .gp-chart text {
-  fill: #6b7280;
+  fill: var(--ink-3);
   font-size: 11px;
 }
 
 .gp-chart polyline {
   fill: none;
   stroke-width: 2.4;
+}
+
+.gp-chart-series {
+  clip-path: inset(0);
+  animation: gp-chart-reveal 1s ease-out both;
+}
+
+@keyframes gp-chart-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-chart-series {
+    animation: none;
+  }
 }
 
 .gp-hover-line {
@@ -2434,9 +2472,9 @@ a.gp-store-route-button {
   z-index: 2;
   min-width: 180px;
   transform: translateX(-50%);
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--sur);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
   padding: 10px;
 }
@@ -2444,13 +2482,13 @@ a.gp-store-route-button {
 .gp-tooltip strong,
 .gp-tooltip span {
   display: block;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 12px;
 }
 
 .gp-tooltip span {
   margin-top: 5px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 11px;
 }
 
@@ -2459,7 +2497,7 @@ a.gp-store-route-button {
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 10px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 11px;
 }
 
@@ -2497,6 +2535,11 @@ a.gp-store-route-button {
   scrollbar-width: none;
 }
 
+.gp-related-rail {
+  position: relative;
+  min-width: 0;
+}
+
 .gp-related-scroll::-webkit-scrollbar {
   display: none;
 }
@@ -2524,19 +2567,23 @@ a.gp-store-route-button {
 
 .gp-related-arrow {
   position: absolute;
-  z-index: 2;
-  top: calc(50% + 18px);
+  z-index: 8;
+  top: 50%;
   display: grid;
-  width: 36px;
-  height: 44px;
+  width: 29px;
+  height: 92px;
   place-items: center;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
+  border: 1px solid rgb(255 255 255 / 0.55);
+  border-radius: 1px;
+  background: rgb(255 255 255 / 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
   color: rgb(var(--color-primary));
   cursor: pointer;
   padding: 0;
   transform: translateY(-50%);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .gp-related-arrow.is-previous {
@@ -2548,13 +2595,35 @@ a.gp-store-route-button {
 }
 
 .gp-related-arrow:hover {
-  background: rgb(var(--color-primary-soft));
+  border-color: rgb(255 255 255 / 0.78);
+  background: rgb(255 255 255 / 0.76);
+  color: rgb(var(--color-primary));
+}
+
+@media (max-width: 1023px) {
+  .gp-related-arrow {
+    display: none;
+  }
+
+  .gp-related-scroll {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gp-related-card:nth-child(n + 7) {
+    display: none;
+  }
 }
 
 .gp-related-more {
   border: 0;
   background: transparent;
-  color: #4a433c;
+  color: var(--ink-2);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -2577,9 +2646,9 @@ a.gp-store-route-button {
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--sur);
   overflow: hidden;
   cursor: pointer;
   font: inherit;
@@ -2596,8 +2665,8 @@ a.gp-store-route-button {
   height: 120px;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid #e6e1d8;
-  background: #ffffff;
+  border-bottom: 1px solid var(--bdr);
+  background: var(--sur);
   overflow: hidden;
   padding: 8px 8px 0;
 }
@@ -2632,7 +2701,7 @@ a.gp-store-route-button {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 800;
   line-height: 1.35;
@@ -2682,14 +2751,14 @@ a.gp-store-route-button {
 
 .gp-related-price {
   margin-top: 6px;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 20px;
   font-weight: 800;
 }
 
 .gp-related-price small {
   margin-left: 3px;
-  color: #2c2824;
+  color: var(--ink);
   font-size: 12px;
   font-weight: 700;
 }
@@ -2697,7 +2766,7 @@ a.gp-store-route-button {
 .gp-related-compare {
   min-height: 16px;
   margin-top: 5px;
-  color: #6b7280;
+  color: var(--ink-3);
   font-size: 11px;
   text-decoration: line-through;
 }
@@ -2714,10 +2783,10 @@ a.gp-store-route-button {
 .gp-state {
   max-width: var(--layout-page-max-width);
   margin: 20px auto 0;
-  border: 1px solid #e6e1d8;
+  border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #ffffff;
-  color: #6b7280;
+  background: var(--sur);
+  color: var(--ink-3);
   font-size: 13px;
   padding: 12px 14px;
 }
@@ -2924,7 +2993,6 @@ a.gp-store-route-button {
 
   .gp-store-route-button {
     background: var(--brand);
-    color: rgb(var(--color-primary-contrast));
   }
 
   .gp-best-hero,
@@ -3023,17 +3091,9 @@ a.gp-store-route-button {
 
   .gp-related-scroll {
     gap: 10px;
-    margin-right: -2px;
-    padding-right: 2px;
-    scrollbar-width: none;
-  }
-
-  .gp-related-scroll::-webkit-scrollbar {
-    display: none;
   }
 
   .gp-related-card {
-    flex-basis: 68%;
     border-radius: 14px;
   }
 
@@ -3056,29 +3116,48 @@ a.gp-store-route-button {
   }
 }
 
-/* 16. 夜間護眼色 */
-:global(html[data-theme="night"]) .gp-product-img {
-  background: #ffe8d6;
-}
+@media (max-width: 360px) {
+  .gp-related-body {
+    padding: 8px;
+  }
 
-:global(html[data-theme="night"]) .gp-chart,
-:global(html[data-theme="night"]) .gp-chart rect {
-  background: #ffffff;
-}
-
-:global(html[data-theme="night"]) .gp-product-img img,
-:global(html[data-theme="night"]) .gp-related-img img,
-:global(html[data-theme="night"]) .gp-image-preview-dialog img {
-  filter: brightness(0.88);
-}
-
-:global(html[data-theme="night"]) .gp-chart line {
-  stroke: #e6e1d8;
-}
-
-@media (max-width: 1023px) {
-  :global(html[data-theme="night"]) .gp-product-img {
-    background: var(--sur);
+  .gp-related-price,
+  .gp-related-saving,
+  .gp-related-store {
+    font-size: 15px;
   }
 }
+
+/* 16. 夜間護眼色 */
+:global(html[data-theme="night"] .offers-detail-page) {
+  --ink: rgb(var(--color-text));
+  --ink-2: rgb(var(--color-ink-2));
+  --ink-3: rgb(var(--color-text-muted));
+  --ink-4: rgb(var(--color-ink-4));
+  --sur: rgb(var(--color-surface-raised));
+  --sur-2: rgb(var(--color-surface-muted));
+  --sur-3: rgb(var(--color-surface-3));
+  --bdr: rgb(var(--color-border));
+  --brand-light: rgb(var(--color-primary-soft));
+  --gp-series-1: #ff934f;
+  --gp-series-2: #72d69a;
+  --gp-series-3: #e1e5ea;
+  --gp-series-4: #65cbd6;
+  --gp-series-5: #efb270;
+  --gp-series-6: #c2a7ff;
+  --gp-series-7: #75d9c9;
+  --gp-series-8: #e8ce79;
+  background: rgb(var(--color-canvas));
+}
+
+:global(html[data-theme="night"] .offers-detail-page .gp-detail-panel) {
+  background: rgb(var(--color-canvas));
+}
+
+:global(html[data-theme="night"] .offers-detail-page .gp-product-img),
+:global(html[data-theme="night"] .offers-detail-page .gp-related-img),
+:global(html[data-theme="night"] .offers-detail-page .gp-chart) {
+  background: rgb(var(--color-surface-3));
+}
+
 </style>

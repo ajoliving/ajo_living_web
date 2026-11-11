@@ -212,6 +212,7 @@ export default {
     noticePublishError: 'Failed to publish notice.',
   },
   management: {
+    backToHome: 'Back to management home',
     staffKicker: 'Staff',
     title: 'Management',
     description: 'Manage members, listing queues, AJO Point operations, and reward ad tasks.',

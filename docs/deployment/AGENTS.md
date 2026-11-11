@@ -25,6 +25,8 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
 
 ## 變更日誌
+2026-11-11: 測試 release `20261111103516-test-71493` 發布目前工作區前後端，保留測試資料庫及舊 release；建置、健康、資料服務與 noindex 通過，生產後端及共用 frpc 未重啟。
+2026-11-11: 測試 release `20261111051947-test-18781` 發布 `testMain` 提交 `bd82b8b`，保留測試資料庫與舊 release；前後端建置、首頁、health、readiness 及資料服務通過，生產後端與共用 frpc 未重啟。
 2026-11-05: AJO iCCTV 播放依賴網關 Nginx `/opi/` 反向代理；上游目前只接受 `channel...` 或 `playback_...`，`public-cameras` 返回的 `HKI_MAIN` 等命名通道會觸發 `Invalid stream path`。修復前須核實實際通道映射，且不得未經確認修改或重部署 OrangePi 服務。
 2026-10-29: 測試 release `20261029110314-test-90661` 發布大廈手機內容適配、保留橫向選項卡、超市詳情中性底色與手機快捷篩選箭頭間距；保留測試資料庫、獨立密鑰及舊 release。243 項前端測試、Go 測試、建置、公網健康、readiness、資料服務及 `noindex` 通過；已部署資源的大廈 168 項、篩選 24 組與商品詳情雙語六種寬度檢查通過，大廈資料及外部媒體保持模擬。生產版本、環境、二進制、PID 及共用 FRP 配置／PID 未變。
 2026-10-20: 測試 release `20261020150156-test-1996` 發布每個物業的解除綁定入口及商品內頁比較字樣清理；保留資料庫和舊 release。31 項相關測試、建置、健康、readiness、資料服務及桌面／手機瀏覽器驗證通過；會員頁以模擬 API 確認不發送解除寫入。生產 release、環境、二進制及 PID、FRP 配置及 PID 未變。

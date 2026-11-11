@@ -138,9 +138,11 @@ describe('AppHeader mobile navigation', () => {
     const wrapper = mountHeader();
     const bottomItems = wrapper.findAll('.bnav-item');
 
-    expect(bottomItems).toHaveLength(5);
-    expect(bottomItems[4]?.attributes('href')).toBe('/profile');
-    expect(bottomItems[4]?.text()).toContain('我的');
+    expect(bottomItems).toHaveLength(6);
+    expect(bottomItems[4]?.attributes('href')).toBe('/notifications');
+    expect(bottomItems[4]?.text()).toContain('通知中心');
+    expect(bottomItems[5]?.attributes('href')).toBe('/profile');
+    expect(bottomItems[5]?.text()).toContain('我的');
     expect(wrapper.find('.mobile-menu-body').text()).toContain('通知中心');
     expect(wrapper.find('.mobile-menu-body').text()).not.toContain('登入');
     expect(wrapper.find('.mobile-login').exists()).toBe(false);
@@ -210,6 +212,26 @@ describe('AppHeader mobile navigation', () => {
     expect(wrapper.find('.theme-menu').exists()).toBe(false);
   });
 
+  it('cycles mobile themes directly and preserves the selected preference', async () => {
+    const preferenceStore = usePreferenceStore();
+    const wrapper = mountHeader();
+    const toggle = wrapper.find('.mobile-theme-toggle');
+
+    for (const theme of ['cyan', 'night', 'orange-05']) {
+      await toggle.trigger('click');
+      expect(preferenceStore.theme).toBe(theme);
+      expect(window.localStorage.getItem('ajoliving.theme')).toBe(theme);
+    }
+    expect(wrapper.find('.theme-menu').exists()).toBe(false);
+  });
+
+  it('uses table and dollar icons in the mobile shortcuts', () => {
+    const wrapper = mountHeader();
+    const icons = wrapper.findAll('.bnav-item').map((item) => item.findComponent({ name: 'AppIcon' }).props('name'));
+
+    expect(icons).toEqual(['home', 'building', 'table', 'dollar-sign', 'user']);
+  });
+
   it('shows a white moon instead of the dark swatch for the night theme', () => {
     const preferenceStore = usePreferenceStore();
     preferenceStore.setTheme('night');
@@ -262,6 +284,7 @@ describe('AppHeader mobile navigation', () => {
 
     expect(wrapper.find('.theme-picker').exists()).toBe(false);
     expect(wrapper.find('.theme-toggle').exists()).toBe(false);
+    expect(wrapper.find('.mobile-theme-toggle').exists()).toBe(false);
     expect(wrapper.find('.nav-login').exists()).toBe(true);
     expect(wrapper.find('.locale-toggle').exists()).toBe(true);
   });

@@ -26,6 +26,7 @@ const mobileAudit = readFileSync('scripts/audit_mobile.mjs', 'utf8');
 const propertyListPage = readFileSync('src/pages/property/list/PropertyListPage.vue', 'utf8');
 const furnitureListPage = readFileSync('src/pages/furniture/Page.vue', 'utf8');
 const offersPage = readFileSync('src/pages/offers/Page.vue', 'utf8');
+const notificationsPage = readFileSync('src/pages/notifications/Page.vue', 'utf8');
 const offersDetailPage = readFileSync('src/pages/offers/detail/Page.vue', 'utf8');
 const buildingStyles = readFileSync('src/pages/building/styles.scss', 'utf8');
 const collectSourceFiles = (directory) =>
@@ -178,7 +179,8 @@ describe('mobile baseline styles', () => {
   it('excludes stacked building tables from the shared wide-table baseline', () => {
     expect(styles).toMatch(/:where\(\.work-table,[^\n]+\):not\(\.stack-table\) \{\s*min-width: 640px;/);
     expect(styles).toContain(':where(.work-card > table):not(.stack-table)');
-    expect(buildingStyles).toMatch(/#page-affairs \.work-nav \{[^}]*display: flex;[^}]*overflow-x: auto;/);
+    expect(buildingStyles).toMatch(/#page-affairs \.work-nav \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+    expect(buildingStyles).toContain('#page-affairs:not(.is-mobile-home) .building-mobile-back');
     expect(buildingStyles).toMatch(/#page-affairs \.acct-tabs \{[^}]*display: flex;[^}]*overflow-x: auto;/);
     expect(buildingStyles).not.toContain('.building-module-select');
     expect(buildingStyles).toMatch(/\.stack-table \.icctv-expanded-row td \{\s*display: block;/);
@@ -204,6 +206,14 @@ describe('mobile baseline styles', () => {
     expect(offersPage).toMatch(/@media \(max-width: 1023px\)[\s\S]*?\.gp-toolbar \{[\s\S]*?display: none;/);
   });
 
+  it('shows supermarket home products in two columns and keeps mobile filters sticky', () => {
+    expect(offersPage).toMatch(/const homeSectionSize = 10;/);
+    expect(offersPage).toMatch(/\.gp-product-track\.is-rail \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow: visible;[^}]*scroll-snap-type: none;/);
+    expect(offersPage).toMatch(/\.gp-product-rail-control \{\s*display: none;/);
+    expect(offersPage).toMatch(/\.gp-search-controls \{[^}]*position: sticky;[^}]*top: var\(--app-header-offset\);/);
+    expect(offersPage).toMatch(/\.gp-controls \{\s*display: contents;/);
+  });
+
   it('keeps quick-filter select arrows inset from the right edge', () => {
     expect(styles).toMatch(/:where\(\.mobile-filter-select, \.gp-mobile-filter-select\) \{[^}]*appearance: none;[^}]*background-position: right 14px center;[^}]*padding-right: 40px;/);
     const selectChevron = readFileSync('src/shared/components/base/select_chevron.svg', 'utf8');
@@ -224,6 +234,12 @@ describe('mobile baseline styles', () => {
 
   it('keeps public list filters inside compact mobile sheets', () => {
     [propertyListPage, furnitureListPage].forEach((source) => {
+      expect(source).toMatch(/\.mobile-listing-controls \{[^}]*position: sticky;[^}]*top: var\(--app-header-offset\);/);
+      expect(source).toMatch(/\.mobile-search-form \{[^}]*grid-template-columns: minmax\(0, 1fr\) 48px;[^}]*gap: 8px;/);
+      expect(source).toMatch(/\.mobile-search-form \.sinput \{[^}]*height: 48px;[^}]*border-color: rgb\(var\(--color-text\)\);/);
+      expect(source).toMatch(/\.mobile-search-form \.sinput \{[^}]*border-radius: 8px;/);
+      expect(source).toMatch(/\.mobile-search-button \{[^}]*background: rgb\(var\(--color-primary\)\);/);
+      expect(source).toMatch(/\.mobile-search-button \{[^}]*border-radius: 8px;/);
       expect(source).toContain('class="mobile-search-toolbar"');
       expect(source).toContain('class="mobile-listing-controls"');
       expect(source).toContain('class="mobile-filter-rail"');
@@ -240,6 +256,16 @@ describe('mobile baseline styles', () => {
       expect(source.indexOf('class="mobile-filter-rail"')).toBeLessThan(source.indexOf('class="sort-row'));
       expect(source).toContain('overflow-x: auto');
     });
+    expect(offersPage).toMatch(/\.gp-search-row \{[^}]*grid-template-columns: minmax\(0, 1fr\) 48px;[^}]*gap: 8px;/);
+  });
+
+  it('keeps the notification center as a compact single-layer mobile workspace', () => {
+    expect(notificationsPage).toMatch(/\.notifications-page \{[^}]*height: calc\(100svh - var\(--app-header-offset\)\);/);
+    expect(notificationsPage).toMatch(/\.inbox-switch \{[^}]*display: grid;[^}]*grid-template-columns: 1fr 1fr;/);
+    expect(notificationsPage).toMatch(/\.notice-folders \{[^}]*overflow-x: auto;[^}]*scrollbar-width: none;/);
+    expect(notificationsPage).toMatch(/\.notice-row \{[^}]*min-height: 76px;/);
+    expect(notificationsPage).toContain('class="notice-board__action-label"');
+    expect(notificationsPage).toContain('class="notifications-chat"');
   });
 
   it('keeps member and work pages compact across portrait and landscape mobile layouts', () => {

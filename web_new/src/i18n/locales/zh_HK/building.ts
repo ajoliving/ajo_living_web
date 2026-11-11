@@ -39,6 +39,7 @@ export default {
     saveError: '目前物業保存失敗，請稍後再試。',
   },
   nav: {
+    backToHome: '返回我的大廈',
     notices: '最新通告',
     building: '大廈資料',
     finance: '大廈財務',

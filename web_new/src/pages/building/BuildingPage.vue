@@ -1,6 +1,6 @@
 <!--
  * 我的大廈頁。
- * 1. 桌面側欄導航，手機以物業選擇及橫滑標籤切換縱向業務面板。
+ * 1. 桌面側欄導航，手機以物業選擇及功能首頁切換縱向業務面板。
  * 2. 提供最新通告、大廈資料、大廈財務、業戶帳目、申請表格、意見提供/維修報修、智能門禁、視像監控與住戶授權。
  * 3. 意見提供面板使用 iSmart 服務個案 API 提交、讀取及查看處理紀錄。
  * 4. 大廈資料讀取目前會員 iSmart 綁定大廈。
@@ -93,6 +93,7 @@ type OwnerAccountTab = 'owner-unpaid' | 'owner-records';
 interface NavItem {
   target: AffairsTab;
   label: string;
+  icon: 'bell' | 'building' | 'wallet' | 'credit-card' | 'inbox' | 'message' | 'lock' | 'view' | 'shield';
   needsApi?: boolean;
 }
 
@@ -264,6 +265,8 @@ const formatLocaleMonthValue = (value: unknown): string => {
 
 // 3. 主面板與子面板狀態
 const activeTab = ref<AffairsTab>('affairs-notices');
+const mobileHome = ref(true);
+let buildingPageInitialized = false;
 const buildingInfoLoading = ref(false);
 const buildingInfoError = ref('');
 const selectedBuildingID = ref('');
@@ -359,15 +362,15 @@ const serviceCaseDetail = ref<IsmartServiceCaseDetailResponse | null>(null);
 
 // 5. 左側導航項目
 const navItems = computed<NavItem[]>(() => [
-  { target: 'affairs-notices', label: t('building.nav.notices') },
-  { target: 'affairs-building', label: t('building.nav.building') },
-  { target: 'affairs-finance', label: t('building.nav.finance') },
-  { target: 'affairs-owner-account', label: t('building.nav.ownerAccount') },
-  { target: 'affairs-forms', label: t('building.nav.forms') },
-  { target: 'affairs-feedback', label: t('building.nav.feedback') },
-  { target: 'affairs-access', label: t('building.nav.access') },
-  { target: 'affairs-icctv', label: t('building.nav.icctv') },
-  { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations') },
+  { target: 'affairs-notices', label: t('building.nav.notices'), icon: 'bell' },
+  { target: 'affairs-building', label: t('building.nav.building'), icon: 'building' },
+  { target: 'affairs-finance', label: t('building.nav.finance'), icon: 'wallet' },
+  { target: 'affairs-owner-account', label: t('building.nav.ownerAccount'), icon: 'credit-card' },
+  { target: 'affairs-forms', label: t('building.nav.forms'), icon: 'inbox' },
+  { target: 'affairs-feedback', label: t('building.nav.feedback'), icon: 'message' },
+  { target: 'affairs-access', label: t('building.nav.access'), icon: 'lock' },
+  { target: 'affairs-icctv', label: t('building.nav.icctv'), icon: 'view' },
+  { target: 'affairs-resident-authorizations', label: t('building.nav.authorizations'), icon: 'shield' },
 ]);
 
 // 5.1 以路由查詢對應大廈面板
@@ -411,8 +414,13 @@ watch(
   () => route.query.tab,
   (value) => {
     const nextTab = resolveAffairsTabFromQuery(value);
+    mobileHome.value = !nextTab;
     if (nextTab && nextTab !== activeTab.value) {
-      activeTab.value = nextTab;
+      if (buildingPageInitialized) {
+        switchTab(nextTab);
+      } else {
+        activeTab.value = nextTab;
+      }
     }
   },
   { immediate: true },
@@ -1779,28 +1787,26 @@ const revokeResidentAuthorization = async (row: ResidentAuthorizationView): Prom
 };
 
 // 16. 切換主面板
-const switchTab = (target: AffairsTab, event: MouseEvent) => {
+const switchTab = (target: AffairsTab) => {
   activeTab.value = target;
-  const button = event.currentTarget as HTMLElement | null;
+  mobileHome.value = false;
   void nextTick(() => {
     if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 1023px)').matches) {
       return;
-    }
-    const rail = button?.parentElement;
-    if (button && rail) {
-      const left = button.offsetLeft - rail.offsetLeft;
-      if (left < rail.scrollLeft || left + button.offsetWidth > rail.scrollLeft + rail.clientWidth) {
-        rail.scrollTo({ left: left - (rail.clientWidth - button.offsetWidth) / 2, behavior: 'smooth' });
-      }
     }
     workMainEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   const nextTab = Object.entries(affairsTabQueryMap).find(([, value]) => value === target)?.[0] ?? target;
   if (String(route.query.tab ?? '').trim() !== nextTab) {
-    void router.replace({
+    const destination = {
       path: route.path,
       query: { ...route.query, tab: nextTab },
-    });
+    };
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches) {
+      void router.push({ ...destination, state: { buildingMobileHome: true } });
+    } else {
+      void router.replace(destination);
+    }
   }
   if (target === 'affairs-notices' && !ismartNoticeProfile.value && !noticeLoading.value) {
     void loadBuildingNotices();
@@ -1827,6 +1833,19 @@ const switchTab = (target: AffairsTab, event: MouseEvent) => {
   if (target === 'affairs-resident-authorizations' && !residentAuthorizationLoading.value) {
     void loadResidentAuthorizations();
   }
+};
+
+// 16.1 手機返回大廈功能首頁，保留其他查詢條件。
+const returnToMobileHome = () => {
+  if (window.history.state?.buildingMobileHome === true) {
+    router.back();
+    return;
+  }
+  mobileHome.value = true;
+  const query = { ...route.query };
+  delete query.tab;
+  void router.replace({ path: route.path, query });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // 17. 取得門禁操作用大廈 ID
@@ -2135,6 +2154,10 @@ const initializeBuildingPage = async (): Promise<void> => {
     loadBuildingInfo(buildingID),
     loadBuildingNotices(buildingID),
   ]);
+  buildingPageInitialized = true;
+  if (resolveAffairsTabFromQuery(route.query.tab)) {
+    switchTab(activeTab.value);
+  }
 };
 
 onMounted(() => {
@@ -2146,6 +2169,7 @@ onMounted(() => {
   <div
     id="page-affairs"
     class="page"
+    :class="{ 'is-mobile-home': mobileHome }"
   >
     <div class="work-shell">
       <!-- 左側目前物業與大廈導航 -->
@@ -2208,10 +2232,14 @@ onMounted(() => {
             class="work-nav-item"
             :class="{ on: activeTab === item.target }"
             :aria-current="activeTab === item.target ? 'page' : undefined"
-            @click="switchTab(item.target, $event)"
+            @click="switchTab(item.target)"
           >
-            <span class="work-nav-label">{{ item.label }}</span>
-            <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
+            <span class="work-nav-content">
+              <AppIcon class="work-nav-icon" :name="item.icon" :size="19" />
+              <span class="work-nav-label">{{ item.label }}</span>
+              <span v-if="item.needsApi" class="work-nav-note">{{ t('building.nav.needsApi') }}</span>
+            </span>
+            <AppIcon class="work-nav-arrow" name="arrow-right" :size="16" />
           </button>
         </nav>
       </aside>
@@ -2221,6 +2249,15 @@ onMounted(() => {
         ref="workMainEl"
         class="work-main"
       >
+        <button
+          type="button"
+          class="building-mobile-back"
+          :aria-label="t('building.nav.backToHome')"
+          :title="t('building.nav.backToHome')"
+          @click="returnToMobileHome"
+        >
+          <AppIcon name="chevron-down" :size="20" />
+        </button>
         <section
           v-if="hasPendingResidenceBinding"
           class="work-card building-binding-empty"

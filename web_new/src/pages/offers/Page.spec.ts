@@ -212,7 +212,7 @@ describe('SupermarketOffersPage search', () => {
     Object.defineProperty(targetRail.element, 'clientWidth', { configurable: true, value: 400 });
     Object.defineProperty(targetRail.element, 'scrollBy', { configurable: true, value: scrollBy });
     const section = wrapper.findAll('.gp-product-section')[1]!;
-    expect(section.find('.gp-product-section-header .gp-product-rail-control').exists()).toBe(false);
+    expect(section.findAll('.gp-product-section-header .gp-product-rail-control')).toHaveLength(0);
     expect(section.find('.gp-product-rail-control.is-previous').exists()).toBe(true);
     expect(section.find('.gp-product-rail-control.is-next').exists()).toBe(true);
 
@@ -221,6 +221,50 @@ describe('SupermarketOffersPage search', () => {
 
     await section.find('.gp-product-rail-control[aria-label="向左捲動商品"]').trigger('click');
     expect(scrollBy).toHaveBeenLastCalledWith({ left: -340, behavior: 'smooth' });
+  });
+
+  it('rotates ten home products by Hong Kong date and fills a partial last page', async () => {
+    const initialDate = Date.UTC(2026, 10, 11, 4);
+    mockedSearchProducts.mockImplementation((params) => {
+      if (!params.category) return Promise.resolve(createSearchResponse());
+      const page = params.page ?? 1;
+      const count = page === 3 ? 5 : 10;
+      const response = createSearchResponse('分類商品', count);
+      response.data.data.total = 25;
+      response.data.data.items.forEach((item, index) => {
+        item.code = `P${page}-${index}`;
+        item.name = `Product ${page}-${index}`;
+      });
+      return Promise.resolve(response);
+    });
+
+    const renderFirstSection = async (date: number) => {
+      vi.setSystemTime(date);
+      const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+      await flushPromises();
+      await flushPromises();
+      const cards = wrapper.findAll('.gp-product-section')[0]!.findAll('.gp-card-name-text')
+        .map((card) => card.text());
+      wrapper.unmount();
+      return cards;
+    };
+
+    const firstDay = await renderFirstSection(initialDate);
+    const sameDay = await renderFirstSection(initialDate + 60 * 60 * 1000);
+    const secondDay = await renderFirstSection(initialDate + 24 * 60 * 60 * 1000);
+    const thirdDay = await renderFirstSection(initialDate + 2 * 24 * 60 * 60 * 1000);
+
+    expect(firstDay).toHaveLength(10);
+    expect(firstDay).toEqual(sameDay);
+    expect(secondDay).toHaveLength(10);
+    expect(thirdDay).toHaveLength(10);
+    expect(new Set(thirdDay).size).toBe(10);
+    expect(firstDay).not.toEqual(secondDay);
+    expect(secondDay).not.toEqual(thirdDay);
+    expect([firstDay, secondDay, thirdDay].some((cards) =>
+      cards.some((name) => name.includes('Product 3-')) && cards.some((name) => name.includes('Product 1-')),
+    )).toBe(true);
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 10 }));
   });
 
   // 2.2 分類入口進入分類頁後隱藏，改由分類標題的返回入口回到首頁。

@@ -517,13 +517,15 @@ onMounted(() => {
               v-if="activePanel.showMarkAllRead && activePanel.unreadCount > 0"
               type="button"
               class="notice-board__action"
+              :aria-label="t('account.notifications.markAllRead')"
+              :title="t('account.notifications.markAllRead')"
               @click="markAllRead(activePanel)"
             >
               <AppIcon
                 name="check"
                 :size="15"
               />
-              {{ t('account.notifications.markAllRead') }}
+              <span class="notice-board__action-label">{{ t('account.notifications.markAllRead') }}</span>
             </button>
           </header>
 
@@ -1111,7 +1113,7 @@ onMounted(() => {
 @media (max-width: 1023px) {
   .notifications-page {
     grid-template-columns: 1fr;
-    height: calc(100svh - var(--app-header-offset) - var(--app-mobile-content-bottom));
+    height: calc(100svh - var(--app-header-offset));
   }
 
   .inbox-rail {
@@ -1151,6 +1153,7 @@ onMounted(() => {
   .notice-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
   }
 
   .notice-folders {
@@ -1195,27 +1198,70 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   .notice-board__header {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    min-height: 52px;
     padding: 12px;
   }
 
   .notice-board__action {
-    width: 100%;
+    width: 36px;
+    min-height: 36px;
     justify-content: center;
+    padding: 0;
+  }
+
+  .notice-board__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .notice-row {
     grid-template-columns: 4px 32px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 76px;
     padding: 12px 12px 12px 8px;
   }
 
   .notice-row time {
     grid-column: 3;
+    justify-self: start;
+    margin-top: 2px;
+    font-size: 11px;
   }
 
   .notice-group__title {
-    padding: 12px 12px 8px;
+    padding: 10px 12px 6px;
+  }
+
+  .notice-board__heading {
+    gap: 6px;
+  }
+
+  .notice-board__heading h2 {
+    font-size: 15px;
+  }
+
+  .notice-board__unread {
+    min-height: 20px;
+    font-size: 10px;
+  }
+
+  .notice-row__topline strong {
+    font-size: 14px;
+  }
+
+  .notice-row__summary {
+    font-size: 12px;
+    -webkit-line-clamp: 2;
+  }
+
+  .notice-empty {
+    padding: 28px 20px;
   }
 }
 </style>

@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import ListingStatusBadge from '@/shared/components/marketplace/ListingStatusBadge.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import BaseEmpty from '@/shared/components/feedback/BaseEmpty.vue';
 
@@ -53,8 +54,7 @@ const {
     <section class="marketplace-my-results min-w-0">
       <header class="my-page-heading">
         <div>
-          <p class="my-page-kicker">{{ t('marketplace.mine.kicker') }}</p>
-          <h1>{{ t('marketplace.mine.title') }}</h1>
+          <h1><AccountMobileBack />{{ t('marketplace.mine.title') }}</h1>
           <p>{{ t('marketplace.mine.subtitle') }}</p>
         </div>
         <button
@@ -315,17 +315,8 @@ const {
   padding-bottom: 16px;
 }
 
-.my-page-kicker {
-  margin: 0;
-  color: rgb(var(--color-primary));
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .my-page-heading h1 {
-  margin: 6px 0 0;
+  margin: 0;
   color: rgb(var(--color-text));
   font-family: var(--font-display);
   font-size: 32px;
@@ -333,7 +324,7 @@ const {
   line-height: 1.15;
 }
 
-.my-page-heading p:not(.my-page-kicker) {
+.my-page-heading p {
   margin: 8px 0 0;
   color: rgb(var(--color-text-muted));
   font-size: 13px;

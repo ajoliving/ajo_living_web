@@ -476,6 +476,14 @@
   }
 }
 
+@media (max-width: 1023px) {
+  html:has(.mobile-listing-controls),
+  body:has(.mobile-listing-controls),
+  #app:has(.mobile-listing-controls) {
+    overflow-x: clip;
+  }
+}
+
 @media (max-width: 767px) {
   html,
   body,

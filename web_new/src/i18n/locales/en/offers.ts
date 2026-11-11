@@ -17,6 +17,7 @@ export default {
     allStores: 'All stores',
     previous: 'Previous',
     next: 'Next',
+    paginationAria: 'Price intelligence pagination',
     updatedDate: 'Data updated: {date}',
     updatedPending: 'Data update pending',
     updatedSummary: '{prefix} · Monitoring {count} products · Prices are for reference; merchant prices prevail.',

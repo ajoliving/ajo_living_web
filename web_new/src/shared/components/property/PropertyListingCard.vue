@@ -356,7 +356,7 @@ const handleFavorite = (): void => {
   min-height: 34px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink-2);
   cursor: pointer;
   font: inherit;

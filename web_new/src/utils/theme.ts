@@ -84,7 +84,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   { value: 'orange-02', labelKey: 'common.theme.orange02', primary: '#FF5500', primaryContrast: 'dark', group: 'orange', orangeTone: 'flame' },
   { value: 'orange-03', labelKey: 'common.theme.orange03', primary: '#FF5D00', primaryContrast: 'dark', group: 'orange', orangeTone: 'flame' },
   { value: 'orange-04', labelKey: 'common.theme.orange04', primary: '#FF6500', primaryContrast: 'dark', group: 'orange', orangeTone: 'flame' },
-  { value: 'orange-05', labelKey: 'common.theme.orange05', primary: '#FF5A00', primaryContrast: 'dark', group: 'orange', orangeTone: 'flame' },
+  { value: 'orange-05', labelKey: 'common.theme.orange05', primary: '#FF5A00', primaryContrast: 'light', group: 'orange', orangeTone: 'flame' },
   { value: 'orange-06', labelKey: 'common.theme.orange06', primary: '#FF7000', primaryContrast: 'dark', group: 'orange', orangeTone: 'classic' },
   { value: 'orange-07', labelKey: 'common.theme.orange07', primary: '#FF7800', primaryContrast: 'dark', group: 'orange', orangeTone: 'classic' },
   { value: 'orange-08', labelKey: 'common.theme.orange08', primary: '#FF8000', primaryContrast: 'dark', group: 'orange', orangeTone: 'classic' },

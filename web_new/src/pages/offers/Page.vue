@@ -19,6 +19,7 @@ import {
 import { fetchPublicDisplayAds } from '@/httpapis/wallet';
 import { readStoredAccessToken } from '@/httpapis/auth_session';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import ListingPagination from '@/shared/components/navigation/ListingPagination.vue';
 import categoryIconsUrl from './category_icons.svg?no-inline';
 import { usePreferenceStore } from '@/stores/preferences';
 import type { PublicDisplayAdResponse } from '@/model/wallet';
@@ -62,14 +63,6 @@ interface CategoryTile {
   keywords: string[];
 }
 
-interface PageButton {
-  label: string | number;
-  key: string;
-  page: number;
-  active: boolean;
-  disabled: boolean;
-}
-
 interface HomeCategorySection {
   id: string;
   category: string;
@@ -83,6 +76,7 @@ const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const pageSize = 20;
 const categoryPageSize = 15;
+const homeSectionSize = 10;
 const summary = ref<SupermarketSummary | null>(null);
 const searchResult = ref<SupermarketSearchResult | null>(null);
 const homeSections = ref<HomeCategorySection[]>([]);
@@ -110,6 +104,7 @@ const currentPage = ref(1);
 const isMobileFilterOpen = ref(false);
 let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 let suggestionRequestVersion = 0;
+let homeSectionsRequestVersion = 0;
 
 const sortOptions = computed<SortOption[]>(() => [
   { label: t('offers.list.sortDiscount'), value: 'discount' },
@@ -202,8 +197,9 @@ const currentPageSize = computed(() =>
 );
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / currentPageSize.value)));
 
-// 9.1 分類首頁按六個快捷分類建立橫向商品列。
+// 9.1 分類首頁按香港日期輪換各分類商品，最後一頁不足時以首批商品補足。
 const loadHomeSections = async (): Promise<void> => {
+  const requestVersion = ++homeSectionsRequestVersion;
   if (activeCategory.value || showFavoritesOnly.value) {
     homeSections.value = [];
     homeSectionsLoading.value = false;
@@ -218,32 +214,55 @@ const loadHomeSections = async (): Promise<void> => {
     .filter((item): item is { tile: CategoryTile; category: string } => Boolean(item.category));
 
   homeSectionsLoading.value = true;
-  const sections = await Promise.all(categories.map(async ({ tile, category }) => {
+  const day = Math.floor((Date.now() + 8 * 60 * 60 * 1000) / (24 * 60 * 60 * 1000));
+  const query = searchQuery.value.trim();
+  const brand = activeBrand.value;
+  const store = activeStore.value;
+  const sections = await Promise.all(categories.map(async ({ tile, category }, index) => {
     try {
-      const { data } = await searchSupermarketProducts({
-        q: searchQuery.value.trim(),
+      const params = {
+        q: query,
         category,
-        brand: activeBrand.value,
-        store: activeStore.value,
+        brand,
+        store,
         offerOnly: false,
         page: 1,
-        pageSize: 6,
-      });
+        pageSize: homeSectionSize,
+      };
+      const { data } = await searchSupermarketProducts(params);
+      const firstPage = data.data;
+      const pages = Math.max(1, Math.ceil(firstPage.total / homeSectionSize));
+      const dailyPage = (day + index) % pages + 1;
+      let items = firstPage.items;
+      if (dailyPage > 1) {
+        try {
+          const dailyResult = await searchSupermarketProducts({ ...params, page: dailyPage });
+          items = dailyResult.data.data.items;
+          if (items.length < homeSectionSize) {
+            const codes = new Set(items.map((item) => item.code));
+            items = [...items, ...firstPage.items.filter((item) => !codes.has(item.code))];
+          }
+        } catch {
+          items = firstPage.items;
+        }
+      }
       return {
         id: tile.id,
         category,
         label: displaySupermarketCategory(category, preferenceStore.locale),
-        items: data.data.items.slice(0, 6),
+        items: items.slice(0, homeSectionSize),
       };
     } catch {
       return null;
     }
   }));
 
-  homeSections.value = sections.filter(
-    (section): section is HomeCategorySection => Boolean(section?.items.length),
-  );
-  homeSectionsLoading.value = false;
+  if (requestVersion === homeSectionsRequestVersion) {
+    homeSections.value = sections.filter(
+      (section): section is HomeCategorySection => Boolean(section?.items.length),
+    );
+    homeSectionsLoading.value = false;
+  }
 };
 
 // 9.2 首頁分類列與分類結果網格共用商品卡資料結構。
@@ -262,22 +281,6 @@ const displaySections = computed((): Array<HomeCategorySection & { layout: 'rail
         layout: 'grid',
       }]
     : [];
-});
-
-// 10. 建立分頁按鈕
-const pageButtons = computed<PageButton[]>(() => {
-  const pages = new Set<number>([1, totalPages.value, currentPage.value]);
-  if (currentPage.value > 1) pages.add(currentPage.value - 1);
-  if (currentPage.value < totalPages.value) pages.add(currentPage.value + 1);
-  const numericPages = [...pages].filter((page) => page >= 1 && page <= totalPages.value).sort((a, b) => a - b);
-
-  return numericPages.map((page) => ({
-    label: page,
-    key: String(page),
-    page,
-    active: page === currentPage.value,
-    disabled: false,
-  }));
 });
 
 // 11. 建立更新資訊文字
@@ -574,11 +577,11 @@ const toggleFavorite = async (product: SupermarketProduct): Promise<void> => {
 };
 
 // 33. 切換分頁
-const selectPage = (page: PageButton): void => {
-  if (page.disabled || currentPage.value === page.page) {
+const selectPage = (page: number): void => {
+  if (page < 1 || page > totalPages.value || currentPage.value === page) {
     return;
   }
-  currentPage.value = page.page;
+  currentPage.value = page;
   if (!showFavoritesOnly.value) {
     void loadSearch();
   }
@@ -693,7 +696,7 @@ const productFeaturedPrice = (product: SupermarketProduct): SupermarketStorePric
 const productFeaturedStoreLabel = (product: SupermarketProduct): string =>
   productFeaturedPrices(product).map((price) => formatStore(price.store)).join(' / ');
 
-// 54.2 按商品列兩側控制按鈕捲動對應商品列。
+// 54.2 按商品列標題區控制按鈕捲動對應商品列。
 const scrollProductSection = (event: MouseEvent, direction: -1 | 1): void => {
   const button = event.currentTarget;
   if (!(button instanceof HTMLElement)) {
@@ -773,6 +776,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  homeSectionsRequestVersion += 1;
   if (suggestionTimer) {
     clearTimeout(suggestionTimer);
   }
@@ -940,12 +944,12 @@ onBeforeUnmount(() => {
           class="gp-ad-frame gp-ad-placeholder gp-ad-mobile"
         ></div>
       </div>
+      <div class="gp-search-controls">
       <form
         class="gp-search-row"
         @submit.prevent="submitSearch"
       >
         <div class="gp-search-box">
-          <span class="gp-search-ico">⌕</span>
           <input
             v-model="searchQuery"
             class="gp-sinput"
@@ -1094,6 +1098,7 @@ onBeforeUnmount(() => {
           class="gp-mobile-filter-reset"
           @click="resetFilters"
         >{{ t('offers.list.reset') }}</button>
+      </div>
       </div>
       <div
         v-if="!activeCategory && !showFavoritesOnly"
@@ -1248,104 +1253,102 @@ onBeforeUnmount(() => {
               >{{ t('offers.list.moreProducts') }}</button>
             </div>
           </header>
-          <button
-            v-if="section.layout === 'rail'"
-            type="button"
-            class="gp-product-rail-control is-previous"
-            :aria-label="t('offers.list.scrollLeft')"
-            :title="t('offers.list.scrollLeft')"
-            @click.stop="scrollProductSection($event, -1)"
-          >
-            <AppIcon name="arrow-left" :size="17" />
-          </button>
-          <button
-            v-if="section.layout === 'rail'"
-            type="button"
-            class="gp-product-rail-control is-next"
-            :aria-label="t('offers.list.scrollRight')"
-            :title="t('offers.list.scrollRight')"
-            @click.stop="scrollProductSection($event, 1)"
-          >
-            <AppIcon name="arrow-right" :size="17" />
-          </button>
           <div
-            class="gp-product-track"
-            :class="section.layout === 'rail' ? 'is-rail' : 'is-grid'"
+            class="gp-product-rail"
           >
-            <article
-              v-for="product in section.items"
-              :key="product.code"
-              class="gp-card"
-              @click="openDetail(product)"
+            <button
+              v-if="section.layout === 'rail'"
+              type="button"
+              class="gp-product-rail-control is-previous"
+              :aria-label="t('offers.list.scrollLeft')"
+              :title="t('offers.list.scrollLeft')"
+              @click.stop="scrollProductSection($event, -1)"
             >
-              <div class="gp-card-img">
-                <span
-                  v-if="productDisplayBrand(product)"
-                  class="gp-card-brand-chip"
-                >{{ productDisplayBrand(product) }}</span>
-                <button
-                  type="button"
-                  class="gp-card-fav"
-                  :class="product.isFavorite ? 'on' : ''"
-                  :aria-label="product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite')"
-                  @click.stop="toggleFavorite(product)"
-                >
-                  <AppIcon
-                    name="heart"
-                    :size="16"
-                  />
-                </button>
-                <img
-                  v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
-                  :src="product.image_url || product.imageUrl"
-                  :alt="productDisplayTitle(product)"
-                  @error="handleProductImageError(product.code)"
-                >
-                <span
-                  v-else
-                  class="gp-card-img-ph"
-                >{{ productFallbackInitial(product) }}</span>
-              </div>
-              <div class="gp-card-body">
-                <div class="gp-card-name">
-                  <span class="gp-card-name-text">{{ productDisplayName(product) }}</span>
+              <AppIcon name="arrow-left" :size="17" />
+            </button>
+            <button
+              v-if="section.layout === 'rail'"
+              type="button"
+              class="gp-product-rail-control is-next"
+              :aria-label="t('offers.list.scrollRight')"
+              :title="t('offers.list.scrollRight')"
+              @click.stop="scrollProductSection($event, 1)"
+            >
+              <AppIcon name="arrow-right" :size="17" />
+            </button>
+            <div
+              class="gp-product-track"
+              :class="section.layout === 'rail' ? 'is-rail' : 'is-grid'"
+            >
+              <article
+                v-for="product in section.items"
+                :key="product.code"
+                class="gp-card"
+                @click="openDetail(product)"
+              >
+                <div class="gp-card-img">
+                  <span
+                    v-if="productDisplayBrand(product)"
+                    class="gp-card-brand-chip"
+                  >{{ productDisplayBrand(product) }}</span>
+                  <button
+                    type="button"
+                    class="gp-card-fav"
+                    :class="product.isFavorite ? 'on' : ''"
+                    :aria-label="product.isFavorite ? t('offers.list.favorited') : t('offers.list.favorite')"
+                    @click.stop="toggleFavorite(product)"
+                  >
+                    <AppIcon
+                      name="heart"
+                      :size="16"
+                    />
+                  </button>
+                  <img
+                    v-if="(product.image_url || product.imageUrl) && !failedImageCodes.has(product.code)"
+                    :src="product.image_url || product.imageUrl"
+                    :alt="productDisplayTitle(product)"
+                    @error="handleProductImageError(product.code)"
+                  >
+                  <span
+                    v-else
+                    class="gp-card-img-ph"
+                  >{{ productFallbackInitial(product) }}</span>
                 </div>
-                <div class="gp-card-best-store">{{ productFeaturedStoreLabel(product) }}</div>
-                <div class="gp-card-best-price">
-                  <span>{{ formatOfferPrice(productFeaturedPrice(product).effectiveUnitPrice) }}</span>
-                  <small>{{ t('offers.list.perItem') }}</small>
+                <div class="gp-card-body">
+                  <div class="gp-card-name">
+                    <span class="gp-card-name-text">{{ productDisplayName(product) }}</span>
+                  </div>
+                  <div class="gp-card-best-store">{{ productFeaturedStoreLabel(product) }}</div>
+                  <div class="gp-card-best-price">
+                    <span>{{ formatOfferPrice(productFeaturedPrice(product).effectiveUnitPrice) }}</span>
+                    <small>{{ t('offers.list.perItem') }}</small>
+                  </div>
+                  <div
+                    v-if="productFeaturedCompareText(productFeaturedPrice(product))"
+                    class="gp-card-best-compare"
+                  >{{ productFeaturedCompareText(productFeaturedPrice(product)) }}</div>
+                  <div
+                    v-if="productFeaturedOfferText(product, productFeaturedPrice(product))"
+                    class="gp-card-best-offer"
+                  >{{ productFeaturedOfferText(product, productFeaturedPrice(product)) }}</div>
                 </div>
-                <div
-                  v-if="productFeaturedCompareText(productFeaturedPrice(product))"
-                  class="gp-card-best-compare"
-                >{{ productFeaturedCompareText(productFeaturedPrice(product)) }}</div>
-                <div
-                  v-if="productFeaturedOfferText(product, productFeaturedPrice(product))"
-                  class="gp-card-best-offer"
-                >{{ productFeaturedOfferText(product, productFeaturedPrice(product)) }}</div>
-              </div>
-            </article>
+              </article>
+            </div>
           </div>
         </section>
       </div>
 
       <!-- 3.3 分頁 -->
-      <div
-        v-if="activeCategory && totalPages > 1"
+      <ListingPagination
+        v-if="(activeCategory || showFavoritesOnly) && totalPages > 1"
         class="gp-pagination"
-      >
-        <button
-          v-for="page in pageButtons"
-          :key="page.key"
-          type="button"
-          class="gp-page-btn"
-          :class="page.active ? 'on' : ''"
-          :disabled="page.disabled"
-          @click="selectPage(page)"
-        >
-          {{ page.label }}
-        </button>
-      </div>
+        :current-page="currentPage"
+        :total-pages="totalPages"
+        :navigation-label="t('offers.list.paginationAria')"
+        :previous-label="t('offers.list.previous')"
+        :next-label="t('offers.list.next')"
+        @select="selectPage"
+      />
 
       <div class="gp-updated-bar">
         {{ updatedBarText }}
@@ -1662,12 +1665,6 @@ onBeforeUnmount(() => {
 
 .gp-search-suggestion-state {
   padding: 10px 12px;
-}
-
-.gp-search-ico {
-  color: var(--ink-3);
-  font-size: 21px;
-  line-height: 1;
 }
 
 .gp-sinput {
@@ -2286,7 +2283,7 @@ onBeforeUnmount(() => {
   .gp-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px;
-    gap: 0;
+    gap: 8px;
     margin: 0;
   }
 
@@ -2691,6 +2688,10 @@ onBeforeUnmount(() => {
   padding-bottom: 0;
 }
 
+.gp-search-controls {
+  display: contents;
+}
+
 .gp-page-heading {
   padding: 22px 0 18px;
   text-align: center;
@@ -2729,7 +2730,7 @@ onBeforeUnmount(() => {
 
 .gp-search-box {
   max-width: none;
-  border-color: #e6e1d8;
+  border-color: rgb(var(--color-text));
   border-radius: 8px;
 }
 
@@ -2746,8 +2747,15 @@ onBeforeUnmount(() => {
 }
 
 .gp-fav-btn {
-  border-color: #e6e1d8;
+  border-color: rgb(var(--color-text));
   border-radius: 8px;
+}
+
+.gp-sort,
+.gp-mobile-filter-select,
+.gp-mobile-filter-button,
+.gp-mobile-favorite-filter {
+  border-color: rgb(var(--color-text));
 }
 
 .gp-cat-nav {
@@ -2767,14 +2775,14 @@ onBeforeUnmount(() => {
 
 .gp-cat-tile {
   min-height: 68px;
-  border-color: rgb(var(--color-primary) / 0.16);
+  border-color: currentColor;
   border-radius: 8px;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
 }
 
 .gp-cat-tile.on {
-  border-color: rgb(var(--color-primary));
+  border-color: currentColor;
   background: rgb(var(--color-surface));
   color: rgb(var(--color-text));
 }
@@ -2837,19 +2845,23 @@ onBeforeUnmount(() => {
 
 .gp-product-rail-control {
   position: absolute;
-  z-index: 2;
-  top: calc(50% + 18px);
+  z-index: 8;
+  top: 50%;
   display: inline-grid;
-  width: 36px;
-  height: 44px;
+  width: 29px;
+  height: 92px;
   place-items: center;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 6px;
-  background: rgb(var(--color-surface));
-  color: rgb(var(--color-text));
+  border: 1px solid rgb(255 255 255 / 0.55);
+  border-radius: 1px;
+  background: rgb(255 255 255 / 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
+  color: rgb(var(--color-primary));
   cursor: pointer;
   padding: 0;
   transform: translateY(-50%);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .gp-product-rail-control.is-previous {
@@ -2861,8 +2873,8 @@ onBeforeUnmount(() => {
 }
 
 .gp-product-rail-control:hover {
-  border-color: rgb(var(--color-primary) / 0.35);
-  background: rgb(var(--color-primary-soft));
+  border-color: rgb(255 255 255 / 0.78);
+  background: rgb(255 255 255 / 0.76);
   color: rgb(var(--color-primary));
 }
 
@@ -2871,9 +2883,21 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+@media (max-width: 1023px) {
+  .gp-product-rail-control {
+    width: 33px;
+    height: 84px;
+  }
+}
+
 .gp-product-sections {
   display: grid;
   gap: 28px;
+}
+
+.gp-product-rail {
+  position: relative;
+  min-width: 0;
 }
 
 .gp-product-section {
@@ -2883,6 +2907,7 @@ onBeforeUnmount(() => {
 
 .gp-product-section-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -2928,7 +2953,7 @@ onBeforeUnmount(() => {
   box-shadow: none;
   isolation: auto;
   overflow: hidden;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .gp-product-track.is-rail .gp-card {
@@ -2944,7 +2969,6 @@ onBeforeUnmount(() => {
 .gp-card:hover {
   border-color: #ff6a00;
   box-shadow: none;
-  transform: translateY(-2px);
 }
 
 .gp-card-img {
@@ -3126,6 +3150,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1023px) {
+  :global(html:has(.gp-search-controls)),
+  :global(body:has(.gp-search-controls)),
+  :global(#app:has(.gp-search-controls)) {
+    overflow-x: clip;
+  }
+
   .gp-controls,
   .gp-content {
     width: 100%;
@@ -3145,6 +3175,42 @@ onBeforeUnmount(() => {
     font-size: 13px;
   }
 
+  .gp-controls {
+    display: contents;
+  }
+
+  .gp-page-heading,
+  .gp-ad-banner,
+  .gp-cat-nav {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
+  .gp-search-controls {
+    position: sticky;
+    top: var(--app-header-offset);
+    z-index: 20;
+    display: block;
+    padding: 0 12px 8px;
+    background: rgb(var(--color-surface));
+  }
+
+  .gp-product-rail-control {
+    display: none;
+  }
+
+  .gp-product-track.is-rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .gp-product-track.is-rail .gp-card {
+    max-width: none;
+  }
+
   .gp-content-header {
     flex-direction: row;
     flex-wrap: wrap;
@@ -3160,15 +3226,6 @@ onBeforeUnmount(() => {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .gp-product-track.is-rail {
-    gap: 10px;
-  }
-
-  .gp-product-track.is-rail .gp-card {
-    flex-basis: 68%;
-    max-width: none;
-  }
-
   .gp-product-track.is-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
@@ -3176,7 +3233,7 @@ onBeforeUnmount(() => {
 
   .gp-content {
     padding-top: 14px;
-    padding-bottom: calc(36px + var(--app-mobile-content-bottom));
+    padding-bottom: 16px;
   }
 
   .gp-card-body {
@@ -3200,12 +3257,48 @@ onBeforeUnmount(() => {
 }
 
 /* 11. 夜間護眼色 */
-:global(html[data-theme="night"]) .gp-card-img img,
-:global(html[data-theme="night"]) .gp-card-media {
-  background: rgb(42 48 56);
+:global(html[data-theme="night"] #page-offers),
+:global(html[data-theme="night"] #page-offers .gp-controls),
+:global(html[data-theme="night"] #page-offers .gp-content),
+:global(html[data-theme="night"] #page-offers .gp-ad-banner) {
+  background: rgb(var(--color-canvas));
+  color: rgb(var(--color-text));
 }
 
-:global(html[data-theme="night"]) .gp-card-img img {
-  filter: brightness(0.88);
+:global(html[data-theme="night"] #page-offers .gp-card),
+:global(html[data-theme="night"] #page-offers .gp-page-btn:not(.on)) {
+  border-color: rgb(var(--color-border));
+  background: rgb(var(--color-surface-raised));
+  color: rgb(var(--color-text));
+}
+
+:global(html[data-theme="night"] #page-offers .gp-card-body) {
+  border-color: rgb(var(--color-border));
+}
+
+:global(html[data-theme="night"] #page-offers .gp-page-heading h1),
+:global(html[data-theme="night"] #page-offers .gp-category-heading h2),
+:global(html[data-theme="night"] #page-offers .gp-category-heading button),
+:global(html[data-theme="night"] #page-offers .gp-product-section-header h2),
+:global(html[data-theme="night"] #page-offers .gp-product-section-header .gp-more-products),
+:global(html[data-theme="night"] #page-offers .gp-card-name-text),
+:global(html[data-theme="night"] #page-offers .gp-card-best-price),
+:global(html[data-theme="night"] #page-offers .gp-card-best-price small) {
+  color: rgb(var(--color-text));
+}
+
+:global(html[data-theme="night"] #page-offers .gp-page-heading p),
+:global(html[data-theme="night"] #page-offers .gp-count),
+:global(html[data-theme="night"] #page-offers .gp-state),
+:global(html[data-theme="night"] #page-offers .gp-card-best-compare),
+:global(html[data-theme="night"] #page-offers .gp-updated-bar) {
+  color: rgb(var(--color-text-muted));
+}
+
+:global(html[data-theme="night"] #page-offers .gp-card-img),
+:global(html[data-theme="night"] #page-offers .gp-card-img-ph),
+:global(html[data-theme="night"] #page-offers .gp-card-media) {
+  background: rgb(42 48 56);
+  color: rgb(var(--color-text-muted));
 }
 </style>

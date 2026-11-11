@@ -28,6 +28,7 @@ import type {
   WalletRechargePayRegion,
 } from '@/model/wallet';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -609,8 +610,7 @@ watch(
   <main class="wallet-page">
     <section class="wallet-heading">
       <div>
-        <p class="wallet-kicker">{{ t('common.brand.pointsName') }}</p>
-        <h1>{{ t('account.wallet.title') }}</h1>
+        <h1><AccountMobileBack />{{ t('account.wallet.title') }}</h1>
         <p>{{ t('account.wallet.description') }}</p>
       </div>
     </section>

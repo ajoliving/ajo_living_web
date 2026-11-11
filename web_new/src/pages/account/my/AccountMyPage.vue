@@ -4,9 +4,9 @@
  * 2. 綁定單位讀取 POS 大廈與單位資料，帳號管理讀取目前會員資料。
  * 3. CSS 變量與樣式嚴格對齊 HTML 設計稿 ajo_living_desktop_20260624(3)(10).html 的原生變量名。
  * 4. 響應式設計：桌面雙欄、行動單欄（900px / 560px 斷點）。
- * 5. 在已連結物業登記資料提供密碼更新彈窗。
+ * 5. 在帳號管理提供密碼更新彈窗。
  * 6. 點擊帳戶頭像即可更換靜態預設頭像。
- * 7. 在底部登記資料框以完整單位下拉選單切換目前物業。
+ * 7. 在物業綁定頁以完整單位下拉選單切換目前物業。
 -->
 <script setup lang="ts">
 /*
@@ -18,7 +18,7 @@
  * 5. 提交密碼更新並顯示結果。
  * 6. 點擊帳戶頭像選擇靜態預設頭像。
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, provide, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 
@@ -26,17 +26,12 @@ import axios from 'axios';
 import { isIntegrationBusinessAuthError } from '@/httpapis';
 import {
   fetchMemberIsmartFlatBindings,
-  fetchMemberIsmartOwnerBindingRequests,
   fetchMemberPosBuildings,
   fetchMemberPosBuildingUnits,
   fetchPosBuildings,
-  fetchPosBuildingUnits,
-  submitMemberIsmartOwnerBindingRequest,
 } from '@/httpapis/building';
 import type {
   IsmartFlatBindingRow,
-  IsmartOwnerBindingRequestRow,
-  IsmartOwnerBindingRequestStatus,
 } from '@/httpapis/building';
 import { changeMemberIsmartPassword, updateMemberIsmartProfile, updateMe } from '@/httpapis/me';
 import { avatarKeyFromSeed, presetAvatarOptions, resolveAvatarSrc } from '@/constants/presetAvatars';
@@ -46,6 +41,8 @@ import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import AccountWalletPage from '@/pages/account/my/profile/wallet/Page.vue';
 import PropertyMyPage from '@/pages/property/my/PropertyMyPage.vue';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -107,6 +104,23 @@ const shouldRenderRoutePanel = computed(() =>
   routePanelPaths.some((path) => route.path === path || route.path.startsWith(`${path}/`)),
 );
 
+const mobileHome = computed(() =>
+  !isRestrictedAgencyAccount.value
+  && (route.path === '/account/profile' || route.path === '/profile')
+  && !route.query.panel,
+);
+const navIcons = {
+  'profile-account': 'user',
+  'profile-preferences': 'settings',
+  'profile-agency-company': 'user',
+  'profile-property-binding': 'building',
+  'profile-wallet': 'wallet',
+  'profile-properties': 'home',
+  'profile-homes': 'building',
+  'profile-furniture': 'browse',
+  'profile-saved': 'heart',
+} as const;
+
 // 5. 切換面板
 const switchPanel = (key: PanelKey) => {
   const routeMap: Partial<Record<PanelKey, string>> = {
@@ -118,15 +132,29 @@ const switchPanel = (key: PanelKey) => {
     'profile-furniture': '/account/listings',
     'profile-saved': '/account/favorites',
   };
+  activePanel.value = key;
   const nextRoute = routeMap[key];
-  if (nextRoute) {
+  const destination = nextRoute
+    ? { path: nextRoute }
+    : { path: '/account/profile', query: { panel: key === 'profile-property-binding' ? 'property-binding' : 'account' } };
+  if (mobileHome.value && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches) {
+    void router.push({ ...destination, state: { accountMobileHome: true } });
+  } else if (nextRoute) {
     void router.push(nextRoute);
+  } else {
+    void router.push(destination);
+  }
+};
+
+// 5.1 返回手機會員中心首頁
+const returnToMobileHome = () => {
+  if (window.history.state?.accountMobileHome === true) {
+    router.back();
     return;
   }
-
-  activePanel.value = key;
-  void router.push('/account/profile');
+  void router.replace('/account/profile');
 };
+provide('accountReturnToHome', returnToMobileHome);
 
 // 6. 根據路由同步會員中心面板
 const syncActivePanelFromRoute = (path: string) => {
@@ -158,7 +186,7 @@ const syncActivePanelFromRoute = (path: string) => {
     activePanel.value = 'profile-saved';
     return;
   }
-  if (path === '/account/profile' || path === '/account/profile/info') {
+  if (path === '/account/profile' || path === '/account/profile/info' || path === '/profile') {
     activePanel.value = route.query.panel === 'property-binding'
       ? 'profile-property-binding'
       : 'profile-account';
@@ -573,8 +601,6 @@ const getBindBuildingName = (item: PosBuilding): string => {
   ).trim();
   return communityName === buildingID ? '' : communityName;
 };
-const getBindBuildingLabel = (item: PosBuilding): string =>
-  getBindBuildingName(item) || t('account.center.common.buildingCodeLabel', { id: getBindBuildingID(item) });
 const getBindUnitID = (item: PosBuildingUnit): string =>
   String(item.unit_id ?? item.id ?? '').trim();
 const getBindUnitFloor = (item: PosBuildingUnit): string =>
@@ -623,9 +649,7 @@ const normalizeBindFlatUnitPermissions = (values: string[] | undefined): string[
 
 // 6.5 取得 iSmart 即時綁定資料
 // 1. flat-bindings 是已審批綁定的權威來源，取代只在登入時更新的本地快照。
-// 2. owner-binding-requests 提供審批狀態，避免待審批鎖死或已拒絕無法重提。
 const ismartFlatBindings = ref<IsmartFlatBindingRow[]>([]);
-const ismartOwnerBindingRequests = ref<IsmartOwnerBindingRequestRow[]>([]);
 let ismartBindingQueried = false;
 
 // 6.5.1 取得 iSmart 即時單位綁定對應的單位碼
@@ -645,20 +669,6 @@ const liveBindUnitIDs = computed<string[]>(() => {
   return result;
 });
 
-// 6.5.2 由 iSmart 申請記錄推導目前審批狀態，最新一筆為準
-const liveResidenceBindingStatus = computed<IsmartOwnerBindingRequestStatus | ''>(() => {
-  const rows = ismartOwnerBindingRequests.value;
-  if (rows.some((row) => row.status === 'pending_approval')) {
-    return 'pending_approval';
-  }
-
-  const latest = rows[0];
-  if (latest?.status === 'approved' || latest?.status === 'rejected') {
-    return latest.status;
-  }
-  return '';
-});
-
 // 6.5.3 取得 iSmart 綁定查詢結果
 const loadIsmartBindingSnapshot = async (): Promise<void> => {
   if (ismartBindingQueried) {
@@ -666,15 +676,11 @@ const loadIsmartBindingSnapshot = async (): Promise<void> => {
   }
   ismartBindingQueried = true;
 
-  const [bindings, requests] = await Promise.allSettled([
-    fetchMemberIsmartFlatBindings(),
-    fetchMemberIsmartOwnerBindingRequests(),
-  ]);
-  if (bindings.status === 'fulfilled') {
-    ismartFlatBindings.value = bindings.value.items ?? [];
-  }
-  if (requests.status === 'fulfilled') {
-    ismartOwnerBindingRequests.value = requests.value.items ?? [];
+  try {
+    const bindings = await fetchMemberIsmartFlatBindings();
+    ismartFlatBindings.value = bindings.items ?? [];
+  } catch {
+    // 保留登入時的單位權限作為回退。
   }
 };
 
@@ -903,10 +909,6 @@ const bindAllowedBuildingIDs = computed(() => {
   return bindResidentBuildingIDs.value.length > 0 || !primaryCommunityID
     ? bindResidentBuildingIDs.value
     : [primaryCommunityID];
-});
-const visibleBindBuildings = computed(() => {
-  const allowed = new Set(bindAllowedBuildingIDs.value);
-  return bindBuildings.value.filter((item) => allowed.has(getBindBuildingID(item)));
 });
 const visibleBindUnits = computed(() => {
   return bindUnits.value.filter((item) =>
@@ -1479,403 +1481,6 @@ const handleRevokeSubaccount = async (group: SubaccountGroup, row: SubaccountDis
 };
 */
 
-interface BindingStatusItem {
-  key: string;
-  title: string;
-  meta: string;
-  chip: string;
-  chipType: 'good' | 'warn' | 'brand' | 'bad';
-}
-
-// 8. 物業綁定申請
-const bindingSteps = computed(() => [
-  {
-    num: '1',
-    title: t('account.center.binding.selectUnitStep'),
-    desc: t('account.center.binding.selectUnitStepDescription'),
-  },
-  {
-    num: '2',
-    title: t('account.center.binding.detailsStep'),
-    desc: t('account.center.binding.detailsStepDescription'),
-  },
-  {
-    num: '3',
-    title: t('account.center.binding.approvalStep'),
-    desc: t('account.center.binding.approvalStepDescription'),
-  },
-]);
-
-const bindingDocs = computed(() => [
-  {
-    title: t('account.center.binding.identityDocument'),
-    desc: t('account.center.binding.identityDocumentDescription'),
-  },
-  {
-    title: t('account.center.binding.relationshipDocument'),
-    desc: t('account.center.binding.relationshipDocumentDescription'),
-  },
-  {
-    title: t('account.center.binding.recentBill'),
-    desc: t('account.center.binding.recentBillDescription'),
-  },
-  {
-    title: t('account.center.binding.supportingDocument'),
-    desc: t('account.center.binding.supportingDocumentDescription'),
-  },
-]);
-
-const bindingRoleOptions = computed(() => [
-  { value: '業主', label: t('account.center.binding.ownerRole') },
-  { value: '住戶代表', label: t('account.center.binding.residentRole') },
-  { value: '公司授權人', label: t('account.center.binding.companyRole') },
-]);
-const bindingBuildings = ref<PosBuilding[]>([]);
-const bindingUnits = ref<PosBuildingUnit[]>([]);
-const bindingBuildingID = ref('');
-const bindingFloor = ref('');
-const bindingUnitID = ref('');
-const bindingRole = ref('業主');
-const bindingApplicantName = ref('');
-const bindingPhone = ref('');
-const bindingEmail = ref('');
-const bindingNote = ref('');
-const bindingReceiveEmail = ref(true);
-const bindingBuildingsLoading = ref(false);
-const bindingUnitsLoading = ref(false);
-const bindingSubmitting = ref(false);
-const bindingStatusList = ref<BindingStatusItem[]>([]);
-let latestBindingUnitsRequestID = 0;
-let ownerBindingLoaded = false;
-let ownerBindingLoadPromise: Promise<void> | null = null;
-let isInitializingOwnerBinding = false;
-
-// 8.1 取得物業綁定大廈選項
-const bindingBuildingOptions = computed<BindOption[]>(() =>
-  bindingBuildings.value
-    .slice()
-    .sort((left, right) => getBindBuildingLabel(left).localeCompare(getBindBuildingLabel(right), 'en', {
-      numeric: true,
-      sensitivity: 'base',
-    }))
-    .map((item) => ({ label: getBindBuildingLabel(item), value: getBindBuildingID(item) }))
-    .filter((item) => item.label.length > 0 && item.value.length > 0),
-);
-
-// 8.2 取得物業綁定可選單位
-const visibleBindingUnits = computed(() => bindingUnits.value);
-
-// 8.3 取得物業綁定樓層與單位選項
-const bindingFloorOptions = computed<BindOption[]>(() =>
-  Array.from(new Set(visibleBindingUnits.value.map((item) => getBindDisplayUnitFloor(item)).filter(Boolean)))
-    .sort(compareBindCodes)
-    .map((floor) => ({ label: formatBindFloorLabel(floor), value: floor })),
-);
-const bindingUnitOptions = computed<BindOption[]>(() =>
-  visibleBindingUnits.value
-    .filter((item) => getBindDisplayUnitFloor(item) === bindingFloor.value)
-    .slice()
-    .sort((left, right) => compareBindCodes(getBindUnitName(left), getBindUnitName(right)))
-    .map((item) => ({ label: getBindUnitName(item), value: getBindUnitID(item) }))
-    .filter((item) => item.label.length > 0 && item.value.length > 0),
-);
-
-// 8.4 取得物業綁定目前選擇
-const bindingSelectedBuildingName = computed(() =>
-  bindingBuildingOptions.value.find((item) => item.value === bindingBuildingID.value)?.label ?? '',
-);
-const bindingSelectedUnit = computed(() =>
-  visibleBindingUnits.value.find((item) => getBindUnitID(item) === bindingUnitID.value),
-);
-const bindingSelectedUnitName = computed(() =>
-  bindingSelectedUnit.value ? getBindUnitName(bindingSelectedUnit.value) : '',
-);
-const bindingCurrent = computed(() =>
-  [
-    bindingSelectedBuildingName.value,
-    bindingFloor.value ? formatBindFloorLabel(bindingFloor.value) : '',
-    bindingSelectedUnitName.value,
-  ].filter(Boolean).join(' / ') || t('account.center.common.noUnitSelected'),
-);
-const bindingRoleLabel = computed(() =>
-  bindingRoleOptions.value.find((role) => role.value === bindingRole.value)?.label ?? bindingRole.value,
-);
-const hasPendingResidenceBinding = computed(() => {
-  const live = liveResidenceBindingStatus.value;
-  if (live) {
-    return live === 'pending_approval';
-  }
-  return sessionStore.me?.residence_binding_status === 'pending';
-});
-const canSubmitOwnerBinding = computed(() =>
-  bindingBuildingID.value.length > 0 &&
-  bindingFloor.value.length > 0 &&
-  bindingUnitID.value.length > 0 &&
-  bindingRole.value.trim().length > 0 &&
-  bindingApplicantName.value.trim().length > 0 &&
-  bindingPhone.value.trim().length > 0 &&
-  !hasPendingResidenceBinding.value &&
-  !bindingSubmitting.value,
-);
-
-// 8.5 同步物業綁定預設聯絡資料
-const syncOwnerBindingContactFromProfile = (): void => {
-  if (!bindingApplicantName.value.trim()) {
-    bindingApplicantName.value = accountDisplayName.value === unsetText.value ? '' : accountDisplayName.value;
-  }
-  if (!bindingPhone.value.trim()) {
-    bindingPhone.value = memberPhoneText.value === unsetText.value ? '' : memberPhoneText.value;
-  }
-  if (!bindingEmail.value.trim()) {
-    bindingEmail.value = sessionStore.me?.email?.trim()
-      || ismartProfile.value?.account_email?.trim()
-      || sessionStore.me?.ismart_msg?.email?.trim()
-      || '';
-  }
-};
-
-// 8.6 同步物業綁定預設大廈
-const syncOwnerBindingBuildingFromOptions = (): void => {
-  if (bindingBuildingID.value || bindingBuildingOptions.value.length === 0) {
-    return;
-  }
-  const preferredBuildingID = bindBuildingID.value && bindingBuildingOptions.value.some((item) => item.value === bindBuildingID.value)
-    ? bindBuildingID.value
-    : bindingBuildingOptions.value[0]?.value ?? '';
-  bindingBuildingID.value = preferredBuildingID;
-};
-
-// 8.7 載入物業綁定大廈
-const loadOwnerBindingBuildings = async (): Promise<void> => {
-  bindingBuildingsLoading.value = true;
-  try {
-    bindingBuildings.value = await fetchPosBuildings();
-  } catch {
-    bindingBuildings.value = visibleBindBuildings.value;
-    if (bindingBuildings.value.length === 0) {
-      feedbackStore.pushToast(t('account.center.binding.buildingLoadError'), 'error');
-    }
-  } finally {
-    bindingBuildingsLoading.value = false;
-  }
-};
-
-// 8.8 載入物業綁定單位
-const loadOwnerBindingUnits = async (buildingID: string): Promise<void> => {
-  const requestID = ++latestBindingUnitsRequestID;
-  const value = buildingID.trim();
-  if (!value) {
-    bindingUnits.value = [];
-    return;
-  }
-
-  bindingUnitsLoading.value = true;
-  try {
-    const result = await fetchPosBuildingUnits(value);
-    if (requestID !== latestBindingUnitsRequestID) {
-      return;
-    }
-    bindingUnits.value = result.filter((item) => isSelectableBindUnit(value, item));
-    if (bindingFloor.value && !bindingFloorOptions.value.some((item) => item.value === bindingFloor.value)) {
-      bindingFloor.value = '';
-      bindingUnitID.value = '';
-    }
-    if (bindingUnitID.value && !visibleBindingUnits.value.some((item) => getBindUnitID(item) === bindingUnitID.value)) {
-      bindingUnitID.value = '';
-    }
-  } catch {
-    if (requestID !== latestBindingUnitsRequestID) {
-      return;
-    }
-    bindingUnits.value = [];
-    feedbackStore.pushToast(t('account.center.binding.unitLoadError'), 'error');
-  } finally {
-    if (requestID === latestBindingUnitsRequestID) {
-      bindingUnitsLoading.value = false;
-    }
-  }
-};
-
-// 8.9 首次進入物業綁定面板時才載入公共大廈與單位
-const ensureOwnerBindingLoaded = async (): Promise<void> => {
-  if (ownerBindingLoaded) {
-    return;
-  }
-  if (ownerBindingLoadPromise) {
-    await ownerBindingLoadPromise;
-    return;
-  }
-
-  ownerBindingLoadPromise = (async () => {
-    isInitializingOwnerBinding = true;
-    try {
-      syncOwnerBindingContactFromProfile();
-      await loadOwnerBindingBuildings();
-      syncOwnerBindingBuildingFromOptions();
-      if (bindingBuildingID.value) {
-        await loadOwnerBindingUnits(bindingBuildingID.value);
-      }
-      ownerBindingLoaded = true;
-    } finally {
-      isInitializingOwnerBinding = false;
-      ownerBindingLoadPromise = null;
-    }
-  })();
-  await ownerBindingLoadPromise;
-};
-
-// 8.10 轉換物業綁定可選欄位
-const optionalBindingValue = (value: string): string | undefined => {
-  const text = value.trim();
-  return text || undefined;
-};
-
-// 8.11 提交物業綁定申請
-const handleSubmitOwnerBindingRequest = async (): Promise<void> => {
-  if (hasPendingResidenceBinding.value) {
-    feedbackStore.pushToast(t('account.center.binding.pendingSubmitBlocked'), 'error');
-    return;
-  }
-
-  if (!canSubmitOwnerBinding.value) {
-    feedbackStore.pushToast(t('account.center.binding.requiredFields'), 'error');
-    return;
-  }
-
-  bindingSubmitting.value = true;
-  try {
-    await submitMemberIsmartOwnerBindingRequest({
-      building_id: bindingBuildingID.value,
-      ownedflat: [bindingUnitID.value],
-      cli_role: bindingRole.value.trim(),
-      ownernote: optionalBindingValue(bindingNote.value),
-      is_receive_email: bindingReceiveEmail.value,
-      reg_tel: optionalBindingValue(bindingPhone.value),
-      reg_email: optionalBindingValue(bindingEmail.value),
-      cli_name: optionalBindingValue(bindingApplicantName.value),
-      cli_tel: optionalBindingValue(bindingPhone.value),
-    });
-
-    const submittedAt = new Date().toLocaleDateString(preferenceStore.locale, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-    const pendingStatus: BindingStatusItem = {
-      key: `${bindingUnitID.value}-${Date.now()}`,
-      title: [bindingSelectedBuildingName.value || bindingBuildingID.value, bindingFloor.value, bindingSelectedUnitName.value || bindingUnitID.value]
-        .filter(Boolean)
-        .join(' / '),
-      meta: t('account.center.binding.statusMeta', { role: bindingRoleLabel.value, date: submittedAt }),
-      chip: t('account.center.binding.pending'),
-      chipType: 'warn',
-    };
-    bindingStatusList.value = [pendingStatus, ...bindingStatusList.value].slice(0, 5);
-    feedbackStore.pushToast(t('account.center.binding.submitSuccess'), 'success');
-  } catch (error) {
-    feedbackStore.pushToast(readAccountApiErrorMessage(error, t('account.center.binding.submitError')), 'error');
-  } finally {
-    bindingSubmitting.value = false;
-  }
-};
-
-// 8.12 格式化綁定申請日期
-const formatBindingStatusDate = (value?: string | null): string => {
-  const text = (value ?? '').trim();
-  if (!text) {
-    return '';
-  }
-
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) {
-    return text;
-  }
-  return date.toLocaleDateString(preferenceStore.locale, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-};
-
-// 8.13 以頁面統一格式顯示綁定申請單位，優先使用 AJO 大廈名稱而非上游英文 unit_display
-const formatOwnerBindingUnitLabel = (unitID: string, buildingName?: string): string => {
-  const normalizedUnitID = getBindDigitsOnly(unitID).slice(0, 11);
-  if (normalizedUnitID.length < 11) {
-    return '';
-  }
-
-  const liveBinding = ismartFlatBindings.value.find(
-    (item) => getBindDigitsOnly(item.unit_id ?? '').slice(0, 11) === normalizedUnitID,
-  );
-  const buildingID = (liveBinding?.building_id ?? normalizedUnitID.slice(0, 7)).trim();
-  const resolvedBuildingName = bindBuildingNameMap.value[buildingID]
-    || liveBinding?.building_name
-    || buildingName
-    || t('account.center.common.buildingCodeLabel', { id: buildingID });
-  const floor = (liveBinding?.floor ?? '').trim();
-  const unit = (liveBinding?.unit ?? '').trim();
-
-  return [resolvedBuildingName, floor ? formatBindFloorLabel(floor) : '', unit].filter(Boolean).join(' / ');
-};
-
-// 8.14 由 iSmart 申請記錄組裝申請狀態列表
-const buildOwnerBindingStatusList = (rows: IsmartOwnerBindingRequestRow[]): BindingStatusItem[] =>
-  rows.slice(0, 5).map((row, index) => {
-    const unitLabels = (row.ownedflat ?? [])
-      .map((unitID) => formatOwnerBindingUnitLabel(unitID, row.building_name))
-      .filter(Boolean);
-    const title = unitLabels.join('、')
-      || [row.building_name, row.building_id].filter(Boolean).join(' / ');
-    const role = row.cli_role?.trim() || bindingRoleLabel.value;
-    const submittedAt = formatBindingStatusDate(row.created_date);
-    const approvedAt = formatBindingStatusDate(row.approval_date);
-    const key = `ismart-request-${row.owner_reg_id ?? index}`;
-
-    if (row.status === 'approved') {
-      return {
-        key,
-        title,
-        meta: approvedAt
-          ? t('account.center.binding.statusApprovedMeta', { role, date: approvedAt })
-          : role,
-        chip: t('account.center.binding.approved'),
-        chipType: 'good' as const,
-      };
-    }
-    if (row.status === 'rejected') {
-      return {
-        key,
-        title,
-        meta: approvedAt
-          ? t('account.center.binding.statusRejectedMeta', { role, date: approvedAt })
-          : role,
-        chip: t('account.center.binding.rejected'),
-        chipType: 'bad' as const,
-      };
-    }
-    return {
-      key,
-      title,
-      meta: submittedAt
-        ? t('account.center.binding.statusMeta', { role, date: submittedAt })
-        : role,
-      chip: t('account.center.binding.pending'),
-      chipType: 'warn' as const,
-    };
-  }).filter((item) => item.title.length > 0);
-
-// 8.15 將 iSmart 申請記錄寫入申請狀態列表
-const syncOwnerBindingStatusFromIsmart = (): void => {
-  bindingStatusList.value = buildOwnerBindingStatusList(ismartOwnerBindingRequests.value);
-};
-
-// 8.16 僅在沒有 iSmart 申請記錄可顯示時，才回退顯示通用待審批提示
-const showGenericPendingNotice = computed(() =>
-  hasPendingResidenceBinding.value
-  && !ismartOwnerBindingRequests.value.some((row) => row.status === 'pending_approval')
-  && bindingStatusList.value.length === 0,
-);
-
 // 9. 住宅 mock 資料
 const homeListings = computed(() => [
   {
@@ -1942,13 +1547,6 @@ const openFurnitureCreate = () => {
   router.push('/account/listings/new');
 };
 
-// 13. 按目前面板首次載入非帳號管理資料
-const ensureActivePanelLoaded = async (): Promise<void> => {
-  if (activePanel.value === 'profile-property-binding') {
-    await ensureOwnerBindingLoaded();
-  }
-};
-
 onMounted(async () => {
   try {
     if (!sessionStore.me) {
@@ -1962,9 +1560,6 @@ onMounted(async () => {
       await loadBindUnits(bindBuildingID.value);
       syncBindUnitFromProfile();
     }
-    // 大廈名稱載入後才組裝申請狀態標題，避免退回上游英文名稱
-    syncOwnerBindingStatusFromIsmart();
-    await ensureActivePanelLoaded();
   } finally {
     isSyncingBindProfile = false;
   }
@@ -1988,31 +1583,6 @@ watch(bindFloor, (nextValue, previousValue) => {
   }
 });
 
-watch(bindingBuildingID, (nextValue, previousValue) => {
-  if (nextValue === previousValue) {
-    return;
-  }
-  bindingFloor.value = '';
-  bindingUnitID.value = '';
-  if (isInitializingOwnerBinding) {
-    return;
-  }
-  void loadOwnerBindingUnits(nextValue);
-});
-
-watch(bindingFloor, (nextValue, previousValue) => {
-  if (nextValue !== previousValue) {
-    bindingUnitID.value = '';
-  }
-});
-
-watch(
-  bindingBuildingOptions,
-  () => {
-    syncOwnerBindingBuildingFromOptions();
-  },
-);
-
 watch(
   [() => route.path, () => route.query.panel],
   ([path]) => {
@@ -2021,15 +1591,13 @@ watch(
   { immediate: true },
 );
 
-watch(activePanel, () => {
-  void ensureActivePanelLoaded();
-});
 </script>
 
 <template>
   <div
     class="page"
     id="page-profile"
+    :class="{ 'is-mobile-home': mobileHome, 'is-restricted-account': isRestrictedAgencyAccount }"
   >
     <div class="work-shell">
       <!-- 1. 左側導覽 -->
@@ -2044,8 +1612,10 @@ watch(activePanel, () => {
             :class="{ on: activePanel === item.key }"
             @click="switchPanel(item.key)"
           >
+            <AppIcon class="work-nav-icon" :name="navIcons[item.key]" :size="19" />
             <span class="work-nav-label">{{ item.label }}</span>
             <span v-if="item.needsApi" class="work-nav-note">{{ t('account.center.nav.apiRequired') }}</span>
+            <AppIcon class="work-nav-arrow" name="arrow-right" :size="16" />
           </button>
         </nav>
       </aside>
@@ -2058,6 +1628,7 @@ watch(activePanel, () => {
             <div class="work-account-topbar">
               <div class="work-account-head">
                 <div class="work-account-user">
+                  <AccountMobileBack />
                   <button
                     type="button"
                     class="work-account-avatar"
@@ -2076,16 +1647,7 @@ watch(activePanel, () => {
                   </div>
                 </div>
               </div>
-              <div class="work-account-actions">
-                <button
-                  type="button"
-                  class="work-account-btn outline"
-                  :disabled="isSigningOut"
-                  @click="handleLogout"
-                >
-                  {{ isSigningOut ? t('account.center.account.signingOut') : t('account.actions.signOut') }}
-                </button>
-              </div>
+
             </div>
           </section>
 
@@ -2112,53 +1674,7 @@ watch(activePanel, () => {
               </div>
             </section>
 
-            <section class="work-card work-bind-section">
-              <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
-              <div class="work-bind-wrap">
-                <div class="work-property-table-wrap">
-                  <table class="work-property-table">
-                    <thead>
-                      <tr>
-                        <th>{{ t('account.center.account.linkedPropertyName') }}</th>
-                        <th>{{ t('account.center.account.functionName') }}</th>
-                        <th>{{ t('account.center.account.staffEnabled') }}</th>
-                        <th>{{ t('account.center.account.unbindProperty') }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-if="linkedPropertyFunctionRows.length === 0">
-                        <td colspan="4">{{ t('account.center.account.propertyFunctionsEmpty') }}</td>
-                      </tr>
-                      <tr
-                        v-for="row in linkedPropertyFunctionRows"
-                        :key="row.key"
-                      >
-                        <td>{{ row.showProperty ? row.property : '' }}</td>
-                        <td>{{ row.functionName }}</td>
-                        <td>
-                          <span
-                            class="work-chip"
-                            :class="row.enabled ? 'good' : 'warn'"
-                          >
-                            {{ row.enabled ? t('account.center.account.propertyFunctionEnabled') : t('account.center.account.propertyFunctionDisabled') }}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            v-if="row.canUnbind"
-                            type="button"
-                            class="work-action work-compact-action secondary"
-                            @click="handleUnbindProperty"
-                          >
-                            {{ t('account.center.account.unbindProperty') }}
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
+
           </div>
 
           <Teleport to="body">
@@ -2300,53 +1816,7 @@ watch(activePanel, () => {
             </div>
           </Teleport>
 
-          <section class="work-card work-ismart-section">
-            <div class="work-section-heading">
-              <div>
-                <div class="work-card-title">{{ t('account.center.account.ismartData') }}</div>
-                <p>{{ t('account.center.account.ismartProfileDescription') }}</p>
-              </div>
-              <div class="work-section-heading__actions">
-                <button
-                  type="button"
-                  class="work-action work-compact-action secondary"
-                  :disabled="ismartPasswordSaving"
-                  @click="openIsmartPassword"
-                >
-                  {{ t('account.center.account.changeIsmartPassword') }}
-                </button>
-                <button
-                  type="button"
-                  class="work-action work-compact-action"
-                  :disabled="ismartEditSaving || !canEditIsmartProfile"
-                  @click="openIsmartEdit"
-                >
-                  {{ t('account.center.account.editIsmartProfile') }}
-                </button>
-              </div>
-            </div>
-            <div class="work-property-switch">
-              <label for="account-current-property">{{ t('account.center.account.currentProperty') }}</label>
-              <select
-                id="account-current-property"
-                v-model="bindUnitID"
-                class="acct-select"
-                :disabled="bindLoading || bindUnitsLoading || bindSaving || integrationAuthUnavailable || bindPropertyOptions.length === 0"
-                :aria-busy="bindSaving"
-                @change="handleBindProperty(bindUnitID)"
-              >
-                <option value="" disabled>
-                  {{ bindPropertyPlaceholder }}
-                </option>
-                <option
-                  v-for="property in bindPropertyOptions"
-                  :key="property.value"
-                  :value="property.value"
-                >
-                  {{ property.label }}
-                </option>
-              </select>
-            </div>
+          <section class="work-card work-account-settings">
             <div class="work-ismart-grid">
               <div class="work-ismart-group">
                 <div class="work-card-sub">{{ t('account.center.account.ownerData') }}</div>
@@ -2374,6 +1844,29 @@ watch(activePanel, () => {
                     <span>{{ item.value }}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+            <div class="work-section-heading work-account-settings__actions">
+              <div>
+                <div class="work-card-title">{{ t('account.center.account.accountActions') }}</div>
+              </div>
+              <div class="work-section-heading__actions">
+                <button
+                  type="button"
+                  class="work-action work-compact-action secondary"
+                  :disabled="ismartPasswordSaving"
+                  @click="openIsmartPassword"
+                >
+                  {{ t('account.center.account.changeIsmartPassword') }}
+                </button>
+                <button
+                  type="button"
+                  class="work-action work-compact-action"
+                  :disabled="ismartEditSaving || !canEditIsmartProfile"
+                  @click="openIsmartEdit"
+                >
+                  {{ t('account.center.account.editIsmartProfile') }}
+                </button>
               </div>
             </div>
             <Teleport to="body">
@@ -2556,7 +2049,14 @@ watch(activePanel, () => {
               </div>
             </Teleport>
           </section>
-
+          <button
+            type="button"
+            class="work-account-btn outline work-signout"
+            :disabled="isSigningOut"
+            @click="handleLogout"
+          >
+            {{ isSigningOut ? t('account.center.account.signingOut') : t('account.actions.signOut') }}
+          </button>
         </div>
 
         <!-- 2.2 提示設定 -->
@@ -2695,174 +2195,77 @@ watch(activePanel, () => {
         <div v-show="activePanel === 'profile-property-binding'" class="work-panel on" data-work-panel="profile-property-binding">
           <section class="work-hero">
             <div>
-              <div class="work-kicker">{{ t('account.center.binding.kicker') }}</div>
-              <h2 class="work-title">{{ t('account.center.binding.title') }}</h2>
+              <h2 class="work-title"><AccountMobileBack />{{ t('account.center.binding.title') }}</h2>
               <p class="work-desc">{{ t('account.center.binding.description') }}</p>
             </div>
           </section>
-          <section class="work-card">
-            <div class="work-card-title">{{ t('account.center.binding.processTitle') }}</div>
-            <div class="binding-flow">
-              <div v-for="step in bindingSteps" :key="step.num" class="binding-step">
-                <div class="binding-step-num">{{ step.num }}</div>
-                <div class="binding-step-title">{{ step.title }}</div>
-                <div class="binding-step-desc">{{ step.desc }}</div>
-              </div>
-            </div>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">{{ t('account.center.binding.reviewTitle') }}</div>
-            <div class="binding-review-box">
-              <strong>{{ t('account.center.binding.reviewResponsibility') }}</strong>
-              <span>{{ t('account.center.binding.reviewDescription') }}</span>
-            </div>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">{{ t('account.center.binding.applicationTitle') }}</div>
-            <div v-if="hasPendingResidenceBinding" class="binding-review-box binding-pending-state">
-              <strong>{{ t('account.center.binding.pendingTitle') }}</strong>
-              <span>{{ t('account.center.binding.pendingDescription') }}</span>
-            </div>
-            <div class="binding-platform-panel">
-              <div class="binding-subtitle">{{ t('account.center.binding.applicationUnit') }}</div>
-              <div class="work-bind-current">{{ bindingCurrent }}</div>
-              <div class="acct-form-grid">
-                <div class="acct-field">
-                  <label>{{ t('account.center.common.building') }}</label>
-                  <select
-                    v-model="bindingBuildingID"
-                    class="acct-select"
-                    :disabled="hasPendingResidenceBinding || bindingBuildingsLoading || bindingBuildingOptions.length === 0"
-                  >
-                    <option value="">{{ bindingBuildingsLoading ? t('account.center.common.loading') : t('account.center.common.selectBuilding') }}</option>
-                    <option
-                      v-for="item in bindingBuildingOptions"
-                      :key="item.value"
-                      :value="item.value"
+          <section class="work-card work-bind-section">
+            <div class="work-card-title">{{ t('account.center.account.linkedUnit') }}</div>
+            <div class="work-bind-wrap">
+              <div class="work-property-table-wrap">
+                <table class="work-property-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('account.center.account.linkedPropertyName') }}</th>
+                      <th>{{ t('account.center.account.functionName') }}</th>
+                      <th>{{ t('account.center.account.staffEnabled') }}</th>
+                      <th>{{ t('account.center.account.unbindProperty') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="linkedPropertyFunctionRows.length === 0">
+                      <td colspan="4">{{ t('account.center.account.propertyFunctionsEmpty') }}</td>
+                    </tr>
+                    <tr
+                      v-for="row in linkedPropertyFunctionRows"
+                      :key="row.key"
                     >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="acct-field">
-                  <label>{{ t('account.center.common.floor') }}</label>
-                  <select
-                    v-model="bindingFloor"
-                    class="acct-select"
-                    :disabled="hasPendingResidenceBinding || !bindingBuildingID || bindingUnitsLoading || bindingFloorOptions.length === 0"
-                  >
-                    <option value="">{{ bindingUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectFloor') }}</option>
-                    <option
-                      v-for="item in bindingFloorOptions"
-                      :key="item.value"
-                      :value="item.value"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="acct-field">
-                  <label>{{ t('account.center.common.unit') }}</label>
-                  <select
-                    v-model="bindingUnitID"
-                    class="acct-select"
-                    :disabled="hasPendingResidenceBinding || !bindingFloor || bindingUnitsLoading || bindingUnitOptions.length === 0"
-                  >
-                    <option value="">{{ bindingUnitsLoading ? t('account.center.common.loading') : t('account.center.common.selectUnit') }}</option>
-                    <option
-                      v-for="item in bindingUnitOptions"
-                      :key="item.value"
-                      :value="item.value"
-                    >
-                      {{ item.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="acct-field">
-                  <label>{{ t('account.center.binding.applicantRole') }}</label>
-                  <select v-model="bindingRole" class="acct-select" :disabled="hasPendingResidenceBinding">
-                    <option
-                      v-for="role in bindingRoleOptions"
-                      :key="role.value"
-                      :value="role.value"
-                    >
-                      {{ role.label }}
-                    </option>
-                  </select>
-                </div>
+                      <td>{{ row.showProperty ? row.property : '' }}</td>
+                      <td>{{ row.functionName }}</td>
+                      <td>
+                        <span
+                          class="work-chip"
+                          :class="row.enabled ? 'good' : 'warn'"
+                        >
+                          {{ row.enabled ? t('account.center.account.propertyFunctionEnabled') : t('account.center.account.propertyFunctionDisabled') }}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          v-if="row.canUnbind"
+                          type="button"
+                          class="work-action work-compact-action secondary"
+                          @click="handleUnbindProperty"
+                        >
+                          {{ t('account.center.account.unbindProperty') }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div class="acct-form-grid binding-common-grid">
-              <div class="acct-field">
-                <label>{{ t('account.center.binding.applicantName') }}</label>
-                <input v-model="bindingApplicantName" class="acct-input" type="text" autocomplete="name" :readonly="hasPendingResidenceBinding">
-              </div>
-              <div class="acct-field">
-                <label>{{ t('account.center.binding.phone') }}</label>
-                <input v-model="bindingPhone" class="acct-input" type="tel" autocomplete="tel" :readonly="hasPendingResidenceBinding">
-              </div>
-              <div class="acct-field full">
-                <label>{{ t('account.center.binding.email') }}</label>
-                <input v-model="bindingEmail" class="acct-input" type="email" autocomplete="email" :readonly="hasPendingResidenceBinding">
-              </div>
-              <div class="acct-field full">
-                <label>{{ t('account.center.binding.remark') }}</label>
-                <textarea
-                  v-model="bindingNote"
-                  class="acct-textarea"
-                  :placeholder="t('account.center.binding.remarkPlaceholder')"
-                  :readonly="hasPendingResidenceBinding"
-                ></textarea>
-              </div>
-            </div>
-            <label class="binding-check">
-              <input v-model="bindingReceiveEmail" type="checkbox" :disabled="hasPendingResidenceBinding">
-              <span>{{ t('account.center.binding.receiveEmail') }}</span>
-            </label>
-            <div class="work-bind-actions work-doc-actions">
-              <button
-                type="button"
-                class="work-action"
-                :disabled="!canSubmitOwnerBinding"
-                @click="handleSubmitOwnerBindingRequest"
+            <div class="work-property-switch">
+              <label for="account-current-property">{{ t('account.center.account.currentProperty') }}</label>
+              <select
+                id="account-current-property"
+                v-model="bindUnitID"
+                class="acct-select"
+                :disabled="bindLoading || bindUnitsLoading || bindSaving || integrationAuthUnavailable || bindPropertyOptions.length === 0"
+                :aria-busy="bindSaving"
+                @change="handleBindProperty(bindUnitID)"
               >
-                {{ bindingSubmitting
-                  ? t('account.center.common.submitting')
-                  : hasPendingResidenceBinding
-                    ? t('account.center.binding.pending')
-                    : t('account.center.binding.submitApproval') }}
-              </button>
-            </div>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">{{ t('account.center.binding.requiredDocuments') }}</div>
-            <div class="binding-doc-grid">
-              <div v-for="doc in bindingDocs" :key="doc.title" class="binding-doc-card">
-                <div class="binding-doc-title">{{ doc.title }}</div>
-                <div class="binding-doc-desc">{{ doc.desc }}</div>
-              </div>
-            </div>
-          </section>
-          <section class="work-card">
-            <div class="work-card-title">{{ t('account.center.binding.applicationStatus') }}</div>
-            <div class="binding-status-list">
-              <div v-if="showGenericPendingNotice" class="binding-status-item">
-                <div>
-                  <div class="binding-status-title">{{ t('account.center.binding.pendingTitle') }}</div>
-                  <div class="binding-status-meta">{{ t('account.center.binding.pendingDescription') }}</div>
-                </div>
-                <span class="work-chip warn">{{ t('account.center.binding.pending') }}</span>
-              </div>
-              <div v-else-if="bindingStatusList.length === 0" class="binding-empty-state">
-                {{ t('account.center.binding.noSubmission') }}
-              </div>
-              <div v-for="item in bindingStatusList" :key="item.key" class="binding-status-item">
-                <div>
-                  <div class="binding-status-title">{{ item.title }}</div>
-                  <div class="binding-status-meta">{{ item.meta }}</div>
-                </div>
-                <span class="work-chip" :class="item.chipType">{{ item.chip }}</span>
-              </div>
+                <option value="" disabled>
+                  {{ bindPropertyPlaceholder }}
+                </option>
+                <option
+                  v-for="property in bindPropertyOptions"
+                  :key="property.value"
+                  :value="property.value"
+                >
+                  {{ property.label }}
+                </option>
+              </select>
             </div>
           </section>
         </div>
@@ -3016,7 +2419,7 @@ watch(activePanel, () => {
   align-self: start;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 16px;
 }
 
@@ -3058,6 +2461,11 @@ watch(activePanel, () => {
 
 .work-nav-label {
   min-width: 0;
+}
+
+.work-nav-icon,
+.work-nav-arrow {
+  display: none;
 }
 
 .work-nav-note {
@@ -3166,7 +2574,7 @@ watch(activePanel, () => {
   align-items: center;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 18px 20px;
 }
 
@@ -3254,13 +2662,6 @@ watch(activePanel, () => {
   font-weight: 700;
 }
 
-.work-account-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .work-account-btn {
   display: inline-flex;
   min-height: 34px;
@@ -3268,7 +2669,7 @@ watch(activePanel, () => {
   justify-content: center;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   cursor: pointer;
   font-family: inherit;
@@ -3276,6 +2677,12 @@ watch(activePanel, () => {
   font-weight: 700;
   padding: 0 12px;
   line-height: 1;
+}
+
+.work-signout {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 16px;
 }
 
 .work-account-btn.outline {
@@ -3296,7 +2703,7 @@ watch(activePanel, () => {
   gap: 0;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   overflow: hidden;
   margin-top: 12px;
 }
@@ -3317,7 +2724,7 @@ watch(activePanel, () => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
-  background: #fff;
+  background: var(--sur);
   overflow: hidden;
   padding: 18px 20px;
 }
@@ -3494,6 +2901,10 @@ watch(activePanel, () => {
   gap: 14px;
 }
 
+.work-account-settings__actions {
+  margin-top: 24px;
+}
+
 .work-section-heading__actions {
   display: flex;
   flex-wrap: wrap;
@@ -3530,7 +2941,7 @@ watch(activePanel, () => {
   overflow: hidden;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   box-shadow: 0 24px 72px rgb(0 0 0 / 0.25);
 }
 
@@ -3554,7 +2965,7 @@ watch(activePanel, () => {
   padding: 0;
   border: 1px solid var(--bdr);
   border-radius: 50%;
-  background: #fff;
+  background: var(--sur);
   appearance: none;
   cursor: pointer;
 }
@@ -3602,7 +3013,7 @@ watch(activePanel, () => {
   justify-content: center;
   border: 1px solid var(--bdr);
   border-radius: 4px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink-2);
   cursor: pointer;
 }
@@ -3752,7 +3163,7 @@ watch(activePanel, () => {
 
 .work-action.secondary {
   border: 1px solid var(--bdr);
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
 }
 
@@ -3792,7 +3203,7 @@ watch(activePanel, () => {
 .work-card {
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 16px;
 }
 
@@ -3964,7 +3375,7 @@ watch(activePanel, () => {
   gap: 10px;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 12px;
   margin-bottom: 12px;
 }
@@ -4009,176 +3420,6 @@ watch(activePanel, () => {
   padding: 18px 12px;
 }
 
-/* 17. 物業綁定流程 */
-.binding-flow {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.binding-step {
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: #fff;
-  padding: 14px;
-}
-
-.binding-step-num {
-  display: flex;
-  width: 26px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--brand);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  margin-bottom: 10px;
-}
-
-.binding-step-title {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 5px;
-}
-
-.binding-step-desc {
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-/* 19. 審批說明 */
-.binding-review-box {
-  display: grid;
-  gap: 6px;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: var(--sur-2);
-  padding: 12px 14px;
-}
-
-.binding-review-box strong {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.binding-review-box span {
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-/* 20. 綁定申請表單 */
-.binding-platform-panel {
-  display: block;
-}
-
-.binding-subtitle {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
-  margin: 0 0 10px;
-}
-
-.binding-subtitle:not(:first-child) {
-  margin-top: 16px;
-}
-
-.binding-common-grid {
-  margin-top: 14px;
-}
-
-.binding-check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.binding-check input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--brand);
-}
-
-/* 21. 文件說明 */
-.binding-doc-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.binding-doc-card {
-  border: 1px dashed var(--bdr-2);
-  border-radius: 8px;
-  background: var(--sur-2);
-  padding: 14px;
-}
-
-.binding-doc-title {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 5px;
-}
-
-.binding-doc-desc {
-  color: var(--ink-3);
-  font-size: 12px;
-  line-height: 1.6;
-  margin-bottom: 10px;
-}
-
-.work-doc-actions {
-  margin-top: 14px;
-}
-
-/* 22. 申請狀態 */
-.binding-status-list {
-  display: grid;
-  gap: 10px;
-}
-
-.binding-status-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid var(--bdr);
-  border-radius: 8px;
-  background: #fff;
-  padding: 12px 14px;
-}
-
-.binding-status-title {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.binding-status-meta {
-  color: var(--ink-3);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.binding-empty-state {
-  border: 1px dashed var(--bdr-2);
-  border-radius: 8px;
-  background: var(--sur-2);
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 14px;
-}
-
 /* 23. 表單元件 */
 .acct-form-grid {
   display: grid;
@@ -4207,7 +3448,7 @@ watch(activePanel, () => {
   width: 100%;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;
@@ -4223,6 +3464,50 @@ watch(activePanel, () => {
 
 /* 24. 響應式 - 平板 */
 @media (max-width: 1023px) {
+  html #app #page-profile.is-mobile-home .work-main,
+  html #app #page-profile:not(.is-mobile-home) .work-sidebar {
+    display: none;
+  }
+
+  html #app #page-profile.is-mobile-home .work-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin: 10px 0 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  html #app #page-profile.is-mobile-home .work-nav-item {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 52px;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    padding: 10px 4px;
+    white-space: normal;
+  }
+
+  #page-profile.is-mobile-home .work-nav-icon,
+  #page-profile.is-mobile-home .work-nav-arrow {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  #page-profile.is-mobile-home .work-nav-arrow {
+    margin-left: auto;
+    color: var(--ink-3);
+  }
+
+  #page-profile.is-restricted-account :deep(.account-mobile-back) {
+    display: none;
+  }
+
   .work-shell {
     grid-template-columns: 1fr;
     padding: 14px;
@@ -4240,9 +3525,7 @@ watch(activePanel, () => {
   .work-ismart-grid,
   .work-account-detail-grid,
   .work-account-grid,
-  .work-bind-grid,
-  .binding-flow,
-  .binding-doc-grid {
+  .work-bind-grid {
     grid-template-columns: 1fr;
   }
 

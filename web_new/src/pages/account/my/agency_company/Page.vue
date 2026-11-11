@@ -32,6 +32,7 @@ import type {
   CreateAgencySubaccountPayload,
 } from '@/model/agency_profile';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
@@ -471,8 +472,7 @@ onMounted(loadProfile);
       <div class="agency-profile-heading">
         <span class="agency-profile-heading-icon"><AppIcon :name="profileHeaderIcon" :size="21" /></span>
         <div>
-          <p>{{ t('account.agencyCompany.kicker') }}</p>
-          <h1>{{ profileType === 'individual' ? t('account.agencyCompany.individualTitle') : t('account.agencyCompany.companyTitle') }}</h1>
+          <h1><AccountMobileBack />{{ profileType === 'individual' ? t('account.agencyCompany.individualTitle') : t('account.agencyCompany.companyTitle') }}</h1>
           <span>{{ t('account.agencyCompany.reviewNotice') }}</span>
         </div>
       </div>

@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   updateMemberIsmartProfile: vi.fn(),
   updateMe: vi.fn(),
   routerPush: vi.fn(),
+  routerBack: vi.fn(),
+  routerReplace: vi.fn(),
   route: {
     path: '/account/profile',
     query: {} as Record<string, string>,
@@ -92,7 +94,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({
   RouterView: { template: '<div />' },
   useRoute: () => mocks.route,
-  useRouter: () => ({ push: mocks.routerPush }),
+  useRouter: () => ({ push: mocks.routerPush, back: mocks.routerBack, replace: mocks.routerReplace }),
 }));
 
 vi.mock('@/stores/session', () => ({
@@ -253,6 +255,8 @@ describe('AccountMyPage lazy data loading', () => {
     mocks.changeMemberIsmartPassword.mockReset();
     mocks.updateMemberIsmartProfile.mockReset();
     mocks.routerPush.mockReset();
+    mocks.routerBack.mockReset();
+    mocks.routerReplace.mockReset();
     Reflect.deleteProperty(mocks.session.me, 'avatar_key');
     mocks.fetchMemberBuildings.mockResolvedValue([
       { building_id: '0999900', buildname_chi: '測試1大廈', buildname: 'Test Building 1' },
@@ -312,120 +316,38 @@ describe('AccountMyPage lazy data loading', () => {
     expect(wrapper.find('.work-account-name').text()).not.toBe('Guest Member');
   });
 
-  it('loads owner-binding directories only after the property-binding panel is opened', async () => {
+  it('does not load application directories when opening property binding', async () => {
     const wrapper = await mountAccountPage();
-
     await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
-    expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchPublicUnits).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchPublicBuildings).not.toHaveBeenCalled();
+    expect(mocks.fetchPublicUnits).not.toHaveBeenCalled();
+    expect(mocks.fetchIsmartOwnerBindingRequests).not.toHaveBeenCalled();
+  });
 
+  it('navigates account management and property binding to distinct panels', async () => {
+    const wrapper = await mountAccountPage();
+    expect(wrapper.classes()).toContain('is-mobile-home');
+    await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith({
+      path: '/account/profile',
+      query: { panel: 'property-binding' },
+    });
     await clickPanel(wrapper, i18n.global.t('account.center.nav.account'));
-    await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
-    expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchPublicUnits).toHaveBeenCalledTimes(1);
+    expect(mocks.routerPush).toHaveBeenLastCalledWith({
+      path: '/account/profile',
+      query: { panel: 'account' },
+    });
   });
 
-  it('loads owner-binding data when entering through the property-binding query', async () => {
+  it('returns directly opened panels to the account home', async () => {
     mocks.route.query = { panel: 'property-binding' };
-    await mountAccountPage();
-
-    expect(mocks.fetchPublicBuildings).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchPublicUnits).toHaveBeenCalledTimes(1);
-  });
-
-  // 3.1 iSmart 待審批申請鎖定提交
-  it('locks the owner-binding submit action while an iSmart request is pending', async () => {
-    mocks.fetchIsmartOwnerBindingRequests.mockResolvedValue({
-      items: [
-        {
-          owner_reg_id: 11,
-          building_id: '0999900',
-          building_name: '測試1大廈',
-          ownedflat: ['09999000401'],
-          cli_role: '業主',
-          status: 'pending_approval',
-          created_date: '2026-09-01',
-        },
-      ],
-      count: 1,
-      building_options: [],
-    });
     const wrapper = await mountAccountPage();
-
-    await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
-
-    const submitButton = wrapper.findAll('button').find((item) => item.text().includes(i18n.global.t('account.center.binding.pending')));
-    expect(submitButton).toBeTruthy();
-    expect(wrapper.findAll('.binding-status-item')).toHaveLength(1);
-    expect(wrapper.find('.binding-status-item').text()).toContain(i18n.global.t('account.center.binding.pending'));
-  });
-  // 3.2 iSmart 已拒絕申請不再鎖定提交
-  it('reopens the owner-binding submit action after an iSmart request is rejected', async () => {
-    mocks.fetchIsmartOwnerBindingRequests.mockResolvedValue({
-      items: [
-        {
-          owner_reg_id: 12,
-          building_id: '0999900',
-          building_name: '測試1大廈',
-          ownedflat: ['09999000401'],
-          cli_role: '業主',
-          status: 'rejected',
-          created_date: '2026-09-01',
-          approval_date: '2026-09-10',
-        },
-      ],
-      count: 1,
-      building_options: [],
-    });
-    const wrapper = await mountAccountPage();
-
-    await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
-
-    const submitButton = wrapper.findAll('button').find((item) => item.text().includes(i18n.global.t('account.center.binding.submitApproval')));
-    expect(submitButton).toBeTruthy();
-    expect(wrapper.find('.binding-status-title').text()).toBe('測試1大廈');
-    expect(wrapper.find('.binding-status-item').text()).toContain(i18n.global.t('account.center.binding.rejected'));
-  });
-
-  // 3.2.1 已拒絕申請的單位標題沿用頁面中文大廈名稱格式
-  it('formats the rejected request unit label with the AJO building name', async () => {
-    mocks.fetchIsmartFlatBindings.mockResolvedValue({
-      items: [
-        {
-          relation_info_id: 2851,
-          building_id: '0999900',
-          building_name: 'DEMO1 BUILDING',
-          unit_id: '09999000417',
-          unit_display: 'DEMO1 BUILDING 04 G',
-          floor: '04',
-          unit: 'G',
-          cli_role: '登記業主',
-        },
-      ],
-      count: 1,
-      building_options: [],
-    });
-    mocks.fetchIsmartOwnerBindingRequests.mockResolvedValue({
-      items: [
-        {
-          owner_reg_id: 13,
-          building_id: '0999900',
-          building_name: 'DEMO1 BUILDING',
-          ownedflat: ['09999000417'],
-          cli_role: '業主',
-          status: 'rejected',
-          created_date: '2026-09-01',
-          approval_date: '2026-09-10',
-        },
-      ],
-      count: 1,
-      building_options: [],
-    });
-    const wrapper = await mountAccountPage();
-
-    await clickPanel(wrapper, i18n.global.t('account.center.nav.propertyBinding'));
-
-    expect(wrapper.find('.binding-status-title').text()).toBe('測試1大廈 / 04 / G');
+    expect(wrapper.classes()).not.toContain('is-mobile-home');
+    expect(wrapper.find('.account-mobile-header').exists()).toBe(false);
+    expect(wrapper.find('[data-work-panel="profile-property-binding"] .work-title .account-mobile-back').exists()).toBe(true);
+    expect(wrapper.find('[data-work-panel="profile-property-binding"] .work-hero .work-kicker').exists()).toBe(false);
+    await wrapper.get('[data-work-panel="profile-property-binding"] .account-mobile-back').trigger('click');
+    expect(mocks.routerReplace).toHaveBeenCalledWith('/account/profile');
   });
 
   // 3.3 關聯物業以 iSmart 即時綁定為準
@@ -562,11 +484,30 @@ describe('AccountMyPage lazy data loading', () => {
     });
   });
 
-  // 4.1 中英文均以底部完整單位下拉切換，中間表格不再提供切換欄
-  it.each(['zh-HK', 'en'] as const)('renders a single current-property dropdown in the bottom registration section in %s', async (locale) => {
+  // 4.1 帳戶操作與物業資料分別置於對應面板
+  it.each(['zh-HK', 'en'] as const)('separates account actions from linked property details in %s', async (locale) => {
     configureLinkedPropertyFixture();
     applyLocale(locale);
     const wrapper = await mountAccountPage();
+    const account = wrapper.get('[data-work-panel="profile-account"]');
+    const binding = wrapper.get('[data-work-panel="profile-property-binding"]');
+    expect(account.find('.work-property-table').exists()).toBe(false);
+    expect(account.find('#account-current-property').exists()).toBe(false);
+    expect(account.find('.work-ismart-grid').exists()).toBe(true);
+    expect(binding.find('.work-property-table').exists()).toBe(true);
+    expect(binding.find('#account-current-property').exists()).toBe(true);
+    expect(binding.find('.work-ismart-grid').exists()).toBe(false);
+    expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.processTitle'));
+    expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.applicationTitle'));
+    expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.applicationStatus'));
+    expect(account.get('.work-account-settings').text()).toContain(i18n.global.t('account.center.account.changeIsmartPassword'));
+    expect(account.get('.work-account-settings').text()).toContain(i18n.global.t('account.center.account.editIsmartProfile'));
+    expect(binding.text()).not.toContain(i18n.global.t('account.center.account.changeIsmartPassword'));
+    expect(binding.text()).not.toContain(i18n.global.t('account.center.account.editIsmartProfile'));
+    expect(account.get('.work-ismart-grid').element.compareDocumentPosition(
+      account.get('.work-account-settings__actions').element,
+    )).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(account.element.lastElementChild?.classList.contains('work-signout')).toBe(true);
     const switchLabel = i18n.global.t('account.center.account.switchProperty');
     const currentLabel = i18n.global.t('account.center.account.currentProperty');
 
@@ -577,7 +518,7 @@ describe('AccountMyPage lazy data loading', () => {
     expect(wrapper.find('.work-property-table').text()).not.toContain(currentLabel);
     expect(wrapper.find('.work-property-table').text()).not.toContain(switchLabel);
 
-    const select = wrapper.get<HTMLSelectElement>('.work-ismart-section #account-current-property');
+    const select = binding.get<HTMLSelectElement>('#account-current-property');
     expect(wrapper.findAll('#account-current-property')).toHaveLength(1);
     expect(select.element.tagName).toBe('SELECT');
     expect(select.element.disabled).toBe(false);
@@ -587,10 +528,6 @@ describe('AccountMyPage lazy data loading', () => {
       '測試甲大廈 / 04 / A',
       '測試甲大廈 / 04 / G',
     ]);
-    const registration = wrapper.get('.work-ismart-section').element;
-    expect(registration.querySelector('#account-current-property')?.compareDocumentPosition(
-      registration.querySelector('.work-ismart-grid')!,
-    )).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(mocks.updateMe).not.toHaveBeenCalled();
   });
 

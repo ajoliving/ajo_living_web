@@ -212,6 +212,7 @@ export default {
     noticePublishError: '無法發布通知。',
   },
   management: {
+    backToHome: '返回管理中心',
     staffKicker: '職員',
     title: '管理',
     description: '管理會員、內容列表、AJO Point 與廣告任務。',

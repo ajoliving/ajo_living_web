@@ -812,6 +812,19 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 
 一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
 
+2026-11-11 已部署測試 release `20261111103516-test-71493`：
+
+- 重新建置並發布目前工作區前後端，包含尚未提交的頁面調整；使用 `INITIALIZE_DB=0` 保留測試資料庫，`KEEP_RELEASES=0` 保留舊 release。
+- 前端型別檢查及建置、後端建置、測試首頁、health、readiness、Nginx、PostgreSQL、Redis 及 `noindex` 通過；伺服器前端首頁與後端二進制校驗值與本次建置一致。
+- 生產首頁及 health 正常，生產後端和共用 `frpc` 的 PID、FRP 配置及生產 release 未變；公網檢查曾遇連線中斷，重試後成功。未執行完整業務或外部服務寫入測試。
+
+2026-11-11 已部署測試 release `20261111051947-test-18781`：
+
+- 從 `testMain` 提交 `bd82b8ba13b35b0ad646af71a646841c64744581` 的獨立快照重新建置前後端，未包含本機未提交檔案。
+- 使用 `INITIALIZE_DB=0` 保留測試資料庫、`KEEP_RELEASES=0` 保留舊 release；未重建測試資料庫。
+- 前端型別檢查與建置、後端建置、公網首頁、health、readiness、Nginx、測試 PostgreSQL 與 Redis 通過；公網首頁和伺服器後端二進制均與本次建置校驗一致。
+- 生產後端及共用 `frpc` 的 PID 在部署前後保持不變，生產首頁返回 `200`；未執行完整業務功能測試。
+
 2026-10-29 已部署測試 release `20261029110314-test-90661`：
 
 - 重新建置目前工作區前後端，發布「我的大廈」手機內容收窄、表格標籤及按鈕對齊、全寬 16:9 CCTV 框架；模組及財務／帳目選項卡維持左右捲動，不改為下拉框。

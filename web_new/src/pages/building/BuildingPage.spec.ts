@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   updateMe: vi.fn(),
   routerPush: vi.fn(),
   routerReplace: vi.fn(),
+  routerBack: vi.fn(),
   route: {
     path: '/building',
     query: {} as Record<string, string>,
@@ -89,6 +90,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: mocks.routerPush,
     replace: mocks.routerReplace,
+    back: mocks.routerBack,
   }),
 }));
 
@@ -160,6 +162,8 @@ describe('BuildingPage binding refresh', () => {
     mocks.fetchOtherFees.mockResolvedValue({ result: [] });
     mocks.updateMe.mockReset();
     mocks.routerReplace.mockReset();
+    mocks.routerPush.mockReset();
+    mocks.routerBack.mockReset();
     mocks.route.path = '/building';
     mocks.route.query = {};
     mocks.session.me = {
@@ -319,6 +323,41 @@ describe('BuildingPage binding refresh', () => {
       query: { tab: 'icctv' },
     });
     wrapper.unmount();
+  });
+
+  it('returns to the mobile building home while retaining other query parameters', async () => {
+    mocks.route.query = { tab: 'icctv', source: 'account' };
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('#page-affairs').classes()).not.toContain('is-mobile-home');
+    expect(mocks.fetchICCTV).toHaveBeenCalledWith('0999900');
+    await wrapper.get('.building-mobile-back').trigger('click');
+    expect(wrapper.get('#page-affairs').classes()).toContain('is-mobile-home');
+    expect(mocks.routerReplace).toHaveBeenLastCalledWith({ path: '/building', query: { source: 'account' } });
+    wrapper.unmount();
+    scrollTo.mockRestore();
+  });
+
+  it('adds a mobile history entry when opening a module from the building home', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    const wrapper = mount(BuildingPage, {
+      global: { plugins: [i18n], stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+    await wrapper.findAll('.work-nav-item')[0]!.trigger('click');
+    expect(mocks.routerPush).toHaveBeenCalledWith({
+      path: '/building',
+      query: { tab: 'notices' },
+      state: { buildingMobileHome: true },
+    });
+    wrapper.unmount();
+    vi.unstubAllGlobals();
   });
 
   it('keeps management-fee labels available when the table stacks on mobile', async () => {

@@ -63,14 +63,14 @@ const handleSelect = (page: PaginationPage) => {
   gap: 16px;
   margin-top: 18px;
   padding: 12px 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgb(var(--color-border));
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
 }
 
 .pagination-bar-info {
   font-size: 11px;
-  color: var(--color-ink-3);
+  color: rgb(var(--color-ink-3));
 }
 
 .pagination-bar-actions {
@@ -81,10 +81,10 @@ const handleSelect = (page: PaginationPage) => {
 }
 
 .pagination-bar-btn {
-  border: 1px solid var(--color-border);
+  border: 1px solid rgb(var(--color-border));
   border-radius: 6px;
-  background: #fff;
-  color: var(--color-ink-3);
+  background: var(--sur);
+  color: rgb(var(--color-ink-3));
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
@@ -92,8 +92,8 @@ const handleSelect = (page: PaginationPage) => {
 }
 
 .pagination-bar-btn-active {
-  border-color: var(--color-text);
-  color: var(--color-text);
+  border-color: rgb(var(--color-text));
+  color: rgb(var(--color-text));
   font-weight: 500;
 }
 

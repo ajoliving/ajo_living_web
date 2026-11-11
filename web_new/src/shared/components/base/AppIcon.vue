@@ -15,6 +15,7 @@ export type IconName =
   | 'check-circle'
   | 'check'
   | 'credit-card'
+  | 'dollar-sign'
   | 'chevron-down'
   | 'cloud-upload'
   | 'clock'
@@ -46,6 +47,7 @@ export type IconName =
   | 'star'
   | 'settings'
   | 'tag'
+  | 'table'
   | 'user'
   | 'view'
   | 'view-off'
@@ -73,6 +75,7 @@ const iconMap: Record<IconName, string> = {
     'M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10z M8 12.5l2.5 2.5L16.5 9',
   check: 'M5 12.5 9.5 17 19 7.5',
   'credit-card': 'M3 6h18v12H3z M3 10h18 M7 15h4',
+  'dollar-sign': 'M12 2v20 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
   'chevron-down': 'M6 9l6 6 6-6',
   'cloud-upload':
     'M16 16l-4-4-4 4 M12 12v9 M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3',
@@ -110,6 +113,7 @@ const iconMap: Record<IconName, string> = {
   smile: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M8 9.5h.01 M16 9.5h.01 M8 14s1.5 3 4 3 4-3 4-3',
   star: 'm12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.23 6.44 20.12l1.06-6.2L3 9.53l6.22-.9z',
   tag: 'M3 5v6l10 10 8-8L11 3H5a2 2 0 0 0-2 2z M7 7h.01',
+  table: 'M3 8h18v3H3z M5 11v9 M19 11v9',
   user: 'M20 21a8 8 0 1 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   view: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   'view-off': 'M3 3l18 18 M10.58 10.58A3 3 0 0 0 13.42 13.42 M9.88 4.24A10.65 10.65 0 0 1 12 4c6.5 0 10 8 10 8a18.33 18.33 0 0 1-2.19 3.12 M6.61 6.61C3.62 8.42 2 12 2 12s3.5 6 10 6a10.5 10.5 0 0 0 4.39-.95',

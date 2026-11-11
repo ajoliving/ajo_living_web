@@ -12,7 +12,7 @@
  * 3. 依分頁載入對應元件。
  * 4. 切換分頁時更新 query。
  */
-import { computed } from 'vue';
+import { computed, provide } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
@@ -27,6 +27,8 @@ import ManagementWalletTransactionsPage from './wallet_transactions/Page.vue';
 import ManagementBuildingChatsPage from './building_chats/Page.vue';
 import ManagementIcctvPanel from './widgets/ManagementIcctvPanel.vue';
 import ManagementAdSettingsPanel from './widgets/ManagementAdSettingsPanel.vue';
+import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 
 // 1. 管理分頁索引
 type ManagementTab =
@@ -88,6 +90,20 @@ const resolveManagementTab = (value: unknown): ManagementTab => {
 };
 
 const activeTab = computed<ManagementTab>(() => resolveManagementTab(route.query.tab));
+const mobileHome = computed(() => !route.query.tab);
+const navIcons: Record<ManagementTab, 'browse' | 'home' | 'building' | 'view' | 'user' | 'settings' | 'message' | 'inbox' | 'wallet'> = {
+  'admin-furniture': 'browse',
+  'admin-properties': 'home',
+  'admin-homes': 'building',
+  'admin-icctv': 'view',
+  'admin-members': 'user',
+  'admin-agency-companies': 'building',
+  'admin-building-chats': 'message',
+  'admin-notices': 'inbox',
+  'admin-ads': 'wallet',
+  'admin-ad-settings': 'settings',
+  'admin-points': 'wallet',
+};
 
 // 4. 依分頁載入元件
 const activeComponent = computed(() => {
@@ -120,22 +136,37 @@ const activeComponent = computed(() => {
 
 // 5. 切換管理分頁
 const activateNavItem = async (item: ManagementTabNavItem): Promise<void> => {
-  await router.replace({
+  const isMobile = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
+  const destination = {
     path: '/account/marketplace/management',
-    query: item.key === defaultTab ? {} : { tab: item.key },
-  });
+    query: item.key === defaultTab && !isMobile ? {} : { tab: item.key },
+  };
+  if (mobileHome.value && isMobile) {
+    await router.push({ ...destination, state: { managementMobileHome: true } });
+    return;
+  }
+  await router.replace(destination);
 };
 
 // 6. 判斷導覽啟用狀態
 const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
   activeTab.value === item.key;
+
+const returnToMobileHome = (): void => {
+  if (window.history.state?.managementMobileHome === true) {
+    router.back();
+    return;
+  }
+  void router.replace('/account/marketplace/management');
+};
+provide('managementReturnToHome', returnToMobileHome);
 </script>
 
 <template>
-  <main class="work-shell">
+  <main class="work-shell management-shell" :class="{ 'is-mobile-home': mobileHome }">
     <aside class="work-sidebar">
       <h1>{{ t('marketplace.management.title') }}</h1>
-      <p>{{ t('marketplace.management.description') }}</p>
+      <p class="management-sidebar-description">{{ t('marketplace.management.description') }}</p>
 
       <nav class="work-nav">
         <button
@@ -146,12 +177,17 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
           :class="{ on: isActiveNavItem(item) }"
           @click="activateNavItem(item)"
         >
+          <AppIcon class="work-nav-icon" :name="navIcons[item.key]" :size="19" />
           {{ item.label }}
+          <AppIcon class="work-nav-arrow" name="arrow-right" :size="16" />
         </button>
       </nav>
     </aside>
 
     <section class="work-main">
+      <div v-if="!mobileHome" class="management-mobile-back">
+        <AccountMobileBack label-key="marketplace.management.backToHome" />
+      </div>
       <Transition
         name="subroute-slide"
         mode="out-in"
@@ -265,6 +301,12 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
   outline: none;
 }
 
+.work-nav-icon,
+.work-nav-arrow,
+.management-mobile-back {
+  display: none;
+}
+
 .work-nav-item.on:hover,
 .work-nav-item:focus-visible:hover {
   background: var(--brand-light);
@@ -292,6 +334,91 @@ const isActiveNavItem = (item: ManagementTabNavItem): boolean =>
 
   .work-sidebar {
     position: static;
+  }
+
+  html #app .management-shell.is-mobile-home .work-main,
+  html #app .management-shell:not(.is-mobile-home) .work-sidebar {
+    display: none;
+  }
+
+  html #app .management-shell.is-mobile-home .work-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin: 10px 0 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  html #app .management-shell.is-mobile-home .work-nav-item {
+    display: flex;
+    justify-content: flex-start;
+    min-height: 52px;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    padding: 10px 4px;
+    white-space: normal;
+  }
+
+  .management-shell.is-mobile-home .work-nav-icon,
+  .management-shell.is-mobile-home .work-nav-arrow {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  .management-shell.is-mobile-home .work-nav-arrow {
+    margin-left: auto;
+    color: var(--ink-3);
+  }
+
+  .management-shell .management-sidebar-description {
+    display: none;
+  }
+
+  .management-shell:not(.is-mobile-home) .work-main {
+    position: relative;
+  }
+
+  .management-shell:not(.is-mobile-home) .management-mobile-back {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+  }
+
+  .management-shell :deep(.management-list-header h1),
+  .management-shell :deep(.wallet-settings-header h1),
+  .management-shell :deep(.staff-list-head .staff-title),
+  .management-shell :deep(.work-hero .work-title) {
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 0 0 44px;
+  }
+
+  .management-shell :deep(.furniture-list-header),
+  .management-shell :deep(.reward-ad-list-header),
+  .management-shell :deep(.building-chats-header) {
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .management-shell :deep(.building-chats-page) {
+    background: transparent;
+    padding: 0;
+  }
+
+  .management-shell :deep(.management-list-header .management-list-kicker),
+  .management-shell :deep(.wallet-settings-header .wallet-settings-kicker),
+  .management-shell :deep(.staff-list-head .staff-kicker),
+  .management-shell :deep(.work-hero .work-kicker) {
+    display: none;
   }
 }
 

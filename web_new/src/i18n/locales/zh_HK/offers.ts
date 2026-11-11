@@ -17,6 +17,7 @@ export default {
     allStores: '全部商店',
     previous: '上一頁',
     next: '下一頁',
+    paginationAria: '價格情報網分頁',
     updatedDate: '資料更新：{date}',
     updatedPending: '資料更新：等待資料',
     updatedSummary: '{prefix} · 共監測 {count} 件商品 · 價格只供參考，實際售價以商戶公布為準。',

@@ -38,6 +38,7 @@ export default {
   center: {
     nav: {
       title: 'Account',
+      backToHome: 'Back to account home',
       account: 'Account management',
       preferences: 'Notification settings',
       agencyCompany: 'Agency profile',
@@ -80,6 +81,7 @@ export default {
       ismartProfileSaveError: 'Unable to update the details. Please try again.',
       ismartProfileUnavailable: 'No editable details are available.',
       accountInfo: 'Account information',
+      accountActions: 'Account actions',
       identityStatus: 'Identity status',
       managedBuildings: 'Managed properties',
       residentUnits: 'Linked properties',
@@ -203,7 +205,7 @@ export default {
     binding: {
       kicker: 'Property binding',
       title: 'Property binding',
-      description: 'Submit building and unit details for management-office approval.',
+      description: 'View linked properties and switch the current property.',
       processTitle: 'Application process',
       selectUnitStep: 'Select unit',
       selectUnitStepDescription: 'Select the building, floor, and unit to bind.',

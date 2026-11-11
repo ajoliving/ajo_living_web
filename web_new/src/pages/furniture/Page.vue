@@ -15,6 +15,7 @@ import type { MarketplaceCategoryCode, MarketplaceConditionCode } from '@/consta
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
 import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+import ListingPagination from '@/shared/components/navigation/ListingPagination.vue';
 
 import { useFurniturePage } from './composables/useFurniturePage';
 
@@ -99,38 +100,6 @@ const activeFilterCount = computed(() =>
 const mobileAreaOptions = computed(() =>
   areaOptions.value.filter((option) => option.value !== 'all'),
 );
-
-// 3. 分頁按鈕資料
-const paginationButtons = computed(() => {
-  const buttons: Array<{ label: string | number; key: string | number; pageValue: number; active?: boolean; disabled?: boolean }> = [
-    {
-      label: t('marketplace.filter.previousPage'),
-      key: 'prev',
-      pageValue: page.value - 1,
-      disabled: page.value <= 1,
-    },
-  ];
-  const start = Math.max(1, page.value - 1);
-  const end = Math.min(totalPages.value, start + 2);
-
-  for (let index = start; index <= end; index += 1) {
-    buttons.push({
-      label: index,
-      key: index,
-      pageValue: index,
-      active: index === page.value,
-    });
-  }
-
-  buttons.push({
-    label: t('marketplace.filter.nextPage'),
-    key: 'next',
-    pageValue: page.value + 1,
-    disabled: page.value >= totalPages.value,
-  });
-
-  return buttons;
-});
 
 // 4. 套用價格區間
 const applyPriceRange = (option?: FurniturePriceRangeOption): void => {
@@ -615,19 +584,14 @@ watch(
           <span class="market-pagination-info">
             {{ t('marketplace.list.pageLabel') }} {{ page }} / {{ totalPages }}
           </span>
-          <div class="market-pagination-actions">
-            <button
-              v-for="button in paginationButtons"
-              :key="button.key"
-              type="button"
-              class="market-page-btn"
-              :class="{ on: button.active, disabled: button.disabled }"
-              :disabled="button.disabled"
-              @click="handlePageClick(button.pageValue)"
-            >
-              {{ button.label }}
-            </button>
-          </div>
+          <ListingPagination
+            :current-page="page"
+            :total-pages="totalPages"
+            :navigation-label="t('channels.furniture.paginationAria')"
+            :previous-label="t('marketplace.filter.previousPage')"
+            :next-label="t('marketplace.filter.nextPage')"
+            @select="handlePageClick"
+          />
         </nav>
       </main>
 
@@ -1242,6 +1206,9 @@ watch(
   }
 
   .mobile-listing-controls {
+    position: sticky;
+    top: var(--app-header-offset);
+    z-index: 20;
     display: block;
     box-sizing: border-box;
     margin: -12px calc(-1 * var(--layout-page-padding-inline)) 12px;
@@ -1257,14 +1224,21 @@ watch(
   .mobile-search-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 8px;
     min-width: 0;
   }
 
   .mobile-search-form .sinput {
     height: 48px;
-    border-radius: 8px 0 0 8px;
+    border-color: rgb(var(--color-text));
+    border-radius: 8px;
+    padding: 0 13px;
     background: var(--sur);
     font-size: 16px;
+  }
+
+  .mobile-search-form .sinput:focus {
+    box-shadow: none;
   }
 
   .mobile-search-button {
@@ -1273,9 +1247,9 @@ watch(
     height: 48px;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--brand);
-    border-radius: 0 8px 8px 0;
-    background: var(--brand);
+    border: 1px solid rgb(var(--color-primary));
+    border-radius: 8px;
+    background: rgb(var(--color-primary));
     color: #fff;
     cursor: pointer;
   }

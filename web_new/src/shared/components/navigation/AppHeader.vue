@@ -22,7 +22,7 @@ interface NavigationItem {
   to: string;
   label: string;
   match: string[];
-  icon?: 'home' | 'building' | 'browse' | 'star' | 'user';
+  icon?: 'home' | 'building' | 'table' | 'dollar-sign' | 'bell' | 'user';
   requiresAuth?: boolean;
   requiresStaff?: boolean;
 }
@@ -97,8 +97,9 @@ const bottomNavigationItems = computed<NavigationItem[]>(() => {
   const items: NavigationItem[] = [
     { key: 'home', to: '/', label: t('nav.home'), match: ['/'], icon: 'home' },
     { key: 'listing', to: '/properties', label: t('nav.propertiesShort'), match: ['/properties'], icon: 'building' },
-    { key: 'market', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'], icon: 'browse' },
-    { key: 'offers', to: '/supermarket-offers', label: t('nav.offersShort'), match: ['/offers', '/supermarket-offers'], icon: 'star' },
+    { key: 'market', to: '/furniture', label: t('nav.furniture'), match: ['/furniture'], icon: 'table' },
+    { key: 'offers', to: '/supermarket-offers', label: t('nav.offersShort'), match: ['/offers', '/supermarket-offers'], icon: 'dollar-sign' },
+    { key: 'notification', to: '/notifications', label: t('nav.notifications'), match: ['/notifications', '/account/notifications'], icon: 'bell', requiresAuth: true },
     {
       key: 'profile',
       to: accountPath.value,
@@ -145,6 +146,15 @@ const handleLocaleToggle = (): void => {
 const handleThemeChange = (theme: AppThemeName): void => {
   preferenceStore.setTheme(theme);
   themeMenuOpen.value = false;
+};
+
+// 7.1 手機端直接輪換可選主題
+const handleMobileThemeToggle = (): void => {
+  const currentIndex = SELECTABLE_THEME_NAMES.indexOf(preferenceStore.theme);
+  const nextTheme = SELECTABLE_THEME_NAMES[(currentIndex + 1) % SELECTABLE_THEME_NAMES.length];
+  if (nextTheme) {
+    handleThemeChange(nextTheme);
+  }
 };
 
 // 8. 執行帳戶入口操作
@@ -309,6 +319,30 @@ watch(
       @click="handleLocaleToggle"
     >
       {{ localeToggleLabel }}
+    </button>
+    <button
+      v-if="themePickerEnabled"
+      type="button"
+      class="mobile-theme-toggle"
+      :aria-label="t('common.theme.selector')"
+      :title="t('common.theme.selector')"
+      @click="handleMobileThemeToggle"
+    >
+      <svg
+        class="theme-toggle-icon"
+        :class="{ 'theme-toggle-moon': preferenceStore.theme === 'night' }"
+        :style="activeTheme.appearance === 'night' ? undefined : { color: activeTheme.primary }"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <use :href="`${themeIconsUrl}#${themeIconId(preferenceStore.theme)}`" />
+      </svg>
     </button>
     <RouterLink
       v-if="!sessionStore.isAuthenticated"
@@ -731,7 +765,8 @@ watch(
   color: var(--brand);
 }
 
-.mobile-login {
+.mobile-login,
+.mobile-theme-toggle {
   display: none;
 }
 
@@ -950,12 +985,14 @@ watch(
 
   .locale-toggle,
   .mobile-login,
+  .mobile-theme-toggle,
   .hamburger {
     width: 44px;
     height: 44px;
   }
 
   .locale-toggle {
+    order: 1;
     margin-left: auto;
     border: none;
     background: transparent;
@@ -964,6 +1001,7 @@ watch(
   }
 
   .mobile-login {
+    order: 3;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -971,6 +1009,17 @@ watch(
     font-size: 13px;
     font-weight: 700;
     text-decoration: none;
+  }
+
+  .mobile-theme-toggle {
+    order: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
   }
 
   .locale-toggle:hover {
@@ -982,6 +1031,7 @@ watch(
   }
 
   .hamburger {
+    order: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;

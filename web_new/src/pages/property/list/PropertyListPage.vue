@@ -37,6 +37,7 @@ import type {
 import AppIcon from '@/shared/components/base/AppIcon.vue';
 import FilterTag from '@/shared/components/base/FilterTag.vue';
 import ListingSideAds from '@/shared/components/ads/ListingSideAds.vue';
+import ListingPagination from '@/shared/components/navigation/ListingPagination.vue';
 import PropertyListingCard from '@/shared/components/property/PropertyListingCard.vue';
 import { usePreferenceStore } from '@/stores/preferences';
 import {
@@ -209,26 +210,7 @@ interface PropertyCard extends PropertyListingCardViewModel {
 const cards = computed<PropertyCard[]>(() => items.value.map((listing) => toPropertyCard(listing)));
 
 // 8. 分頁資料
-interface PaginationPage {
-  label: string | number;
-  active?: boolean;
-  disabled?: boolean;
-  key: string | number;
-  page: number;
-}
 const totalPages = computed(() => Math.max(1, Math.ceil(pagination.value.total / pageSize)));
-const paginationPages = computed<PaginationPage[]>(() => {
-  const pages = new Set<number>([1, currentPage.value, totalPages.value]);
-  if (currentPage.value > 1) pages.add(currentPage.value - 1);
-  if (currentPage.value < totalPages.value) pages.add(currentPage.value + 1);
-  const numericPages = [...pages].filter((page) => page >= 1 && page <= totalPages.value).sort((a, b) => a - b);
-
-  return [
-    { label: t('property.publicList.previous'), key: 'prev', page: Math.max(1, currentPage.value - 1), disabled: currentPage.value <= 1 },
-    ...numericPages.map((page) => ({ label: page, key: page, page, active: page === currentPage.value })),
-    { label: t('property.publicList.next'), key: 'next', page: Math.min(totalPages.value, currentPage.value + 1), disabled: currentPage.value >= totalPages.value },
-  ];
-});
 
 const resultRangeText = computed(() => {
   if (pagination.value.total === 0) {
@@ -338,11 +320,11 @@ const handleCardClick = (id: string) => {
 };
 
 // 16. 點擊分頁
-const handlePageSelect = (page: PaginationPage) => {
-  if (page.disabled || page.page === currentPage.value) {
+const handlePageSelect = (page: number) => {
+  if (page < 1 || page > totalPages.value || page === currentPage.value) {
     return;
   }
-  currentPage.value = page.page;
+  currentPage.value = page;
   void loadListings();
 };
 
@@ -774,17 +756,14 @@ onMounted(() => {
           :aria-label="t('property.publicList.paginationAria')"
         >
           <span class="listing-pagination-info">{{ resultRangeText }}</span>
-          <div class="listing-pagination-actions">
-            <button
-              v-for="page in paginationPages"
-              :key="page.key"
-              type="button"
-              class="listing-page-btn"
-              :class="page.active ? 'on' : ''"
-              :disabled="page.disabled"
-              @click="handlePageSelect(page)"
-            >{{ page.label }}</button>
-          </div>
+          <ListingPagination
+            :current-page="currentPage"
+            :total-pages="totalPages"
+            :navigation-label="t('property.publicList.paginationAria')"
+            :previous-label="t('property.publicList.previous')"
+            :next-label="t('property.publicList.next')"
+            @select="handlePageSelect"
+          />
         </div>
       </main>
 
@@ -1319,7 +1298,7 @@ onMounted(() => {
   min-height: 34px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink-2);
   cursor: pointer;
   font-family: var(--font);
@@ -1652,6 +1631,9 @@ onMounted(() => {
   }
 
   .mobile-listing-controls {
+    position: sticky;
+    top: var(--app-header-offset);
+    z-index: 20;
     display: block;
     box-sizing: border-box;
     margin: -12px calc(-1 * var(--layout-page-padding-inline)) 12px;
@@ -1667,12 +1649,16 @@ onMounted(() => {
   .mobile-search-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 8px;
     min-width: 0;
   }
 
   .mobile-search-form .sinput {
+    width: 100%;
     height: 48px;
-    border-radius: 8px 0 0 8px;
+    border-color: rgb(var(--color-text));
+    border-radius: 8px;
+    padding: 0 13px;
     background: var(--sur);
     font-size: 16px;
   }
@@ -1683,9 +1669,9 @@ onMounted(() => {
     height: 48px;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--brand);
-    border-radius: 0 8px 8px 0;
-    background: var(--brand);
+    border: 1px solid rgb(var(--color-primary));
+    border-radius: 8px;
+    background: rgb(var(--color-primary));
     color: #fff;
     cursor: pointer;
   }

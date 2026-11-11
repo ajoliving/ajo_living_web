@@ -38,6 +38,7 @@ export default {
   center: {
     nav: {
       title: '會員中心',
+      backToHome: '返回會員中心',
       account: '帳號管理',
       preferences: '提示設定',
       agencyCompany: '代理資料',
@@ -80,6 +81,7 @@ export default {
       ismartProfileSaveError: '資料更新失敗，請稍後再試。',
       ismartProfileUnavailable: '目前沒有可修改的資料。',
       accountInfo: '帳戶資料',
+      accountActions: '帳戶操作',
       identityStatus: '身份狀態',
       managedBuildings: '員工管理屋苑',
       residentUnits: '已連結物業',
@@ -203,7 +205,7 @@ export default {
     binding: {
       kicker: '物業綁定',
       title: '物業綁定',
-      description: '提交大廈與單位資料予管理處審批。',
+      description: '查看已連結物業及切換目前物業。',
       processTitle: '申請流程',
       selectUnitStep: '選擇單位',
       selectUnitStepDescription: '選擇申請綁定的大廈、樓層與單位。',

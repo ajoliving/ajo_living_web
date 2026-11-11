@@ -28,6 +28,7 @@ import type { SecondhandListingSummaryResponse } from '@/model/marketplace';
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import type { SupermarketProduct } from '@/model/supermarket_offers';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
 import { formatPrice } from '@/utils/format';
@@ -342,9 +343,8 @@ watch(
     <!-- 1. 工具列：標題與篩選 -->
     <div class="saved-toolbar">
       <div>
-        <div class="section-eyebrow">{{ t('marketplace.favoritesPage.kicker') }}</div>
         <div class="saved-toolbar-heading">
-          <h1 class="saved-toolbar-title">{{ t('marketplace.favoritesPage.title') }}</h1>
+          <h1 class="saved-toolbar-title"><AccountMobileBack />{{ t('marketplace.favoritesPage.title') }}</h1>
           <span class="saved-count">{{ items.length }}</span>
         </div>
       </div>
@@ -550,15 +550,6 @@ watch(
   margin-bottom: 14px;
   border-bottom: 1px solid var(--bdr);
   padding-bottom: 12px;
-}
-
-.section-eyebrow {
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0;
-  margin-bottom: 4px;
-  text-transform: uppercase;
 }
 
 .saved-toolbar-heading {

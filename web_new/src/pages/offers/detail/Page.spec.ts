@@ -84,6 +84,7 @@ describe.each(['zh-HK', 'en'] as const)('Product detail related prices (%s)', (l
             zeroOfferProduct,
             makeProduct('P003', 12, [26, 60]),
             makeProduct('P004', 20, [26, 60]),
+            ...Array.from({ length: 9 }, (_, index) => makeProduct(`P${index + 5}`, 20, [26])),
           ],
           isFavorite: false,
         },
@@ -96,7 +97,7 @@ describe.each(['zh-HK', 'en'] as const)('Product detail related prices (%s)', (l
     try {
       await flushPromises();
       const cards = wrapper.findAll('.gp-related-card');
-      expect(cards).toHaveLength(3);
+      expect(cards).toHaveLength(10);
       expect(cards[0]!.find('.gp-related-compare').exists()).toBe(false);
       expect(cards[0]!.find('.gp-related-saving').text()).toContain('$14');
       expect(wrapper.find('.gp-best-hero p').text()).toContain('$14');
@@ -106,6 +107,16 @@ describe.each(['zh-HK', 'en'] as const)('Product detail related prices (%s)', (l
       );
       expect(wrapper.find('.gp-related-block').text()).not.toMatch(/他店|其他店鋪|Others|Other stores/);
       expect(wrapper.findAll('.gp-price-table tbody tr')).toHaveLength(3);
+      expect(wrapper.findAll('.gp-related-header .gp-related-arrow')).toHaveLength(0);
+      expect(wrapper.findAll('.gp-related-rail > .gp-related-arrow')).toHaveLength(2);
+      const scrollBy = vi.fn();
+      const track = wrapper.get('.gp-related-scroll');
+      Object.defineProperty(track.element, 'clientWidth', { configurable: true, value: 400 });
+      Object.defineProperty(track.element, 'scrollBy', { configurable: true, value: scrollBy });
+      await wrapper.get('.gp-related-arrow.is-next').trigger('click');
+      expect(scrollBy).toHaveBeenCalledWith({ left: 320, behavior: 'smooth' });
+      await wrapper.get('.gp-related-arrow.is-previous').trigger('click');
+      expect(scrollBy).toHaveBeenLastCalledWith({ left: -320, behavior: 'smooth' });
     } finally {
       wrapper.unmount();
     }

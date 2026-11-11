@@ -746,7 +746,14 @@ const interactionFlows = [
     path: '/account/marketplace/management',
     liveSafe: true,
     action: async (page) => {
-      await clickVisibleSequence(page, '.work-nav-item', 'management tabs');
+      const items = page.locator('.management-shell .work-nav-item');
+      const count = await items.count();
+      if (!count) throw new Error('Missing management home entries');
+      for (let index = 0; index < count; index += 1) {
+        await items.nth(index).click();
+        await clickFirstVisible(page, '.management-mobile-back button', 'management home back');
+        await items.nth(index).waitFor({ state: 'visible' });
+      }
     },
   },
   {

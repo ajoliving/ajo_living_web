@@ -1,7 +1,7 @@
 /*
  * 我的大廈頁樣式。
  * 1. 桌面雙欄：左側目前物業與模組導航，右側業務面板。
- * 2. 手機保留橫滑標籤導航，業務內容以無橫向捲動的縱向條目呈現。
+ * 2. 手機功能首頁展開全部導航，業務內容以無橫向捲動的縱向條目呈現。
  * 3. 色彩與圓角沿用全站 token，帳目表不再使用舊青色表頭。
  */
 
@@ -48,6 +48,22 @@
 .work-nav {
   display: grid;
   gap: 2px;
+}
+
+.building-mobile-back {
+  display: none;
+}
+
+.work-nav-icon,
+.work-nav-arrow {
+  display: none;
+}
+
+.work-nav-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 .work-nav-item {
@@ -1701,7 +1717,7 @@
   box-sizing: border-box;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -1839,7 +1855,7 @@
   padding: 10px 12px;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   cursor: pointer;
   transition: border-color 160ms ease, background-color 160ms ease;
@@ -2322,39 +2338,51 @@
 }
 
 @media (max-width: 1023px) {
-  /* 18. 保留橫滑標籤，僅業務內容免橫向捲動。 */
+  /* 18. 手機首頁展開功能入口，面板提供返回入口。 */
   #page-affairs {
     background: var(--sur);
     overflow-wrap: anywhere;
   }
 
-  #page-affairs .work-nav {
-    display: flex;
-    gap: 8px;
+  html #app #page-affairs .work-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
     margin: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 2px 0 6px;
-    scrollbar-width: none;
+    padding: 4px 0;
+    overflow: visible;
+    scroll-snap-type: none;
   }
 
-  #page-affairs .work-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  #page-affairs .work-nav-item {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
+  html #app #page-affairs .work-nav-item {
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    height: 44px;
+    justify-content: space-between;
     margin-top: 0;
-    border: 1px solid var(--bdr);
-    border-radius: 999px;
-    background: var(--sur);
-    padding: 6px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--bdr);
+    border-radius: 0;
+    background: transparent;
+    padding: 10px 4px;
     font-weight: 600;
-    white-space: nowrap;
+    white-space: normal;
+  }
+
+  html #app #page-affairs .work-nav-icon,
+  html #app #page-affairs .work-nav-arrow {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  #page-affairs .work-nav-icon {
+    color: var(--brand);
+  }
+
+  #page-affairs .work-nav-arrow {
+    color: var(--ink-3);
   }
 
   #page-affairs .work-nav-item::after {
@@ -2365,17 +2393,58 @@
     background: var(--brand-light);
   }
 
-  #page-affairs .work-nav-item.on,
-  #page-affairs .work-nav-item.on:hover,
+  html #app #page-affairs .work-nav-item.on,
+  html #app #page-affairs .work-nav-item.on:hover {
+    background: transparent;
+    color: var(--ink-2);
+  }
+
   #page-affairs .work-nav-item:focus-visible {
     border-color: var(--brand);
-    background: var(--brand);
-    color: #fff;
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 
   #page-affairs .work-sidebar {
+    position: static;
     gap: 10px;
     margin: 0;
+  }
+
+  #page-affairs:not(.is-mobile-home) .work-sidebar,
+  #page-affairs.is-mobile-home .work-panel {
+    display: none;
+  }
+
+  #page-affairs:not(.is-mobile-home) .building-mobile-back {
+    display: inline-flex;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: 40px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  #page-affairs:not(.is-mobile-home) .work-main {
+    position: relative;
+  }
+
+  #page-affairs:not(.is-mobile-home) .building-mobile-back .app-icon {
+    transform: rotate(90deg);
+  }
+
+  html #app #page-affairs:not(.is-mobile-home) .work-hero {
+    min-height: 56px;
+    align-items: center;
+    padding-left: 44px;
   }
 
   #page-affairs .work-card {

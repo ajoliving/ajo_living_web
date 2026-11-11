@@ -37,6 +37,7 @@ import type {
 } from '@/model/property';
 import AppActionConfirmDialog from '@/shared/components/base/AppActionConfirmDialog.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 import { useDialogBackdropClose } from '@/shared/composables/useDialogBackdropClose';
 import { useFeedbackStore } from '@/stores/feedback';
 import { usePreferenceStore } from '@/stores/preferences';
@@ -511,10 +512,7 @@ onMounted(() => {
   <main class="property-my-page">
     <section class="property-my-heading">
       <div>
-        <p class="property-kicker">
-          {{ props.channel === 'sale' ? t('property.sale.title') : t('property.serviced.title') }}
-        </p>
-        <h1>{{ pageTitle }}</h1>
+        <h1><AccountMobileBack />{{ pageTitle }}</h1>
       </div>
       <button
         type="button"
@@ -855,15 +853,6 @@ onMounted(() => {
 .property-my-heading {
   align-items: end;
   margin-bottom: 0;
-}
-
-.property-kicker {
-  margin: 0 0 0.6rem;
-  color: rgb(var(--color-primary));
-  font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .property-my-heading h1 {
@@ -1384,12 +1373,6 @@ onMounted(() => {
   border-bottom: 1px solid rgb(var(--color-border));
   margin-bottom: 0;
   padding-bottom: 12px;
-}
-
-.property-kicker {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0;
 }
 
 .property-my-heading h1 {

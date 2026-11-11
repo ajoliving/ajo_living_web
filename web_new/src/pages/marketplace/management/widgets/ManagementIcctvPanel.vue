@@ -427,7 +427,7 @@ onMounted(() => {
 .work-card {
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 16px;
 }
 
@@ -443,7 +443,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--bdr);
-  background: #fff;
+  background: var(--sur);
   padding: 18px;
 }
 
@@ -621,7 +621,7 @@ onMounted(() => {
 }
 
 .icctv-expanded-row td {
-  background: #fff;
+  background: var(--sur);
   padding: 0;
 }
 

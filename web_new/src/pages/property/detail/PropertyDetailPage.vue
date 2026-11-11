@@ -1121,7 +1121,7 @@ onMounted(() => {
 .similar-section {
   border: 1px solid var(--bdr);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--sur);
   padding: var(--sp-4);
 }
 
@@ -1666,7 +1666,7 @@ onMounted(() => {
   gap: 7px;
   border: 1px solid var(--bdr);
   border-radius: 7px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   font-family: inherit;
   font-size: 12px;
@@ -1729,7 +1729,7 @@ onMounted(() => {
   width: 100%;
   border: 1px solid var(--bdr);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sur);
   color: var(--ink);
   font-family: inherit;
   font-size: 13px;

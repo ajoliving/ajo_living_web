@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n';
 import axios from 'axios';
 import { fetchMemberIsmartNotificationSettings, updateMemberIsmartNotificationSettings } from '@/httpapis/me';
 import { useFeedbackStore } from '@/stores/feedback';
+import AccountMobileBack from '@/shared/components/navigation/AccountMobileBack.vue';
 
 const { t } = useI18n();
 const feedbackStore = useFeedbackStore();
@@ -54,7 +55,7 @@ onMounted(() => { void loadSettings(); });
 <template>
   <section class="preferences-page">
     <header class="preferences-page__header">
-      <h2>{{ t('account.center.nav.preferences') }}</h2>
+      <h2><AccountMobileBack />{{ t('account.center.nav.preferences') }}</h2>
     </header>
 
     <section class="preferences-page__card" :aria-busy="isLoading">
@@ -103,7 +104,7 @@ onMounted(() => { void loadSettings(); });
   gap: 14px;
   border: 1px solid var(--bdr);
   border-radius: 8px;
-  background: #fff;
+  background: var(--sur);
   padding: 14px;
 }
 
