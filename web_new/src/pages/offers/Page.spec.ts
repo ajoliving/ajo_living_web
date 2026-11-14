@@ -142,7 +142,7 @@ describe('SupermarketOffersPage search', () => {
     expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ offerOnly: false }));
   });
 
-  it('navigates recommendation sections and opens a full category from more filters', async () => {
+  it('keeps recommendation selected while scrolling and opens full category results', async () => {
     mockedSearchProducts.mockImplementation((params) =>
       Promise.resolve(createSearchResponse(params.category ? '分類商品' : params.q)),
     );
@@ -155,28 +155,28 @@ describe('SupermarketOffersPage search', () => {
     expect(nav.find('button').text()).toBe('推薦');
     expect(nav.find('button').classes()).toContain('on');
     expect(wrapper.findAll('.gp-mobile-filter-rail select')).toHaveLength(0);
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-    await nav.findAll('button')[1]!.trigger('click');
-    expect(scrollTo).toHaveBeenCalled();
-    expect(nav.findAll('button')[1]!.classes()).toContain('on');
-
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
-    vi.spyOn(wrapper.get('.gp-search-controls').element, 'getBoundingClientRect').mockReturnValue({ bottom: 100 } as DOMRect);
-    wrapper.findAll('.gp-product-section').forEach((section, index) => {
-      vi.spyOn(section.element, 'getBoundingClientRect').mockReturnValue({ top: index < 2 ? 80 : 500 } as DOMRect);
-    });
     window.dispatchEvent(new Event('scroll'));
     await wrapper.vm.$nextTick();
-    expect(nav.findAll('button')[2]!.attributes('aria-current')).toBe('true');
+    expect(nav.findAll('button')[0]!.attributes('aria-current')).toBe('page');
+
+    await nav.findAll('button')[1]!.trigger('click');
+    await flushPromises();
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '個人護理', q: '', pageSize: 15 }));
+    expect(wrapper.get('.gp-category-heading h2').text()).toBe('個人護理');
+    expect(nav.findAll('button')[1]!.attributes('aria-current')).toBe('page');
+    expect(wrapper.find('.gp-product-track.is-grid').exists()).toBe(true);
 
     await wrapper.get('.gp-mobile-filter-button').trigger('click');
     expect(wrapper.get('.gp-filter-sheet').classes()).toContain('is-filter-open');
-    await wrapper.findAll('.gp-filter-section')[0]!.findAll('button')[1]!.trigger('click');
+    await wrapper.findAll('.gp-filter-section')[0]!.findAll('button')[2]!.trigger('click');
     await flushPromises();
-    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '個人護理' }));
-    expect(wrapper.get('.gp-category-heading h2').text()).toBe('個人護理');
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '保健食品' }));
+    expect(nav.findAll('button')[2]!.attributes('aria-current')).toBe('page');
+    await nav.findAll('button')[0]!.trigger('click');
+    await flushPromises();
+    expect(nav.findAll('button')[0]!.attributes('aria-current')).toBe('page');
+    expect(wrapper.find('.gp-product-track.is-rail').exists()).toBe(true);
     wrapper.unmount();
-    scrollTo.mockRestore();
   });
 
   it('keeps desktop filters but removes desktop sorting and view switching', async () => {
@@ -349,6 +349,8 @@ describe('SupermarketOffersPage search', () => {
     await wrapper.find('.gp-search-row').trigger('submit');
     await flushPromises();
 
+    expect(wrapper.find('.gp-mobile-category-nav [aria-current]').exists()).toBe(false);
+    expect(wrapper.find('.gp-product-track.is-grid').exists()).toBe(true);
     expect(wrapper.find('.gp-card-name').text().replace(/\s+/g, ' ').trim()).toContain('花生醬 - 幼滑裝');
     expect(wrapper.find('.gp-card-brand-chip').text()).toBe('Meadows');
     expect(wrapper.find('.gp-card-best-store').text()).toBe('百佳');

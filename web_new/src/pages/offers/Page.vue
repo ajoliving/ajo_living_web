@@ -5,7 +5,7 @@
  * 3. 桌面保留摘要 Hero；手機以搜尋、快捷篩選與底部篩選彈窗呈現。
 -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -90,6 +90,7 @@ const summaryError = ref('');
 const searchError = ref('');
 const actionMessage = ref('');
 const searchQuery = ref('');
+const submittedSearch = ref('');
 const searchSuggestions = ref<SupermarketProduct[]>([]);
 const suggestionsVisible = ref(false);
 const suggestionsLoading = ref(false);
@@ -102,7 +103,6 @@ const activeSort = ref('discount');
 const showFavoritesOnly = ref(false);
 const currentPage = ref(1);
 const isMobileFilterOpen = ref(false);
-const activeHomeSection = ref('');
 let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 let suggestionRequestVersion = 0;
 let homeSectionsRequestVersion = 0;
@@ -161,6 +161,11 @@ const categoryOptions = computed<FilterPill[]>(() =>
     .map((item) => ({ label: displaySupermarketCategory(item.value, preferenceStore.locale), value: item.value }))
     .filter((item) => item.value),
 );
+const mobileCategories = computed<FilterPill[]>(() =>
+  categoryTiles
+    .map((tile) => categoryOptions.value.find((category) => categoryMatchesTile(category.value, tile)))
+    .filter((category): category is FilterPill => Boolean(category)),
+);
 const storeOptions = computed<FilterPill[]>(() =>
   (summary.value?.stores ?? [])
     .map((item) => ({ label: displaySupermarketStore(item.value, preferenceStore.locale), value: item.value }))
@@ -199,7 +204,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / curre
 // 9.1 分類首頁按香港日期輪換各分類商品，最後一頁不足時以首批商品補足。
 const loadHomeSections = async (): Promise<void> => {
   const requestVersion = ++homeSectionsRequestVersion;
-  if (activeCategory.value || showFavoritesOnly.value) {
+  if (activeCategory.value || showFavoritesOnly.value || submittedSearch.value) {
     homeSectionsLoading.value = false;
     return;
   }
@@ -265,7 +270,7 @@ const loadHomeSections = async (): Promise<void> => {
 
 // 9.2 首頁分類列與分類結果網格共用商品卡資料結構。
 const displaySections = computed((): Array<HomeCategorySection & { layout: 'rail' | 'grid' }> => {
-  if (!activeCategory.value && !showFavoritesOnly.value) {
+  if (!activeCategory.value && !showFavoritesOnly.value && !submittedSearch.value) {
     return homeSections.value.map((section) => ({ ...section, layout: 'rail' }));
   }
   return visibleProducts.value.length > 0
@@ -332,7 +337,7 @@ const loadSearch = async (): Promise<void> => {
   actionMessage.value = '';
   try {
     const params: SupermarketSearchParams = {
-      q: searchQuery.value.trim(),
+      q: submittedSearch.value,
       category: activeCategory.value,
       brand: activeBrand.value,
       store: activeStore.value,
@@ -449,6 +454,7 @@ const loadFavorites = async (): Promise<void> => {
 
 // 22. 提交搜尋
 const submitSearch = (): void => {
+  submittedSearch.value = searchQuery.value.trim();
   showFavoritesOnly.value = false;
   currentPage.value = 1;
   suggestionsVisible.value = false;
@@ -463,40 +469,12 @@ const selectCategory = (category: string): void => {
   void loadSearch();
 };
 
-// 23.0 手機推薦分類定位與捲動同步。
-const updateActiveHomeSection = (): void => {
-  if (activeCategory.value || showFavoritesOnly.value || window.innerWidth > 1023) return;
-  const controls = document.querySelector<HTMLElement>('.gp-search-controls');
-  const boundary = (controls?.getBoundingClientRect().bottom ?? 0) + 12;
-  let current = '';
-  document.querySelectorAll<HTMLElement>('.gp-product-section[data-home-section]').forEach((section) => {
-    if (section.getBoundingClientRect().top <= boundary) current = section.dataset.homeSection ?? '';
-  });
-  if (current !== activeHomeSection.value) {
-    const nav = document.querySelector<HTMLElement>('.gp-mobile-category-nav');
-    const button = nav?.querySelector<HTMLElement>(`[data-category-nav="${current}"]`);
-    if (nav && button) nav.scrollLeft = Math.max(0, button.offsetLeft - nav.offsetLeft - 12);
-  }
-  activeHomeSection.value = current;
-};
-
-const navigateHomeSection = async (sectionId: string): Promise<void> => {
-  if (activeCategory.value || showFavoritesOnly.value) {
-    activeCategory.value = '';
-    showFavoritesOnly.value = false;
-    currentPage.value = 1;
-    await loadSearch();
-    await nextTick();
-  }
-  activeHomeSection.value = sectionId;
-  const controls = document.querySelector<HTMLElement>('.gp-search-controls');
-  const target = sectionId
-    ? document.querySelector<HTMLElement>(`.gp-product-section[data-home-section="${sectionId}"]`)
-    : document.querySelector<HTMLElement>('.gp-page-heading');
-  if (!target) return;
-  const offset = controls?.getBoundingClientRect().height ?? 0;
-  const headerOffset = controls ? Math.max(0, controls.getBoundingClientRect().top) : 0;
-  window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset - headerOffset - 8), behavior: 'smooth' });
+// 23.0 手機分類導航直接切換推薦或完整分類。
+const selectMobileCategory = (category: string): void => {
+  searchQuery.value = '';
+  submittedSearch.value = '';
+  suggestionsVisible.value = false;
+  selectCategory(category);
 };
 
 // 23.1 判斷分類是否屬於某個入口。
@@ -626,7 +604,7 @@ const openDetail = (product: SupermarketProduct): void => {
     path: `/supermarket-offers/products/${encodeURIComponent(product.code)}`,
     query: {
       return: 'supermarket-offers',
-      q: searchQuery.value || undefined,
+      q: submittedSearch.value || undefined,
       category: activeCategory.value || undefined,
       store: activeStore.value || undefined,
       brand: activeBrand.value || undefined,
@@ -791,6 +769,7 @@ const formatCompactDollar = (value: number): string =>
 const restoreSearchState = (): void => {
   const query = route.query;
   searchQuery.value = typeof query.q === 'string' ? query.q : '';
+  submittedSearch.value = searchQuery.value.trim();
   activeCategory.value = typeof query.category === 'string' ? query.category : '';
   activeStore.value = typeof query.store === 'string' ? query.store : '';
   activeBrand.value = typeof query.brand === 'string' ? query.brand : '';
@@ -806,12 +785,10 @@ onMounted(() => {
   void loadSummary();
   void loadSearch();
   void loadBanners();
-  window.addEventListener('scroll', updateActiveHomeSection, { passive: true });
 });
 
 onBeforeUnmount(() => {
   homeSectionsRequestVersion += 1;
-  window.removeEventListener('scroll', updateActiveHomeSection);
   if (suggestionTimer) {
     clearTimeout(suggestionTimer);
   }
@@ -1073,21 +1050,19 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="gp-mobile-category"
-            data-category-nav=""
-            :class="{ on: !activeCategory && !showFavoritesOnly && !activeHomeSection }"
-            :aria-current="!activeCategory && !showFavoritesOnly && !activeHomeSection ? 'true' : undefined"
-            @click="navigateHomeSection('')"
+            :class="{ on: !activeCategory && !showFavoritesOnly && !submittedSearch }"
+            :aria-current="!activeCategory && !showFavoritesOnly && !submittedSearch ? 'page' : undefined"
+            @click="selectMobileCategory('')"
           >{{ t('offers.list.recommended') }}</button>
           <button
-            v-for="section in homeSections"
-            :key="section.id"
+            v-for="category in mobileCategories"
+            :key="category.value"
             type="button"
             class="gp-mobile-category"
-            :data-category-nav="section.id"
-            :class="{ on: !activeCategory && !showFavoritesOnly && activeHomeSection === section.id }"
-            :aria-current="!activeCategory && !showFavoritesOnly && activeHomeSection === section.id ? 'true' : undefined"
-            @click="navigateHomeSection(section.id)"
-          >{{ section.label }}</button>
+            :class="{ on: !showFavoritesOnly && !submittedSearch && activeCategory === category.value }"
+            :aria-current="!showFavoritesOnly && !submittedSearch && activeCategory === category.value ? 'page' : undefined"
+            @click="selectMobileCategory(category.value)"
+          >{{ category.label }}</button>
         </nav>
         <button
           type="button"
@@ -1109,7 +1084,7 @@ onBeforeUnmount(() => {
       </div>
       </div>
       <div
-        v-if="!activeCategory && !showFavoritesOnly"
+        v-if="!activeCategory && !showFavoritesOnly && !submittedSearch"
         class="gp-cat-nav"
       >
         <h2 class="gp-cat-nav-title">{{ t('offers.list.popularCategories') }}</h2>
@@ -1349,7 +1324,7 @@ onBeforeUnmount(() => {
 
       <!-- 3.3 分頁 -->
       <ListingPagination
-        v-if="(activeCategory || showFavoritesOnly) && totalPages > 1"
+        v-if="(activeCategory || showFavoritesOnly || submittedSearch) && totalPages > 1"
         class="gp-pagination"
         :current-page="currentPage"
         :total-pages="totalPages"

@@ -83,6 +83,7 @@ No direct prompt regression test currently guards prompt wording or localization
 - Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, `docs/archive`, database dumps, or backups as stable prompt surfaces.
 
 ## Change Log
+2026-11-15: 手機價格情報網推薦頁固定高亮「推薦」，分類直接開啟完整結果，搜尋顯示完整結果。
 2026-11-14: 價格情報網手機推薦頁使用捲動同步分類導航，「更多」提供完整分類及篩選。
 2026-11-14: 會員中心業主、聯絡及帳單資料移至物業綁定的目前物業下方，帳戶資料操作保留在帳號管理。
 2026-11-11: Price-detail related products use a two-column, up-to-ten-item mobile grid and retain the six-item desktop rail, using the existing upstream category recommendations.
