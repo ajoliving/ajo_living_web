@@ -41,7 +41,7 @@ export const avatarKeyFromSeed = (seed?: string | null): string => {
 };
 
 // 3. 取得靜態頭像路徑
-export const presetAvatarUrl = (key: string): string => `/avatars/${key}.svg`;
+export const presetAvatarUrl = (key: string): string => `/avatars/${key.replace('-', '_')}.svg`;
 
 // 4. 優先使用已選 key，其次既有圖片，最後用識別碼映射
 export const resolveAvatarSrc = (input: {

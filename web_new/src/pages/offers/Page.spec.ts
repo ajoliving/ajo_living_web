@@ -142,17 +142,41 @@ describe('SupermarketOffersPage search', () => {
     expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ offerOnly: false }));
   });
 
-  it('shows category, store, and discount sorting in the mobile filter rail', async () => {
-    const wrapper = mount(Page, { global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+  it('navigates recommendation sections and opens a full category from more filters', async () => {
+    mockedSearchProducts.mockImplementation((params) =>
+      Promise.resolve(createSearchResponse(params.category ? '分類商品' : params.q)),
+    );
+    const wrapper = mount(Page, { attachTo: document.body, global: { plugins: [createPinia(), i18n], stubs: { AppIcon: true } } });
+    await flushPromises();
     await flushPromises();
 
-    const mobileSelects = wrapper.findAll('.gp-mobile-filter-rail select');
-    expect(mobileSelects).toHaveLength(3);
-    expect(mobileSelects.map((select) => select.attributes('aria-label'))).toEqual([
-      '商品分類',
-      '商店',
-      '排序方式',
-    ]);
+    const nav = wrapper.get('.gp-mobile-category-nav');
+    expect(nav.findAll('button')).toHaveLength(7);
+    expect(nav.find('button').text()).toBe('推薦');
+    expect(nav.find('button').classes()).toContain('on');
+    expect(wrapper.findAll('.gp-mobile-filter-rail select')).toHaveLength(0);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    await nav.findAll('button')[1]!.trigger('click');
+    expect(scrollTo).toHaveBeenCalled();
+    expect(nav.findAll('button')[1]!.classes()).toContain('on');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    vi.spyOn(wrapper.get('.gp-search-controls').element, 'getBoundingClientRect').mockReturnValue({ bottom: 100 } as DOMRect);
+    wrapper.findAll('.gp-product-section').forEach((section, index) => {
+      vi.spyOn(section.element, 'getBoundingClientRect').mockReturnValue({ top: index < 2 ? 80 : 500 } as DOMRect);
+    });
+    window.dispatchEvent(new Event('scroll'));
+    await wrapper.vm.$nextTick();
+    expect(nav.findAll('button')[2]!.attributes('aria-current')).toBe('true');
+
+    await wrapper.get('.gp-mobile-filter-button').trigger('click');
+    expect(wrapper.get('.gp-filter-sheet').classes()).toContain('is-filter-open');
+    await wrapper.findAll('.gp-filter-section')[0]!.findAll('button')[1]!.trigger('click');
+    await flushPromises();
+    expect(mockedSearchProducts).toHaveBeenCalledWith(expect.objectContaining({ category: '個人護理' }));
+    expect(wrapper.get('.gp-category-heading h2').text()).toBe('個人護理');
+    wrapper.unmount();
+    scrollTo.mockRestore();
   });
 
   it('keeps desktop filters but removes desktop sorting and view switching', async () => {
@@ -164,7 +188,7 @@ describe('SupermarketOffersPage search', () => {
     expect(wrapper.find('.gp-toolbar .gp-brand-select').exists()).toBe(true);
     expect(wrapper.find('.gp-toolbar .gp-order-select').exists()).toBe(false);
     expect(wrapper.find('.gp-view-switch').exists()).toBe(false);
-    expect(wrapper.find('.gp-mobile-sort-select').exists()).toBe(true);
+    expect(wrapper.find('.gp-filter-select-field select').exists()).toBe(true);
   });
 
   // 2.1 每個快捷分類均有可渲染、同色描邊的 Lucide 圖示。

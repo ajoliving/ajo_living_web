@@ -60,6 +60,8 @@ export default {
     loading: '載入中',
     myFavorites: '我的收藏',
     offerFilters: '優惠篩選',
+    recommendationNavigation: '推薦分類',
+    recommended: '推薦',
     sortMethod: '排序方式',
     more: '更多',
     favorite: '收藏',

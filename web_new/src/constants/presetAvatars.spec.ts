@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PRESET_AVATAR_KEYS,
   avatarKeyFromSeed,
   buildingAvatarKey,
   normalizeAvatarKey,
@@ -9,6 +10,12 @@ import {
 } from './presetAvatars';
 
 describe('presetAvatars', () => {
+  it('maps preset keys to underscore-separated public image paths', () => {
+    expect(PRESET_AVATAR_KEYS.map(presetAvatarUrl)).toEqual(
+      Array.from({ length: 16 }, (_, index) => `/avatars/avo_${String(index + 1).padStart(2, '0')}.svg`),
+    );
+  });
+
   it('normalizes catalog keys and rejects unknown values', () => {
     expect(normalizeAvatarKey(' AVO-03 ')).toBe('avo-03');
     expect(normalizeAvatarKey('avo-00')).toBe('');

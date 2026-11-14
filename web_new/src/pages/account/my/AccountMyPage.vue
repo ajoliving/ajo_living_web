@@ -1817,35 +1817,6 @@ watch(
           </Teleport>
 
           <section class="work-card work-account-settings">
-            <div class="work-ismart-grid">
-              <div class="work-ismart-group">
-                <div class="work-card-sub">{{ t('account.center.account.ownerData') }}</div>
-                <div v-for="item in ismartOwnerData" :key="item.label" class="work-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="work-ismart-group">
-                <div class="work-card-sub">{{ t('account.center.account.contactData') }}</div>
-                <div v-for="item in ismartContactData" :key="item.label" class="work-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="work-ismart-group">
-                <div class="work-card-sub">{{ t('account.center.account.billingData') }}</div>
-                <div v-for="item in ismartBillingData" :key="item.label" class="work-row">
-                  <div>
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.value }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
             <div class="work-section-heading work-account-settings__actions">
               <div>
                 <div class="work-card-title">{{ t('account.center.account.accountActions') }}</div>
@@ -2266,6 +2237,28 @@ watch(
                   {{ property.label }}
                 </option>
               </select>
+            </div>
+          </section>
+          <section class="work-card work-ismart-section">
+            <div class="work-ismart-grid">
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.ownerData') }}</div>
+                <div v-for="item in ismartOwnerData" :key="item.label" class="work-row">
+                  <div><strong>{{ item.label }}</strong><span>{{ item.value }}</span></div>
+                </div>
+              </div>
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.contactData') }}</div>
+                <div v-for="item in ismartContactData" :key="item.label" class="work-row">
+                  <div><strong>{{ item.label }}</strong><span>{{ item.value }}</span></div>
+                </div>
+              </div>
+              <div class="work-ismart-group">
+                <div class="work-card-sub">{{ t('account.center.account.billingData') }}</div>
+                <div v-for="item in ismartBillingData" :key="item.label" class="work-row">
+                  <div><strong>{{ item.label }}</strong><span>{{ item.value }}</span></div>
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -2851,7 +2844,6 @@ watch(
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
-  margin-top: 16px;
 }
 
 .work-ismart-section {
@@ -2899,10 +2891,6 @@ watch(
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-}
-
-.work-account-settings__actions {
-  margin-top: 24px;
 }
 
 .work-section-heading__actions {

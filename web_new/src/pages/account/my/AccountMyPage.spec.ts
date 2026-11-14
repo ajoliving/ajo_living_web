@@ -493,10 +493,12 @@ describe('AccountMyPage lazy data loading', () => {
     const binding = wrapper.get('[data-work-panel="profile-property-binding"]');
     expect(account.find('.work-property-table').exists()).toBe(false);
     expect(account.find('#account-current-property').exists()).toBe(false);
-    expect(account.find('.work-ismart-grid').exists()).toBe(true);
+    expect(account.find('.work-ismart-grid').exists()).toBe(false);
     expect(binding.find('.work-property-table').exists()).toBe(true);
     expect(binding.find('#account-current-property').exists()).toBe(true);
-    expect(binding.find('.work-ismart-grid').exists()).toBe(false);
+    expect(binding.find('.work-ismart-grid').exists()).toBe(true);
+    expect(binding.findAll('.work-ismart-group')).toHaveLength(3);
+    expect(binding.text()).toContain('patrick@seventy2.hk');
     expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.processTitle'));
     expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.applicationTitle'));
     expect(binding.text()).not.toContain(i18n.global.t('account.center.binding.applicationStatus'));
@@ -504,8 +506,8 @@ describe('AccountMyPage lazy data loading', () => {
     expect(account.get('.work-account-settings').text()).toContain(i18n.global.t('account.center.account.editIsmartProfile'));
     expect(binding.text()).not.toContain(i18n.global.t('account.center.account.changeIsmartPassword'));
     expect(binding.text()).not.toContain(i18n.global.t('account.center.account.editIsmartProfile'));
-    expect(account.get('.work-ismart-grid').element.compareDocumentPosition(
-      account.get('.work-account-settings__actions').element,
+    expect(binding.get('#account-current-property').element.compareDocumentPosition(
+      binding.get('.work-ismart-grid').element,
     )).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(account.element.lastElementChild?.classList.contains('work-signout')).toBe(true);
     const switchLabel = i18n.global.t('account.center.account.switchProperty');
@@ -688,7 +690,7 @@ describe('AccountMyPage lazy data loading', () => {
     const avatarButton = wrapper.find('.work-account-avatar');
     expect(avatarButton.exists()).toBe(true);
     expect(avatarButton.element.tagName).toBe('BUTTON');
-    expect(avatarButton.find('img').attributes('src')).toBe('/avatars/avo-07.svg');
+    expect(avatarButton.find('img').attributes('src')).toBe('/avatars/avo_07.svg');
 
     await avatarButton.trigger('click');
     await flushPromises();
@@ -709,7 +711,7 @@ describe('AccountMyPage lazy data loading', () => {
     await flushPromises();
     const nextDialog = document.body.querySelector('.work-avatar-dialog');
     const nextOptions = nextDialog?.querySelectorAll<HTMLButtonElement>('.work-avatar-picker__item') ?? [];
-    const selected = Array.from(nextOptions).find((item) => item.querySelector('img')?.getAttribute('src') === '/avatars/avo-03.svg');
+    const selected = Array.from(nextOptions).find((item) => item.querySelector('img')?.getAttribute('src') === '/avatars/avo_03.svg');
     expect(selected).toBeTruthy();
     selected!.click();
     await flushPromises();

@@ -5,7 +5,7 @@
  * 3. 桌面保留摘要 Hero；手機以搜尋、快捷篩選與底部篩選彈窗呈現。
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -102,6 +102,7 @@ const activeSort = ref('discount');
 const showFavoritesOnly = ref(false);
 const currentPage = ref(1);
 const isMobileFilterOpen = ref(false);
+const activeHomeSection = ref('');
 let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 let suggestionRequestVersion = 0;
 let homeSectionsRequestVersion = 0;
@@ -128,7 +129,6 @@ const categoryPills = computed<FilterPill[]>(() => [
   ...valueCountPills(
     summary.value?.categories ?? [],
     (value) => displaySupermarketCategory(value, preferenceStore.locale),
-    9,
   ),
 ]);
 
@@ -152,7 +152,6 @@ const storePills = computed<FilterPill[]>(() => [
   ...valueCountPills(
     summary.value?.stores ?? [],
     (value) => displaySupermarketStore(value, preferenceStore.locale),
-    9,
   ),
 ]);
 
@@ -201,7 +200,6 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / curre
 const loadHomeSections = async (): Promise<void> => {
   const requestVersion = ++homeSectionsRequestVersion;
   if (activeCategory.value || showFavoritesOnly.value) {
-    homeSections.value = [];
     homeSectionsLoading.value = false;
     return;
   }
@@ -465,6 +463,42 @@ const selectCategory = (category: string): void => {
   void loadSearch();
 };
 
+// 23.0 手機推薦分類定位與捲動同步。
+const updateActiveHomeSection = (): void => {
+  if (activeCategory.value || showFavoritesOnly.value || window.innerWidth > 1023) return;
+  const controls = document.querySelector<HTMLElement>('.gp-search-controls');
+  const boundary = (controls?.getBoundingClientRect().bottom ?? 0) + 12;
+  let current = '';
+  document.querySelectorAll<HTMLElement>('.gp-product-section[data-home-section]').forEach((section) => {
+    if (section.getBoundingClientRect().top <= boundary) current = section.dataset.homeSection ?? '';
+  });
+  if (current !== activeHomeSection.value) {
+    const nav = document.querySelector<HTMLElement>('.gp-mobile-category-nav');
+    const button = nav?.querySelector<HTMLElement>(`[data-category-nav="${current}"]`);
+    if (nav && button) nav.scrollLeft = Math.max(0, button.offsetLeft - nav.offsetLeft - 12);
+  }
+  activeHomeSection.value = current;
+};
+
+const navigateHomeSection = async (sectionId: string): Promise<void> => {
+  if (activeCategory.value || showFavoritesOnly.value) {
+    activeCategory.value = '';
+    showFavoritesOnly.value = false;
+    currentPage.value = 1;
+    await loadSearch();
+    await nextTick();
+  }
+  activeHomeSection.value = sectionId;
+  const controls = document.querySelector<HTMLElement>('.gp-search-controls');
+  const target = sectionId
+    ? document.querySelector<HTMLElement>(`.gp-product-section[data-home-section="${sectionId}"]`)
+    : document.querySelector<HTMLElement>('.gp-page-heading');
+  if (!target) return;
+  const offset = controls?.getBoundingClientRect().height ?? 0;
+  const headerOffset = controls ? Math.max(0, controls.getBoundingClientRect().top) : 0;
+  window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset - headerOffset - 8), behavior: 'smooth' });
+};
+
 // 23.1 判斷分類是否屬於某個入口。
 const categoryMatchesTile = (category: string, tile: CategoryTile): boolean => {
   const raw = category.toLowerCase();
@@ -543,7 +577,6 @@ const toggleFavoritesOnly = async (): Promise<void> => {
   showFavoritesOnly.value = !showFavoritesOnly.value;
   currentPage.value = 1;
   if (showFavoritesOnly.value) {
-    homeSections.value = [];
     await loadFavorites();
   } else {
     await loadSearch();
@@ -626,7 +659,7 @@ const patchFavoriteState = (productCode: string, isFavorite: boolean): void => {
 const valueCountPills = (
   values: SupermarketValueCount[],
   formatter: (value: string) => string,
-  limit: number,
+  limit = Infinity,
 ): FilterPill[] =>
   values
     .slice(0, limit)
@@ -773,10 +806,12 @@ onMounted(() => {
   void loadSummary();
   void loadSearch();
   void loadBanners();
+  window.addEventListener('scroll', updateActiveHomeSection, { passive: true });
 });
 
 onBeforeUnmount(() => {
   homeSectionsRequestVersion += 1;
+  window.removeEventListener('scroll', updateActiveHomeSection);
   if (suggestionTimer) {
     clearTimeout(suggestionTimer);
   }
@@ -884,6 +919,17 @@ onBeforeUnmount(() => {
             </option>
           </select>
         </label>
+
+        <section class="gp-filter-section">
+          <button
+            type="button"
+            class="gp-filter-tag"
+            :class="{ on: showFavoritesOnly }"
+            :aria-pressed="showFavoritesOnly"
+            :disabled="favoritesLoading"
+            @click="toggleFavoritesOnly"
+          >{{ t('offers.list.myFavorites') }}</button>
+        </section>
 
       </div>
 
@@ -1021,46 +1067,28 @@ onBeforeUnmount(() => {
       </form>
       <div
         class="gp-mobile-filter-rail"
-        :aria-label="t('offers.list.offerFilters')"
+        :aria-label="t('offers.list.recommendationNavigation')"
       >
-        <select
-          v-model="activeCategory"
-          class="gp-mobile-filter-select"
-          :aria-label="t('offers.list.category')"
-          @change="selectCategory(activeCategory)"
-        >
-          <option value="">{{ t('offers.list.category') }}</option>
-          <option
-            v-for="category in categoryOptions"
-            :key="`mobile-category-${category.value}`"
-            :value="category.value"
-          >{{ category.label }}</option>
-        </select>
-        <select
-          v-model="activeStore"
-          class="gp-mobile-filter-select"
-          :aria-label="t('offers.list.store')"
-          @change="selectStore(activeStore)"
-        >
-          <option value="">{{ t('offers.list.store') }}</option>
-          <option
-            v-for="store in storeOptions"
-            :key="`mobile-store-${store.value}`"
-            :value="store.value"
-          >{{ store.label }}</option>
-        </select>
-        <select
-          v-model="activeSort"
-          class="gp-mobile-filter-select gp-mobile-sort-select"
-          :aria-label="t('offers.list.sortMethod')"
-          @change="selectSort"
-        >
-          <option
-            v-for="option in sortOptions"
-            :key="`mobile-sort-${option.value}`"
-            :value="option.value"
-          >{{ option.label }}</option>
-        </select>
+        <nav class="gp-mobile-category-nav" :aria-label="t('offers.list.recommendationNavigation')">
+          <button
+            type="button"
+            class="gp-mobile-category"
+            data-category-nav=""
+            :class="{ on: !activeCategory && !showFavoritesOnly && !activeHomeSection }"
+            :aria-current="!activeCategory && !showFavoritesOnly && !activeHomeSection ? 'true' : undefined"
+            @click="navigateHomeSection('')"
+          >{{ t('offers.list.recommended') }}</button>
+          <button
+            v-for="section in homeSections"
+            :key="section.id"
+            type="button"
+            class="gp-mobile-category"
+            :data-category-nav="section.id"
+            :class="{ on: !activeCategory && !showFavoritesOnly && activeHomeSection === section.id }"
+            :aria-current="!activeCategory && !showFavoritesOnly && activeHomeSection === section.id ? 'true' : undefined"
+            @click="navigateHomeSection(section.id)"
+          >{{ section.label }}</button>
+        </nav>
         <button
           type="button"
           class="gp-mobile-filter-button mobile-filter-button"
@@ -1078,26 +1106,6 @@ onBeforeUnmount(() => {
             class="gp-mobile-filter-count"
           >{{ activeFilterCount }}</span>
         </button>
-        <button
-          type="button"
-          class="gp-mobile-favorite-filter"
-          :class="showFavoritesOnly ? 'on' : ''"
-          :aria-pressed="showFavoritesOnly"
-          :disabled="favoritesLoading"
-          @click="toggleFavoritesOnly"
-        >
-          <AppIcon
-            name="star"
-            :size="16"
-          />
-          <span>{{ t('offers.list.favorite') }}</span>
-        </button>
-        <button
-          v-if="activeFilterCount > 0"
-          type="button"
-          class="gp-mobile-filter-reset"
-          @click="resetFilters"
-        >{{ t('offers.list.reset') }}</button>
       </div>
       </div>
       <div
@@ -1239,6 +1247,7 @@ onBeforeUnmount(() => {
           v-for="section in displaySections"
           :key="section.id"
           class="gp-product-section"
+          :data-home-section="section.layout === 'rail' ? section.id : undefined"
         >
           <header
             v-if="section.layout === 'rail'"
@@ -2324,58 +2333,50 @@ onBeforeUnmount(() => {
     display: flex;
     gap: 8px;
     margin: 10px -2px 0;
+    padding: 2px;
+    min-width: 0;
+  }
+
+  .gp-mobile-category-nav {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 4px;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    padding: 2px;
     scrollbar-width: none;
   }
 
-  .gp-mobile-filter-rail::-webkit-scrollbar {
+  .gp-mobile-category-nav::-webkit-scrollbar {
     display: none;
   }
 
-  .gp-mobile-filter-select,
-  .gp-mobile-filter-button,
-  .gp-mobile-favorite-filter {
+  .gp-mobile-category,
+  .gp-mobile-filter-button {
     min-height: 40px;
-    border: 1px solid var(--bdr);
-    border-radius: 999px;
-    background: var(--sur);
+    border: 0;
+    background: transparent;
     color: var(--ink-2);
     font: inherit;
     font-size: 13px;
-  }
-
-  .gp-mobile-filter-select {
-    width: auto;
-    min-width: 98px;
     flex: 0 0 auto;
-    padding: 0 30px 0 13px;
+    padding: 0 10px;
+    cursor: pointer;
+    white-space: nowrap;
   }
 
-  .gp-mobile-sort-select {
-    min-width: 108px;
+  .gp-mobile-category.on {
+    color: rgb(var(--color-primary));
+    font-weight: 700;
+    box-shadow: inset 0 -2px rgb(var(--color-primary));
   }
 
-  .gp-mobile-filter-button,
-  .gp-mobile-favorite-filter {
+  .gp-mobile-filter-button {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
     gap: 4px;
-    padding: 0 12px;
-    cursor: pointer;
-  }
-
-  .gp-mobile-favorite-filter.on {
-    border-color: var(--brand-mid);
-    background: var(--brand-light);
-    color: var(--accent);
-  }
-
-  .gp-mobile-favorite-filter:disabled {
-    cursor: not-allowed;
-    opacity: 0.52;
+    border-left: 1px solid var(--bdr);
   }
 
   .gp-mobile-filter-count {
@@ -2389,18 +2390,6 @@ onBeforeUnmount(() => {
     color: #fff;
     font-size: 10px;
     line-height: 1;
-  }
-
-  .gp-mobile-filter-reset {
-    flex: 0 0 auto;
-    min-height: 40px;
-    border: 0;
-    background: transparent;
-    color: var(--ink-3);
-    cursor: pointer;
-    font: inherit;
-    font-size: 13px;
-    padding: 0 4px;
   }
 
   .gp-content {

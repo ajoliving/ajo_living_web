@@ -60,6 +60,8 @@ export default {
     loading: 'Loading',
     myFavorites: 'My favorites',
     offerFilters: 'Offer filters',
+    recommendationNavigation: 'Recommended categories',
+    recommended: 'Recommended',
     sortMethod: 'Sort method',
     more: 'More',
     favorite: 'Favorite',
