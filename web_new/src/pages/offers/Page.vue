@@ -2252,7 +2252,7 @@ onBeforeUnmount(() => {
   }
 
   .gp-cat-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: none;
   }
 
   .gp-content-header {
@@ -3184,10 +3184,6 @@ onBeforeUnmount(() => {
 @media (max-width: 800px) {
   .gp-ad-banner {
     min-height: 96px;
-  }
-
-  .gp-cat-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .gp-product-track.is-grid {
