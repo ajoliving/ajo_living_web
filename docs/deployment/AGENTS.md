@@ -25,6 +25,7 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
 
 ## 變更日誌
+2026-11-19: 測試 release `20261119-home-1738bef` 從 `testMain` 首頁提交 `1738bef` 的獨立快照發布，保留資料庫及全部舊 release；建置、健康、readiness、資料服務、noindex 與四組線上資源瀏覽器驗證通過，生產版本、環境、二進制及 PID、共用 FRP 配置及 PID 未變。
 2026-11-11: 測試 release `20261111103516-test-71493` 發布目前工作區前後端，保留測試資料庫及舊 release；建置、健康、資料服務與 noindex 通過，生產後端及共用 frpc 未重啟。
 2026-11-11: 測試 release `20261111051947-test-18781` 發布 `testMain` 提交 `bd82b8b`，保留測試資料庫與舊 release；前後端建置、首頁、health、readiness 及資料服務通過，生產後端與共用 frpc 未重啟。
 2026-11-05: AJO iCCTV 播放依賴網關 Nginx `/opi/` 反向代理；上游目前只接受 `channel...` 或 `playback_...`，`public-cameras` 返回的 `HKI_MAIN` 等命名通道會觸發 `Invalid stream path`。修復前須核實實際通道映射，且不得未經確認修改或重部署 OrangePi 服務。

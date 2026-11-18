@@ -84,6 +84,7 @@ No direct prompt regression test currently guards prompt wording or localization
 - Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, `docs/archive`, database dumps, or backups as stable prompt surfaces.
 
 ## Change Log
+2026-11-19: Recorded testing release `20261119-home-1738bef` from isolated homepage commit `1738bef`; preserved the database and all previous releases, verified deployed resources and live public APIs across four browser scenarios, and confirmed production and shared FRP remained unchanged.
 2026-11-19: Replaced the obsolete homepage stage prompt with a compact photo cover, six existing service links, upstream-ordered supermarket offers and latest public properties; recorded independent data states, bilingual homepage tests and preservation of existing themes and global navigation.
 2026-11-15: 價格情報網推薦頁只在桌面保留熱門分類圖標區，手機使用頂部分類導航。
 2026-11-15: 手機價格情報網推薦頁固定高亮「推薦」，分類直接開啟完整結果，搜尋顯示完整結果。
