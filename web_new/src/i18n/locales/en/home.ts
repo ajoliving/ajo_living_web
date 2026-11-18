@@ -1,4 +1,34 @@
+/*
+ * Homepage English messages.
+ * 1. Existing service entries and public content states.
+ * 2. Retained messages referenced by other public pages.
+ */
 export default {
+  dashboard: {
+    coverTitle: 'Smart Buildings · Connected Living · Property Services',
+    coverDescription: 'Building management, property listings and everyday services',
+    services: 'Services',
+    shortcuts: {
+      building: 'My Building',
+      offers: 'Supermarket Prices',
+      properties: 'Property Listings',
+      residences: 'Serviced Residences',
+      furniture: 'Furniture',
+      trend: 'Rental Trends',
+    },
+    offersTitle: 'Supermarket Offers',
+    moreOffers: 'More Offers',
+    propertiesTitle: 'Latest Properties',
+    moreProperties: 'More Properties',
+    loadingOffers: 'Loading supermarket offers',
+    loadingProperties: 'Loading latest properties',
+    offersError: 'Supermarket offers are unavailable. Please retry.',
+    propertiesError: 'Properties are unavailable. Please retry.',
+    offersEmpty: 'No supermarket offers available',
+    propertiesEmpty: 'No properties available',
+    retry: 'Retry',
+    perItem: '/item',
+  },
   eyebrow: 'AJO Living',
   title: 'Hong Kong community living platform',
   subtitle: 'Browse secondhand, property sale, and serviced apartment channels from one home screen.',

@@ -24,6 +24,7 @@ export interface SupermarketValueCount {
 export interface SupermarketDatasetMetadata {
   latestSnapshotDate?: string;
   latestUpdatedAt?: string;
+  upstreamAvailable?: boolean;
 }
 
 export interface SupermarketStorePrice {

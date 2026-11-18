@@ -1,17 +1,19 @@
 <!--
- * 首頁入口頁。
- * 1. HERO 區：暗色漸層背景 + SVG 城市剪影 + 標題與雙按鈕。
- * 2. 探索服務區：4 個分類卡片（樓盤租售、服務式住宅、家具市集、綜合優惠）。
- * 3. 精選樓盤區：讀取公開樓盤列表並展示真實樓盤資料。
- * 4. 樣式嚴格對齊 HTML 設計稿原生變量。
+ * AJO Living 首頁。
+ * 1. 以現有物業及生活服務提供六個可直接進入的快捷入口。
+ * 2. 獨立載入超市優惠前三項及最新樓盤，保留各區載入、重試與空態。
+ * 3. 沿用全站主題、語系及登入路由，不展示尚未接入的模組。
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import { fetchPropertySaleListings } from '@/httpapis/properties';
+import { fetchSupermarketSummary } from '@/httpapis/supermarket_offers';
 import type { PropertyListingSummaryResponse } from '@/model/property';
+import type { SupermarketProduct } from '@/model/supermarket_offers';
+import AppIcon, { type IconName } from '@/shared/components/base/AppIcon.vue';
 import { usePreferenceStore } from '@/stores/preferences';
 import {
   resolvePropertyArea,
@@ -25,776 +27,245 @@ import {
   resolvePropertyTransactionType,
   resolvePropertyTypeLabel,
 } from '@/utils/property';
+import {
+  displaySupermarketStore,
+  formatSupermarketHKPrice,
+  resolveSupermarketProductFullTitle,
+  supermarketOfferDisplayText,
+} from '@/utils/supermarket_offers';
 
-type HomeTarget = 'listing' | 'service' | 'market' | 'offers';
-
-interface CategoryCard {
-  key: HomeTarget;
-  name: string;
-  desc: string;
-  icon: 'building' | 'service' | 'market' | 'offers';
-}
-
-interface FeaturedTag {
-  label: string;
-  dark: boolean;
-}
-
-interface FeaturedCard {
+interface HomeShortcut {
   key: string;
-  tags: FeaturedTag[];
-  title: string;
-  price: string;
-  unit: string;
-  area: string;
-  imgClass: 'tall' | 'short';
-  bg: string;
-  imageUrl?: string;
-  targetPath: string;
+  to: string;
+  icon: IconName;
 }
 
-// 1. 路由跳轉
-const router = useRouter();
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
-const go = (target: HomeTarget): void => {
-  const routeMap: Record<HomeTarget, string> = {
-    listing: '/properties',
-    service: '/serviced-residences',
-    market: '/furniture',
-    offers: '/supermarket-offers',
-  };
-  void router.push(routeMap[target]);
-};
-
-// 2. 精選樓盤狀態
+const shortcuts: HomeShortcut[] = [
+  { key: 'building', to: '/building', icon: 'building' },
+  { key: 'offers', to: '/supermarket-offers', icon: 'tag' },
+  { key: 'properties', to: '/properties', icon: 'home' },
+  { key: 'residences', to: '/serviced-residences', icon: 'location' },
+  { key: 'furniture', to: '/furniture', icon: 'table' },
+  { key: 'trend', to: '/trend', icon: 'browse' },
+];
+const products = ref<SupermarketProduct[]>([]);
 const propertyListings = ref<PropertyListingSummaryResponse[]>([]);
-const loadingFeatured = ref(false);
-const featuredError = ref(false);
+const loadingOffers = ref<boolean>(true);
+const loadingProperties = ref<boolean>(true);
+const offersError = ref<boolean>(false);
+const propertiesError = ref<boolean>(false);
+const failedImages = ref<Set<string>>(new Set());
 
-// 3. 精選樓盤資料
-const featured = computed<FeaturedCard[]>(() =>
-  propertyListings.value.map((listing, index) => toFeaturedCard(listing, index)),
-);
+// 1. 保留上游優惠排序，沿用現有商品標題、商店名稱與港幣格式。
+const offers = computed(() => products.value.map((product) => ({
+  key: product.code,
+  title: resolveSupermarketProductFullTitle(product),
+  store: displaySupermarketStore(product.bestStore, preferenceStore.locale),
+  price: formatSupermarketHKPrice(product.bestEffectiveUnitPrice, preferenceStore.locale),
+  imageUrl: product.image_url || product.imageUrl || '',
+  terms: supermarketOfferDisplayText(product.bestOffer ?? ''),
+  to: `/supermarket-offers/products/${encodeURIComponent(product.code)}`,
+})));
 
-// 4. 探索服務分類靜態資料
-const categories = computed<CategoryCard[]>(() => [
-  {
-    key: 'listing',
-    name: t('home.newShell.services.propertySale.title'),
-    desc: t('home.newShell.services.propertySale.description'),
-    icon: 'building',
-  },
-  {
-    key: 'service',
-    name: t('home.newShell.services.servicedResidence.title'),
-    desc: t('home.newShell.services.servicedResidence.description'),
-    icon: 'service',
-  },
-  {
-    key: 'market',
-    name: t('home.newShell.services.furniture.title'),
-    desc: t('home.newShell.services.furniture.description'),
-    icon: 'market',
-  },
-  {
-    key: 'offers',
-    name: t('home.newShell.services.offers.title'),
-    desc: t('home.newShell.services.offers.description'),
-    icon: 'offers',
-  },
-]);
+// 2. 只使用公開樓盤欄位，不組合會員或聯絡人私有資料。
+const properties = computed(() => propertyListings.value.map((listing) => {
+  const locale = preferenceStore.locale;
+  const area = resolvePropertyArea(listing);
+  return {
+    key: listing.listing_id,
+    title: resolvePropertyTitle(listing, locale),
+    district: resolvePropertyDistrict(listing, locale),
+    type: resolvePropertyTypeLabel(listing, locale),
+    publisher: resolvePropertyPublisherRole(listing, locale),
+    imageUrl: resolvePropertyCoverImage(listing)?.url || '',
+    price: resolvePropertyPriceText(listing, locale),
+    priceUnit: resolvePropertyTransactionType(listing) === 'rent' && resolvePropertyPrice(listing) > 0
+      ? t('home.newShell.featured.priceSuffix')
+      : '',
+    area: area > 0
+      ? `${t('property.sale.areaLabel')} ${t('common.unit.sqft', { value: area.toLocaleString(locale) })}`
+      : t('property.editor.areaUnverifiedField'),
+    to: resolvePropertyDetailPath(listing),
+  };
+}));
 
-// 5. 讀取真實公開樓盤
-const loadFeaturedProperties = async (): Promise<void> => {
-  loadingFeatured.value = true;
-  featuredError.value = false;
-
+// 3. 超市資料失敗或上游不可用時，只切換本區的重試狀態。
+const loadOffers = async (): Promise<void> => {
+  loadingOffers.value = true;
+  offersError.value = false;
   try {
-    const { data } = await fetchPropertySaleListings({
-      page: 1,
-      page_size: 3,
-      sort_by: 'latest',
-    });
-    propertyListings.value = data.data.items;
+    const { data } = await fetchSupermarketSummary();
+    if (data.data.metadata?.upstreamAvailable === false) {
+      offersError.value = true;
+      products.value = [];
+      return;
+    }
+    products.value = data.data.bestDiscounts.slice(0, 3);
   } catch {
-    featuredError.value = true;
-    propertyListings.value = [];
+    offersError.value = true;
+    products.value = [];
   } finally {
-    loadingFeatured.value = false;
+    loadingOffers.value = false;
   }
 };
 
-// 6. 轉換首頁樓盤卡片
-const toFeaturedCard = (
-  listing: PropertyListingSummaryResponse,
-  index: number,
-): FeaturedCard => {
-  const area = resolvePropertyArea(listing);
-  const price = resolvePropertyPrice(listing);
-  const locale = preferenceStore.locale;
-  const priceText = resolvePropertyPriceText(listing, locale);
-  const isRent = resolvePropertyTransactionType(listing) === 'rent';
-  const imageUrl = resolvePropertyCoverImage(listing)?.url;
-
-  return {
-    key: listing.listing_id,
-    tags: [
-      { label: resolvePropertyPublisherRole(listing, locale), dark: true },
-      { label: resolvePropertyDistrict(listing, locale), dark: false },
-      { label: resolvePropertyTypeLabel(listing, locale), dark: false },
-    ],
-    title: resolvePropertyTitle(listing, locale),
-    price: priceText,
-    unit: isRent && price > 0 ? t('home.newShell.featured.priceSuffix') : '',
-    area: area > 0
-      ? `${t('property.sale.areaLabel')} ${t('common.unit.sqft', {
-        value: area.toLocaleString(locale),
-      })}`
-      : t('property.editor.areaUnverifiedField'),
-    imgClass: index % 2 === 1 ? 'short' : 'tall',
-    bg: 'var(--sur)',
-    imageUrl,
-    targetPath: resolvePropertyDetailPath(listing),
-  };
+// 4. 最新樓盤獨立載入，避免另一區塊失敗阻塞首頁入口。
+const loadProperties = async (): Promise<void> => {
+  loadingProperties.value = true;
+  propertiesError.value = false;
+  try {
+    const { data } = await fetchPropertySaleListings({ page: 1, page_size: 3, sort_by: 'latest' });
+    propertyListings.value = data.data.items.slice(0, 3);
+  } catch {
+    propertiesError.value = true;
+    propertyListings.value = [];
+  } finally {
+    loadingProperties.value = false;
+  }
 };
 
-// 7. 進入樓盤詳情
-const openFeatured = (card: FeaturedCard): void => {
-  void router.push(card.targetPath);
-};
-
-// 8. 隱藏失效樓盤封面
-const hideFailedImage = (event: Event): void => {
-  (event.currentTarget as HTMLImageElement).style.display = 'none';
+// 5. 以響應式狀態切換圖片後備內容，保持卡片原有尺寸。
+const markFailedImage = (url: string): void => {
+  failedImages.value.add(url);
 };
 
 onMounted(() => {
-  void loadFeaturedProperties();
+  void loadOffers();
+  void loadProperties();
 });
 </script>
 
 <template>
-  <div class="page" id="page-home">
-    <!-- 1. HERO -->
-    <div class="hero">
-      <div class="hero-bg pat" style="background:linear-gradient(160deg,#1a1a1a 0%,#2e2e2e 100%);">
-        <svg
-          style="position:absolute;inset:0;width:100%;height:100%;opacity:.08"
-          viewBox="0 0 800 420"
-          preserveAspectRatio="xMidYMid slice"
-          aria-hidden="true"
-        >
-          <rect x="0" y="280" width="60" height="140" fill="white" />
-          <rect x="70" y="200" width="80" height="220" fill="white" />
-          <rect x="160" y="240" width="55" height="180" fill="white" />
-          <rect x="225" y="160" width="100" height="260" fill="white" />
-          <rect x="335" y="210" width="70" height="210" fill="white" />
-          <rect x="415" y="140" width="110" height="280" fill="white" />
-          <rect x="535" y="190" width="75" height="230" fill="white" />
-          <rect x="620" y="220" width="55" height="200" fill="white" />
-          <rect x="685" y="170" width="90" height="250" fill="white" />
-          <rect x="785" y="200" width="15" height="220" fill="white" />
-        </svg>
-        <div class="hero-content">
-          <div class="hero-eyebrow">AJO LIVING</div>
-          <h1 class="hero-title">
-            {{ t('home.newShell.titleLineOne') }}<br />{{ t('home.newShell.titleLineTwo') }}
-          </h1>
-          <p class="hero-desc">
-            {{ t('home.newShell.subtitle') }}
-          </p>
-          <div class="hero-btns">
-            <button class="hbtn-primary" type="button" @click="go('listing')">
-              {{ t('home.newShell.primaryAction') }}
-            </button>
-            <button class="hbtn-ghost" type="button" @click="go('service')">
-              {{ t('home.newShell.secondaryAction') }}
-            </button>
-          </div>
+  <div id="page-home" class="home-page">
+    <!-- 1. 首頁封面及主要物業入口 -->
+    <section class="home-cover" aria-labelledby="home-title">
+      <img
+        class="home-cover-image"
+        src="/home_stage/community_cover.webp"
+        alt=""
+        fetchpriority="high"
+        width="1680"
+        height="640"
+      />
+      <div class="home-container home-cover-content">
+        <h1 id="home-title">AJO LIVING</h1>
+        <p class="home-cover-title">{{ t('home.dashboard.coverTitle') }}</p>
+        <p class="home-cover-description">{{ t('home.dashboard.coverDescription') }}</p>
+        <RouterLink class="home-cover-action" to="/building">
+          {{ t('home.dashboard.shortcuts.building') }}
+          <AppIcon name="arrow-right" :size="18" />
+        </RouterLink>
+      </div>
+    </section>
+
+    <!-- 2. 六個真實功能入口 -->
+    <nav class="home-container home-shortcuts" :aria-label="t('home.dashboard.services')">
+      <RouterLink
+        v-for="shortcut in shortcuts"
+        :key="shortcut.key"
+        :to="shortcut.to"
+        class="home-shortcut"
+      >
+        <span class="home-shortcut-icon"><AppIcon :name="shortcut.icon" :size="24" /></span>
+        <span>{{ t(`home.dashboard.shortcuts.${shortcut.key}`) }}</span>
+      </RouterLink>
+    </nav>
+
+    <!-- 3. 即時超市優惠 -->
+    <section
+      class="home-container home-content-section home-offers"
+      :aria-busy="loadingOffers"
+      aria-labelledby="home-offers-title"
+    >
+      <div class="home-section-heading">
+        <h2 id="home-offers-title">{{ t('home.dashboard.offersTitle') }}</h2>
+        <RouterLink class="home-more" to="/supermarket-offers">
+          {{ t('home.dashboard.moreOffers') }}<AppIcon name="arrow-right" :size="16" />
+        </RouterLink>
+      </div>
+      <div v-if="loadingOffers" class="home-card-grid" role="status">
+        <span class="sr-only">{{ t('home.dashboard.loadingOffers') }}</span>
+        <div v-for="slot in 3" :key="slot" class="home-skeleton home-offer-skeleton" aria-hidden="true">
+          <span class="home-skeleton-image"></span><span class="home-skeleton-line"></span>
+          <span class="home-skeleton-line home-skeleton-line-short"></span>
         </div>
       </div>
-    </div>
-
-    <!-- 2. 探索服務 -->
-    <div class="home-section">
-      <div class="home-sec-title">{{ t('home.newShell.serviceTitle') }}</div>
-      <div class="cat-grid">
-        <div
-          v-for="cat in categories"
-          :key="cat.key"
-          class="cat-card"
-          role="button"
-          tabindex="0"
-          @click="go(cat.key)"
-          @keyup.enter="go(cat.key)"
-        >
-          <div class="cat-icon">
-            <!-- 2.1 樓盤租售圖示 -->
-            <svg
-              v-if="cat.icon === 'building'"
-              viewBox="0 0 32 32"
-              width="28"
-              height="28"
-              aria-hidden="true"
-            >
-              <rect
-                x="5"
-                y="8"
-                width="22"
-                height="20"
-                rx="1"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-              />
-              <rect
-                x="9"
-                y="12"
-                width="4"
-                height="4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <rect
-                x="15"
-                y="12"
-                width="4"
-                height="4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <rect
-                x="21"
-                y="12"
-                width="3"
-                height="4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <rect
-                x="9"
-                y="19"
-                width="4"
-                height="4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <rect
-                x="15"
-                y="19"
-                width="7"
-                height="5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-            </svg>
-            <!-- 2.2 服務式住宅圖示 -->
-            <svg
-              v-else-if="cat.icon === 'service'"
-              viewBox="0 0 32 32"
-              width="28"
-              height="28"
-              aria-hidden="true"
-            >
-              <path
-                d="M6 26V12l10-6 10 6v14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linejoin="round"
-              />
-              <rect
-                x="13"
-                y="16"
-                width="6"
-                height="10"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-              />
-              <line
-                x1="6"
-                y1="26"
-                x2="26"
-                y2="26"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-              />
-            </svg>
-            <!-- 2.3 家具市集圖示 -->
-            <svg
-              v-else-if="cat.icon === 'market'"
-              viewBox="0 0 32 32"
-              width="28"
-              height="28"
-              aria-hidden="true"
-            >
-              <path
-                d="M5 13h22l-2 13H7L5 13z"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M11 13V9a5 5 0 0 1 10 0v4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-              />
-            </svg>
-            <!-- 2.4 綜合優惠圖示 -->
-            <svg
-              v-else
-              viewBox="0 0 32 32"
-              width="28"
-              height="28"
-              aria-hidden="true"
-            >
-              <path
-                d="M16 4l2.6 5.3 5.9.9-4.3 4.1 1 5.8L16 17.5 10.8 20l1-5.8L7.5 10l5.9-.9L16 4z"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linejoin="round"
-              />
-              <line
-                x1="11"
-                y1="26"
-                x2="21"
-                y2="26"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-              />
-            </svg>
-          </div>
-          <div class="cat-name">{{ cat.name }}</div>
-          <div class="cat-desc">{{ cat.desc }}</div>
-        </div>
+      <div v-else-if="offersError" class="home-state" role="status">
+        <p>{{ t('home.dashboard.offersError') }}</p>
+        <button type="button" @click="loadOffers"><AppIcon name="reload" :size="16" />{{ t('home.dashboard.retry') }}</button>
       </div>
-    </div>
-
-    <!-- 3. 精選樓盤 -->
-    <div class="home-section" style="background:var(--sur);padding-top:32px;padding-bottom:32px;">
-      <div class="home-sec-title">{{ t('home.newShell.featuredTitle') }}</div>
-      <div class="feat-grid">
-        <div
-          v-for="feat in featured"
-          :key="feat.key"
-          class="feat-card"
-          role="button"
-          tabindex="0"
-          @click="openFeatured(feat)"
-          @keyup.enter="openFeatured(feat)"
-        >
-          <div
-            class="feat-img pat"
-            :class="feat.imgClass"
-            :style="{ background: feat.bg }"
-          >
+      <p v-else-if="offers.length === 0" class="home-state" role="status">{{ t('home.dashboard.offersEmpty') }}</p>
+      <div v-else class="home-card-grid">
+        <RouterLink v-for="offer in offers" :key="offer.key" :to="offer.to" class="home-offer-card">
+          <div class="home-offer-image">
             <img
-              v-if="feat.imageUrl"
-              :src="feat.imageUrl"
-              :alt="feat.title"
+              v-if="offer.imageUrl && !failedImages.has(offer.imageUrl)"
+              :src="offer.imageUrl"
+              :alt="offer.title"
               loading="lazy"
-              @error="hideFailedImage"
+              @error="markFailedImage(offer.imageUrl)"
             />
-            <span v-else>AJO Living</span>
+            <AppIcon v-else name="picture" :size="32" />
           </div>
-          <div class="feat-body">
-            <div class="gtags">
-              <span
-                v-for="(tag, idx) in feat.tags"
-                :key="idx"
-                class="gtag"
-                :class="{ dark: tag.dark }"
-              >{{ tag.label }}</span>
-            </div>
-            <div class="gtitle">{{ feat.title }}</div>
-            <div class="gprice">{{ feat.price }} <span>{{ feat.unit }}</span></div>
-            <div class="feat-area">{{ feat.area }}</div>
+          <div class="home-offer-body">
+            <p class="home-offer-store">{{ offer.store }}</p>
+            <h3>{{ offer.title }}</h3>
+            <p class="home-offer-price">{{ offer.price }}<span>{{ t('home.dashboard.perItem') }}</span></p>
+            <p v-if="offer.terms" class="home-offer-terms">{{ offer.terms }}</p>
           </div>
+        </RouterLink>
+      </div>
+    </section>
+
+    <!-- 4. 最新公開樓盤 -->
+    <section
+      class="home-container home-content-section home-properties"
+      :aria-busy="loadingProperties"
+      aria-labelledby="home-properties-title"
+    >
+      <div class="home-section-heading">
+        <h2 id="home-properties-title">{{ t('home.dashboard.propertiesTitle') }}</h2>
+        <RouterLink class="home-more" to="/properties">
+          {{ t('home.dashboard.moreProperties') }}<AppIcon name="arrow-right" :size="16" />
+        </RouterLink>
+      </div>
+      <div v-if="loadingProperties" class="home-card-grid" role="status">
+        <span class="sr-only">{{ t('home.dashboard.loadingProperties') }}</span>
+        <div v-for="slot in 3" :key="slot" class="home-skeleton" aria-hidden="true">
+          <span class="home-skeleton-image"></span><span class="home-skeleton-line"></span>
+          <span class="home-skeleton-line home-skeleton-line-short"></span>
         </div>
       </div>
-      <p
-        v-if="loadingFeatured && featured.length === 0"
-        class="feat-state"
-      >
-        {{ t('home.loading') }}
-      </p>
-      <p
-        v-else-if="featuredError"
-        class="feat-state feat-state-error"
-      >
-        {{ t('home.loadError') }}
-      </p>
-      <p
-        v-else-if="featured.length === 0"
-        class="feat-state"
-      >
-        {{ t('home.emptyTitle') }}
-      </p>
-    </div>
+      <div v-else-if="propertiesError" class="home-state" role="status">
+        <p>{{ t('home.dashboard.propertiesError') }}</p>
+        <button type="button" @click="loadProperties"><AppIcon name="reload" :size="16" />{{ t('home.dashboard.retry') }}</button>
+      </div>
+      <p v-else-if="properties.length === 0" class="home-state" role="status">{{ t('home.dashboard.propertiesEmpty') }}</p>
+      <div v-else class="home-card-grid home-property-grid">
+        <RouterLink v-for="property in properties" :key="property.key" :to="property.to" class="home-property-card">
+          <div class="home-property-image">
+            <img
+              v-if="property.imageUrl && !failedImages.has(property.imageUrl)"
+              :src="property.imageUrl"
+              :alt="property.title"
+              loading="lazy"
+              @error="markFailedImage(property.imageUrl)"
+            />
+            <AppIcon v-else name="picture" :size="40" />
+            <span class="home-property-publisher">{{ property.publisher }}</span>
+          </div>
+          <div class="home-property-body">
+            <div class="home-property-tags"><span>{{ property.district }}</span><span>{{ property.type }}</span></div>
+            <h3>{{ property.title }}</h3>
+            <p class="home-property-price">{{ property.price }}<span>{{ property.priceUnit }}</span></p>
+            <p class="home-property-area">{{ property.area }}</p>
+          </div>
+        </RouterLink>
+      </div>
+    </section>
   </div>
 </template>
 
-<style scoped>
-/* 1. HERO 區 */
-.hero {
-  position: relative;
-}
-
-.hero-bg {
-  position: relative;
-  min-height: 340px;
-  display: flex;
-  align-items: center;
-  padding: 60px 48px;
-  overflow: hidden;
-  filter: brightness(0.85);
-}
-
-.hero-content {
-  position: relative;
-  z-index: 1;
-  max-width: 500px;
-}
-
-.hero-eyebrow {
-  font-size: var(--text-xs);
-  letter-spacing: 3px;
-  color: var(--g3);
-  margin-bottom: 14px;
-  animation: fadeUp 0.5s ease 0.1s both;
-}
-
-.hero-title {
-  margin: 0 0 14px;
-  font-family: var(--font-serif);
-  font-size: var(--text-3xl);
-  font-weight: 400;
-  line-height: 1.15;
-  color: var(--sur);
-  animation: fadeUp 0.5s ease 0.25s both;
-}
-
-.hero-desc {
-  margin: 0 0 24px;
-  max-width: 380px;
-  font-size: var(--text-base);
-  line-height: 1.8;
-  color: var(--g3);
-  animation: fadeUp 0.5s ease 0.4s both;
-}
-
-.hero-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  animation: fadeUp 0.5s ease 0.55s both;
-}
-
-/* 1.1 HERO 主按鈕 */
-.hbtn-primary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 22px;
-  font-family: var(--font);
-  font-size: var(--text-sm);
-  letter-spacing: 0.5px;
-  font-weight: 500;
-  color: var(--sur);
-  background: var(--brand);
-  border: none;
-  border-radius: 2px;
-  cursor: pointer;
-}
-
-/* 1.2 HERO 次按鈕 */
-.hbtn-ghost {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 22px;
-  font-family: var(--font);
-  font-size: var(--text-sm);
-  letter-spacing: 0.5px;
-  color: var(--sur);
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 2px;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-
-.hbtn-ghost:hover {
-  border-color: rgba(255, 255, 255, 0.7);
-}
-
-/* 2. HOME SECTION 通用 */
-.home-section {
-  padding: 32px 40px;
-  max-width: 1440px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.home-sec-title {
-  margin-bottom: 16px;
-  padding-left: 10px;
-  font-family: var(--font-serif);
-  font-size: var(--text-base);
-  font-weight: 400;
-  letter-spacing: 0.5px;
-  color: var(--ink);
-  border-left: 3px solid var(--brand);
-}
-
-/* 3. 探索服務分類卡片 */
-.cat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--sp-3);
-}
-
-.cat-card {
-  padding: 20px var(--sp-4);
-  background: var(--sur);
-  border: 1px solid var(--bdr);
-  border-radius: var(--r-lg);
-  cursor: pointer;
-  outline: none;
-  transition:
-    box-shadow 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.cat-card:hover,
-.cat-card:focus-visible {
-  border-color: var(--brand-mid);
-  box-shadow: var(--shadow-md);
-}
-
-.cat-icon {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--sp-2);
-  color: var(--brand);
-}
-
-.cat-name {
-  margin-bottom: var(--sp-1);
-  font-size: var(--text-base);
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.cat-desc {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--g4);
-}
-
-/* 4. 精選樓盤卡片 */
-.feat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-3);
-}
-
-.feat-card {
-  overflow: hidden;
-  background: var(--sur);
-  border: 1px solid var(--bdr);
-  border-radius: var(--r-lg);
-  cursor: pointer;
-  outline: none;
-  transition:
-    box-shadow 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.feat-card:hover,
-.feat-card:focus-visible {
-  border-color: var(--brand-mid);
-  box-shadow: var(--shadow-md);
-}
-
-.feat-img {
-  width: 100%;
-  color: var(--g4);
-  font-family: var(--font-serif);
-  font-size: var(--text-base);
-}
-
-.feat-img.tall {
-  height: 140px;
-}
-
-.feat-img.short {
-  height: 100px;
-}
-
-.feat-img img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.feat-img span {
-  position: relative;
-  z-index: 1;
-}
-
-.feat-body {
-  padding: var(--sp-3);
-}
-
-.gtags {
-  display: flex;
-  gap: 5px;
-  margin-bottom: 10px;
-}
-
-.gtag {
-  padding: 3px 7px;
-  font-size: 11px;
-  letter-spacing: 0.8px;
-  color: var(--g4);
-  border: 1px solid var(--g2);
-  border-radius: 1px;
-}
-
-.gtag.dark {
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  border-radius: var(--r-sm);
-  color: var(--sur);
-  background: var(--brand);
-  border-color: var(--brand);
-}
-
-.gtitle {
-  margin-bottom: 3px;
-  font-size: var(--text-md);
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--ink);
-}
-
-.gprice {
-  margin-top: 6px;
-  font-size: 20px;
-  font-weight: 300;
-  letter-spacing: -0.3px;
-  color: var(--ink);
-}
-
-.gprice span {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--g4);
-}
-
-.feat-area {
-  margin-top: 6px;
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  color: var(--ink-3);
-}
-
-.feat-state {
-  margin: var(--sp-4) 0 0;
-  padding: var(--sp-4);
-  text-align: center;
-  font-size: var(--text-sm);
-  color: var(--g4);
-  background: var(--sur);
-  border: 1px solid var(--bdr);
-  border-radius: var(--r-lg);
-}
-
-.feat-state-error {
-  color: #8a2c2c;
-}
-
-/* 5. 圖片紋理覆蓋層 */
-.pat {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pat::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 5px,
-    rgba(0, 0, 0, 0.025) 5px,
-    rgba(0, 0, 0, 0.025) 10px
-  );
-  pointer-events: none;
-}
-
-/* 6. 進場動畫 */
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 7. 響應式 */
-@media (max-width: 900px) {
-  .cat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .feat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .hero-bg {
-    min-height: 280px;
-    padding: 40px var(--sp-5);
-  }
-
-  .hero-title {
-    font-size: var(--text-2xl);
-  }
-
-  .home-section {
-    padding: var(--sp-5) 20px;
-  }
-
-  .cat-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .feat-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
+<style scoped lang="scss" src="./styles.scss"></style>

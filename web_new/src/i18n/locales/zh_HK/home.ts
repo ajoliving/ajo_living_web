@@ -1,4 +1,34 @@
+/*
+ * 首頁繁體中文文案。
+ * 1. 既有服務入口及公開內容狀態。
+ * 2. 保留其他公開頁引用的既有文案。
+ */
 export default {
+  dashboard: {
+    coverTitle: '智慧大廈 · 智能生活 · 租務一站式',
+    coverDescription: '大廈事務、物業租售與日常生活服務',
+    services: '常用服務',
+    shortcuts: {
+      building: '我的大廈',
+      offers: '超市格價',
+      properties: '樓盤租售',
+      residences: '服務式住宅',
+      furniture: '家具市集',
+      trend: '租金走勢',
+    },
+    offersTitle: '超市優惠',
+    moreOffers: '更多優惠',
+    propertiesTitle: '最新樓盤',
+    moreProperties: '更多樓盤',
+    loadingOffers: '正在載入超市優惠',
+    loadingProperties: '正在載入最新樓盤',
+    offersError: '暫時無法取得超市優惠，請重試。',
+    propertiesError: '暫時無法取得樓盤，請重試。',
+    offersEmpty: '暫時沒有超市優惠',
+    propertiesEmpty: '暫時沒有樓盤',
+    retry: '重新載入',
+    perItem: '/件',
+  },
   eyebrow: 'AJO Living',
   title: '香港屋苑租住與社區生活平台',
   subtitle: '從首頁直接進入二手、樓盤放售與服務住宅。',

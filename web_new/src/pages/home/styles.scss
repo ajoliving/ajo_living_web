@@ -1,0 +1,510 @@
+/*
+ * 首頁局部樣式。
+ * 1. 緊湊封面、六個服務入口及同寬內容欄。
+ * 2. 保留主題 token、固定圖片比例與手機觸控尺寸。
+ */
+
+/* 1. 頁面與封面 */
+.home-page {
+  padding-bottom: 40px;
+  color: rgb(var(--color-text));
+  background: rgb(var(--color-canvas));
+  letter-spacing: 0;
+}
+
+.home-container {
+  width: min(100% - 64px, 1120px);
+  margin-inline: auto;
+}
+
+.home-cover {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  min-height: 260px;
+  overflow: hidden;
+  color: rgb(var(--color-primary-contrast));
+  background: rgb(var(--color-text));
+}
+
+.home-cover-image,
+.home-cover::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.home-cover-image {
+  object-fit: cover;
+  object-position: center 65%;
+}
+
+.home-cover::after {
+  content: '';
+  background: rgb(0 0 0 / 0.52);
+}
+
+.home-cover-content {
+  padding-block: 32px;
+}
+
+.home-cover h1 {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.home-cover-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.home-cover-description {
+  max-width: 540px;
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.home-cover-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 44px;
+  border-radius: 4px;
+  padding: 10px 18px;
+  color: rgb(var(--color-primary-contrast));
+  background: rgb(var(--color-primary));
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 2. 快捷入口 */
+.home-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  border-bottom: 1px solid rgb(var(--color-border));
+  padding-block: 24px;
+}
+
+.home-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.home-shortcut-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgb(var(--color-primary-soft));
+  color: rgb(var(--color-primary));
+}
+
+/* 3. 內容欄及操作 */
+.home-content-section {
+  padding-block: 24px 8px;
+}
+
+.home-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-section-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.home-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 6px;
+  min-height: 44px;
+  color: rgb(var(--color-text-muted));
+  font-size: 13px;
+}
+
+.home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.home-offer-card,
+.home-property-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  background: rgb(var(--color-surface));
+  transition: border-color 0.15s ease;
+}
+
+.home-cover-action:hover,
+.home-shortcut:hover {
+  filter: brightness(0.96);
+}
+
+.home-offer-card:hover,
+.home-property-card:hover {
+  border-color: rgb(var(--color-primary));
+}
+
+.home-page a:focus-visible,
+.home-page button:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 3px;
+}
+
+/* 4. 超市優惠卡 */
+.home-offer-card {
+  display: grid;
+  grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+  align-items: center;
+}
+
+.home-offer-image,
+.home-property-image {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: rgb(var(--color-text-muted));
+  background: rgb(var(--color-surface-muted));
+}
+
+.home-offer-image {
+  aspect-ratio: 1;
+  margin: 12px;
+  border-radius: 4px;
+}
+
+.home-offer-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.home-offer-body {
+  min-width: 0;
+  padding: 16px 12px 16px 0;
+}
+
+.home-offer-store {
+  margin: 0 0 6px;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+}
+
+.home-offer-card h3,
+.home-property-card h3 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.home-offer-card h3 {
+  min-height: 42px;
+}
+
+.home-offer-price,
+.home-property-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
+  margin: 10px 0 0;
+  color: rgb(var(--color-primary));
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.home-offer-price span,
+.home-property-price span {
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.home-offer-terms {
+  margin: 5px 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 5. 最新樓盤卡 */
+.home-property-image {
+  aspect-ratio: 16 / 9;
+}
+
+.home-property-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-property-publisher {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  font-size: 12px;
+}
+
+.home-property-body {
+  padding: 16px;
+}
+
+.home-property-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+}
+
+.home-property-tags span + span::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+.home-property-card h3 {
+  min-height: 42px;
+  font-size: 16px;
+}
+
+.home-property-area {
+  margin: 6px 0 0;
+  color: rgb(var(--color-text-muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 6. 各區獨立狀態與等比例骨架 */
+.home-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 156px;
+  margin: 0;
+  padding: 24px 16px;
+  background: rgb(var(--color-surface-muted));
+  color: rgb(var(--color-text-muted));
+  text-align: center;
+  font-size: 14px;
+}
+
+.home-state p {
+  margin: 0;
+}
+
+.home-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 4px;
+  padding: 8px 16px;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-text));
+  font: inherit;
+  cursor: pointer;
+}
+
+.home-skeleton {
+  overflow: hidden;
+  border: 1px solid rgb(var(--color-border));
+  border-radius: 8px;
+  padding-bottom: 20px;
+}
+
+.home-skeleton-image,
+.home-skeleton-line {
+  display: block;
+  background: rgb(var(--color-surface-muted));
+}
+
+.home-skeleton-image {
+  aspect-ratio: 16 / 9;
+}
+
+.home-skeleton-line {
+  width: 75%;
+  height: 18px;
+  margin: 16px 12px 0;
+  border-radius: 2px;
+}
+
+.home-skeleton-line-short {
+  width: 45%;
+}
+
+.home-offer-skeleton {
+  min-height: 174px;
+  padding: 12px;
+}
+
+.home-offer-skeleton .home-skeleton-image {
+  float: left;
+  width: 32%;
+  aspect-ratio: 1;
+  margin-right: 12px;
+}
+
+.home-offer-skeleton .home-skeleton-line {
+  width: 50%;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+/* 7. 手機及平板保持既有導航避讓，優惠三欄、樓盤單欄。 */
+@media (max-width: 767px) {
+  .home-container {
+    width: auto;
+    margin-inline: max(14px, var(--app-safe-left)) max(14px, var(--app-safe-right));
+  }
+
+  .home-cover {
+    min-height: 224px;
+  }
+
+  .home-cover-content {
+    padding-block: 24px;
+  }
+
+  .home-cover h1 {
+    font-size: 26px;
+  }
+
+  .home-cover-title {
+    max-width: 320px;
+    font-size: 19px;
+  }
+
+  .home-cover-description {
+    max-width: 320px;
+    font-size: 13px;
+  }
+
+  .home-shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 8px;
+    padding-block: 20px;
+  }
+
+  .home-shortcut {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .home-content-section {
+    padding-block: 20px 4px;
+  }
+
+  .home-section-heading {
+    margin-bottom: 8px;
+  }
+
+  .home-section-heading h2 {
+    font-size: 18px;
+  }
+
+  .home-card-grid {
+    gap: 8px;
+  }
+
+  .home-offer-card {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+
+  .home-offer-image {
+    margin: 8px 8px 0;
+  }
+
+  .home-offer-body {
+    padding: 10px 8px 12px;
+  }
+
+  .home-offer-card h3 {
+    min-height: 39px;
+    font-size: 13px;
+  }
+
+  .home-offer-price {
+    font-size: 14px;
+  }
+
+  .home-offer-price span,
+  .home-offer-terms {
+    font-size: 11px;
+  }
+
+  .home-property-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .home-property-card h3 {
+    min-height: 0;
+  }
+
+  .home-offer-skeleton {
+    padding: 8px 8px 16px;
+  }
+
+  .home-offer-skeleton .home-skeleton-image {
+    float: none;
+    width: 100%;
+    margin: 0;
+  }
+
+  .home-offer-skeleton .home-skeleton-line {
+    width: 85%;
+    margin-inline: 0;
+  }
+}

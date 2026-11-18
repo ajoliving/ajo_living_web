@@ -83,7 +83,7 @@ const pageRoutePaths = new Set(collectPageRoutePaths(allRoutes));
 
 // 3. 鎖定主要功能路由與手機端基線選擇器
 const routeMobileContracts = [
-  { path: '/', selectors: ['.section-shell', '.home-section'] },
+  { path: '/', selectors: ['.home-container', '.home-content-section', '.home-shortcuts'] },
   { path: '/login', selectors: ['.login-shell', '.login-hero-panel'] },
   { path: '/forgot-password', selectors: ['.forgot-password-page'] },
   { path: '/account/profile/agency-profile', selectors: ['.agency-profile-page'] },
