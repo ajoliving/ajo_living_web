@@ -2,19 +2,23 @@
  * AJO Living 首頁。
  * 1. 以現有物業及生活服務提供六個可直接進入的快捷入口。
  * 2. 獨立載入超市優惠前三項及最新樓盤，保留各區載入、重試與空態。
- * 3. 沿用全站主題、語系及登入路由，不展示尚未接入的模組。
+ * 3. 社區環境、交通及生活提示沿用會員目前大廈，缺少位置時使用公開資料。
+ * 4. 沿用全站主題、語系及登入路由，不展示尚未接入的模組。
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
+import { fetchHomeEnvironment } from '@/httpapis/home';
 import { fetchPropertySaleListings } from '@/httpapis/properties';
 import { fetchSupermarketSummary } from '@/httpapis/supermarket_offers';
+import type { HomeEnvironment } from '@/model/home';
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import type { SupermarketProduct } from '@/model/supermarket_offers';
 import AppIcon, { type IconName } from '@/shared/components/base/AppIcon.vue';
 import { usePreferenceStore } from '@/stores/preferences';
+import { useSessionStore } from '@/stores/session';
 import {
   resolvePropertyArea,
   resolvePropertyCoverImage,
@@ -34,6 +38,14 @@ import {
   supermarketOfferDisplayText,
 } from '@/utils/supermarket_offers';
 
+import HomeEnvironmentPanel from './widgets/HomeEnvironmentPanel.vue';
+import HomeLifePanel from './widgets/HomeLifePanel.vue';
+import HomeTransportPanel from './widgets/HomeTransportPanel.vue';
+import HomeToolbar from './widgets/HomeToolbar.vue';
+import HomePropertyNews from './widgets/HomePropertyNews.vue';
+import HomeContentLinks from './widgets/HomeContentLinks.vue';
+import { resolveHomeEstate } from './home_estate';
+
 interface HomeShortcut {
   key: string;
   to: string;
@@ -42,13 +54,15 @@ interface HomeShortcut {
 
 const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
+const sessionStore = useSessionStore();
+const route = useRoute();
 const shortcuts: HomeShortcut[] = [
   { key: 'building', to: '/building', icon: 'building' },
-  { key: 'offers', to: '/supermarket-offers', icon: 'tag' },
   { key: 'properties', to: '/properties', icon: 'home' },
-  { key: 'residences', to: '/serviced-residences', icon: 'location' },
-  { key: 'furniture', to: '/furniture', icon: 'table' },
+  { key: 'access', to: '/building?tab=access', icon: 'lock' },
+  { key: 'offers', to: '/supermarket-offers', icon: 'tag' },
   { key: 'trend', to: '/trend', icon: 'browse' },
+  { key: 'conversations', to: '/notifications?tab=conversations', icon: 'message' },
 ];
 const products = ref<SupermarketProduct[]>([]);
 const propertyListings = ref<PropertyListingSummaryResponse[]>([]);
@@ -57,6 +71,16 @@ const loadingProperties = ref<boolean>(true);
 const offersError = ref<boolean>(false);
 const propertiesError = ref<boolean>(false);
 const failedImages = ref<Set<string>>(new Set());
+const environment = ref<HomeEnvironment | null>(null);
+const loadingEnvironment = ref(true);
+const environmentRetry = ref(0);
+const environmentBuildingID = computed(() =>
+  sessionStore.isAuthenticated && sessionStore.me?.member_status === 'active'
+    ? sessionStore.me.bound_building_ids?.[0]?.trim() || undefined
+    : undefined,
+);
+const environmentEstate = computed(() => resolveHomeEstate(route.query.estate, environmentBuildingID.value));
+const requestedBuilding = computed(() => environmentEstate.value ? undefined : environmentBuildingID.value);
 
 // 1. 保留上游優惠排序，沿用現有商品標題、商店名稱與港幣格式。
 const offers = computed(() => products.value.map((product) => ({
@@ -131,6 +155,29 @@ const markFailedImage = (url: string): void => {
   failedImages.value.add(url);
 };
 
+// 6. 切換物業或語系即清除舊讀數，避免稍後完成的請求覆蓋目前資料。
+watch(
+  [requestedBuilding, environmentEstate, () => preferenceStore.locale, environmentRetry],
+  async ([buildingID, estate, locale], _previous, onCleanup) => {
+    const request = new AbortController();
+    onCleanup(() => request.abort());
+    environment.value = null;
+    loadingEnvironment.value = true;
+    try {
+      const { data } = await fetchHomeEnvironment(
+        { lang: locale === 'en' ? 'en' : 'tc', ...(estate ? { estate } : buildingID ? { building_id: buildingID } : {}) },
+        request.signal,
+      );
+      if (!request.signal.aborted) environment.value = data.data;
+    } catch {
+      // 6.1 請求失敗時保留公開查詢入口，不阻塞超市及樓盤。
+    } finally {
+      if (!request.signal.aborted) loadingEnvironment.value = false;
+    }
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   void loadOffers();
   void loadProperties();
@@ -139,6 +186,8 @@ onMounted(() => {
 
 <template>
   <div id="page-home" class="home-page">
+    <HomeToolbar class="home-container" :building-id="environmentBuildingID" />
+
     <!-- 1. 首頁封面及主要物業入口 -->
     <section class="home-cover" aria-labelledby="home-title">
       <img
@@ -219,7 +268,30 @@ onMounted(() => {
       </div>
     </section>
 
-    <!-- 4. 最新公開樓盤 -->
+    <!-- 4. 目前大廈環境；沒有可用位置時顯示香港天氣 -->
+    <HomeEnvironmentPanel
+      class="home-container home-content-section"
+      :environment="environment"
+      :loading="loadingEnvironment"
+      @retry="environmentRetry++"
+    />
+
+    <!-- 5. 港鐵到站及日常公共資訊 -->
+    <HomeTransportPanel
+      class="home-container home-content-section"
+      :transport="environment?.transport"
+      :loading="loadingEnvironment"
+      :reference-area="environment?.scope === 'reference'"
+      @retry="environmentRetry++"
+    />
+    <HomeLifePanel
+      class="home-container home-content-section"
+      :environment="environment"
+      :loading="loadingEnvironment"
+    />
+
+    <!-- 6. 物業資訊及最新公開樓盤 -->
+    <HomePropertyNews class="home-container home-content-section" />
     <section
       class="home-container home-content-section home-properties"
       :aria-busy="loadingProperties"
@@ -265,6 +337,7 @@ onMounted(() => {
         </RouterLink>
       </div>
     </section>
+    <HomeContentLinks class="home-container home-content-section" />
   </div>
 </template>
 

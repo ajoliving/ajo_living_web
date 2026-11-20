@@ -10,7 +10,7 @@ import { computed, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
-import AppIcon from '@/shared/components/base/AppIcon.vue';
+import AppIcon, { type IconName } from '@/shared/components/base/AppIcon.vue';
 import { type AppLocale, usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import { isThemePickerEnabled } from '@/utils/feature_flags';
@@ -22,7 +22,7 @@ interface NavigationItem {
   to: string;
   label: string;
   match: string[];
-  icon?: 'home' | 'building' | 'table' | 'dollar-sign' | 'bell' | 'user';
+  icon?: IconName;
   requiresAuth?: boolean;
   requiresStaff?: boolean;
 }
@@ -94,6 +94,15 @@ const mobileNavigationItems = computed<NavigationItem[]>(() => [
 
 // 3. 底部導航入口
 const bottomNavigationItems = computed<NavigationItem[]>(() => {
+  if (route.path === '/') {
+    return [
+      { key: 'home', to: '/', label: t('nav.home'), match: ['/'], icon: 'home' },
+      { key: 'listing', to: '/properties', label: t('nav.propertiesShort'), match: ['/properties'], icon: 'building' },
+      { key: 'access', to: '/building?tab=access', label: t('home.dashboard.shortcuts.access'), match: [], icon: 'lock' },
+      { key: 'affairs', to: '/building', label: t('home.dashboard.shortcuts.building'), match: ['/building'], icon: 'shield' },
+      { key: 'conversations', to: '/notifications?tab=conversations', label: t('home.dashboard.shortcuts.conversations'), match: ['/notifications'], icon: 'message' },
+    ];
+  }
   const items: NavigationItem[] = [
     { key: 'home', to: '/', label: t('nav.home'), match: ['/'], icon: 'home' },
     { key: 'listing', to: '/properties', label: t('nav.propertiesShort'), match: ['/properties'], icon: 'building' },

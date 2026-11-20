@@ -280,6 +280,27 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/v1/health" -Method GET
 
 ## 基礎資料模組
 
+### /api/v1/home/environment [GET]
+
+讀取天氣、交通及生活提示。`lang` 為 `tc`（預設）或 `en`。`estate` 可選 `seaview`、`summit`、`fleur`，表示公開參考區域；不得與 `building_id` 同時傳入。`building_id` 只有有效登入且具該大廈可見權限的會員才可取得大廈環境。無可用位置則回退香港天氣和公開參考資料。登入會員可用 `detail=forecast` 讀取最多九天預報及可用濕度、紫外線。
+
+`data` 的欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `scope` / `building_name` | `hong_kong`、`building` 或 `reference`；後兩者可含本地化名稱。 |
+| `temperature` | `value`（°C）、`station`、`observed_at`（RFC3339）。 |
+| `forecast` | 全港明日預報：`date`（香港日期）、`min`、`max`、`description`。 |
+| `rainfall` | `value`（分區過去一小時最高雨量，毫米）、`district`、`observed_at`。 |
+| `air_quality` | `value`（AQHI 字串，包含 `10+`）、`station`、`observed_at`。 |
+| `transport` | `station`、`line`、`nearby`、`observed_at`、`arrivals`（目的地及 RFC3339 到站時間）、`delayed`。 |
+| `holiday` | `name`、`date`、`is_today`。 |
+| `parking` | `name`、`spaces`、`observed_at`；零個空位有效。 |
+| `emergency` | `hospital`、`wait`、`observed_at`、`category`（`45` 合併類別）、`nearby`；只代表官方統計。 |
+| `forecast_days` / `humidity` / `uv` | 詳細預報選項可返回全港日期列表及氣象站觀測值。 |
+
+缺失或過期讀數省略；不返回座標、單位或文件。位置從獲授權的 iSmart 大廈資料取得，必要時以地政總署名稱及門牌核對。Redis 快取共享來源及位置，同鍵取數合併，上游並行和等待時間有上限，失敗短時降載。回應為 `private, no-store`。
+
 ### 2. /api/v1/channel-home/overview [GET]
 - **簡介**: 取得頻道首頁摘要
 - **請求參數**

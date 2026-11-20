@@ -103,13 +103,21 @@ const buildMemberProfile = (isStaff = false): CurrentMemberProfile => ({
 describe('AppHeader mobile navigation', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    routeState.path = '/';
-    routeState.fullPath = '/';
+    routeState.path = '/properties';
+    routeState.fullPath = '/properties';
     window.localStorage.clear();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it('exposes five working community destinations on the home tab bar', () => {
+    routeState.path = '/';
+    const wrapper = mountHeader();
+    expect(wrapper.findAll('.bnav-item').map((item) => item.attributes('href'))).toEqual([
+      '/', '/properties', '/building?tab=access', '/building', '/notifications?tab=conversations',
+    ]);
   });
 
   it('keeps a login entry in mobile navigation when signed out', () => {

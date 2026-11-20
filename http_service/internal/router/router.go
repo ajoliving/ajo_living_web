@@ -8,6 +8,7 @@ package router
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -84,6 +85,8 @@ func New(deps *Dependencies) *gin.Engine {
 	marketTrendHandler := handler.NewMarketTrendHandler(deps.MarketTrendService)
 
 	api := engine.Group("/api/v1")
+	homeEnvironment := handler.HomeEnvironmentHandler{Service: service.NewHomeEnvironmentService(deps.Runtime, deps.IsmartExternalService)}
+	api.GET("/home/environment", middleware.NewInMemoryLimiter().Limit(60, time.Minute, func(c *gin.Context) string { return c.ClientIP() }), optionalAuth, homeEnvironment.Read)
 	registerPublicRoutes(api, healthHandler, userHandler, homeContentHandler, walletHandler, secondhandHandler, propertyHandler, supermarketOfferHandler, marketTrendHandler, optionalAuth)
 	registerPublicPOSPaymentRoutes(api, posBuildingHandler, walletHandler)
 	registerPublicIsmartIntegrationRoutes(api, ismartHandler)

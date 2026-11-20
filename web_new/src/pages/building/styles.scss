@@ -2346,7 +2346,7 @@
 
   html #app #page-affairs .work-nav {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0;
     margin: 0;
     padding: 4px 0;
@@ -2360,7 +2360,7 @@
     min-height: 52px;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     margin-top: 0;
     border: 0;
     border-bottom: 1px solid var(--bdr);
@@ -2371,8 +2371,7 @@
     white-space: normal;
   }
 
-  html #app #page-affairs .work-nav-icon,
-  html #app #page-affairs .work-nav-arrow {
+  html #app #page-affairs .work-nav-icon {
     display: block;
     flex: 0 0 auto;
   }
@@ -2381,8 +2380,15 @@
     color: var(--brand);
   }
 
-  #page-affairs .work-nav-arrow {
-    color: var(--ink-3);
+  html #app #page-affairs .work-nav-arrow {
+    display: none;
+  }
+
+  html #app #page-affairs .work-nav-content {
+    flex-direction: column;
+    gap: 5px;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
 
   #page-affairs .work-nav-item::after {

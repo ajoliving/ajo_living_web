@@ -5,7 +5,7 @@
 ## 成員清單
 ajo-living-public-ui-style-prompt.md: AJO Living 公開頁 UI 基線 prompt。
 global-form-dialog-prompt.md: 全域表單彈窗結構、欄位、狀態與驗收 prompt。
-home-page-prompt.md: 首頁緊湊封面、六個既有服務入口、真實優惠與樓盤及響應式 UI prompt。
+home-page-prompt.md: 首頁屋苑切換、公開資訊、服務入口及我的大廈 UI prompt。
 login-page-prompt.md: 登入頁視覺、表單與狀態 UI prompt。
 marketplace-discover-page-prompt.md: 二手展示探索頁 UI prompt。
 marketplace-filter-page-prompt.md: 二手篩選列表頁 UI prompt。
@@ -19,6 +19,8 @@ marketplace-publish-page-prompt.md: 二手發布頁表單、預覽與視覺 prom
 - prompt 描述產品邊界時，以根級 `AGENTS.md` 的 AJO Living 主系統定位為準，不把所有功能寫成 marketplace。
 
 ## 變更日誌
+2026-11-20: 首頁交通與生活提示查詢連結固定直達香港城市儀表板對應欄目，摘要仍由 AJO 後端讀取。
+2026-11-20: 首頁規格加入屋苑參考區、環境、港鐵、生活提示、物業資訊及真實大廈服務。
 2026-11-19: 首頁 prompt 改為既有功能入口及真實優惠、樓盤，移除全螢幕輪播、捲動舞台與未接通功能。
 2026-07-08: 建立 UI prompt 目錄記憶，限制新增 prompt 的用途與維護入口。
 

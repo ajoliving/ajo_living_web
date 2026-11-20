@@ -179,7 +179,7 @@ describe('mobile baseline styles', () => {
   it('excludes stacked building tables from the shared wide-table baseline', () => {
     expect(styles).toMatch(/:where\(\.work-table,[^\n]+\):not\(\.stack-table\) \{\s*min-width: 640px;/);
     expect(styles).toContain(':where(.work-card > table):not(.stack-table)');
-    expect(buildingStyles).toMatch(/#page-affairs \.work-nav \{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+    expect(buildingStyles).toMatch(/#page-affairs \.work-nav \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
     expect(buildingStyles).toContain('#page-affairs:not(.is-mobile-home) .building-mobile-back');
     expect(buildingStyles).toMatch(/#page-affairs \.acct-tabs \{[^}]*display: flex;[^}]*overflow-x: auto;/);
     expect(buildingStyles).not.toContain('.building-module-select');

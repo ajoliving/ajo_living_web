@@ -12,6 +12,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import BuildingLocalWeather from './widgets/BuildingLocalWeather.vue';
 import { useSessionStore } from '@/stores/session';
 import {
   fetchMemberICCTVPublicCameras,
@@ -1198,6 +1199,11 @@ const categoryLabel = (category: string, options: SelectOption[]): string =>
   options.find((item) => item.value === category)?.label ?? '';
 
 const serviceCaseStatusChoices = computed(() => serviceCaseList.value?.status_choices ?? []);
+const pendingServiceCases = computed(() => (serviceCaseList.value?.cases ?? [])
+  .filter((item) => String(item.building_id || feedbackBuildingID.value) === selectedBuildingID.value
+    && ['pending', 'submitted', 'processing', 'pending_information'].includes(String(item.status))
+    && item.subject?.trim())
+  .slice(0, 2));
 const feedbackRecords = computed<FeedbackRecord[]>(() => (serviceCaseList.value?.cases ?? []).map((item) => ({
   caseID: item.case_id,
   type: item.request_type_label || (item.request_type === 'repair'
@@ -1354,7 +1360,8 @@ const loadBuildingServiceCases = async (buildingID = feedbackBuildingID.value): 
       serviceCaseList.value = null;
       return;
     }
-    serviceCaseList.value = await fetchMemberIsmartServiceCases(buildingID, serviceCaseStatus.value || undefined);
+    const result = await fetchMemberIsmartServiceCases(buildingID, serviceCaseStatus.value || undefined);
+    if (buildingID === feedbackBuildingID.value) serviceCaseList.value = result;
   } catch (error) {
     console.error(error);
     serviceCaseList.value = null;
@@ -2096,6 +2103,7 @@ const handleSaveBuildingContext = async (): Promise<void> => {
   if (activeTab.value === 'affairs-finance') await loadBuildingFinanceReceivables(buildingID);
   if (activeTab.value === 'affairs-owner-account') await loadOwnerAccount();
   if (activeTab.value === 'affairs-feedback') await loadBuildingServiceCases(buildingID);
+  else if (mobileHome.value && feedbackBuildingID.value) void loadBuildingServiceCases();
   if (activeTab.value === 'affairs-access') await loadBuildingAccess();
   if (activeTab.value === 'affairs-icctv') await loadICCTV();
   if (activeTab.value === 'affairs-resident-authorizations') await loadResidentAuthorizations();
@@ -2157,6 +2165,8 @@ const initializeBuildingPage = async (): Promise<void> => {
   buildingPageInitialized = true;
   if (resolveAffairsTabFromQuery(route.query.tab)) {
     switchTab(activeTab.value);
+  } else if (feedbackBuildingID.value) {
+    void loadBuildingServiceCases();
   }
 };
 
@@ -2221,6 +2231,10 @@ onMounted(() => {
               : t(contextErrorKey || 'building.context.saveError') }}
           </p>
         </div>
+        <BuildingLocalWeather
+          v-if="mobileHome && hasLinkedBuilding && selectedBuildingID"
+          :building-id="selectedBuildingID"
+        />
         <nav
           class="work-nav"
           :aria-label="t('building.pageTitle')"
@@ -2242,6 +2256,13 @@ onMounted(() => {
             <AppIcon class="work-nav-arrow" name="arrow-right" :size="16" />
           </button>
         </nav>
+        <section v-if="mobileHome && hasLinkedBuilding && pendingServiceCases.length" class="building-pending-cases">
+          <h2>{{ t('home.environment.pendingCases') }}</h2>
+          <button v-for="item in pendingServiceCases" :key="item.case_id" type="button" @click="switchTab('affairs-feedback')">
+            <span>{{ item.subject }}</span>
+            <AppIcon name="arrow-right" :size="16" />
+          </button>
+        </section>
       </aside>
 
       <!-- 右側主內容 -->
@@ -4197,3 +4218,19 @@ onMounted(() => {
 </template>
 
 <style scoped src="./styles.scss"></style>
+<style scoped>
+/* 1. 待跟進個案使用既有面板入口。 */
+.building-pending-cases { min-width: 0; padding-block: 12px; border-top: 1px solid var(--bdr); }
+.building-pending-cases h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.building-pending-cases button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.building-pending-cases svg { flex: none; }
+</style>

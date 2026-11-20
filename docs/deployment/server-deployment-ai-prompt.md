@@ -812,6 +812,19 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 
 一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
 
+2026-11-20 已部署測試 release `20261120-home-community-final`：
+
+- 從 `testMain` 獨立快照發布首頁參考屋苑、交通、生活提示、物業資訊及我的大廈；未包含其他本機修改。保留測試資料庫及舊 release，生產與共用 FRP 未變。
+- 前後端建置、77 項相關前端測試、Go 全量及並發 race 測試通過；公網 health、readiness、noindex、Nginx、PostgreSQL、Redis 及產物比對正常。
+- 真實公開 API 驗證三個參考屋苑的氣象站、港鐵、急症輪候及假期；MOKO 官方標為關閉，未顯示可用車位。320、390、768、1440px 瀏覽器驗證屋苑切換、排列及封面解碼。未使用真實會員登入驗收。
+- 測試站兩次各 24 個並發唯讀請求全部成功，P95 分別約 1.18 秒及 0.53 秒；本地測試驗證冷快取的 101 個同鍵呼叫合併為一次上游請求。此數據不代表生產容量。
+
+2026-11-20 已部署測試 release `20261120-home-environment-31990`：
+
+- 從 `testMain` 的獨立快照套用本次首頁社區環境改動，未包含本機其他未提交修改；使用 `INITIALIZE_DB=0`、`KEEP_RELEASES=0` 保留資料庫及舊 release。
+- `go test ./...`、28 項相關前端測試及前後端建置通過。公網首頁、health、readiness、Nginx、PostgreSQL、Redis 及 `noindex` 正常；公網首頁與伺服器二進制與建置產物一致。
+- 已部署首頁以真實 API 驗證 320px 繁中及 1440px English 的香港天氣；訪客帶大廈 ID 仍返回全港範圍。屋苑讀數與切換以測試資料驗證，未使用真實會員登入驗收。生產版本、程序與環境及共用 FRP 配置與程序未變。
+
 2026-11-19 已部署測試 release `20261119-home-1738bef`：
 
 - 從 `testMain` 提交 `1738bef5caf14a4c016267a26e20a0f29c4bbce6` 的獨立快照建置前後端，只發布首頁布局、六個既有服務入口、真實超市優惠及最新樓盤；未包含工作區其他修改。
