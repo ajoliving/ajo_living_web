@@ -25,6 +25,7 @@ oss-cdn-letsencrypt-renewal-prompt.md: OSS CDN Let's Encrypt 憑證續期與 HTT
 - 部署類變更必須回報運行時真相、產品效果、風險、決策點與驗證狀態，不輸出大段命令日誌。
 
 ## 變更日誌
+2026-11-20: 城市儀表板上線四個欄目直達連結；測試 release `20261120-home-links-dc50ff5` 接入入口並完成雙視口及健康驗證。
 2026-11-20: 測試 release `20261120-home-community-final` 驗證三個公開參考屋苑、四種寬度及兩組 24 並發唯讀請求；保留資料庫與歷史版本，生產及共用 FRP 未變。
 2026-11-20: 測試 release `20261120-home-environment-31990` 發布首頁社區環境，通過健康及真實訪客天氣驗證，保留測試庫與舊 release；生產及共用 FRP 不變。
 2026-11-19: 測試 release `20261119-home-1738bef` 從 `testMain` 首頁提交 `1738bef` 的獨立快照發布，保留資料庫及全部舊 release；建置、健康、readiness、資料服務、noindex 與四組線上資源瀏覽器驗證通過，生產版本、環境、二進制及 PID、共用 FRP 配置及 PID 未變。

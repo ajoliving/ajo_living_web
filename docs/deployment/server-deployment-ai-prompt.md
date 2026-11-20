@@ -812,6 +812,12 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 
 一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
 
+2026-11-20 已部署測試 release `20261120-home-links-dc50ff5`：
+
+- 從提交 `dc50ff5` 的獨立快照建置並發布，保留測試資料庫和舊 release；AJO 生產及共用 FRP 程序未重啟。
+- 城市儀表板提交 `c7ea022` 已更新靜態首頁、主程式及 Service Worker，舊檔保存在 `/home/admin/hk-dashboard-backups/20261120-c7ea022/`。
+- 測試站 health、readiness、海景灣公開環境資料正常；390px 與 1440px 瀏覽器驗證首頁四個連結，以及儀表板交通、泊車、醫療及假期欄目可直接開啟。未執行真實會員驗收。
+
 2026-11-20 已部署測試 release `20261120-home-community-final`：
 
 - 從 `testMain` 獨立快照發布首頁參考屋苑、交通、生活提示、物業資訊及我的大廈；未包含其他本機修改。保留測試資料庫及舊 release，生產與共用 FRP 未變。

@@ -85,6 +85,7 @@ No direct prompt regression test currently guards prompt wording or localization
 - Do not index generated output, `dist`, `node_modules`, `.claude/worktrees`, `docs/archive`, database dumps, or backups as stable prompt surfaces.
 
 ## Change Log
+2026-11-20: Recorded testing release `20261120-home-links-dc50ff5` and the separately deployed dashboard section links, including browser and health verification.
 2026-11-20: Recorded direct dashboard section links for homepage rail, parking, A&E and holidays, without forwarding member or building data.
 2026-11-20: Recorded testing release `20261120-home-community-final`, live estate switching and public feed checks, bounded concurrency results, and the remaining authenticated acceptance gap.
 2026-11-20: Expanded the homepage to include three clearly marked estate references, rail arrivals, holiday and parking data, HA waiting-time statistics, and source-linked property news. My Building uses the authorized real location and existing service panels.
