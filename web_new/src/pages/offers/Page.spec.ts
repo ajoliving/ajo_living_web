@@ -5,7 +5,7 @@
  * 3. 確認熱門分類標題及桌面、手機篩選入口。
  * 4. 確認商品卡只顯示實際原價，不顯示跨店比較 fallback。
  */
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +18,7 @@ import categoryIconsSvg from './category_icons.svg?raw';
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ query: {} }),
+  get RouterLink() { return RouterLinkStub; },
 }));
 
 vi.mock('@/httpapis/auth_session', () => ({

@@ -12,7 +12,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 
 import { fetchHomeEnvironment } from '@/httpapis/home';
 import { fetchPropertySaleListings } from '@/httpapis/properties';
-import { fetchSupermarketSummary } from '@/httpapis/supermarket_offers';
+import { addSupermarketFavorite, fetchSupermarketSummary, removeSupermarketFavorite } from '@/httpapis/supermarket_offers';
 import i18n, { applyLocale } from '@/i18n';
 import type { HomeEnvironment } from '@/model/home';
 import type { PropertyListingSummaryResponse } from '@/model/property';
@@ -33,6 +33,8 @@ vi.mock('@/httpapis/properties', () => ({
 
 vi.mock('@/httpapis/supermarket_offers', () => ({
   fetchSupermarketSummary: vi.fn(),
+  addSupermarketFavorite: vi.fn(),
+  removeSupermarketFavorite: vi.fn(),
 }));
 
 const mockedFetchProperties = vi.mocked(fetchPropertySaleListings);
@@ -64,6 +66,14 @@ const createProduct = (code: string, price: number, bestStore = 'LUNGFUNG'): Sup
   discountAmount: 20,
   discountRate: 20,
   stores: [bestStore],
+  storePrices: [{
+    store: bestStore,
+    listPrice: price + 20,
+    effectiveUnitPrice: price,
+    offer: '',
+    parseStatus: 'parsed',
+    snapshotDate: '2026-11-23',
+  }],
   hasOffer: true,
   bestStore,
   offerType: 'discount',
@@ -156,6 +166,8 @@ const mountHome = async (member?: Pick<CurrentMemberProfile, 'member_status' | '
 describe('HomePage', () => {
   beforeEach(() => {
     applyLocale('zh-HK');
+    vi.mocked(addSupermarketFavorite).mockReset();
+    vi.mocked(removeSupermarketFavorite).mockReset();
     mockedFetchProperties.mockReset().mockResolvedValue(propertyResponse([createProperty()]));
     mockedFetchEnvironment.mockReset().mockResolvedValue(environmentResponse());
     mockedFetchSummary.mockReset().mockResolvedValue(summaryResponse([
@@ -163,6 +175,7 @@ describe('HomePage', () => {
       createProduct('P001', 12, 'AEON'),
       createProduct('P002', 38),
       createProduct('P004', 1),
+      createProduct('P005', 0.5),
     ]));
   });
 
@@ -175,6 +188,8 @@ describe('HomePage', () => {
     const { wrapper, router } = await mountHome();
     await flushPromises();
 
+    expect(wrapper.get('#page-home').element.firstElementChild?.classList.contains('home-cover')).toBe(true);
+    expect(wrapper.find('.home-toolbar').exists()).toBe(false);
     expect(wrapper.findAll('a.home-shortcut').map((link) => link.attributes('href'))).toEqual([
       '/building',
       '/properties',
@@ -192,19 +207,23 @@ describe('HomePage', () => {
     expect(wrapper.text()).not.toMatch(/即將開放|待補路由|租務管理|智能家居產品/);
   });
 
-  it('keeps the first three upstream offers and links cards to their actual details', async () => {
+  it('keeps the first four upstream offers and links cards to their actual details', async () => {
     const { wrapper } = await mountHome();
     await flushPromises();
 
-    const offers = wrapper.findAll('a.home-offer-card');
-    expect(offers.map((card) => card.attributes('href'))).toEqual([
+    const offers = wrapper.findAll('.home-offer-card');
+    expect(offers.map((card) => card.get('a').attributes('href'))).toEqual([
       '/supermarket-offers/products/P003',
       '/supermarket-offers/products/P001',
       '/supermarket-offers/products/P002',
+      '/supermarket-offers/products/P004',
     ]);
     expect(offers[0]!.text()).toContain('龍豐');
     expect(offers[1]!.text()).toContain('AEON');
-    expect(offers[0]!.get('.home-offer-price').text()).toContain('HK$ 178.00');
+    expect(offers[0]!.get('.gp-card-best-price').text()).toContain('HK$ 178.00');
+    expect(offers[0]!.get('.gp-card-brand-chip').text()).toBe('Test Brand');
+    expect(offers[0]!.get('.gp-card-best-compare').text()).toContain('$198.00');
+    expect(offers[0]!.get('.gp-card-best-offer').text()).toContain('$20');
     expect(wrapper.get('a.home-property-card').attributes('href')).toBe('/properties/property-live-7');
     expect(wrapper.get('a.home-property-card').text()).toContain('海景單位');
     expect(mockedFetchProperties).toHaveBeenCalledWith({ page: 1, page_size: 3, sort_by: 'latest' });
@@ -215,8 +234,41 @@ describe('HomePage', () => {
     const { wrapper } = await mountHome();
     await flushPromises();
 
-    expect(wrapper.get('a.home-offer-card').attributes('href'))
+    expect(wrapper.get('.home-offer-card a').attributes('href'))
       .toBe('/supermarket-offers/products/P%2F003%20%3FA');
+  });
+
+  it('opens the actual product and sends guests to login only when favoriting', async () => {
+    const { wrapper, router } = await mountHome();
+    await flushPromises();
+    await wrapper.get('.home-offer-card a').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/supermarket-offers/products/P003');
+    await wrapper.get('.home-offer-card .gp-card-fav').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/login');
+    expect(router.currentRoute.value.query.redirect).toBe('/supermarket-offers/products/P003');
+    expect(addSupermarketFavorite).not.toHaveBeenCalled();
+  });
+
+  it('updates member favorites only after success and preserves the state on failure', async () => {
+    const { wrapper, router } = await mountHome({ member_status: 'active', bound_building_ids: [] });
+    await flushPromises();
+    const button = wrapper.get('.home-offer-card .gp-card-fav');
+    await button.trigger('click');
+    await flushPromises();
+    expect(addSupermarketFavorite).toHaveBeenCalledWith('P003');
+    expect(button.attributes('aria-pressed')).toBe('true');
+    expect(router.currentRoute.value.path).toBe('/');
+    vi.mocked(removeSupermarketFavorite).mockRejectedValueOnce(new Error('unavailable'));
+    await button.trigger('click');
+    await flushPromises();
+    expect(button.attributes('aria-pressed')).toBe('true');
+    expect(wrapper.get('.home-offer-feedback').text()).toBe(i18n.global.t('offers.list.favoriteError'));
+    await button.trigger('click');
+    await flushPromises();
+    expect(removeSupermarketFavorite).toHaveBeenCalledWith('P003');
+    expect(button.attributes('aria-pressed')).toBe('false');
   });
 
   it('renders working navigation while both data requests are still pending', async () => {
@@ -229,6 +281,7 @@ describe('HomePage', () => {
     expect(mockedFetchSummary).toHaveBeenCalledTimes(1);
     expect(mockedFetchProperties).toHaveBeenCalledTimes(1);
     expect(wrapper.get('section.home-offers').attributes('aria-busy')).toBe('true');
+    expect(wrapper.findAll('.home-offer-skeleton')).toHaveLength(4);
     expect(wrapper.get('section.home-properties').attributes('aria-busy')).toBe('true');
     await wrapper.get('a.home-shortcut[href="/properties"]').trigger('click');
     await flushPromises();
@@ -236,7 +289,7 @@ describe('HomePage', () => {
 
     finishOffers(summaryResponse([createProduct('P001', 12)]));
     await flushPromises();
-    expect(wrapper.findAll('a.home-offer-card')).toHaveLength(1);
+    expect(wrapper.findAll('.home-offer-card')).toHaveLength(1);
     expect(wrapper.get('section.home-properties').attributes('aria-busy')).toBe('true');
     finishProperties(propertyResponse([]));
     await flushPromises();
@@ -248,13 +301,13 @@ describe('HomePage', () => {
     await flushPromises();
 
     expect(wrapper.get('section.home-offers').attributes('aria-busy')).toBe('false');
-    expect(wrapper.findAll('a.home-offer-card')).toHaveLength(0);
+    expect(wrapper.findAll('.home-offer-card')).toHaveLength(0);
     expect(wrapper.findAll('a.home-property-card')).toHaveLength(1);
     await wrapper.get('section.home-offers button').trigger('click');
     await flushPromises();
     expect(mockedFetchSummary).toHaveBeenCalledTimes(2);
     expect(mockedFetchProperties).toHaveBeenCalledTimes(1);
-    expect(wrapper.findAll('a.home-offer-card')).toHaveLength(3);
+    expect(wrapper.findAll('.home-offer-card')).toHaveLength(4);
   });
 
   it('treats an upstream-unavailable summary as retryable instead of a successful empty result', async () => {
@@ -271,7 +324,7 @@ describe('HomePage', () => {
     await flushPromises();
     expect(mockedFetchSummary).toHaveBeenCalledTimes(2);
     expect(mockedFetchProperties).toHaveBeenCalledTimes(1);
-    expect(wrapper.findAll('a.home-offer-card')).toHaveLength(3);
+    expect(wrapper.findAll('.home-offer-card')).toHaveLength(4);
   });
 
   it('retries failed properties without affecting successful offers', async () => {
@@ -279,7 +332,7 @@ describe('HomePage', () => {
     const { wrapper } = await mountHome();
     await flushPromises();
 
-    expect(wrapper.findAll('a.home-offer-card')).toHaveLength(3);
+    expect(wrapper.findAll('.home-offer-card')).toHaveLength(4);
     expect(wrapper.findAll('a.home-property-card')).toHaveLength(0);
     await wrapper.get('section.home-properties button').trigger('click');
     await flushPromises();
@@ -294,7 +347,7 @@ describe('HomePage', () => {
     const { wrapper } = await mountHome();
     await flushPromises();
 
-    expect(wrapper.findAll('a.home-offer-card, a.home-property-card')).toHaveLength(0);
+    expect(wrapper.findAll('.home-offer-card, a.home-property-card')).toHaveLength(0);
     expect(wrapper.get('section.home-offers').text()).toMatch(/暫|沒有/);
     expect(wrapper.get('section.home-properties').text()).toMatch(/暫|沒有/);
     expect(wrapper.findAll('a.home-shortcut')).toHaveLength(6);
@@ -304,13 +357,13 @@ describe('HomePage', () => {
     const { wrapper } = await mountHome();
     await flushPromises();
 
-    const offer = wrapper.get('a.home-offer-card');
+    const offer = wrapper.get('.home-offer-card');
     const property = wrapper.get('a.home-property-card');
     await offer.get('img').trigger('error');
     await property.get('img').trigger('error');
     expect(offer.find('img').exists()).toBe(false);
     expect(property.find('img').exists()).toBe(false);
-    expect(offer.attributes('href')).toBe('/supermarket-offers/products/P003');
+    expect(offer.get('a').attributes('href')).toBe('/supermarket-offers/products/P003');
     expect(property.attributes('href')).toBe('/properties/property-live-7');
     expect(offer.text()).toContain('178');
     expect(property.text()).toContain('海景單位');
@@ -325,7 +378,7 @@ describe('HomePage', () => {
     applyLocale('en');
     await flushPromises();
     expect(wrapper.get('a.home-shortcut[href="/building"]').text()).not.toBe(chineseShortcut);
-    expect(wrapper.get('a.home-offer-card').text()).toContain('Lung Fung');
+    expect(wrapper.get('.home-offer-card').text()).toContain('Lung Fung');
     expect(wrapper.get('a.home-property-card').text()).toContain('Seaview Home');
     expect(wrapper.text()).not.toContain('home.dashboard.');
     expect(mockedFetchSummary).toHaveBeenCalledTimes(1);

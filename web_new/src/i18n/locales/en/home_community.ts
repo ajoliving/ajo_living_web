@@ -1,20 +1,9 @@
 /*
- * Homepage estate controls and property information in English.
- * 1. Provide matching toolbar and source-linked editorial labels.
+ * Homepage property information in English.
+ * 1. Provide matching source-linked editorial and content-entry labels.
  */
 
 export default {
-  toolbar: {
-    label: 'Homepage tools',
-    estate: 'Select estate',
-    current: 'Current property',
-    estates: {
-      seaview: 'Seaview Bay',
-      summit: 'Summit · Skyline',
-      fleur: 'Fleur Pavilia',
-    },
-    search: 'Search products',
-  },
   news: {
     title: 'Property information',
     access: {

@@ -1,22 +1,23 @@
 <!--
  * AJO Living 首頁。
  * 1. 以現有物業及生活服務提供六個可直接進入的快捷入口。
- * 2. 獨立載入超市優惠前三項及最新樓盤，保留各區載入、重試與空態。
+ * 2. 獨立載入超市優惠前四項及最新樓盤，保留各區載入、重試與空態。
  * 3. 社區環境、交通及生活提示沿用會員目前大廈，缺少位置時使用公開資料。
  * 4. 沿用全站主題、語系及登入路由，不展示尚未接入的模組。
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import { fetchHomeEnvironment } from '@/httpapis/home';
 import { fetchPropertySaleListings } from '@/httpapis/properties';
-import { fetchSupermarketSummary } from '@/httpapis/supermarket_offers';
+import { addSupermarketFavorite, fetchSupermarketSummary, removeSupermarketFavorite } from '@/httpapis/supermarket_offers';
 import type { HomeEnvironment } from '@/model/home';
 import type { PropertyListingSummaryResponse } from '@/model/property';
 import type { SupermarketProduct } from '@/model/supermarket_offers';
 import AppIcon, { type IconName } from '@/shared/components/base/AppIcon.vue';
+import SupermarketProductCard from '@/shared/components/offers/SupermarketProductCard.vue';
 import { usePreferenceStore } from '@/stores/preferences';
 import { useSessionStore } from '@/stores/session';
 import {
@@ -31,17 +32,9 @@ import {
   resolvePropertyTransactionType,
   resolvePropertyTypeLabel,
 } from '@/utils/property';
-import {
-  displaySupermarketStore,
-  formatSupermarketHKPrice,
-  resolveSupermarketProductFullTitle,
-  supermarketOfferDisplayText,
-} from '@/utils/supermarket_offers';
-
 import HomeEnvironmentPanel from './widgets/HomeEnvironmentPanel.vue';
 import HomeLifePanel from './widgets/HomeLifePanel.vue';
 import HomeTransportPanel from './widgets/HomeTransportPanel.vue';
-import HomeToolbar from './widgets/HomeToolbar.vue';
 import HomePropertyNews from './widgets/HomePropertyNews.vue';
 import HomeContentLinks from './widgets/HomeContentLinks.vue';
 import { resolveHomeEstate } from './home_estate';
@@ -56,6 +49,7 @@ const { t } = useI18n();
 const preferenceStore = usePreferenceStore();
 const sessionStore = useSessionStore();
 const route = useRoute();
+const router = useRouter();
 const shortcuts: HomeShortcut[] = [
   { key: 'building', to: '/building', icon: 'building' },
   { key: 'properties', to: '/properties', icon: 'home' },
@@ -69,6 +63,7 @@ const propertyListings = ref<PropertyListingSummaryResponse[]>([]);
 const loadingOffers = ref<boolean>(true);
 const loadingProperties = ref<boolean>(true);
 const offersError = ref<boolean>(false);
+const offerActionMessage = ref('');
 const propertiesError = ref<boolean>(false);
 const failedImages = ref<Set<string>>(new Set());
 const environment = ref<HomeEnvironment | null>(null);
@@ -82,16 +77,30 @@ const environmentBuildingID = computed(() =>
 const environmentEstate = computed(() => resolveHomeEstate(route.query.estate, environmentBuildingID.value));
 const requestedBuilding = computed(() => environmentEstate.value ? undefined : environmentBuildingID.value);
 
-// 1. 保留上游優惠排序，沿用現有商品標題、商店名稱與港幣格式。
-const offers = computed(() => products.value.map((product) => ({
-  key: product.code,
-  title: resolveSupermarketProductFullTitle(product),
-  store: displaySupermarketStore(product.bestStore, preferenceStore.locale),
-  price: formatSupermarketHKPrice(product.bestEffectiveUnitPrice, preferenceStore.locale),
-  imageUrl: product.image_url || product.imageUrl || '',
-  terms: supermarketOfferDisplayText(product.bestOffer ?? ''),
-  to: `/supermarket-offers/products/${encodeURIComponent(product.code)}`,
-})));
+// 1. 收藏沿用超市頁接口；未登入時先登入，再返回該商品。
+const toggleOfferFavorite = async (product: SupermarketProduct): Promise<void> => {
+  if (!sessionStore.isAuthenticated) {
+    await router.push({
+      path: '/login',
+      query: { redirect: `/supermarket-offers/products/${encodeURIComponent(product.code)}` },
+    });
+    return;
+  }
+  offerActionMessage.value = '';
+  try {
+    if (product.isFavorite) {
+      await removeSupermarketFavorite(product.code);
+      product.isFavorite = false;
+      offerActionMessage.value = t('offers.list.favoriteRemoved');
+    } else {
+      await addSupermarketFavorite(product.code);
+      product.isFavorite = true;
+      offerActionMessage.value = t('offers.list.favoriteAdded');
+    }
+  } catch {
+    offerActionMessage.value = t('offers.list.favoriteError');
+  }
+};
 
 // 2. 只使用公開樓盤欄位，不組合會員或聯絡人私有資料。
 const properties = computed(() => propertyListings.value.map((listing) => {
@@ -126,7 +135,7 @@ const loadOffers = async (): Promise<void> => {
       products.value = [];
       return;
     }
-    products.value = data.data.bestDiscounts.slice(0, 3);
+    products.value = data.data.bestDiscounts.slice(0, 4);
   } catch {
     offersError.value = true;
     products.value = [];
@@ -186,8 +195,6 @@ onMounted(() => {
 
 <template>
   <div id="page-home" class="home-page">
-    <HomeToolbar class="home-container" :building-id="environmentBuildingID" />
-
     <!-- 1. 首頁封面及主要物業入口 -->
     <section class="home-cover" aria-labelledby="home-title">
       <img
@@ -234,9 +241,10 @@ onMounted(() => {
           {{ t('home.dashboard.moreOffers') }}<AppIcon name="arrow-right" :size="16" />
         </RouterLink>
       </div>
-      <div v-if="loadingOffers" class="home-card-grid" role="status">
+      <p v-if="offerActionMessage" class="home-offer-feedback" role="status">{{ offerActionMessage }}</p>
+      <div v-if="loadingOffers" class="home-card-grid home-offer-grid" role="status">
         <span class="sr-only">{{ t('home.dashboard.loadingOffers') }}</span>
-        <div v-for="slot in 3" :key="slot" class="home-skeleton home-offer-skeleton" aria-hidden="true">
+        <div v-for="slot in 4" :key="slot" class="home-skeleton home-offer-skeleton" aria-hidden="true">
           <span class="home-skeleton-image"></span><span class="home-skeleton-line"></span>
           <span class="home-skeleton-line home-skeleton-line-short"></span>
         </div>
@@ -245,26 +253,16 @@ onMounted(() => {
         <p>{{ t('home.dashboard.offersError') }}</p>
         <button type="button" @click="loadOffers"><AppIcon name="reload" :size="16" />{{ t('home.dashboard.retry') }}</button>
       </div>
-      <p v-else-if="offers.length === 0" class="home-state" role="status">{{ t('home.dashboard.offersEmpty') }}</p>
-      <div v-else class="home-card-grid">
-        <RouterLink v-for="offer in offers" :key="offer.key" :to="offer.to" class="home-offer-card">
-          <div class="home-offer-image">
-            <img
-              v-if="offer.imageUrl && !failedImages.has(offer.imageUrl)"
-              :src="offer.imageUrl"
-              :alt="offer.title"
-              loading="lazy"
-              @error="markFailedImage(offer.imageUrl)"
-            />
-            <AppIcon v-else name="picture" :size="32" />
-          </div>
-          <div class="home-offer-body">
-            <p class="home-offer-store">{{ offer.store }}</p>
-            <h3>{{ offer.title }}</h3>
-            <p class="home-offer-price">{{ offer.price }}<span>{{ t('home.dashboard.perItem') }}</span></p>
-            <p v-if="offer.terms" class="home-offer-terms">{{ offer.terms }}</p>
-          </div>
-        </RouterLink>
+      <p v-else-if="products.length === 0" class="home-state" role="status">{{ t('home.dashboard.offersEmpty') }}</p>
+      <div v-else class="home-card-grid home-offer-grid">
+        <SupermarketProductCard
+          v-for="product in products"
+          :key="product.code"
+          class="home-offer-card"
+          :product="product"
+          :to="`/supermarket-offers/products/${encodeURIComponent(product.code)}`"
+          @favorite="toggleOfferFavorite(product)"
+        />
       </div>
     </section>
 

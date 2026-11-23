@@ -812,6 +812,36 @@ INITIALIZE_DB_CONFIRM=RESTORE_AJOLIVING_TEST \
 
 一般測試發布只在新增 `ajoliving-test-web` 代理時重啟共用 `frpc`；既有代理正確時不重啟，避免中斷其他站點。
 
+2026-11-23 已部署測試 release `20261123-home-life-ui`：
+
+- 以上一版 `20261123-home-four-1355` 的獨立發布副本為基底，只套用首頁生活提示 UI 調整：公眾假期、私家車位及急症室輪候查詢移至各項標題右側，與交通資訊的文字箭頭樣式一致；未帶入工作區其他會員中心及大廈樣式修改。
+- 執行 `deploy_ajoliving_test.sh`，使用 `INITIALIZE_DB=0`、`KEEP_RELEASES=0` 保留測試資料庫及全部舊 release。41 項相關測試、型別檢查及前後端建置通過。
+- 線上資源及真實公開 API 的繁中、English 與 320px、390px、768px、1440px 八組瀏覽器檢查通過：三個入口靠右、觸控尺寸正常、四張優惠商品卡保留，沒有頁面橫向溢出、JavaScript 錯誤或 API 請求失敗。資源由 Node 讀取線上回應後交由瀏覽器渲染，並非本機 dist 預覽；未執行會員或外部服務寫入。
+- 公網首頁、health、readiness、Nginx、Supervisor、PostgreSQL、Redis 及 `noindex` 正常；公開首頁、首頁 CSS 與伺服器二進制校驗值和本次建置一致。
+- 生產 release、二進制、環境檔及 PID，以及共用 FRP 配置及 PID 未變；測試 PostgreSQL volume 保持原值，上一版發布目錄仍保留。
+
+2026-11-23 已部署測試 release `20261123-home-four-1355`：
+
+- 在上一版獨立發布副本調整首頁超市優惠為上游前四項；桌面一行四張、手機兩行兩張，載入骨架同步四張，共用卡片及已上線修正保留。
+- 41 項相關測試、型別檢查及前後端建置通過；真實公開 API 的繁中及 English、320px、390px、1024px 及 1440px 八組檢查通過，驗證四張卡片及欄數、與超市頁樣式一致、圖片、訪客收藏登入跳轉及無橫向溢出，沒有 JavaScript 錯誤或 API 失敗。
+- 公網首頁、readiness、Nginx、Supervisor、PostgreSQL、Redis 及 `noindex` 正常，遠端首頁與二進制校驗值和本次建置一致；使用 `INITIALIZE_DB=0`、`KEEP_RELEASES=0` 保留測試資料庫及舊 release。
+- 生產二進制、環境檔及 PID，以及共用 FRP 配置及 PID 未變，生產健康正常；未執行會員或外部服務寫入驗收。
+
+2026-11-23 已部署測試 release `20261123-home-cards-1350`：
+
+- 以提交 `0b2ed9a` 的獨立快照套用本次首頁及超市商品卡修改，保留已上線監控修正；未包含會員中心、其他大廈樣式或本機二進制等未提交修改。
+- 首頁與超市優惠共用商品卡；首頁完整移除搜尋、屋苑選擇及通知工具列，封面直接接續全域導航。
+- 使用 `INITIALIZE_DB=0`、`KEEP_RELEASES=0` 保留測試資料庫及所有舊 release；資料卷、JWT 與加密密鑰指紋維持不變。
+- 41 項相關前端測試、型別檢查及前後端建置通過；公網首頁、health、readiness、Nginx、PostgreSQL、Redis 與 `noindex` 正常，公開首頁及伺服器二進制與本次建置校驗一致。
+- 真實公開 API 的繁中及 English、390px 及 1440px 四組瀏覽器檢查通過：三張商品卡、共用計算樣式、圖片、工具列移除、無橫向溢出及訪客收藏登入返回正常，沒有 JavaScript 錯誤或 API 失敗；未執行會員收藏寫入。
+- 生產 release、二進制、環境檔及 PID，以及共用 FRP 配置及 PID 未變；生產首頁與健康接口正常。
+
+2026-11-23 已部署測試 release `20261123-cctv-0b2ed9a`：
+
+- 從提交 `0b2ed9a` 的獨立快照建置並發布監控錯誤顯示修正；保留測試資料庫及舊 release。
+- 前後端建置、測試站首頁、health、readiness、資料服務、noindex 及線上監控元件校驗通過；未以真實會員及有效攝影機憑證驗證播放。
+- 生產及共用 `frpc` 程序和 FRP 配置未變；測試網關對未認證的 `29003/channel33` 探測返回 `502`，不代表已確認攝影機狀態。
+
 2026-11-20 已部署測試 release `20261120-home-links-dc50ff5`：
 
 - 從提交 `dc50ff5` 的獨立快照建置並發布，保留測試資料庫和舊 release；AJO 生產及共用 FRP 程序未重啟。

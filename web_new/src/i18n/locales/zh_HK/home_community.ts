@@ -1,20 +1,9 @@
 /*
- * 首頁屋苑切換與物業資訊繁體中文。
- * 1. 備妥工具列及真實來源的物業資訊文案。
+ * 首頁物業資訊繁體中文。
+ * 1. 備妥真實來源的物業資訊與內容入口文案。
  */
 
 export default {
-  toolbar: {
-    label: '首頁工具列',
-    estate: '選擇屋苑',
-    current: '目前物業',
-    estates: {
-      seaview: '海景灣',
-      summit: '尚珀·天際',
-      fleur: '柏蔚山',
-    },
-    search: '搜尋商品',
-  },
   news: {
     title: '物業資訊',
     access: {

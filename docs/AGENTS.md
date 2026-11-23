@@ -24,6 +24,10 @@ prompts/AGENTS.md: UI prompt 文件的本地維護協議。
 - `docs/archive/`、`.claude/worktrees/`、`dist`、`node_modules`、資料庫備份與 HTML 備份不列入穩定 prompt surface，除非使用者明確要求追溯歷史。
 
 ## 變更日誌
+2026-11-23: 記錄測試 release `20261123-home-life-ui` 的生活提示右側入口及八組雙語線上驗證，保留測試資料、舊版本與生產運行狀態。
+2026-11-23: 首頁 prompt 與前端記憶統一為四件超市優惠、桌面四欄及手機兩欄；測試 release `20261123-home-four-1355` 完成八組雙語真實公開 API 版面驗證。
+2026-11-23: 記錄測試 release `20261123-home-cards-1350` 的首頁與超市共用商品卡、完整工具列移除及四組真實公開 API 瀏覽器驗證；保留資料庫、舊版本及生產運行狀態。
+2026-11-23: 記錄測試 release `20261123-cctv-0b2ed9a` 的監控錯誤顯示部署及驗證邊界。
 2026-11-10: 活躍 AJO 源碼、命令目錄與部署入口統一使用小寫 `snake_case`；歷史歸檔、外部 API 路徑與部署工具固定檔名不納入機械改名。
 2026-11-05: 固定 AJO iCCTV iframe 的播放反代邊界：網關 Nginx `/opi/` 的嵌入回應頭已修正，但設備端只接受 `channel...` 或 `playback_...`；`HKI_MAIN` 等命名通道會遭上游拒絕，通道映射尚待核實，OrangePi 服務不得未經確認修改。
 2026-09-14: `docs/integrations/external_app_building_api.zh-HK.md` 對譯底稿升級為 `external_app_building_api(2).md`，新增 `GET /api/v1/integration/buildings/building-flat-owner-binding-requests/`（業主綁定申請與審批狀態）與 `GET /api/v1/integration/buildings/flat-bindings/`（會員現行單位角色）兩節，第 3 節改為 3.1 提交與查詢、3.2 會員單位綁定清單、3.3 至 3.5 副戶；兩條路由已在 production 與 clouddev 回應，但本機檢出的 `ajo_ismart` 分支尚未包含，接入仍需以上游部署為準。

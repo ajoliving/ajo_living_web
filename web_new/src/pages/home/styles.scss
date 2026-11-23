@@ -158,7 +158,6 @@
   gap: 16px;
 }
 
-.home-offer-card,
 .home-property-card {
   min-width: 0;
   overflow: hidden;
@@ -173,7 +172,6 @@
   filter: brightness(0.96);
 }
 
-.home-offer-card:hover,
 .home-property-card:hover {
   border-color: rgb(var(--color-primary));
 }
@@ -184,14 +182,18 @@
   outline-offset: 3px;
 }
 
-/* 4. 超市優惠卡 */
-.home-offer-card {
-  display: grid;
-  grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
-  align-items: center;
+/* 4. 商品卡沿用共用超市樣式；此處只安排首頁欄數與回饋。 */
+.home-offer-grid {
+  grid-template-columns: repeat(4, minmax(0, 240px));
+  gap: 12px;
 }
 
-.home-offer-image,
+.home-offer-feedback {
+  margin: 0 0 12px;
+  color: rgb(var(--color-text-muted));
+  font-size: 13px;
+}
+
 .home-property-image {
   position: relative;
   display: grid;
@@ -201,30 +203,6 @@
   background: rgb(var(--color-surface-muted));
 }
 
-.home-offer-image {
-  aspect-ratio: 1;
-  margin: 12px;
-  border-radius: 4px;
-}
-
-.home-offer-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.home-offer-body {
-  min-width: 0;
-  padding: 16px 12px 16px 0;
-}
-
-.home-offer-store {
-  margin: 0 0 6px;
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-}
-
-.home-offer-card h3,
 .home-property-card h3 {
   display: -webkit-box;
   overflow: hidden;
@@ -236,11 +214,6 @@
   line-height: 1.5;
 }
 
-.home-offer-card h3 {
-  min-height: 42px;
-}
-
-.home-offer-price,
 .home-property-price {
   display: flex;
   flex-wrap: wrap;
@@ -253,18 +226,10 @@
   line-height: 1.4;
 }
 
-.home-offer-price span,
 .home-property-price span {
   color: rgb(var(--color-text-muted));
   font-size: 12px;
   font-weight: 400;
-}
-
-.home-offer-terms {
-  margin: 5px 0 0;
-  color: rgb(var(--color-text-muted));
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* 5. 最新樓盤卡 */
@@ -384,24 +349,29 @@
 }
 
 .home-offer-skeleton {
-  min-height: 174px;
-  padding: 12px;
+  min-height: 340px;
+  padding: 0 0 12px;
 }
 
 .home-offer-skeleton .home-skeleton-image {
-  float: left;
-  width: 32%;
-  aspect-ratio: 1;
-  margin-right: 12px;
+  height: 148px;
+  aspect-ratio: auto;
 }
 
 .home-offer-skeleton .home-skeleton-line {
-  width: 50%;
+  width: 75%;
   margin-top: 16px;
   overflow: hidden;
 }
 
-/* 7. 手機及平板保持既有導航避讓，優惠三欄、樓盤單欄。 */
+/* 7. 手機優惠與超市頁一致採兩欄；樓盤保留單欄。 */
+@media (max-width: 1023px) {
+  .home-offer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
 @media (max-width: 767px) {
   .home-container {
     width: auto;
@@ -457,33 +427,6 @@
     gap: 8px;
   }
 
-  .home-offer-card {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-  }
-
-  .home-offer-image {
-    margin: 8px 8px 0;
-  }
-
-  .home-offer-body {
-    padding: 10px 8px 12px;
-  }
-
-  .home-offer-card h3 {
-    min-height: 39px;
-    font-size: 13px;
-  }
-
-  .home-offer-price {
-    font-size: 14px;
-  }
-
-  .home-offer-price span,
-  .home-offer-terms {
-    font-size: 11px;
-  }
-
   .home-property-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
@@ -493,18 +436,4 @@
     min-height: 0;
   }
 
-  .home-offer-skeleton {
-    padding: 8px 8px 16px;
-  }
-
-  .home-offer-skeleton .home-skeleton-image {
-    float: none;
-    width: 100%;
-    margin: 0;
-  }
-
-  .home-offer-skeleton .home-skeleton-line {
-    width: 85%;
-    margin-inline: 0;
-  }
 }

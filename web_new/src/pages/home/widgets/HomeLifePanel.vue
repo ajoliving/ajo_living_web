@@ -2,6 +2,7 @@
  * 首頁生活提示。
  * 1. 顯示公眾假期、私家車位及官方急症室輪候統計。
  * 2. 無即時讀數時保留城市儀表板查詢入口，不以其他位置或模擬資料替代。
+ * 3. 查詢入口統一置於各項標題右側，摘要顯示於下方。
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -36,23 +37,30 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
     <div class="life-grid">
       <!-- 1. 缺少讀數仍可前往城市儀表板。 -->
       <article class="life-item">
-        <h3>
-          {{ t(environment?.holiday
-            ? environment.holiday.is_today ? 'home.life.todayHoliday' : 'home.life.nextHoliday'
-            : 'home.life.publicHoliday') }}
-        </h3>
+        <header class="life-item-heading">
+          <h3>
+            {{ t(environment?.holiday
+              ? environment.holiday.is_today ? 'home.life.todayHoliday' : 'home.life.nextHoliday'
+              : 'home.life.publicHoliday') }}
+          </h3>
+          <a href="https://apis.hk.skylinedances.com/?page=holidays" target="_blank" rel="noopener noreferrer">
+            <span>{{ t('home.life.holidaySource') }}</span><AppIcon name="arrow-right" :size="16" />
+          </a>
+        </header>
         <div v-if="environment?.holiday" class="life-reading">
           <strong>{{ environment.holiday.name }}</strong>
           <time v-if="holidayDate" :datetime="environment.holiday.date">{{ holidayDate }}</time>
         </div>
-        <a href="https://apis.hk.skylinedances.com/?page=holidays" target="_blank" rel="noopener noreferrer">
-          {{ t('home.life.holidaySource') }} <AppIcon name="arrow-right" :size="16" />
-        </a>
       </article>
 
       <!-- 2. 只使用確認位置的車位；零個空位仍屬有效讀數。 -->
       <article class="life-item">
-        <h3>{{ t('home.life.parking') }}</h3>
+        <header class="life-item-heading">
+          <h3>{{ t('home.life.parking') }}</h3>
+          <a href="https://apis.hk.skylinedances.com/?page=parking" target="_blank" rel="noopener noreferrer">
+            <span>{{ t('home.life.parkingSource') }}</span><AppIcon name="arrow-right" :size="16" />
+          </a>
+        </header>
         <div v-if="environment?.parking" class="life-reading">
           <strong v-if="environment.parking.closed">{{ t('home.life.parkingClosed') }}</strong>
           <strong v-else-if="environment.parking.spaces != null">{{ t('home.life.availableSpaces', { count: environment.parking.spaces }) }}</strong>
@@ -61,14 +69,16 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
           <time v-if="parkingTime" :datetime="environment.parking.observed_at">{{ parkingTime }}</time>
         </div>
         <p v-else-if="!loading">{{ t('home.life.nearbyParking') }}</p>
-        <a href="https://apis.hk.skylinedances.com/?page=parking" target="_blank" rel="noopener noreferrer">
-          {{ t('home.life.parkingSource') }} <AppIcon name="arrow-right" :size="16" />
-        </a>
       </article>
 
       <!-- 3. 依官方分流分類顯示中位數，不推薦就醫地點。 -->
       <article class="life-item">
-        <h3>{{ t('home.life.emergency') }}</h3>
+        <header class="life-item-heading">
+          <h3>{{ t('home.life.emergency') }}</h3>
+          <a href="https://apis.hk.skylinedances.com/?page=health" target="_blank" rel="noopener noreferrer">
+            <span>{{ t('home.life.emergencySource') }}</span><AppIcon name="arrow-right" :size="16" />
+          </a>
+        </header>
         <div v-if="environment?.emergency" class="life-reading">
           <p>{{ environment.emergency.hospital }}</p>
           <small v-if="environment.scope === 'reference'">{{ t('home.environment.referenceArea') }}</small>
@@ -78,18 +88,18 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
           <time v-if="emergencyTime" :datetime="environment.emergency.observed_at">{{ emergencyTime }}</time>
         </div>
         <p v-else-if="!loading">{{ t('home.life.noWait') }}</p>
-        <a href="https://apis.hk.skylinedances.com/?page=health" target="_blank" rel="noopener noreferrer">
-          {{ t('home.life.emergencySource') }} <AppIcon name="arrow-right" :size="16" />
-        </a>
       </article>
     </div>
   </section>
 </template>
 
 <style scoped lang="scss">
-/* 1. 以行列分隔摘要，手機採單欄、文字自然換行。 */
+/* 1. 標題列與交通資訊對齊；手機採單欄、桌面三欄。 */
 .home-section-heading {
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 8px;
 }
 
 .home-section-heading h2 {
@@ -105,11 +115,8 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
 }
 
 .life-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   min-width: 0;
-  padding: 12px 12px 0;
+  padding: 8px 12px 12px;
   overflow-wrap: anywhere;
 }
 
@@ -117,10 +124,21 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
   border-top: 1px solid rgb(var(--color-border));
 }
 
+.life-item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin-bottom: 4px;
+}
+
 .life-item h3 {
-  margin: 0 0 4px;
+  min-width: 0;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.4;
 }
 
 .life-item p,
@@ -145,11 +163,15 @@ const emergencyTime = computed(() => formatObservationTime(props.environment?.em
 .life-item a {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
   gap: 6px;
+  max-width: 60%;
   min-height: 44px;
-  margin-top: auto;
   color: rgb(var(--color-text-muted));
   font-size: 13px;
+  line-height: 1.45;
+  text-align: right;
 }
 
 .life-item a:hover {
