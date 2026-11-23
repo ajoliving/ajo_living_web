@@ -12,6 +12,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import QrCodeImage from '@/shared/components/base/QrCodeImage.vue';
 import AppIcon from '@/shared/components/base/AppIcon.vue';
+import CameraFrame from '@/shared/components/base/CameraFrame.vue';
 import BuildingLocalWeather from './widgets/BuildingLocalWeather.vue';
 import { useSessionStore } from '@/stores/session';
 import {
@@ -4146,11 +4147,10 @@ onMounted(() => {
                     >
                       <td colspan="3">
                         <div class="icctv-inline-viewer">
-                          <iframe
+                          <CameraFrame
                             :key="`${camera.id}-frame`"
                             :src="camera.url"
                             :title="icctvCameraFrameTitle(camera, index)"
-                            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                           />
                         </div>
                       </td>

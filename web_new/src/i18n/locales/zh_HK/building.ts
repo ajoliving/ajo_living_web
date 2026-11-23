@@ -635,5 +635,6 @@ export default {
       disabled: '未啟用',
     },
     loadError: '視像監控資料載入失敗',
+    playbackError: '無法載入監控畫面，請重新整理後再試。',
   },
 };

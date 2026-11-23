@@ -13,6 +13,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import CameraFrame from '@/shared/components/base/CameraFrame.vue';
 
 import {
   fetchMemberICCTVPublicCameras,
@@ -321,11 +322,10 @@ onMounted(() => {
               >
                 <td colspan="3">
                   <div class="icctv-inline-viewer">
-                    <iframe
+                    <CameraFrame
                       :key="`${camera.id}-frame`"
                       :src="camera.url"
                       :title="cameraFrameTitle(camera, index)"
-                      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     />
                   </div>
                 </td>

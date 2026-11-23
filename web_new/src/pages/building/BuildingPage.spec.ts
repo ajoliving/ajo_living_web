@@ -924,6 +924,9 @@ describe('BuildingPage binding refresh', () => {
   });
 
   it('shows building cameras without exposing iCCTV device names', async () => {
+    const fetchCamera = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', {
+      headers: { 'content-type': 'text/html' },
+    }));
     mocks.fetchICCTV.mockResolvedValue({
       selected_building_id: '0999900',
       building_options: ['0999900'],
@@ -977,11 +980,13 @@ describe('BuildingPage binding refresh', () => {
 
     const viewButton = icctvPanel.get('.icctv-row-actions .primary');
     await viewButton.trigger('click');
+    await flushPromises();
     const frame = icctvPanel.get('.icctv-expanded-row iframe');
     expect(frame.attributes('src')).toBe('https://icctv.example/opi/29003/channel1');
     expect(frame.attributes('title')).toBeTruthy();
     expect(frame.element.closest('td')?.getAttribute('colspan')).toBe('3');
     await viewButton.trigger('click');
     expect(icctvPanel.find('.icctv-expanded-row').exists()).toBe(false);
+    fetchCamera.mockRestore();
   });
 });

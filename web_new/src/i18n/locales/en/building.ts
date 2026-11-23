@@ -635,5 +635,6 @@ export default {
       disabled: 'Disabled',
     },
     loadError: 'Failed to load CCTV data',
+    playbackError: 'Unable to load the camera view. Please refresh and try again.',
   },
 };
